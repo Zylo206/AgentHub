@@ -15,6 +15,12 @@ public class TaskStep {
     private final TaskStepStatus status;
     private final String inputContext;
     private final String outputContent;
+    private final String preferredAdapterType;
+    private final String actualAdapterType;
+    private final String adapterType;
+    private final String adapterStatus;
+    private final String adapterResponseSummary;
+    private final String adapterErrorMessage;
     private final List<ArtifactId> producedArtifactIds;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -28,6 +34,11 @@ public class TaskStep {
             TaskStepStatus status,
             String inputContext,
             String outputContent,
+            String preferredAdapterType,
+            String actualAdapterType,
+            String adapterStatus,
+            String adapterResponseSummary,
+            String adapterErrorMessage,
             List<ArtifactId> producedArtifactIds,
             Instant createdAt,
             Instant updatedAt) {
@@ -39,9 +50,46 @@ public class TaskStep {
         this.status = status;
         this.inputContext = inputContext;
         this.outputContent = outputContent;
+        this.preferredAdapterType = preferredAdapterType;
+        this.actualAdapterType = actualAdapterType;
+        this.adapterType = actualAdapterType;
+        this.adapterStatus = adapterStatus;
+        this.adapterResponseSummary = adapterResponseSummary;
+        this.adapterErrorMessage = adapterErrorMessage;
         this.producedArtifactIds = List.copyOf(producedArtifactIds);
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+    }
+
+    public TaskStep(
+            TaskStepId id,
+            TaskRunId taskRunId,
+            int stepOrder,
+            AgentId assignedAgentId,
+            String taskDescription,
+            TaskStepStatus status,
+            String inputContext,
+            String outputContent,
+            List<ArtifactId> producedArtifactIds,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                taskRunId,
+                stepOrder,
+                assignedAgentId,
+                taskDescription,
+                status,
+                inputContext,
+                outputContent,
+                null,
+                null,
+                null,
+                null,
+                null,
+                producedArtifactIds,
+                createdAt,
+                updatedAt);
     }
 
     public TaskStepId getId() {
@@ -74,6 +122,30 @@ public class TaskStep {
 
     public String getOutputContent() {
         return outputContent;
+    }
+
+    public String getAdapterType() {
+        return adapterType;
+    }
+
+    public String getPreferredAdapterType() {
+        return preferredAdapterType;
+    }
+
+    public String getActualAdapterType() {
+        return actualAdapterType;
+    }
+
+    public String getAdapterStatus() {
+        return adapterStatus;
+    }
+
+    public String getAdapterResponseSummary() {
+        return adapterResponseSummary;
+    }
+
+    public String getAdapterErrorMessage() {
+        return adapterErrorMessage;
     }
 
     public List<ArtifactId> getProducedArtifactIds() {

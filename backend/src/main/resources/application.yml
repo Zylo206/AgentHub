@@ -7,3 +7,11 @@ server:
 
 mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
+
+agenthub:
+  adapters:
+    default-type: MOCK
+    codex:
+      enabled: false
+    claude-code:
+      enabled: false

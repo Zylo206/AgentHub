@@ -206,6 +206,59 @@
   margin-top: 10px;
 }
 
+.agent-item__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-item__identity-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-avatar,
+.agent-avatar-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  flex: 0 0 36px;
+}
+
+.agent-avatar {
+  object-fit: cover;
+  border: 1px solid #d7e0ea;
+}
+
+.agent-avatar-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #dbe8ff;
+  color: #0a4ecf;
+  font-weight: 700;
+}
+
+.agent-preferred-adapter {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #51657d;
+}
+
+.agent-tag {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: #214e96;
+  font-size: 12px;
+}
+
+.agent-tag--tool {
+  background: #edf9f2;
+  color: #167a48;
+}
+
 .artifact-card__tags {
   display: flex;
   flex-wrap: wrap;
@@ -219,6 +272,12 @@
   background: #fff1dd;
   border-radius: 999px;
   padding: 4px 8px;
+}
+
+.artifact-card__tag--lineage,
+.revision-badge {
+  color: #0c5f8a;
+  background: #e4f5ff;
 }
 
 .tag-chip {
@@ -409,6 +468,51 @@
   color: #54657a;
 }
 
+.step-adapter-meta {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.step-adapter-fallback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.step-adapter-preferred,
+.step-adapter-actual,
+.step-adapter-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: #28415e;
+}
+
+.step-adapter-status--fallback {
+  color: #a05d00;
+}
+
+.step-adapter-response {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #58697f;
+  background: #f5f9ff;
+  border: 1px solid #d9e7f7;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.step-adapter-error {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #a22937;
+  background: #fff2f3;
+  border: 1px solid #f1c7cc;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
 .task-step-item--selected {
   border-color: #10a37f;
   background: #eefcf7;
@@ -559,6 +663,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow: auto;
 }
 
 .artifact-preview__meta-right {
@@ -572,6 +677,18 @@
 
 .artifact-preview__line {
   margin-top: 6px;
+}
+
+.artifact-detail-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.artifact-detail-section__header span {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .artifact-revision-box {
@@ -610,6 +727,119 @@
 
 .artifact-revision-box__button {
   align-self: flex-start;
+}
+
+.version-history,
+.diff-summary {
+  border: 1px solid #d8e2ee;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.version-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.version-history-item {
+  border: 1px solid #dbe6f2;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 12px;
+  text-align: left;
+}
+
+.version-history-item--selected {
+  border-color: #1266ff;
+  background: #eef5ff;
+  box-shadow: inset 0 0 0 1px #1266ff;
+}
+
+.version-history-item__row,
+.version-history-item__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.version-history-item__meta strong {
+  margin-right: 10px;
+}
+
+.version-history-item__notes {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #617085;
+  font-size: 13px;
+}
+
+.version-history-item__notes p {
+  width: 100%;
+  margin: 0;
+  color: #304154;
+  line-height: 1.5;
+}
+
+.version-badge {
+  font-size: 12px;
+  color: #33506f;
+  background: #eaf1fb;
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.diff-summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diff-summary-section__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5d6f84;
+}
+
+.diff-summary-section p,
+.diff-summary-section ul {
+  margin: 0;
+  color: #304154;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.diff-summary-section ul {
+  padding-left: 18px;
+}
+
+.revision-origin {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f3f8ff;
+  border: 1px solid #d7e6fb;
+  color: #24415f;
+  font-size: 13px;
+}
+
+.revision-origin p,
+.revision-origin span,
+.revision-origin strong {
+  margin: 0;
+}
+
+.task-run-card__revision {
+  margin-bottom: 12px;
 }
 
 .artifact-preview__code {

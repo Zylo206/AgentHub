@@ -1,7 +1,9 @@
+import type { Artifact } from "../artifacts/artifactTypes";
 import type { TaskRun, TaskSpec, TaskStep } from "./chatTypes";
 import { formatId, getIdValue } from "../../utils/id";
 
 interface TaskRunPanelProps {
+  artifacts: Artifact[];
   taskSpecs: TaskSpec[];
   taskRuns: TaskRun[];
   loading: boolean;
@@ -14,7 +16,56 @@ function normalizeStatus(status: string): string {
   return status.toLowerCase().replace(/_/g, "-");
 }
 
+function summarizeAdapterResponse(responseSummary?: string): string | null {
+  if (!responseSummary) {
+    return null;
+  }
+
+  const normalized = responseSummary.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized;
+}
+
+function getAdapterDisplay(step: TaskStep) {
+  const preferred = step.preferredAdapterType || step.adapterType || null;
+  const actual = step.actualAdapterType || step.adapterType || null;
+  const status = step.adapterStatus || null;
+  const fallbackUsed = Boolean(preferred && actual && preferred !== actual);
+
+  return {
+    preferred,
+    actual,
+    status,
+    fallbackUsed
+  };
+}
+
+function getRevisionOrigin(artifacts: Artifact[], taskRun: TaskRun) {
+  const producedArtifactIds = new Set(
+    taskRun.steps.flatMap((step) => step.producedArtifactIds.map((artifactId) => getIdValue(artifactId)))
+  );
+  const producedArtifacts = artifacts.filter((artifact) => producedArtifactIds.has(getIdValue(artifact.id)));
+  const revisionArtifact =
+    producedArtifacts.find((artifact) => artifact.parentArtifactId || artifact.revisionInstruction) ?? null;
+
+  if (!revisionArtifact) {
+    return null;
+  }
+
+  const parentArtifact =
+    artifacts.find((artifact) => getIdValue(artifact.id) === revisionArtifact.parentArtifactId) ?? null;
+
+  return {
+    artifact: revisionArtifact,
+    parentArtifact
+  };
+}
+
 export function TaskRunPanel({
+  artifacts,
   taskSpecs,
   taskRuns,
   loading,
@@ -59,6 +110,7 @@ export function TaskRunPanel({
       <div className="task-run-list">
         {taskRuns.map((taskRun) => {
           const isActiveRun = selectedTaskRunId === getIdValue(taskRun.id);
+          const revisionOrigin = getRevisionOrigin(artifacts, taskRun);
 
           return (
             <section
@@ -77,10 +129,25 @@ export function TaskRunPanel({
               <div className="task-run-card__goal">
                 {taskRun.taskPlan?.goal || "No task plan goal available."}
               </div>
+              {revisionOrigin ? (
+                <div className="revision-origin task-run-card__revision">
+                  <strong>Revision TaskRun</strong>
+                  <span>
+                    Based on artifact:{" "}
+                    {revisionOrigin.parentArtifact
+                      ? `${revisionOrigin.parentArtifact.title} v${revisionOrigin.parentArtifact.version}`
+                      : "previous artifact"}
+                  </span>
+                  {revisionOrigin.artifact.revisionInstruction ? (
+                    <p>Instruction: {revisionOrigin.artifact.revisionInstruction}</p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="task-step-list">
                 {taskRun.steps.map((step) => {
                   const stepId = getIdValue(step.id);
                   const isSelectedStep = selectedTaskStepId === stepId;
+                  const adapterDisplay = getAdapterDisplay(step);
 
                   return (
                     <button
@@ -98,6 +165,34 @@ export function TaskRunPanel({
                       <div className="task-step-item__description">{step.taskDescription}</div>
                       <div className="task-step-item__meta">
                         Agent {getIdValue(step.assignedAgentId)} / {step.producedArtifactIds.length} artifacts
+                      </div>
+                      <div className="step-adapter-meta">
+                        {adapterDisplay.fallbackUsed ? (
+                          <div className="step-adapter-fallback">
+                            <span className="step-adapter-preferred">
+                              Preferred: {adapterDisplay.preferred}
+                            </span>
+                            <span className="step-adapter-actual">
+                              Actual: {adapterDisplay.actual}
+                            </span>
+                            <span className="step-adapter-status step-adapter-status--fallback">
+                              Status: {adapterDisplay.status || "FALLBACK_USED"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="step-adapter-status">
+                            Adapter: {adapterDisplay.actual || "not recorded"}
+                            {adapterDisplay.status ? ` · ${adapterDisplay.status}` : ""}
+                          </span>
+                        )}
+                        {step.adapterResponseSummary ? (
+                          <div className="step-adapter-response">
+                            <strong>Adapter Response:</strong> {summarizeAdapterResponse(step.adapterResponseSummary)}
+                          </div>
+                        ) : null}
+                        {step.adapterErrorMessage ? (
+                          <div className="step-adapter-error">{step.adapterErrorMessage}</div>
+                        ) : null}
                       </div>
                     </button>
                   );

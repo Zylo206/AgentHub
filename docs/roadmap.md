@@ -2,252 +2,299 @@
 
 ## 1. Roadmap 说明
 
-本 Roadmap 面向 V0.1 文档与协作资产初始化阶段，用于明确：
+这份 Roadmap 用于把当前 `AgentHub` 的比赛推进路径与最新课题要求对齐。它面向两个目标：
 
-- 已完成什么
-- 当前阶段在做什么
-- 下一阶段做什么
-- 各阶段目标、任务、输出物、验收标准
+- 指导实现顺序
+- 保证交付物、Demo、AI 协作资产和赛题评分点一致
+
+当前阶段仍然以：
+
+- Web 端优先
+- 聊天主入口优先
+- 多 Agent 协作主链路优先
+- Artifact-centered iteration 优先
+
+为核心原则。
 
 ## 2. 阶段总览
 
-| Phase | 名称 | 状态 |
+| Phase | 名称 | 当前状态 |
 |---|---|---|
 | Phase 1 | 项目初始化与范围冻结 | 已完成 |
-| Phase 2 | IM 工作台与前端骨架 | 当前阶段 |
-| Phase 3 | 后端基础模块 | 下一阶段 |
-| Phase 4 | Orchestrator 与多 Agent 协作 | 计划中 |
-| Phase 5 | Context 与 Artifact 流程 | 计划中 |
-| Phase 6 | AI 协作资产沉淀 | 计划中 |
+| Phase 2 | IM 工作台与前端骨架 | 已完成 |
+| Phase 3 | 后端基础模块 | 已完成 |
+| Phase 4 | Orchestrator 与多 Agent 协作 | 当前阶段 |
+| Phase 5 | Context 与 Artifact 流程 | 当前阶段 |
+| Phase 6 | AI 协作资产沉淀 | 下一阶段 |
 | Phase 7 | Demo 稳定与比赛提交 | 计划中 |
 
-## 3. 各阶段说明
-
-## Phase 1：项目初始化与范围冻结
+## 3. Phase 1：项目初始化与范围冻结
 
 ### 目标
 
-- 确定 AgentHub 的定位
-- 冻结 P0 / P1 / P2 范围
-- 建立 docs 结构和文档体系
+- 明确 AgentHub 定位
+- 对齐比赛范围
+- 建立文档体系
 
 ### 任务
 
-- 梳理比赛需求
-- 确定主仓为 `AgentHub`
-- 建立 Spec / Skill / Rules / Collaboration 文档结构
-- 明确 Demo 方向
+- 梳理课题要求
+- 冻结 `P0 / P1 / P2`
+- 建立 `docs/spec`、`docs/skills`、`docs/rules`、`docs/collaboration`
 
 ### 输出物
 
-- competition-plan.md
-- product-design.md
-- technical-design.md
-- demo-scenario.md
-- roadmap.md
-- docs 下各协作资产文档
+- 比赛计划文档
+- 产品设计文档
+- 技术设计文档
+- Roadmap
 
 ### 验收标准
 
-- 文档结构完整
-- 产品边界清晰
-- 主链路清晰
-- 后续开发顺序明确
+- 核心产品边界清晰
+- 协作资产目录可用
+- Demo 主线明确
 
-## Phase 2：IM 工作台与前端骨架
+## 4. Phase 2：IM 工作台与前端骨架
 
 ### 目标
 
-- 确立聊天作为唯一主入口
-- 建立基础前端结构
+- 搭建聊天工作台
+- 明确三栏布局
 
 ### 任务
 
-- 搭建会话列表
-- 搭建消息流
-- 搭建输入区
-- 搭建右侧 Artifact Panel 占位
-- 定义前端状态结构
+- 会话列表
+- Agent 列表
+- 消息流
+- 输入区
+- TaskRunPanel
+- ArtifactPanel
 
 ### 输出物
 
-- 前端页面骨架
-- 基础路由
-- 基础 UI 模块
+- React + Vite 前端骨架
+- 三栏工作台页面
 
 ### 验收标准
 
-- 用户可以进入聊天页面
-- 可以看到 Conversation List 和 Message Stream
-- 可以展示静态 Task Spec 卡片和 Artifact 卡片
+- 页面可进入
+- 可创建会话
+- 可展示消息和 Artifact
 
-## Phase 3：后端基础模块
+## 5. Phase 3：后端基础模块
 
 ### 目标
 
-- 建立后端最小模型和接口骨架
+- 建立最小可联调的后端主链路
 
 ### 任务
 
-- 定义 Conversation / Message / Agent / Artifact 实体
-- 搭建基本 API
-- 搭建 TaskSpec / TaskRun / TaskStep 的最小结构
+- 定义核心领域模型
+- 建立内存 Repository
+- 建立 Application Service
+- 建立基础 REST API
+- 建立统一异常处理
 
 ### 输出物
 
-- API 草案落地为基础接口
-- 基础服务模块结构
-- 简单状态流转
+- `Agent / Conversation / Message / TaskSpec / TaskRun / TaskStep / Artifact`
+- 内存版主链路
 
 ### 验收标准
 
-- 可以创建 Conversation
-- 可以提交 Message
-- 可以返回静态 Task Spec 和 TaskRun 数据
+- 后端可创建会话
+- 可发送消息
+- 可生成静态 Demo Task
+- 可返回 TaskRun、Artifact、Context 数据
 
-## Phase 4：Orchestrator 与多 Agent 协作
+## 6. Phase 4：Orchestrator 与多 Agent 协作
 
 ### 目标
 
-- 打通任务拆解与 Agent 分工
+- 让 Demo 具备“多 Agent 分工”的可见性
 
 ### 任务
 
-- 实现 Task Spec 生成
-- 实现 TaskPlan 生成
-- 实现 Routing Rules
-- 实现薄 Adapter
-- 实现多步骤 TaskRun
+- 明确 `Orchestrator` 职责
+- 把任务拆解为多个 `TaskStep`
+- 在 UI 中展示：
+  - Frontend Builder
+  - Backend Worker
+  - Reviewer
+- 保持至少 2 个主流 Agent 平台的统一接入设计
 
 ### 输出物
 
-- Orchestrator 初版
-- Agent Router
-- Agent Executor
-- 至少 2 个 Adapter 设计或最小接入能力
+- Task Spec 生成链路
+- TaskRun / TaskStep 执行链路
+- Agent 分工展示
 
 ### 验收标准
 
-- 一个复杂任务可以拆成多个 TaskStep
-- 每个 TaskStep 能分配给明确 Agent
-- 最终能聚合结果
+- 一个复杂任务能拆成多个步骤
+- 每个步骤有明确 Agent 归属
+- 结果可以聚合显示
 
-## Phase 5：Context 与 Artifact 流程
+## 7. Phase 5：Context 与 Artifact 流程
 
 ### 目标
 
-- 打通上下文交接与产物预览链路
+- 让系统真正体现“围绕产物持续迭代”
 
 ### 任务
 
-- 实现 Pinned Context
-- 实现 Handoff Summary
-- 实现 ContextSnapshot
-- 实现 Code / Markdown / File / Web Preview Artifact
+- 实现 `ContextSnapshot`
+- 实现 `HandoffSummary`
+- 实现 TaskStep 与 Artifact 的联动
+- 实现 Artifact revision 静态 Demo
+- 在聊天流和右侧面板中展示版本链路
 
 ### 输出物
 
-- Context Manager 初版
-- Artifact Service 初版
-- Handoff 可视化结构
+- ContextPanel
+- HandoffSummary 展示
+- Artifact version 展示
+- Revision TaskRun 静态演示
 
 ### 验收标准
 
-- 上一个 Agent 的 Artifact 可以传给下一个 Agent
-- 右侧面板能展示核心产物
-- 二次修改能基于已有 Artifact 进行
+- 能看见哪个 Step 产出了哪个 Artifact
+- 能看见 Artifact 如何从 v1 演进到 v2
+- 能看见 Frontend Builder 与 Reviewer 之间的交接
 
-## Phase 6：AI 协作资产沉淀
+## 8. Phase 6：AI 协作资产沉淀
 
 ### 目标
 
-- 让比赛最看重的“AI 协作能力”显式化
+- 对齐评分最高的 `AI 协作能力`
 
 ### 任务
 
-- 完善真实 Task Spec
-- 完善 Frontend Builder / Backend Worker / Reviewer Skill
-- 完善 Global / Routing / Handoff Rules
-- 完善 Collaboration Protocol 和 State Machine
+- 补强真实 `Task Spec`
+- 完善 `Frontend Builder / Backend Worker / Reviewer` Skill
+- 完善 `Global / Routing / Handoff Rules`
+- 完善 `Collaboration Protocol`
+- 确保这些资产与产品行为一致
 
 ### 输出物
 
-- 可提交的 AI 协作开发记录基础文档
-- 可在 Demo 中展示的协作资产
+- 可提交的 AI 协作开发记录
+- 可在答辩中引用的规范体系
 
 ### 验收标准
 
-- 所有关键流程都能对应到文档资产
-- 评委能看见 Spec / Skill / Rules 如何驱动产品
+- `Spec / Skill / Rules` 不只是文档说明
+- 可以清楚解释它们如何驱动系统行为
 
-## Phase 7：Demo 稳定与比赛提交
+## 9. Phase 7：Demo 稳定与比赛提交
 
 ### 目标
 
-- 锁定 Demo 路径并完成提交材料
+- 完成最终交付
 
 ### 任务
 
-- 固定一个稳定场景
-- 做一次完整彩排
-- 撰写产品文档和技术文档终稿
+- 锁定稳定 Demo 主线
+- 做完整彩排
+- 完成产品设计文档与技术文档收口
 - 整理 AI 协作开发记录
 - 录制 3 分钟 Demo 视频
 
 ### 输出物
 
-- Runnable Demo
-- 提交文档
+- 可运行 Demo
+- 最终提交文档
 - Demo 视频
 
 ### 验收标准
 
-- Demo 不依赖临场解释补漏洞
-- 全部交付物在截止前完成
+- 演示链路稳定
+- 评委能看懂系统价值
+- 所有交付物与赛题要求一致
 
-## 4. 当前状态
+## 10. 当前阶段判断
 
 ### 已完成
 
-- 比赛需求整理
-- 主仓和产品策略确定
-- docs 目录搭建
-- V0.1 文档体系初始化
+- 主仓建立
+- 核心文档体系建立
+- 前后端骨架建立
+- 静态 demo-task 主链路
+- Context / Handoff 展示
+- Artifact revision 静态 Demo
 
 ### 当前阶段
 
-- 补全文档与协作资产
-- 固化 Demo 场景
-- 明确技术设计与模块边界
+- 把当前系统行为和最新课题要求完全对齐
+- 打磨“多 Agent 协作 + Artifact 迭代”展示链路
 
 ### 下一阶段
 
-- 实际搭建前端骨架
-- 搭建基础后端模块
-- 开始实现聊天主链路
+- 强化 `Spec / Skill / Rules` 在界面中的可见性
+- 补 deployment status card 等比赛要求里提到但当前还较弱的展示能力
+- 开始准备面向答辩的 Demo 脚本
 
-## 5. 风险点
+## 11. 风险点
 
-### 风险 1：范围膨胀
+### 风险 1：课题要求与当前实现脱节
 
-如果同时做多端、部署、Diff、知识库深度集成，MVP 会失控。
+影响：
 
-### 风险 2：平台接入过深
+- 文档和 Demo 讲法不一致
+- 答辩时容易被问住
 
-如果前期就追求复杂 Agent 平台对齐，会拖慢核心产品链路。
+缓解：
 
-### 风险 3：文档和产品脱节
+- 以最新会议要求为准更新核心文档
+- 所有 P0 / P1 / P2 统一口径
 
-如果 Spec / Skill / Rules 只是写在 docs 里，没有进入产品流程，则比赛核心分拿不到。
+### 风险 2：功能很多，但主线不突出
 
-### 风险 4：Demo 不稳定
+影响：
 
-如果依赖真实复杂外部环境，现场演示风险会变高。
+- 评委看不清核心价值
 
-## 6. 下一步建议
+缓解：
 
-1. 确认前后端技术栈
-2. 搭建聊天工作台骨架
-3. 定义核心实体的数据结构
-4. 为 Demo 场景实现第一条 TaskRun 链路
-5. 把 Spec / Skill / Rules 映射到实际前后端对象
+- 始终围绕一条主线演示：
+  - 发任务
+  - 拆任务
+  - 多 Agent 协作
+  - 生成 Artifact
+  - 二次修改
+
+### 风险 3：AI 协作资产只停留在文档
+
+影响：
+
+- 30% 的 AI 协作能力分拿不高
+
+缓解：
+
+- 在界面里显式展示：
+  - Task Spec
+  - Handoff Summary
+  - Reviewer 检查依据
+  - Artifact revision 链路
+
+### 风险 4：P2 过早投入
+
+影响：
+
+- 稳定性下降
+- P0 不够扎实
+
+缓解：
+
+- P2 仅做加分，不反客为主
+- 优先保证主链路稳定
+
+## 12. 下一步建议
+
+按最新课题要求，接下来最值得优先推进的是：
+
+1. 在界面里增加部署状态卡片的静态演示
+2. 给 Artifact 增加更清晰的版本链路展示
+3. 把 `Spec / Skill / Rules` 与当前 UI 和后端对象进一步一一对应
+4. 收敛最终答辩 Demo 脚本，避免功能点散乱

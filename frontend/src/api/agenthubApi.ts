@@ -65,8 +65,24 @@ export interface ArtifactRevisionResponse {
   reviewArtifact: Artifact;
 }
 
+export interface CreateAgentRequest {
+  name: string;
+  avatarUrl?: string;
+  systemPrompt?: string;
+  capabilityTags: string[];
+  toolTags: string[];
+  preferredAdapterType: string;
+}
+
 export function getAgents(): Promise<Agent[]> {
   return request<Agent[]>("/api/agents");
+}
+
+export function createAgent(requestBody: CreateAgentRequest): Promise<Agent> {
+  return request<Agent>("/api/agents", {
+    method: "POST",
+    body: JSON.stringify(requestBody)
+  });
 }
 
 export function createConversation(title: string, type: "SINGLE" | "GROUP"): Promise<Conversation> {

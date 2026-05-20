@@ -7,9 +7,11 @@ public class Agent {
 
     private final AgentId id;
     private final String name;
+    private final String avatarUrl;
     private final AgentRole role;
     private final String description;
     private final String systemPrompt;
+    private final String preferredAdapterType;
     private final List<String> capabilityTags;
     private final List<String> toolTags;
     private final AgentStatus status;
@@ -19,9 +21,11 @@ public class Agent {
     public Agent(
             AgentId id,
             String name,
+            String avatarUrl,
             AgentRole role,
             String description,
             String systemPrompt,
+            String preferredAdapterType,
             List<String> capabilityTags,
             List<String> toolTags,
             AgentStatus status,
@@ -29,9 +33,11 @@ public class Agent {
             Instant updatedAt) {
         this.id = id;
         this.name = name;
+        this.avatarUrl = avatarUrl;
         this.role = role;
         this.description = description;
         this.systemPrompt = systemPrompt;
+        this.preferredAdapterType = preferredAdapterType;
         this.capabilityTags = List.copyOf(capabilityTags);
         this.toolTags = List.copyOf(toolTags);
         this.status = status;
@@ -47,6 +53,10 @@ public class Agent {
         return name;
     }
 
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
     public AgentRole getRole() {
         return role;
     }
@@ -57,6 +67,10 @@ public class Agent {
 
     public String getSystemPrompt() {
         return systemPrompt;
+    }
+
+    public String getPreferredAdapterType() {
+        return preferredAdapterType;
     }
 
     public List<String> getCapabilityTags() {

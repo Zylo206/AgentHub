@@ -29,6 +29,10 @@ textarea {
   font: inherit;
 }
 
+select {
+  font: inherit;
+}
+
 button {
   cursor: pointer;
 }
@@ -115,6 +119,82 @@ button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
+}
+
+.agent-builder-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.agent-builder-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-builder-field span {
+  font-size: 13px;
+  font-weight: 700;
+  color: #42546b;
+}
+
+.agent-builder-field input,
+.agent-builder-field textarea,
+.agent-builder-field select {
+  width: 100%;
+  border: 1px solid #d7e0ea;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #f8fbff;
+  color: #162033;
+}
+
+.agent-builder-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.agent-builder-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.builder-feedback {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.builder-feedback--success {
+  background: #edf9f2;
+  border: 1px solid #b9e1c8;
+  color: #176a40;
+}
+
+.builder-feedback--error {
+  background: #fff2f3;
+  border: 1px solid #f1c7cc;
+  color: #a22937;
+}
+
+.builder-summary {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid #d7e0ea;
+  background: #f8fbff;
+}
+
+.builder-summary h2 {
+  margin: 0 0 12px;
+}
+
+.builder-summary p {
+  margin: 6px 0;
 }
 
 @media (max-width: 900px) {

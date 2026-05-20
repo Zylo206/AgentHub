@@ -2,100 +2,123 @@
 
 ## 1. 项目背景
 
-AgentHub 面向 AI 全栈挑战赛，目标不是做一个普通 Chatbot，而是做一个基于 IM 聊天交互的多 Agent 协作平台。用户通过聊天发起复杂任务，由协调器 Orchestrator 负责理解需求、拆解任务、路由 Agent、组织上下文交接 Handoff，并围绕代码、网页、文档等产物 Artifact 持续迭代。
+AgentHub 面向 AI 全栈挑战赛，赛题要求构建一个“人和 AI 协作的平台”，而不是一个单纯的聊天问答产品。
 
-比赛明确强调的重点不是单点模型能力，而是：
+根据最新课题讲解，平台需要：
 
-- IM 聊天式产品体验
-- 多 Agent 协作机制
-- Orchestrator 的任务调度能力
-- 上下文管理 Context Management
-- Artifact 预览与迭代能力
-- AI 协作资产的沉淀能力
+- 以 IM 聊天作为核心交互范式
+- 支持人与多个 Agent 协作完成复杂任务
+- 支持主 Agent `Orchestrator` 负责任务理解、拆解、调度、汇总
+- 支持围绕代码、网页、文档、PPT 等产物持续迭代
+- 支持沉淀 `Spec / Skill / Rules` 等 AI 协作资产
+
+因此，AgentHub 的产品核心不是“回答问题”，而是“组织多 Agent 协作并围绕 Artifact 推进工作”。
 
 ## 2. 产品定位
 
 一句话定位：
 
-> AgentHub 是一个基于 IM 聊天交互的多 Agent 协作平台，支持用户通过对话方式发起复杂任务，由主 Agent 拆解并调度多个专业 Agent 协作完成，最终生成可预览、可编辑、可迭代的产物。
+> AgentHub 是一个基于 IM 聊天交互的多 Agent 协作平台，支持用户通过对话发起复杂任务，由主 Agent 拆解并调度多个专业 Agent 协作完成，最终生成可预览、可编辑、可迭代的产物。
 
 定位拆解：
 
-- 不是普通问答产品，而是协作系统
-- 主入口是聊天工作台，不是 Workflow Canvas
-- 核心价值是“任务协作 + 产物演进”
-- Web 端是 MVP 主交付端
+- 不是普通 Chatbot
+- 不是以 Workflow Canvas 为主入口的编排工具
+- 而是一个聊天优先、协作优先、产物优先的 AI 开发工作台
 
 ## 3. 目标用户
 
-### 3.1 比赛评审与导师
+### 3.1 评委与导师
 
-关注点：
+他们关注：
 
-- 是否体现多 Agent 协作能力
-- 是否沉淀出 Spec / Skill / Rules / Collaboration Protocol
-- 是否能在 3 分钟内看懂产品价值和技术实现
+- 协作范式是否成立
+- `Spec / Skill / Rules` 是否落地
+- 多 Agent 调度是否真实可演示
+- 产物链路是否完整
 
-### 3.2 开发者型用户
+### 3.2 开发型用户
 
 典型任务：
 
-- 生成前端页面
-- 补 README 或技术文档
-- 做简单 API 设计
-- 对代码进行检查和修改
+- 生成页面
+- 生成 README
+- 输出接口草案
+- 检查代码质量
+- 围绕已有产物继续修改
 
 ### 3.3 复杂任务发起者
 
-典型诉求：
+他们不希望：
 
-- 不想手动切换多个工具
-- 希望把一个复杂任务交给多 Agent 协作完成
-- 希望围绕生成产物持续修改，而不是反复重新提问
+- 手动切换多个工具
+- 自己拼接上下文
+- 重复描述同一个需求
+
+他们希望：
+
+- 一句话发起复杂任务
+- 多个 Agent 自动协作
+- 生成结果后还能继续迭代
 
 ## 4. 核心痛点
 
-### 4.1 单 Agent 模式难以处理复杂任务
+### 4.1 单 Agent 产品难以处理复杂任务
 
-普通聊天机器人更适合单轮问答，不适合“页面生成 + 文档生成 + 质量检查”这种多步骤任务。
+复杂任务通常包含多个步骤，例如：
 
-### 4.2 上下文容易丢失或污染
+- 前端页面生成
+- 接口草案输出
+- 文档补充
+- 质量检查
 
-多个 Agent 协作时，前一个 Agent 的输出如何准确传递给下一个 Agent 是核心难点。
+单 Agent 很难同时兼顾专业分工与执行过程透明度。
 
-### 4.3 产物无法持续迭代
+### 4.2 多 Agent 协作中的上下文容易混乱
 
-传统问答模式只返回文本，无法把代码、网页、README 作为可继续修改的工作对象。
+如果没有明确的 Handoff 机制，前一个 Agent 的结果很难稳定传给下一个 Agent。
+
+### 4.3 传统问答模式无法围绕产物持续推进
+
+如果系统只返回一段文字，用户无法把代码、网页、文档当作后续修改的工作对象。
 
 ### 4.4 协作过程不可见
 
-如果 Orchestrator 如何拆解任务、如何路由 Agent、为什么得出某个结果都不可见，评委很难认可“AI 协作能力”。
+如果看不到：
+
+- Task Spec
+- Agent 分工
+- Routing Rules
+- Handoff Summary
+- Reviewer 检查依据
+
+那么评委很难认可系统具备真正的 AI 协作能力。
 
 ## 5. 产品目标
 
-### 5.1 MVP 目标
+### 5.1 比赛目标
 
-构建一个稳定的 Web 端多 Agent 聊天工作台，支持：
+用一个稳定的 Demo 证明：
 
-- 单聊和群聊
-- Orchestrator 任务拆解
-- 至少 2 个 Agent Adapter 的统一设计
-- Context Handoff
-- Artifact 卡片预览
-- 用户自定义 Agent
+- 多 Agent 能协作完成任务
+- Orchestrator 能拆任务并调度
+- 系统能围绕 Artifact 做二次迭代
+- 协作资产 `Spec / Skill / Rules` 已沉淀且可展示
 
-### 5.2 比赛目标
+### 5.2 MVP 目标
 
-围绕评分点明确达成：
+先完成一个 Web 优先的三栏工作台，覆盖：
 
-- AI 协作能力可见、可交付、可解释
-- 核心功能可跑通
-- 产物展示效果清晰
-- 架构逻辑容易答辩
+- IM 会话列表
+- 聊天消息流
+- TaskRun / TaskStep 展示
+- Context / Handoff 展示
+- Artifact 预览
+- Artifact 二次修改静态 Demo
 
 ## 6. 核心使用场景
 
-### 6.1 多步骤开发任务
+### 6.1 多步骤任务生成
 
 用户输入：
 
@@ -103,24 +126,33 @@ AgentHub 面向 AI 全栈挑战赛，目标不是做一个普通 Chatbot，而�
 
 系统流程：
 
-1. Orchestrator 生成 Task Spec
-2. Frontend Builder 负责页面代码
-3. Backend Worker 可选输出 API Contract 或 Data Model
-4. Reviewer 检查 Acceptance Criteria
-5. Artifact 在聊天流中显示
-6. 用户继续迭代修改
+1. 生成 `Task Spec`
+2. `Orchestrator` 拆解任务
+3. `Frontend Builder` 生成页面
+4. `Backend Worker` 生成接口草案或数据模型
+5. `Reviewer` 检查验收标准
+6. 在聊天流中展示 `Artifact`
 
-### 6.2 基于已有产物继续修改
+### 6.2 基于已有 Artifact 的二次修改
 
-用户不重新描述全部需求，而是基于当前 Artifact 提出局部修改，例如：
+用户选择 `LoginPage.tsx`，输入：
 
 “把按钮改成蓝色，并增加 loading 状态。”
 
-系统应能围绕已有 Artifact 继续工作，而不是重新开始。
+系统流程：
+
+1. 创建 revision `Task Spec`
+2. 创建新的 revision `TaskRun`
+3. 生成新的 `LoginPage.tsx v2`
+4. 生成新的 `Review Report`
+5. 生成新的 `ContextSnapshot` 和 `HandoffSummary`
+6. 刷新消息、任务、产物和上下文展示
+
+这个场景是本项目体现“Artifact-centered iteration”的关键。
 
 ### 6.3 群聊协作场景
 
-一个会话内同时包含：
+一个会话中包含：
 
 - Orchestrator
 - Frontend Builder
@@ -129,7 +161,7 @@ AgentHub 面向 AI 全栈挑战赛，目标不是做一个普通 Chatbot，而�
 
 用户既可以手动 `@Agent`，也可以让 Orchestrator 自动分派。
 
-## 7. 功能范围
+## 7. P0 / P1 / P2 功能范围
 
 ### 7.1 P0 必须完成
 
@@ -150,11 +182,10 @@ AgentHub 面向 AI 全栈挑战赛，目标不是做一个普通 Chatbot，而�
 
 #### 多 Agent Adapter
 
-- 统一 Adapter 设计
-- 至少支持 2 个 Agent 平台的接入预留
-- V0.1 允许先做薄 Adapter，不承诺复杂平台能力
+- 至少支持 2 个主流 Agent 平台的统一接入设计
+- V0.1 可先采用薄 Adapter
 
-#### 上下文管理 Context Management
+#### Context Management
 
 - 聊天历史
 - Pinned Context
@@ -170,7 +201,7 @@ AgentHub 面向 AI 全栈挑战赛，目标不是做一个普通 Chatbot，而�
 
 #### 用户自定义 Agent
 
-- Agent Name
+- Agent 名称
 - System Prompt
 - Tool Tags
 - Capability Tags
@@ -185,127 +216,136 @@ AgentHub 面向 AI 全栈挑战赛，目标不是做一个普通 Chatbot，而�
 ### 7.2 P1 应该完成
 
 - Agent 状态展示
-- Handoff Summary 可视化
 - Reviewer Flow
-- Knowledge Bridge
+- Handoff Summary 可视化
+- Artifact revision 链路
+- 简单部署状态卡片
+- 轻量 Knowledge Bridge
 
 ### 7.3 P2 时间允许再做
 
 - Diff View
-- Deploy Action
 - Version History
-- 多端支持设计说明
+- Deploy Action
+- PPT 浏览
+- 多端支持设计
+- 多人协作与冲突解决说明
 
 ## 8. 页面结构
 
-## 8.1 整体布局
+### 8.1 总体布局
 
-MVP 推荐采用三栏式布局：
+MVP 采用三栏式布局：
 
 - 左侧：Conversation List + Agent List
-- 中间：Chat Workspace
-- 右侧：Artifact Panel + Task Status + Review Result
+- 中间：Message Stream + TaskRunPanel + ContextPanel + ChatInput
+- 右侧：ArtifactPanel
 
-## 8.2 页面组成
+### 8.2 左侧栏
 
-### 页面一：Chat Workspace
+功能：
 
-核心职责：
+- 展示会话列表
+- 支持新建 Demo 会话
+- 展示内置 Agent 和未来的用户自定义 Agent
 
-- 作为唯一主入口
-- 承载单聊与群聊
-- 显示消息流、状态卡片、Artifact 卡片
+### 8.3 中间栏
 
-### 页面二：Agent Builder
+功能：
 
-核心职责：
+- 作为聊天主工作台
+- 展示消息流
+- 展示 TaskRun / TaskStep
+- 展示 ContextSnapshot / HandoffSummary
+- 允许发送消息和运行 Demo Task
 
-- 创建和编辑用户自定义 Agent
-- 配置 System Prompt、Tool Tags、Capability Tags
+### 8.4 右侧栏
 
-### 页面三：Artifact Panel
+功能：
 
-核心职责：
-
-- 预览代码、文档、网页
-- 展示 Review Report
-- 后续支持 Diff View
-
-### 页面四：Task Detail Drawer
-
-核心职责：
-
-- 查看当前 Task Spec
-- 查看 TaskPlan
-- 查看路由和执行状态
+- 展示 Artifact 列表
+- 展示 Artifact 详情
+- 展示版本号
+- 提供二次修改输入区
 
 ## 9. 用户流程
 
 ### 9.1 主流程
 
-1. 用户进入 Web 工作台
-2. 新建会话或选择现有会话
-3. 输入一个复杂任务
-4. 系统生成 Task Spec
-5. Orchestrator 拆解任务并路由 Agent
-6. Specialist Agent 生成主产物
-7. Reviewer 检查结果
-8. 产物以内联卡片 + 右侧面板形式展示
-9. 用户基于 Artifact 继续提修改要求
-10. 系统围绕已有 Artifact 继续迭代
+1. 用户进入工作台
+2. 新建会话
+3. 输入复杂需求
+4. 系统生成 `Task Spec`
+5. Orchestrator 拆解任务
+6. 多个 Agent 返回产物
+7. Reviewer 进行检查
+8. 右侧展示 Artifact
+9. 用户继续围绕 Artifact 发起修改
 
-### 9.2 自定义 Agent 流程
+### 9.2 Revision 流程
 
-1. 用户进入 Agent Builder
-2. 设置名称、Prompt、Tool Tags、Capability Tags
-3. 保存后在会话中作为独立 Agent 出现
-4. 后续可由用户手动 `@Agent` 或被 Orchestrator 路由调用
+1. 用户选中已有 Artifact
+2. 输入 revision 指令
+3. 系统创建新的 revision TaskRun
+4. 生成新版 Artifact
+5. Reviewer 输出新的 Review Report
+6. ContextPanel 展示新的上下文与交接记录
 
 ## 10. Demo 场景
 
-推荐使用统一稳定场景：
+推荐 Demo 由两段组成：
 
-- 用户要求生成 React 登录页面
-- 系统输出代码、README、Review Report
-- 用户基于已有 Artifact 继续提出 UI 修改
+### 第一段：任务生成
 
-这个场景能完整覆盖：
+- 输入复杂需求
+- 展示 Task Spec
+- 展示 3 个 Agent 分工
+- 展示首轮 Artifact
 
-- 多步骤任务
-- 多 Agent 分工
-- Handoff
-- Artifact 预览
-- Reviewer 检查
-- 二次迭代
+### 第二段：产物二次修改
+
+- 选中 `LoginPage.tsx`
+- 输入“把按钮改成蓝色，并增加 loading 状态。”
+- 生成 `LoginPage.tsx v2`
+- 展示新的 Review Report
+- 展示新的 ContextSnapshot 和 HandoffSummary
+
+这样能完整体现：
+
+- 聊天式协作
+- 主 Agent 调度
+- 产物中心迭代
+- AI 协作资产沉淀
 
 ## 11. 非目标范围 Non-goals
 
-以下内容不属于 V0.1 必做范围：
+以下内容不属于 V0.1 必做：
 
 - 桌面端真实实现
 - 移动端真实实现
 - 完整 Workflow Canvas
-- 复杂多人实时协同
-- 深度 IDE 集成
-- 真实生产级部署流水线
-- 复杂知识库基础设施
+- 真实第三方部署
+- 复杂 Diff 编辑器
+- 复杂多人实时协作
+- 企业级知识库基础设施
 
 ## 12. 评分点对应关系
 
-| 评分维度 | 对应产品策略 |
+| 评分维度 | 对应设计策略 |
 |---|---|
-| AI 协作能力 30% | 让 Spec、Skill、Rules、Collaboration Protocol 既存在于 docs，也体现在产品流程里 |
-| 功能完整度 25% | 优先完成聊天、Orchestrator、Adapter、Artifact 主链路 |
-| 生成效果质量 20% | 提升聊天界面、Artifact 卡片、右侧预览面板体验 |
-| 代码理解度 15% | 确保实体、流程、状态机清晰，便于答辩解释 |
-| 创新与产品感 10% | 强调“围绕 Artifact 持续协作”的体验，而不是普通聊天切模型 |
+| AI 协作能力 30% | 在 UI 和仓库中同时沉淀 `Spec / Skill / Rules / Collaboration Protocol` |
+| 功能完整度 25% | 跑通 IM 主链路、Orchestrator、TaskRun、Artifact、Reviewer |
+| 生成效果质量 20% | 突出三栏工作台、消息流、Artifact 预览和 revision 链路 |
+| 代码理解度 15% | 保持实体、状态、服务边界清晰，便于答辩解释 |
+| 创新与产品感 10% | 强调“围绕 Artifact 持续协作”的产品体验，而不是简单多模型聊天 |
 
-## 13. V0.1 输出结论
+## 13. 当前版本结论
 
-V0.1 阶段的目标不是交付完整成品，而是完成以下初始化：
+当前版本的 AgentHub 应继续坚持以下产品判断：
 
-- 冻结产品范围
-- 冻结主入口和主链路
-- 明确前后端模块边界
-- 建立可复用的 Spec / Skill / Rules / Collaboration Protocol 文档体系
-- 定义一个稳定可演示的 Demo 场景
+- 聊天工作台是唯一主入口
+- 多 Agent 协作是核心机制
+- Artifact 是后续迭代的核心对象
+- AI 协作能力必须被看见、被解释、被提交
+
+后续所有开发和 Demo 打磨，都应围绕这条主线推进。

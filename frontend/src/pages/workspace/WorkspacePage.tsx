@@ -151,9 +151,8 @@ export function WorkspacePage() {
         const previousExists = previousId
           ? taskRunData.some((taskRun) => getIdValue(taskRun.id) === previousId)
           : false;
-        return previousExists
-          ? previousId
-          : getIdValue(taskRunData[taskRunData.length - 1]?.id) || null;
+
+        return previousExists ? previousId : getIdValue(taskRunData[taskRunData.length - 1]?.id) || null;
       });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -216,20 +215,20 @@ export function WorkspacePage() {
   }, [selectedTaskRunId, loadContextData]);
 
   useEffect(() => {
-    if (visibleArtifacts.length === 0) {
+    if (artifacts.length === 0) {
       setSelectedArtifactId(null);
       setSelectedArtifact(null);
       return;
     }
 
     const selectedExists = selectedArtifactId
-      ? visibleArtifacts.some((artifact) => getIdValue(artifact.id) === selectedArtifactId)
+      ? artifacts.some((artifact) => getIdValue(artifact.id) === selectedArtifactId)
       : false;
 
     if (!selectedArtifactId || !selectedExists) {
-      setSelectedArtifactId(getIdValue(visibleArtifacts[0].id));
+      setSelectedArtifactId(getIdValue(visibleArtifacts[0]?.id) || getIdValue(artifacts[0]?.id));
     }
-  }, [selectedArtifactId, visibleArtifacts]);
+  }, [artifacts, selectedArtifactId, visibleArtifacts]);
 
   useEffect(() => {
     if (!selectedArtifactId) {
@@ -467,6 +466,7 @@ export function WorkspacePage() {
             onSelectArtifact={setSelectedArtifactId}
           />
           <TaskRunPanel
+            artifacts={artifacts}
             taskSpecs={taskSpecs}
             taskRuns={taskRuns}
             loading={loadingTaskRuns}
@@ -493,6 +493,7 @@ export function WorkspacePage() {
       <aside className="workspace-artifacts">
         <ArtifactPanel
           artifacts={visibleArtifacts}
+          allArtifacts={artifacts}
           totalArtifactCount={artifacts.length}
           selectedArtifact={selectedArtifact}
           selectedArtifactId={selectedArtifactId}

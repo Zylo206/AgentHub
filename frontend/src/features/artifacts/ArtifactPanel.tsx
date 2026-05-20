@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { ArtifactCard } from "./ArtifactCard";
+import { DiffSummaryPanel } from "./DiffSummaryPanel";
+import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import type { Artifact } from "./artifactTypes";
+import { getVersionHistoryEntries } from "./artifactLineage";
 import { formatId, getIdValue } from "../../utils/id";
 
 const DEFAULT_REVISION_INSTRUCTION =
-  "\u628a\u6309\u94ae\u6539\u6210\u84dd\u8272\uff0c\u5e76\u589e\u52a0 loading \u72b6\u6001\u3002";
+  "把按钮改成蓝色，并增加 loading 状态。";
 
 interface ArtifactPanelProps {
   artifacts: Artifact[];
+  allArtifacts: Artifact[];
   totalArtifactCount: number;
   selectedArtifact: Artifact | null;
   selectedArtifactId: string | null;
@@ -41,6 +45,7 @@ function renderArtifactContent(artifact: Artifact) {
 
 export function ArtifactPanel({
   artifacts,
+  allArtifacts,
   totalArtifactCount,
   selectedArtifact,
   selectedArtifactId,
@@ -54,6 +59,9 @@ export function ArtifactPanel({
   onCreateRevision
 }: ArtifactPanelProps) {
   const [revisionInstruction, setRevisionInstruction] = useState(DEFAULT_REVISION_INSTRUCTION);
+  const versionEntries = getVersionHistoryEntries(allArtifacts, selectedArtifact);
+  const selectedVersionEntry =
+    versionEntries.find((entry) => entry.artifactId === selectedArtifactId) ?? null;
 
   useEffect(() => {
     setRevisionInstruction(selectedArtifact?.revisionInstruction || DEFAULT_REVISION_INSTRUCTION);
@@ -123,9 +131,14 @@ export function ArtifactPanel({
                 <p>
                   {selectedArtifact.type} / {selectedArtifact.status} / v{selectedArtifact.version}
                 </p>
-                {selectedArtifact.parentArtifactId ? (
-                  <p className="artifact-preview__line">
-                    Based on {selectedArtifact.parentArtifactId}
+                {selectedVersionEntry?.parentArtifact ? (
+                  <p className="artifact-preview__line revision-origin">
+                    Based on {selectedVersionEntry.parentArtifact.title} v
+                    {selectedVersionEntry.parentArtifact.version}
+                  </p>
+                ) : selectedArtifact.revisionInstruction ? (
+                  <p className="artifact-preview__line revision-origin">
+                    Revision artifact generated from a previous version in this conversation.
                   </p>
                 ) : null}
               </div>
@@ -156,6 +169,13 @@ export function ArtifactPanel({
                 {revisingArtifact ? "Revising..." : "Revise Selected Artifact"}
               </button>
             </div>
+            <VersionHistoryPanel
+              artifacts={allArtifacts}
+              selectedArtifact={selectedArtifact}
+              selectedArtifactId={selectedArtifactId}
+              onSelectArtifact={onSelectArtifact}
+            />
+            <DiffSummaryPanel artifacts={allArtifacts} artifact={selectedArtifact} />
             {renderArtifactContent(selectedArtifact)}
           </div>
         )}

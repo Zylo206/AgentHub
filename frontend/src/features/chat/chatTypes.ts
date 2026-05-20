@@ -38,6 +38,12 @@ export interface TaskStep {
   status: string;
   inputContext: string;
   outputContent: string;
+  preferredAdapterType?: string;
+  actualAdapterType?: string;
+  adapterType?: string;
+  adapterStatus?: string;
+  adapterResponseSummary?: string;
+  adapterErrorMessage?: string;
   producedArtifactIds: IdValue[];
   createdAt: string;
   updatedAt: string;
