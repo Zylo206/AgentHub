@@ -4,6 +4,7 @@ import { formatId } from "../../utils/id";
 interface MessageBubbleProps {
   message: Message;
   senderLabel: string;
+  targetAgentLabel?: string | null;
   onSelectArtifact: (artifactId: string) => void;
 }
 
@@ -31,7 +32,12 @@ function getBubbleVariant(message: Message): string {
   return "system";
 }
 
-export function MessageBubble({ message, senderLabel, onSelectArtifact }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  senderLabel,
+  targetAgentLabel,
+  onSelectArtifact
+}: MessageBubbleProps) {
   const variant = getBubbleVariant(message);
   const artifactIds = message.artifactIds.map((artifactId) => formatId(artifactId)).filter(Boolean);
 
@@ -42,6 +48,12 @@ export function MessageBubble({ message, senderLabel, onSelectArtifact }: Messag
           <span>{senderLabel}</span>
           <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
         </div>
+        {message.senderType === "USER" && message.targetAgentId ? (
+          <div className="message-target-agent">
+            <span>To:</span>
+            <span className="message-target-agent-name">@{targetAgentLabel || message.targetAgentId}</span>
+          </div>
+        ) : null}
         <div className="message-bubble__body">{message.content}</div>
         {artifactIds.length > 0 ? (
           <div className="message-bubble__artifacts">

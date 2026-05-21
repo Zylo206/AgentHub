@@ -1,695 +1,588 @@
-# AgentHub 技术设计文档 V0.1
+# AgentHub 技术设计文档 V0.5
 
 ## 1. 总体架构
 
-AgentHub 采用 Web 优先的前后端分层结构，核心目标是先支持 IM 式多 Agent 协作主链路，而不是一开始追求复杂平台化。
-
-总体分层如下：
-
-- Frontend：聊天工作台、Agent Builder、Artifact Panel、Task Status UI
-- Backend API：会话接口、消息接口、Agent 接口、Task 接口
-- Orchestrator Layer：Task Spec 生成、TaskPlan 生成、Routing、Aggregation
-- Agent Adapter Layer：对接外部 Agent 平台的统一适配器
-- Context Layer：Pinned Context、Artifact Handoff、ContextSnapshot
-- Artifact Layer：代码、文档、网页预览等 Artifact 管理
-
-推荐逻辑架构：
+AgentHub 当前采用前后端分离结构：
 
 ```text
 User
-  -> Chat Workspace
-  -> Backend API
-  -> Orchestrator
-  -> AgentRouter
-  -> AgentExecutor
-  -> Agent Adapter
-  -> ContextManager
-  -> ArtifactService
-  -> Reviewer
-  -> Frontend Render
+  -> React IM Workspace
+  -> Spring Boot REST API
+  -> TaskApplicationService
+  -> OrchestratorService
+  -> AgentRoutingService
+  -> AgentExecutorService
+  -> AgentAdapterRegistry
+  -> Mock / Codex placeholder / Claude Code placeholder
+  -> InMemory Repository
+  -> Frontend render of Message / TaskRun / Context / Artifact
 ```
 
-## 1.1 技术栈确认
+当前架构目标不是“完整生产化”，而是先稳定支撑比赛 Demo 的多 Agent 协作主链路。
 
-V0.1 阶段推荐采用以下技术栈，目标是优先保障开发速度、演示稳定性和后续扩展性。
+## 2. 前端架构
 
-### 前端技术栈
+前端位于：
 
-- `React 18`
-- `TypeScript`
-- `Vite`
-- `React Router`
-- `Ant Design`
-- `Zustand`
-- `Monaco Editor`
-- `axios`
-- `SSE`
+- [frontend](E:/CodeProject2/AgentHub/frontend)
 
-说明：
+主要技术栈：
 
-- React 负责搭建 IM 工作台、Agent Builder 和 Artifact Panel
-- TypeScript 用于约束 Message、TaskRun、Artifact 等核心前端数据结构
-- Vite 用于快速开发和构建
-- React Router 用于管理主工作台和辅助页面
-- Ant Design 用于快速搭建稳定的中后台与工作台界面
-- Zustand 用于管理会话、任务状态和右侧预览面板状态
-- Monaco Editor 用于代码类 Artifact 的查看与后续编辑能力
-- SSE 用于消息流、执行状态和 Agent 输出的增量更新
+- React 18
+- TypeScript
+- Vite
+- React Router
+- 原生 `fetch`
 
-### 后端技术栈
+主要页面：
 
-- `Java 21`
-- `Spring Boot 3.5`
-- `Spring Web`
-- `Spring Validation`
-- `MyBatis`
-- `Lombok`
-- `Jackson`
+- `/workspace`
+- `/agents`
 
-说明：
+主要模块：
 
-- Java 21 和 Spring Boot 3.5 用于承载 API、Orchestrator 和服务编排逻辑
-- Spring Web 用于 REST API 和基础执行接口
-- Spring Validation 用于请求参数和领域对象校验
-- MyBatis 用于控制核心实体的数据访问层，保持 SQL 可见、可控，便于后续按 TaskRun、TaskStep、Artifact 做精细查询
-- Jackson 用于 Task Spec、Artifact、TaskRun 等结构化对象的序列化
+- `features/conversations`
+- `features/agents`
+- `features/chat`
+- `features/artifacts`
+- `features/context`
 
-### 数据层
+当前前端强调：
 
-- `MySQL`
+- 三栏 IM Workspace
+- 低依赖、低复杂度
+- 强可视展示，而不是复杂状态管理
 
-说明：
+## 3. 后端架构
 
-- 正式方向采用 MySQL 持久化核心实体
-- V0.1 允许先以内存实现或轻量持久化跑通主链路
-- 优先落库的实体为 Agent、Conversation、Message、TaskSpec、TaskRun、TaskStep、Artifact
-- 数据访问层推荐采用 `Mapper Interface + XML SQL` 或 `Mapper Interface + 注解 SQL` 的轻量方式，不在 V0.1 阶段引入复杂数据访问抽象
+后端位于：
 
-### 通信方式
+- [backend](E:/CodeProject2/AgentHub/backend)
 
-- `REST API` 用于基础读写
-- `SSE` 用于长任务流式输出和状态更新
+主要技术栈：
 
-说明：
+- Java 17
+- Spring Boot 3.5.x
+- Spring Web
+- Spring Validation
+- MyBatis 依赖已预留
 
-- V0.1 不优先引入复杂实时通信方案
-- 单用户 Demo 场景下，REST + SSE 足以支撑稳定演示
+当前后端特点：
 
-### 当前不纳入 MVP 主栈
+- 领域模型已成型
+- Repository 以内存实现为主
+- API 已可支撑 Demo 联调
+- Adapter Layer 已有 placeholder + Mock fallback
 
-以下内容在 V0.1 阶段不作为主栈要求：
-
-- 复杂消息中间件
-- 企业级搜索基础设施
-- 多端真实落地
-- 复杂 Workflow Canvas
-- 深度平台级外部能力耦合
-
-## 2. 前端模块设计
-
-### 2.1 Chat Workspace
-
-用途：
-
-- 承载主入口
-- 展示单聊、群聊、消息流、状态卡片、Artifact 卡片
-
-子模块：
-
-- conversation-list
-- message-stream
-- message-composer
-- task-status-card
-- handoff-summary-card
-- artifact-inline-card
-
-### 2.2 Agent Builder
-
-用途：
-
-- 创建用户自定义 Agent
-- 维护 System Prompt、Tool Tags、Capability Tags
-
-### 2.3 Artifact Panel
-
-用途：
-
-- 右侧集中展示当前会话的核心 Artifact
-- 展示 Code Preview、Markdown Preview、Web Preview、Review Report
-
-### 2.4 Task Drawer
-
-用途：
-
-- 查看 Task Spec
-- 查看 TaskPlan
-- 查看 TaskRun / TaskStep 状态
-
-## 3. 后端模块设计
-
-### 3.1 Conversation Service
-
-职责：
-
-- 管理会话、群聊成员、消息流
-- 提供 Conversation、Message 的基础 CRUD
-
-### 3.2 Orchestrator Service
-
-职责：
-
-- 从用户消息生成 Task Spec
-- 生成 TaskPlan
-- 根据 Routing Rules 分派 Agent
-- 聚合多个 Agent 结果
-
-### 3.3 Agent Registry Service
-
-职责：
-
-- 管理系统内置 Agent 和用户自定义 Agent
-- 维护 Agent 与 Skill 的绑定关系
-
-### 3.4 Agent Router
-
-职责：
-
-- 读取 TaskPlan、Skill、Routing Rules
-- 为每个 TaskStep 分配最合适的 Agent
-
-### 3.5 Agent Executor
-
-职责：
-
-- 驱动 TaskStep 执行
-- 调用对应 Agent Adapter
-- 记录执行结果
-
-### 3.6 Context Manager
-
-职责：
-
-- 管理聊天历史
-- 管理 Pinned Context
-- 生成 Handoff Summary
-- 形成 ContextSnapshot
-
-### 3.7 Artifact Service
-
-职责：
-
-- 保存代码、Markdown、网页预览、文件等 Artifact
-- 管理 Artifact 状态
-- 供前端预览
-
-### 3.8 Review Service
-
-职责：
-
-- 按 Acceptance Criteria 触发 Reviewer
-- 生成结构化 Review Report
-
-## 4. 核心数据模型
-
-以下实体是 V0.1 的最小闭环。
+## 4. 核心领域模型
 
 ### 4.1 Agent
 
 用途：
 
-- 表示一个可参与协作的 Agent 实体
+- 表示可参与协作的系统内置 Agent 或用户自定义 Agent
 
-核心字段：
+关键字段：
 
-- agentId
-- name
-- role
-- provider
-- systemPrompt
-- toolTags
-- capabilityTags
-- enabled
+- `id`
+- `name`
+- `avatarUrl`
+- `role`
+- `description`
+- `systemPrompt`
+- `preferredAdapterType`
+- `capabilityTags`
+- `toolTags`
+- `status`
+- `createdAt`
+- `updatedAt`
 
 关系：
 
-- 一个 Agent 可绑定多个 Skill
-- 一个 Conversation 可包含多个 Agent
+- 被 Conversation / TaskStep 间接引用
+- 被 AgentRoutingService 用于选择 preferred adapter
+
+当前实现状态：
+
+- 已实现
+- 已支持 `CUSTOM` Agent 创建
+- 已支持 `avatarUrl` 和 `preferredAdapterType`
 
 ### 4.2 Conversation
 
 用途：
 
-- 表示一次单聊或群聊会话
+- 表示一个聊天会话
 
-核心字段：
+关键字段：
 
-- conversationId
-- title
-- mode
-- participantAgentIds
-- createdAt
-- updatedAt
+- `id`
+- `title`
+- `type`
+- `participantAgentIds`
+- `createdAt`
+- `updatedAt`
 
 关系：
 
-- 一个 Conversation 包含多个 Message
-- 一个 Conversation 可对应多个 TaskRun
+- 关联多个 Message
+- 关联多个 TaskSpec / TaskRun / Artifact / ContextSnapshot
+
+当前实现状态：
+
+- 已实现
+- 主要用于单条 Demo 主链路展示
 
 ### 4.3 Message
 
 用途：
 
-- 表示聊天流中的一条消息
+- 表示聊天流中的消息
 
-核心字段：
+关键字段：
 
-- messageId
-- conversationId
-- senderType
-- senderId
-- content
-- messageType
-- referencedMessageId
-- pinned
-- createdAt
+- `id`
+- `conversationId`
+- `senderType`
+- `senderId`
+- `messageType`
+- `content`
+- `artifactIds`
+- `createdAt`
 
 关系：
 
-- Message 可以关联多个 Artifact
-- Message 可以关联 TaskRun 或 TaskStep
+- 属于某个 Conversation
+- 可关联 Artifact
+
+当前实现状态：
+
+- 已实现
+- 支撑聊天流、TaskSpec 卡片消息、Artifact card 消息
 
 ### 4.4 TaskSpec
 
 用途：
 
-- 表示任务规格 Task Spec，是 Orchestrator 的输入基础
+- 表示结构化任务规格
 
-核心字段：
+关键字段：
 
-- taskSpecId
-- conversationId
-- title
-- userGoal
-- userInput
-- scope
-- nonGoals
-- acceptanceCriteria
-- requiredSkills
-- expectedArtifacts
-- constraints
-- risks
-- fallbackPlan
-- status
+- `id`
+- `conversationId`
+- `sourceMessageId`
+- `title`
+- `userGoal`
+- `userInput`
+- `scope`
+- `nonGoals`
+- `acceptanceCriteria`
+- `requiredSkills`
+- `expectedArtifacts`
+- `status`
+- `createdAt`
+- `updatedAt`
 
 关系：
 
-- 一个 TaskSpec 可生成一个或多个 TaskRun
-- TaskSpec 与 Skill、Artifact 强关联
+- 来源于用户消息
+- 驱动后续 TaskRun
 
-### 4.5 TaskPlan
+当前实现状态：
+
+- 已实现
+- 当前由静态 demo-task 生成，不是真实 LLM 推导
+
+### 4.5 TaskRun
 
 用途：
 
-- 表示由 Orchestrator 生成的执行计划
+- 表示一次完整任务执行
 
-核心字段：
+关键字段：
 
-- taskPlanId
-- taskSpecId
-- planSummary
-- steps
-- createdAt
+- `id`
+- `conversationId`
+- `taskSpecId`
+- `status`
+- `steps`
+- `resultSummary`
+- `createdAt`
+- `updatedAt`
 
 关系：
 
-- 一个 TaskPlan 包含多个 TaskStep 定义
+- 包含多个 TaskStep
+- 关联多个 Artifact
+- 关联多个 ContextSnapshot / HandoffSummary
 
-### 4.6 TaskRun
+当前实现状态：
+
+- 已实现
+- 同时支持初始 Demo 任务和 revision TaskRun
+
+### 4.6 TaskStep
 
 用途：
 
-- 表示一次任务执行实例
+- 表示 TaskRun 中的一个子步骤
 
-核心字段：
+关键字段：
 
-- taskRunId
-- taskSpecId
-- taskPlanId
-- conversationId
-- status
-- startedAt
-- endedAt
-- summary
+- `id`
+- `taskRunId`
+- `stepOrder`
+- `assignedAgentId`
+- `taskDescription`
+- `status`
+- `inputContext`
+- `outputContent`
+- `producedArtifactIds`
+- `preferredAdapterType`
+- `actualAdapterType`
+- `adapterType`
+- `adapterStatus`
+- `adapterResponseSummary`
+- `adapterErrorMessage`
+- `createdAt`
+- `updatedAt`
 
 关系：
 
-- 一个 TaskRun 包含多个 TaskStep
+- 隶属于某个 TaskRun
+- 产生多个 Artifact
 
-### 4.7 TaskStep
+当前实现状态：
+
+- 已实现
+- 已能展示 preferred adapter、actual adapter、fallback 状态
+
+### 4.7 Artifact
 
 用途：
 
-- 表示 TaskRun 中的一个执行步骤
+- 表示代码、文档、Review Report、API Contract 等产物
 
-核心字段：
+关键字段：
 
-- taskStepId
-- taskRunId
-- title
-- assignedAgentId
-- requiredSkillId
-- inputSummary
-- outputSummary
-- status
-- dependsOnStepIds
-- startedAt
-- endedAt
+- `id`
+- `conversationId`
+- `taskRunId`
+- `title`
+- `type`
+- `status`
+- `language`
+- `content`
+- `version`
+- `parentArtifactId`
+- `revisionInstruction`
+- `createdAt`
+- `updatedAt`
 
 关系：
 
-- 一个 TaskStep 可产出多个 Artifact
-- 一个 TaskStep 可依赖前置 TaskStep
+- 属于某个 TaskRun
+- 可参与 revision 形成版本链
 
-### 4.8 Artifact
+当前实现状态：
+
+- 已实现
+- 已支持 `v1 -> v2` 关系的前端展示
+
+### 4.8 ContextSnapshot
 
 用途：
 
-- 表示协作过程中的产物
+- 记录一次任务执行的上下文快照
 
-核心字段：
+关键字段：
 
-- artifactId
-- conversationId
-- taskRunId
-- taskStepId
-- artifactType
-- title
-- content
-- previewUrl
-- sourceAgentId
-- status
-- version
-- createdAt
+- `id`
+- `conversationId`
+- `taskRunId`
+- `includedMessageIds`
+- `includedArtifactIds`
+- `pinnedContextItems`
+- `summary`
+- `createdAt`
 
 关系：
 
-- Artifact 可被 Handoff 给后续 Agent
-- Artifact 可被 Reviewer 检查
+- 与 TaskRun、Artifact、Message 相关
 
-### 4.9 Skill
+当前实现状态：
+
+- 已实现
+- 当前由静态 demo-task / revision 流程构造
+
+### 4.9 HandoffSummary
 
 用途：
 
-- 表示一个可复用的能力单元
+- 表示 Agent 之间的交接摘要
 
-核心字段：
+关键字段：
 
-- skillId
-- name
-- description
-- inputSchema
-- outputSchema
-- supportedArtifactTypes
-- verificationRules
-
-关系：
-
-- Skill 与 Agent 是多对多关系
-- Skill 被 Routing Rules 引用
-
-### 4.10 ContextSnapshot
-
-用途：
-
-- 表示一次执行时注入给 Agent 的结构化上下文快照
-
-核心字段：
-
-- contextSnapshotId
-- conversationId
-- taskRunId
-- taskStepId
-- pinnedMessages
-- selectedHistory
-- artifactRefs
-- handoffSummary
-- createdAt
+- `id`
+- `taskRunId`
+- `sourceStepId`
+- `targetStepId`
+- `sourceAgentId`
+- `targetAgentId`
+- `passedArtifactIds`
+- `keyDecisions`
+- `openIssues`
+- `summary`
+- `createdAt`
 
 关系：
 
-- 一个 TaskStep 通常对应一个 ContextSnapshot
+- 与 TaskRun、TaskStep、Artifact 强关联
 
-## 5. Orchestrator 执行流程
+当前实现状态：
 
-目标流程如下：
+- 已实现
+- 当前为静态构造，不是真实 memory handoff engine
 
-用户输入任务  
--> 保存用户消息 Message  
--> 生成任务规格 Task Spec  
--> Orchestrator 生成 TaskPlan  
--> AgentRouter 根据 Skill 和 Rules 分配 Agent  
--> AgentExecutor 调用对应 Agent Adapter  
--> ContextManager 负责上下文注入与 Handoff  
--> ArtifactService 保存代码、文档、网页预览等 Artifact  
--> Reviewer 根据 Acceptance Criteria 检查结果  
--> 前端展示消息流、任务状态和 Artifact  
--> 用户基于 Artifact 继续修改
+## 5. API 分层
 
-### 5.1 简化版伪代码
+当前后端 API 位于 `backend/src/main/java/com/agenthub/api`，已覆盖以下能力：
 
-```text
-onUserMessage(message):
-  saveMessage(message)
+- Health
+- Agents
+- Conversations
+- Messages
+- Tasks
+- Artifacts
+- Context
+- Adapters
 
-  taskSpec = orchestrator.buildTaskSpec(message)
-  saveTaskSpec(taskSpec)
-
-  taskPlan = orchestrator.buildTaskPlan(taskSpec)
-  saveTaskPlan(taskPlan)
-
-  taskRun = createTaskRun(taskSpec, taskPlan)
-
-  for step in taskPlan.steps:
-    agent = agentRouter.pickAgent(step, taskSpec, routingRules)
-    contextSnapshot = contextManager.buildSnapshot(taskRun, step)
-    result = agentExecutor.execute(agent, step, contextSnapshot)
-    artifacts = artifactService.save(result.artifacts)
-    contextManager.recordHandoff(step, artifacts, result.summary)
-
-  reviewResult = reviewService.review(taskRun, taskSpec.acceptanceCriteria)
-  publishToConversation(taskRun, artifacts, reviewResult)
-```
-
-### 5.2 简化版流程图文本
-
-```text
-User Message
-  -> Task Spec
-  -> Task Plan
-  -> Route Step 1
-  -> Execute Step 1
-  -> Save Artifact
-  -> Route Step 2
-  -> Execute Step 2
-  -> Save Artifact
-  -> Reviewer Check
-  -> Aggregate Result
-  -> User Iteration
-```
-
-## 6. Agent Adapter 设计
-
-### 6.1 设计目标
-
-- 屏蔽不同 Agent 平台的调用差异
-- 在 V0.1 阶段先保证统一接口，不承诺深度能力对齐
-- 支持后续增加更多 provider
-
-### 6.2 推荐接口
-
-```json
-{
-  "adapterId": "codex-adapter",
-  "provider": "codex",
-  "input": {
-    "taskStepId": "step_001",
-    "systemPrompt": "...",
-    "userPrompt": "...",
-    "contextSnapshot": {}
-  },
-  "output": {
-    "summary": "...",
-    "artifacts": []
-  }
-}
-```
-
-### 6.3 最小能力
-
-- sendTask
-- parseResult
-- normalizeArtifacts
-- normalizeError
-
-## 7. Context Manager 设计
-
-### 7.1 目标
-
-解决多 Agent 协作中的上下文丢失、冗余、污染问题。
-
-### 7.2 上下文来源
-
-- 当前 Task Spec
-- Pinned Messages
-- 最近相关聊天记录
-- 上一个 Agent 输出的 Artifact
-- Handoff Summary
-
-### 7.3 输出对象
-
-Context Manager 最终输出 `ContextSnapshot`：
-
-- 供当前 Agent 执行
-- 供后续调试和回溯
-
-### 7.4 核心原则
-
-- 不无差别传递完整聊天历史
-- Task Spec 永远优先
-- Artifact 是下游 Agent 的核心上下文
-- Handoff Summary 用于压缩长上下文
-
-## 8. Artifact Service 设计
-
-### 8.1 目标
-
-把代码、网页、文件、Markdown 等产物从“普通文本回复”提升为系统内可管理对象。
-
-### 8.2 支持类型
-
-- CODE
-- WEB_PREVIEW
-- FILE
-- MARKDOWN
-- REVIEW_REPORT
-
-### 8.3 核心职责
-
-- 生成 ArtifactId
-- 保存 Artifact 元数据
-- 保存可预览内容
-- 提供前端读取接口
-- 管理 Artifact 状态和版本
-
-## 9. TaskRun / TaskStep 设计
-
-### 9.1 TaskRun
-
-表示一次端到端执行过程，负责承载：
-
-- 计划执行状态
-- 聚合结果
-- 失败和阻塞信息
-
-### 9.2 TaskStep
-
-表示一次具体分派动作，负责承载：
-
-- 当前步骤由谁执行
-- 输入是什么
-- 输出是什么
-- 状态如何变化
-
-推荐设计上让 Reviewer 也是一个 TaskStep，而不是游离流程。
-
-## 10. API 草案
-
-以下是 V0.1 草案，不代表已实现。
-
-### 10.1 Conversation APIs
-
-- `POST /api/conversations`
-- `GET /api/conversations`
-- `GET /api/conversations/{conversationId}`
-
-### 10.2 Message APIs
-
-- `POST /api/conversations/{conversationId}/messages`
-- `GET /api/conversations/{conversationId}/messages`
-
-### 10.3 Agent APIs
+关键接口包括：
 
 - `GET /api/agents`
 - `POST /api/agents`
-- `PATCH /api/agents/{agentId}`
-
-### 10.4 Task APIs
-
-- `POST /api/tasks/spec`
-- `POST /api/tasks/plan`
-- `POST /api/tasks/run`
-- `GET /api/tasks/run/{taskRunId}`
-- `GET /api/tasks/run/{taskRunId}/steps`
-
-### 10.5 Artifact APIs
-
-- `GET /api/artifacts/{artifactId}`
+- `POST /api/conversations`
+- `POST /api/conversations/{conversationId}/messages`
+- `POST /api/conversations/{conversationId}/demo-task`
+- `POST /api/artifacts/{artifactId}/demo-revision`
+- `GET /api/conversations/{conversationId}/task-runs`
 - `GET /api/conversations/{conversationId}/artifacts`
+- `GET /api/task-runs/{taskRunId}/handoff-summaries`
+- `GET /api/adapters`
+- `POST /api/adapters/{adapterType}/execute`
 
-### 10.6 示例响应
+## 6. Orchestrator / TaskApplicationService 当前实现说明
 
-```json
-{
-  "taskRunId": "run_001",
-  "status": "RUNNING",
-  "taskStepIds": ["step_001", "step_002", "step_003"]
-}
-```
+当前实现特点：
 
-## 11. 状态流转
+- `TaskApplicationService` 仍是 Task 领域的应用入口
+- `OrchestratorService` 已抽离，负责 demo-task 和 revision 的主要编排流程
+- 当前编排流程仍是静态 Demo 逻辑，不是真实动态规划
 
-统一使用英文状态枚举：
+当前含义：
 
-- DRAFT
-- READY
-- APPROVED
-- REVISED
-- CANCELLED
-- PENDING
-- RUNNING
-- COMPLETED
-- FAILED
-- BLOCKED
-- WAITING
-- SKIPPED
-- CREATED
-- UPDATED
-- REVIEWED
-- ACCEPTED
-- REJECTED
-- ARCHIVED
+- 已有“Orchestrator 结构”
+- 但还没有“真实 Orchestrator 智能”
 
-详细定义见 [state-machine.md](/E:/CodeProject2/AgentHub/docs/collaboration/state-machine.md)
+## 7. Agent Adapter Layer 设计
 
-## 12. 风险与扩展点
+当前 Adapter Layer 已实现第一版骨架：
 
-### 12.1 当前风险
+- `AgentAdapter`
+- `AgentRequest`
+- `AgentResponse`
+- `AgentExecutionStatus`
+- `AgentAdapterType`
+- `AgentAdapterRegistry`
+- `AgentExecutorService`
+- `AgentAdapterApplicationService`
 
-- 外部 Agent 平台实际接入复杂度可能高于预期
-- 上下文组织不当会导致演示不稳定
-- Artifact 渲染范围过大容易拖慢实现
+当前支持的类型：
 
-### 12.2 控制策略
+- `MOCK`
+- `CODEX`
+- `CLAUDE_CODE`
+- `OPEN_CODE`
 
-- 先做薄 Adapter
-- 先做稳定 Demo 场景
-- 先支持 4 种核心 Artifact
-- Reviewer 先以结构化检查为主，不追求复杂静态分析
+## 8. Mock / Codex / Claude Code / OpenCode 的接入状态
 
-### 12.3 扩展点
+### MOCK
 
-- Diff View
-- Version History
-- Deploy Action
-- Knowledge Bridge 深化
-- 多端支持
+- 已实现
+- 当前是主要稳定执行器
+- 所有 Demo 主链路默认可 fallback 到它
+
+### CODEX
+
+- 只有 placeholder adapter
+- 不发起真实外部调用
+- 用于体现 preferred adapter 设计
+
+### CLAUDE_CODE
+
+- 只有 placeholder adapter
+- 不发起真实外部调用
+- 用于体现 preferred adapter 设计
+
+### OPEN_CODE
+
+- 当前仅保留枚举与设计空间
+- 未形成真实接入链路
+
+## 9. Agent Builder 设计
+
+当前已实现：
+
+- `POST /api/agents`
+- 自定义 Agent 保存到内存 Repository
+- `/agents` 页面可创建 Agent
+- Agent List 可展示内置 Agent + 自定义 Agent
+
+当前未实现：
+
+- 更新 Agent
+- 删除 Agent
+- 自定义 Agent 进入真实 `@Agent` 执行链路
+
+## 10. ContextSnapshot / HandoffSummary 设计
+
+当前设计目标是把“上下文”和“交接”从隐式逻辑变成显式对象。
+
+当前实现：
+
+- demo-task 创建 ContextSnapshot
+- revision 也创建 ContextSnapshot
+- HandoffSummary 至少覆盖关键 Agent 之间的交接
+
+当前限制：
+
+- 仍是静态构造
+- 不具备真实长期 memory 管理
+
+## 11. Artifact Service / Revision 设计
+
+当前后端已经支持：
+
+- 查询 Artifact
+- 查询 TaskRun 关联的 Artifact
+- 对单个 Artifact 发起静态 revision
+
+revision 流程当前行为：
+
+- 基于原 Artifact 创建新的 TaskSpec
+- 生成新的 TaskRun
+- 生成 revision Artifact v2
+- 生成新的 Review Report
+- 生成新的 ContextSnapshot / HandoffSummary
+
+当前限制：
+
+- 不是基于真实代码分析
+- 不是基于真实 LLM 修改
+
+## 12. Version History / Diff Summary 前端设计
+
+这部分目前主要在前端实现：
+
+- 基于当前会话已加载的 Artifact 计算 lineage
+- 基于 `parentArtifactId`、`revisionInstruction`、`title + version` 推导版本关系
+- 静态生成 Diff Summary
+
+当前限制：
+
+- 没有真实 diff 算法
+- 没有后端版版本图谱服务
+
+## 13. TaskRun / TaskStep 状态流转
+
+当前使用的关键状态：
+
+- TaskRun
+  - `PENDING`
+  - `RUNNING`
+  - `COMPLETED`
+  - `FAILED`
+  - `BLOCKED`
+  - `CANCELLED`
+- TaskStep
+  - `WAITING`
+  - `RUNNING`
+  - `COMPLETED`
+  - `FAILED`
+  - `SKIPPED`
+
+当前 demo 中大多数状态以 `COMPLETED` 为主，用于稳定展示主链路。
+
+## 14. 当前内存 Repository 设计
+
+当前仓库主要依赖内存 Repository：
+
+- `InMemoryAgentRepository`
+- `InMemoryConversationRepository`
+- `InMemoryMessageRepository`
+- `InMemoryTaskRepository`
+- `InMemoryArtifactRepository`
+- `InMemoryContextRepository`
+
+优点：
+
+- 联调快
+- 适合比赛 Demo
+- 便于快速重置数据
+
+缺点：
+
+- 刷新进程后数据丢失
+- 不适合真实多用户协作
+
+## 15. 未来 MyBatis + MySQL 迁移设计
+
+当前依赖中已经引入 MyBatis 和 MySQL connector，但真实持久化尚未完成。
+
+建议迁移顺序：
+
+1. Agent
+2. Conversation
+3. Message
+4. TaskSpec
+5. TaskRun / TaskStep
+6. Artifact
+7. ContextSnapshot / HandoffSummary
+
+迁移原则：
+
+- 先保持 Repository 接口不变
+- 再替换内存实现为 MyBatis 实现
+- 前端 API 不感知存储层变化
+
+## 16. WebSocket / SSE 后续设计
+
+当前未实现流式执行。
+
+后续建议：
+
+- TaskRun 状态更新走 SSE 或 WebSocket
+- Message Stream 支持 Agent 增量输出
+- Adapter 执行过程支持实时状态推送
+
+当前文档中应明确：
+
+- 这仍是下一阶段能力
+- 不是 V0.5 已完成内容
+
+## 17. 风险与扩展点
+
+### 当前风险
+
+- Demo 逻辑较多依赖静态模板
+- placeholder adapter 易被误解为真实接入
+- 内存存储无法支撑持久演示环境
+
+### 扩展点
+
+- 自定义 Agent 接入执行链路
+- 真实 provider 接入
+- SSE / WebSocket
+- 持久化存储
+- Deploy Status Card
+- 多端和多人协作

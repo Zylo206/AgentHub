@@ -11,6 +11,7 @@ public class Message {
     private final ConversationId conversationId;
     private final MessageSenderType senderType;
     private final String senderId;
+    private final String targetAgentId;
     private final MessageType messageType;
     private final String content;
     private final List<ArtifactId> artifactIds;
@@ -25,10 +26,33 @@ public class Message {
             String content,
             List<ArtifactId> artifactIds,
             Instant createdAt) {
+        this(
+                id,
+                conversationId,
+                senderType,
+                senderId,
+                null,
+                messageType,
+                content,
+                artifactIds,
+                createdAt);
+    }
+
+    public Message(
+            MessageId id,
+            ConversationId conversationId,
+            MessageSenderType senderType,
+            String senderId,
+            String targetAgentId,
+            MessageType messageType,
+            String content,
+            List<ArtifactId> artifactIds,
+            Instant createdAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.senderType = senderType;
         this.senderId = senderId;
+        this.targetAgentId = targetAgentId;
         this.messageType = messageType;
         this.content = content;
         this.artifactIds = List.copyOf(artifactIds);
@@ -49,6 +73,10 @@ public class Message {
 
     public String getSenderId() {
         return senderId;
+    }
+
+    public String getTargetAgentId() {
+        return targetAgentId;
     }
 
     public MessageType getMessageType() {

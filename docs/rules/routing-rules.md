@@ -1,116 +1,158 @@
-# Routing Rules
+# Routing Rules V0.5
 
-## 1. Orchestrator 路由规则
+## 1. 文档目的
 
-Routing Rules 定义 Orchestrator 如何把 TaskSpec 或 TaskStep 分派给合适的 Agent。
+Routing Rules 用于说明 Orchestrator 和 AgentRoutingService 如何为不同角色、不同任务选择 preferred adapter，以及当前 Demo 中哪些行为已经实现，哪些仍是设计目标。
 
-核心原则：
+## 2. 当前已实现的路由规则
 
-- 根据任务内容路由，不根据随机偏好路由
-- 优先 Specialist Agent，最后再进入 Reviewer
-- 多步骤任务必须有清晰顺序和依赖关系
+当前代码中已经存在显式 preferred adapter 路由：
 
-## 2. Frontend Builder 选择规则
+- `ORCHESTRATOR -> MOCK`
+- `FRONTEND_BUILDER -> CODEX`
+- `BACKEND_WORKER -> MOCK`
+- `REVIEWER -> CLAUDE_CODE`
+- `CUSTOM -> MOCK`（如果没有单独配置）
 
-以下任务应优先路由到 Frontend Builder：
+另外，当前自定义 Agent 支持配置 `preferredAdapterType`：
+
+- 如果自定义 Agent 配了 `preferredAdapterType`，优先使用该配置
+- 如果配置非法，fallback 到 `MOCK`
+
+## 3. 当前 demo-task 中的实际执行结果
+
+虽然当前存在 preferred adapter 路由，但由于 `CODEX` 和 `CLAUDE_CODE` 仍是 placeholder，因此 demo-task 的实际执行结果是：
+
+- Frontend Builder
+  - preferred: `CODEX`
+  - actual: `MOCK`
+  - status: `FALLBACK_USED`
+- Backend Worker
+  - preferred: `MOCK`
+  - actual: `MOCK`
+  - status: `COMPLETED`
+- Reviewer
+  - preferred: `CLAUDE_CODE`
+  - actual: `MOCK`
+  - status: `FALLBACK_USED`
+
+这部分已经在 TaskStep 和前端 TaskRunPanel 中可见。
+
+## 4. 当前 Artifact revision 中的实际执行结果
+
+revision TaskRun 同样适用当前策略：
+
+- Frontend Builder revision step
+  - preferred: `CODEX`
+  - actual: `MOCK`
+  - status: `FALLBACK_USED`
+- Reviewer revision step
+  - preferred: `CLAUDE_CODE`
+  - actual: `MOCK`
+  - status: `FALLBACK_USED`
+
+## 5. 角色到 adapter 的当前策略
+
+### Frontend Builder
+
+适用任务：
 
 - 页面
 - 组件
 - UI
 - 样式
 - 表单
-- 交互
-- Web Preview
+- revision of code artifact
 
-示例：
+当前策略：
 
-- 生成 React 登录页
-- 调整按钮颜色
-- 添加 loading 状态
+- preferred adapter: `CODEX`
+- current executable path in demo: fallback to `MOCK`
 
-## 3. Backend Worker 选择规则
+### Backend Worker
 
-以下任务应优先路由到 Backend Worker：
+适用任务：
 
-- 接口
-- 数据库
-- 数据模型
-- 服务逻辑
 - API Contract
+- Data Model
+- 服务草案
 
-示例：
+当前策略：
 
-- 设计登录接口
-- 输出验证码接口响应格式
-- 设计用户数据模型
+- preferred adapter: `MOCK`
 
-## 4. Reviewer 选择规则
+说明：
 
-以下任务应优先路由到 Reviewer：
+- 未来可以演进为 `OPEN_CODE`
+- 但当前代码仍以 `MOCK` 为主
 
-- 检查
+### Reviewer
+
+适用任务：
+
 - 验收
-- 质量
-- 安全
-- Review
+- 质量检查
+- 风险检查
+- revision 后检查
 
-示例：
+当前策略：
 
-- 检查是否满足 Acceptance Criteria
-- 给出代码质量建议
+- preferred adapter: `CLAUDE_CODE`
+- current executable path in demo: fallback to `MOCK`
 
-## 5. 多 Agent 任务排序规则
+### Custom Agent
 
-多步骤任务推荐顺序：
+当前策略：
 
-1. 先执行 Specialist Agent
-2. 再执行下游 Specialist Agent
-3. 最后执行 Reviewer
+- 优先读取 `preferredAdapterType`
+- 若为空，默认 `MOCK`
+- 若非法，fallback `MOCK`
 
-在 Demo 场景中通常是：
+当前限制：
 
-1. Frontend Builder
-2. Backend Worker
-3. Reviewer
+- 自定义 Agent 尚未真正进入 demo-task 执行链路
+- 因此这部分当前更准确地说是“已实现配置能力，未完成完整执行接入”
 
-## 6. 路由冲突处理
+## 6. fallback 规则
 
-若同一任务同时命中多个规则：
+当前 AgentAdapterRegistry 的设计目标是：
 
-- 优先根据主产物判断
-- 若主产物是页面，先给 Frontend Builder
-- 若主产物是接口或数据结构，先给 Backend Worker
-- Reviewer 永远不抢主产物生成
+1. 如果 preferred adapter 是 `MOCK`，直接执行 `MOCK`
+2. 如果 preferred adapter 是 `CODEX` 或 `CLAUDE_CODE`
+   - 先走对应 placeholder adapter
+   - 若返回 `FAILED` 或 `FALLBACK_USED`
+   - 则 fallback 到 `MOCK`
+3. 在 TaskStep 中记录：
+   - `preferredAdapterType`
+   - `actualAdapterType`
+   - `adapterStatus`
+   - `adapterResponseSummary`
+   - `adapterErrorMessage`
 
-## 7. 示例
+## 7. 当前已完成与下一阶段边界
 
-### 示例 1
+### 已完成
 
-任务：
+- 显式 preferred adapter 路由规则
+- placeholder adapter + mock fallback
+- TaskStep 中的 preferred / actual / status 展示
 
-“帮我做一个登录页面，并生成 README，最后检查质量。”
+### 下一阶段
 
-路由结果：
+- 让自定义 Agent 的 `preferredAdapterType` 真正进入执行链路
+- 至少两个主流平台的最小真实或半真实接入
+- 在 Workspace 中补最小 `@Agent` 选择执行链路
 
-- 页面 -> Frontend Builder
-- README -> Frontend Builder 或 Backend Worker 附带输出
-- 质量检查 -> Reviewer
+## 8. 对比赛要求的对应关系
 
-### 示例 2
+当前 Routing Rules 已经体现出以下硬要求方向：
 
-任务：
+- 存在统一 Agent Adapter Layer
+- 存在多个 adapter 类型抽象
+- 存在失败降级 fallback 机制
 
-“设计用户登录接口和响应结构。”
+但仍未完全满足：
 
-路由结果：
-
-- API Contract -> Backend Worker
-- Review -> Reviewer
-
-## 8. 对实现的指导意义
-
-后续实现中，Routing Rules 可作为：
-
-- Orchestrator 生成 TaskPlan 后的分配依据
-- AgentRouter 的规则表
-- 前端路由说明卡片的展示依据
+- 至少两个主流 Agent 平台真实接入
+- `@Agent` 指定执行
+- 更真实的动态路由和并行调度

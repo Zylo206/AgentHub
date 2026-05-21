@@ -48,6 +48,11 @@ export function MessageStream({
           key={getIdValue(message.id)}
           message={message}
           senderLabel={resolveSenderLabel(message, agents)}
+          targetAgentLabel={
+            message.targetAgentId
+              ? agents.find((agent) => getIdValue(agent.id) === message.targetAgentId)?.name || message.targetAgentId
+              : null
+          }
           onSelectArtifact={onSelectArtifact}
         />
       ))}

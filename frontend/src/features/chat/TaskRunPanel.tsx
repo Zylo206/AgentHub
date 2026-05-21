@@ -1,8 +1,10 @@
 import type { Artifact } from "../artifacts/artifactTypes";
+import type { Agent } from "../agents/agentTypes";
 import type { TaskRun, TaskSpec, TaskStep } from "./chatTypes";
 import { formatId, getIdValue } from "../../utils/id";
 
 interface TaskRunPanelProps {
+  agents: Agent[];
   artifacts: Artifact[];
   taskSpecs: TaskSpec[];
   taskRuns: TaskRun[];
@@ -65,6 +67,7 @@ function getRevisionOrigin(artifacts: Artifact[], taskRun: TaskRun) {
 }
 
 export function TaskRunPanel({
+  agents,
   artifacts,
   taskSpecs,
   taskRuns,
@@ -73,6 +76,8 @@ export function TaskRunPanel({
   selectedTaskStepId,
   onSelectStep
 }: TaskRunPanelProps) {
+  const agentNameMap = new Map(agents.map((agent) => [getIdValue(agent.id), agent.name]));
+
   if (loading) {
     return <div className="task-panel__empty">Loading task runs...</div>;
   }
@@ -148,6 +153,9 @@ export function TaskRunPanel({
                   const stepId = getIdValue(step.id);
                   const isSelectedStep = selectedTaskStepId === stepId;
                   const adapterDisplay = getAdapterDisplay(step);
+                  const assignedAgentId = getIdValue(step.assignedAgentId);
+                  const assignedAgentName =
+                    agentNameMap.get(assignedAgentId) || step.assignedAgentName || assignedAgentId;
 
                   return (
                     <button
@@ -163,8 +171,9 @@ export function TaskRunPanel({
                         </span>
                       </div>
                       <div className="task-step-item__description">{step.taskDescription}</div>
-                      <div className="task-step-item__meta">
-                        Agent {getIdValue(step.assignedAgentId)} / {step.producedArtifactIds.length} artifacts
+                      <div className="task-step-item__meta step-agent-meta">
+                        <span>Assigned Agent: {assignedAgentName}</span>
+                        <span>{step.producedArtifactIds.length} artifacts</span>
                       </div>
                       <div className="step-adapter-meta">
                         {adapterDisplay.fallbackUsed ? (

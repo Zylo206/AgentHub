@@ -25,7 +25,19 @@ public class TaskApplicationService {
     }
 
     public TaskRun createDemoTaskFromMessage(String conversationId, String messageId, String userInput) {
-        return orchestratorService.createDemoTaskFromMessage(conversationId, messageId, userInput);
+        return orchestratorService.createDemoTaskFromMessage(conversationId, messageId, userInput, null);
+    }
+
+    public TaskRun createDemoTaskFromMessage(
+            String conversationId,
+            String messageId,
+            String userInput,
+            String selectedAgentId) {
+        return orchestratorService.createDemoTaskFromMessage(
+                conversationId,
+                messageId,
+                userInput,
+                selectedAgentId);
     }
 
     public TaskSpec getTaskSpec(String taskSpecId) {

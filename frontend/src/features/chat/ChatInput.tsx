@@ -1,14 +1,23 @@
 import { FormEvent } from "react";
+import type { Agent } from "../agents/agentTypes";
 
 interface ChatInputProps {
   value: string;
   disabled: boolean;
   sending: boolean;
+  selectedAgent?: Agent | null;
   onChange: (value: string) => void;
   onSend: () => void;
 }
 
-export function ChatInput({ value, disabled, sending, onChange, onSend }: ChatInputProps) {
+export function ChatInput({
+  value,
+  disabled,
+  sending,
+  selectedAgent,
+  onChange,
+  onSend
+}: ChatInputProps) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!disabled && !sending) {
@@ -18,6 +27,16 @@ export function ChatInput({ value, disabled, sending, onChange, onSend }: ChatIn
 
   return (
     <form className="chat-input" onSubmit={handleSubmit}>
+      <div className="chat-target-agent">
+        {selectedAgent ? (
+          <>
+            <span className="chat-target-agent-token">@{selectedAgent.name}</span>
+            <span className="chat-input__hint">via {selectedAgent.preferredAdapterType || "MOCK"}</span>
+          </>
+        ) : (
+          <span className="chat-input__hint">No target agent selected</span>
+        )}
+      </div>
       <textarea
         className="chat-input__textarea"
         rows={4}

@@ -4,13 +4,15 @@ import { formatId } from "../../utils/id";
 interface AgentListProps {
   agents: Agent[];
   loading: boolean;
+  selectedAgentId?: string | null;
+  onSelectAgent?: (agent: Agent) => void;
 }
 
 function getInitial(name: string): string {
   return name.trim().charAt(0).toUpperCase() || "A";
 }
 
-export function AgentList({ agents, loading }: AgentListProps) {
+export function AgentList({ agents, loading, selectedAgentId, onSelectAgent }: AgentListProps) {
   if (loading) {
     return <div className="panel-empty">Loading agents...</div>;
   }
@@ -20,9 +22,14 @@ export function AgentList({ agents, loading }: AgentListProps) {
   }
 
   return (
-    <div className="agent-list">
+      <div className="agent-list">
       {agents.map((agent) => (
-        <div key={formatId(agent.id)} className="agent-item">
+        <button
+          type="button"
+          key={formatId(agent.id)}
+          className={`agent-item ${selectedAgentId === formatId(agent.id) ? "agent-item--selected" : ""}`}
+          onClick={() => onSelectAgent?.(agent)}
+        >
           <div className="agent-item__row">
             <div className="agent-item__identity">
               {agent.avatarUrl ? (
@@ -61,7 +68,7 @@ export function AgentList({ agents, loading }: AgentListProps) {
               ))}
             </div>
           ) : null}
-        </div>
+        </button>
       ))}
     </div>
   );

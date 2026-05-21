@@ -1,86 +1,154 @@
-# Handoff Rules
+# Handoff Rules V0.5
 
-## 1. Agent 之间如何传递上下文
+## 1. 文档目的
 
-Agent 之间传递上下文时，目标不是复制全部历史，而是传递“足够完成下一步工作”的最小必要信息。
+Handoff Rules 用于约束 Agent 之间如何传递上下文，避免把完整聊天历史无差别复制给下一个执行者，同时保证 Reviewer 和 revision 流程能够获得足够的核心信息。
 
-Handoff 的最小输入应包括：
+## 2. 必须传递的内容
 
-- Task Spec
-- 当前 TaskStep
-- 上一个 Agent 生成的核心 Artifact
-- Handoff Summary
+### 2.1 TaskSpec
 
-## 2. Handoff Summary 格式
+TaskSpec 必须传给所有相关 Agent，因为它定义了：
 
-推荐统一格式：
+- `userGoal`
+- `scope`
+- `nonGoals`
+- `acceptanceCriteria`
+- `expectedArtifacts`
 
-```json
-{
-  "sourceAgent": "frontend-builder",
-  "targetAgent": "reviewer",
-  "passedArtifacts": ["artifact_code_login_page", "artifact_readme_login_page"],
-  "keyDecisions": [
-    "登录页采用邮箱登录和验证码登录双 Tab 结构",
-    "按钮已预留 loading 状态位置"
-  ],
-  "openIssues": [
-    "README 暂未补充验证码流程说明"
-  ]
-}
-```
+### 2.2 前一个 Agent 的核心 Artifact
 
-## 3. Artifact 如何传给下一个 Agent
+前一个 Agent 生成的核心 Artifact 必须作为下一个 Agent 的关键输入，而不是只传一句 summary。
 
-规则：
+例如：
 
-- 上一个 Agent 生成的主 Artifact 必须作为下一个 Agent 的核心上下文
-- 不能只传 summary 而不传 Artifact 引用
-- 对于 Reviewer，Artifact 是主要检查对象
+- Frontend Builder 生成的 `LoginPage.tsx`
+- Backend Worker 生成的 API Contract
+- README
 
-## 4. 哪些信息必须传递
+### 2.3 HandoffSummary
 
-- taskSpecId
-- userGoal
-- acceptanceCriteria
-- 当前步骤输出的核心 Artifact
-- keyDecisions
-- openIssues
+每次交接都应带上结构化 HandoffSummary，至少包含：
 
-## 5. 哪些信息不能传递
+- `sourceAgent`
+- `targetAgent`
+- `passedArtifacts`
+- `keyDecisions`
+- `openIssues`
 
-- 与当前 TaskStep 无关的大量历史噪音
-- 无法验证的推测性结论
-- 整段完整聊天历史的无差别复制
+### 2.4 Reviewer 特殊要求
 
-## 6. 上下文过长时如何压缩
+Reviewer 必须接收：
 
-压缩优先级：
+- `acceptanceCriteria`
+- 相关 Artifact
+- 必要的 `keyDecisions`
+- 未解决问题 `openIssues`
 
-1. 保留 Task Spec
-2. 保留 Pinned Context
-3. 保留核心 Artifact 引用
-4. 用 Handoff Summary 代替大段聊天记录
+## 3. 不应无差别传递完整聊天历史
 
-## 7. 示例
+当前规则明确要求：
 
-### Frontend Builder -> Reviewer
+- 不把完整消息流原样复制给每个 Agent
+- 不把与当前步骤无关的噪声一起传递
+- 不传递无法验证的推测性结论
 
-- 传递登录页面代码 Artifact
-- 传递 README Artifact
-- 传递“支持两种登录模式”这一关键决策
-- 传递“README 仍需补充部分说明”这一 open issue
+交接目标是：
+
+> 传递足以完成下一步工作的最小必要上下文。
+
+## 4. ContextSnapshot 的作用
+
+ContextSnapshot 是一次任务执行的上下文快照，用于说明：
+
+- 本轮任务包含哪些消息
+- 本轮任务包含哪些 Artifact
+- 哪些内容被视为 pinned context
+- 当前任务的 summary 是什么
+
+当前状态：
+
+- 已在 demo-task 和 revision 链路中静态生成
+- 用于前端 ContextPanel 展示
+
+## 5. HandoffSummary 的作用
+
+HandoffSummary 用于显示：
+
+- 谁把结果交给了谁
+- 交接了哪些 Artifact
+- 关键决策是什么
+- 还有哪些开放问题
+
+当前状态：
+
+- 已在 demo-task 和 revision 链路中静态生成
+- 用于前端 ContextPanel 展示
+
+## 6. revision 场景的额外交接规则
+
+在 Artifact revision 时，以下内容必须传递：
+
+- `parentArtifactId`
+- `revisionInstruction`
+- 原始 Artifact
+- revised Artifact
+- Reviewer 所需的验收依据
+
+原因：
+
+- revision 不是凭空重做任务
+- 而是基于已有 Artifact 做增量修改
+
+## 7. 当前 Demo 中的交接实例
+
+### Frontend Builder -> Backend Worker
+
+必须传递：
+
+- `LoginPage.tsx`
+- TaskSpec
+- 页面目标说明
+- 关键决策，例如登录方式、表单结构
 
 ### Backend Worker -> Reviewer
 
-- 传递 API Contract Artifact
-- 传递字段命名约定
-- 传递未确定的接口错误码设计
+必须传递：
 
-## 8. 对实现的指导意义
+- API Contract 或 Data Model
+- `LoginPage.tsx`
+- README
+- acceptanceCriteria
+- openIssues
 
-Handoff Rules 后续应体现在：
+### Frontend Builder -> Reviewer（revision）
 
-- ContextManager 的 snapshot 构造逻辑
-- Message Stream 中的 Handoff Summary 卡片
-- Reviewer 的输入整理逻辑
+必须传递：
+
+- revised `LoginPage.tsx v2`
+- revisionInstruction
+- 本次修改摘要
+
+## 8. 当前实现边界
+
+### 已完成
+
+- demo-task 中有静态 ContextSnapshot
+- demo-task 中有静态 HandoffSummary
+- revision 中也会生成对应 snapshot 和 handoff
+- 前端可以直接展示这些数据
+
+### 未完成
+
+- 真实自动上下文压缩
+- 长会话下的动态裁剪
+- 真实 provider 执行前的上下文注入策略
+- 多人协作下的冲突合并与交接治理
+
+## 9. 与比赛评分的关系
+
+Handoff Rules 直接对应 AI 协作能力中的“rules”和“协作规范”：
+
+- 证明系统不是简单多模型聊天
+- 证明任务如何从一个 Agent 传到下一个 Agent
+- 证明 Artifact 在协作里是核心上下文对象

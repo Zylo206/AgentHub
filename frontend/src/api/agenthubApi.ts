@@ -100,10 +100,14 @@ export function getConversation(conversationId: string): Promise<Conversation> {
   return request<Conversation>(`/api/conversations/${conversationId}`);
 }
 
-export function sendMessage(conversationId: string, content: string): Promise<Message> {
+export function sendMessage(
+  conversationId: string,
+  content: string,
+  targetAgentId?: string | null
+): Promise<Message> {
   return request<Message>(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ content })
+    body: JSON.stringify({ content, targetAgentId: targetAgentId ?? null })
   });
 }
 
@@ -114,11 +118,12 @@ export function getMessages(conversationId: string): Promise<Message[]> {
 export function createDemoTask(
   conversationId: string,
   messageId: string,
-  userInput: string
+  userInput: string,
+  selectedAgentId?: string | null
 ): Promise<TaskRun> {
   return request<TaskRun>(`/api/conversations/${conversationId}/demo-task`, {
     method: "POST",
-    body: JSON.stringify({ messageId, userInput })
+    body: JSON.stringify({ messageId, userInput, selectedAgentId: selectedAgentId ?? null })
   });
 }
 

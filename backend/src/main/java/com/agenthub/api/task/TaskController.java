@@ -29,7 +29,8 @@ public class TaskController {
                 taskApplicationService.createDemoTaskFromMessage(
                         conversationId,
                         request.messageId(),
-                        request.userInput()),
+                        request.userInput(),
+                        request.selectedAgentId()),
                 "Demo task created");
     }
 
@@ -54,4 +55,7 @@ public class TaskController {
     }
 }
 
-record CreateDemoTaskRequest(@NotBlank String messageId, @NotBlank String userInput) {}
+record CreateDemoTaskRequest(
+        @NotBlank String messageId,
+        @NotBlank String userInput,
+        String selectedAgentId) {}

@@ -1,10 +1,12 @@
 package com.agenthub.application.orchestrator;
 
+import com.agenthub.application.agent.AgentApplicationService;
 import com.agenthub.application.agent.AgentExecutorService;
 import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.application.task.TaskApplicationService;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
+import com.agenthub.domain.agent.Agent;
 import com.agenthub.domain.agent.AgentId;
 import com.agenthub.domain.agent.BuiltInAgentIds;
 import com.agenthub.domain.artifact.Artifact;
@@ -47,6 +49,7 @@ public class OrchestratorService {
     private final ArtifactRepository artifactRepository;
     private final ContextRepository contextRepository;
     private final MessageApplicationService messageApplicationService;
+    private final AgentApplicationService agentApplicationService;
     private final AgentExecutorService agentExecutorService;
     private final AgentRoutingService agentRoutingService;
     private final IdGenerator idGenerator;
@@ -57,6 +60,7 @@ public class OrchestratorService {
             ArtifactRepository artifactRepository,
             ContextRepository contextRepository,
             MessageApplicationService messageApplicationService,
+            AgentApplicationService agentApplicationService,
             AgentExecutorService agentExecutorService,
             AgentRoutingService agentRoutingService,
             IdGenerator idGenerator,
@@ -65,6 +69,7 @@ public class OrchestratorService {
         this.artifactRepository = artifactRepository;
         this.contextRepository = contextRepository;
         this.messageApplicationService = messageApplicationService;
+        this.agentApplicationService = agentApplicationService;
         this.agentExecutorService = agentExecutorService;
         this.agentRoutingService = agentRoutingService;
         this.idGenerator = idGenerator;
@@ -72,9 +77,24 @@ public class OrchestratorService {
     }
 
     public TaskRun createDemoTaskFromMessage(String conversationId, String messageId, String userInput) {
+        return createDemoTaskFromMessage(conversationId, messageId, userInput, null);
+    }
+
+    public TaskRun createDemoTaskFromMessage(
+            String conversationId,
+            String messageId,
+            String userInput,
+            String selectedAgentId) {
         Instant now = timeProvider.now();
         ConversationId conversationRef = new ConversationId(conversationId);
         MessageId sourceMessageId = new MessageId(messageId);
+        Agent selectedAgent = resolveSelectedAgent(selectedAgentId);
+        String selectedAgentSummary = buildSelectedAgentSummary(selectedAgent);
+        AgentAdapterType selectedAgentPreferredAdapter = selectedAgent == null
+                ? agentRoutingService.resolvePreferredAdapterForStep(
+                        BuiltInAgentIds.FRONTEND_BUILDER,
+                        "Generate the React login page and the initial README draft.")
+                : agentRoutingService.resolvePreferredAdapterForAgent(selectedAgent);
 
         TaskSpec taskSpec = new TaskSpec(
                 new TaskSpecId(idGenerator.nextId("spec")),
@@ -97,7 +117,10 @@ public class OrchestratorService {
                         "Support email login and verification code login",
                         "Provide README with usage notes and extension points",
                         "Provide an API contract artifact for backend collaboration",
-                        "Provide a review report with issues, suggestions, and risk level"),
+                        "Provide a review report with issues, suggestions, and risk level",
+                        selectedAgent == null
+                                ? "Allow the built-in specialist agent chain to complete the demo task"
+                                : "Route the first specialist step through the selected agent configuration"),
                 List.of("frontend-builder", "backend-worker", "reviewer"),
                 List.of("CODE", "MARKDOWN", "API_CONTRACT", "REVIEW_REPORT"),
                 TaskSpecStatus.APPROVED,
@@ -149,19 +172,28 @@ public class OrchestratorService {
                 conversationId,
                 taskRunId,
                 1,
-                BuiltInAgentIds.FRONTEND_BUILDER,
-                "Frontend Builder",
+                selectedAgent == null ? BuiltInAgentIds.FRONTEND_BUILDER : selectedAgent.getId().value(),
+                selectedAgent == null ? "Frontend Builder" : selectedAgent.getName(),
                 userInput,
-                "You are responsible for frontend implementation in the AgentHub demo.",
-                "Generate the React login page and the initial README draft.",
-                "Task Spec requires a dual-mode login page with artifact-first iteration.",
+                selectedAgent == null
+                        ? "You are responsible for frontend implementation in the AgentHub demo."
+                        : selectedAgent.getSystemPrompt(),
+                selectedAgent == null
+                        ? "Generate the React login page and the initial README draft."
+                        : "Selected Agent executes frontend artifact generation.",
+                selectedAgent == null
+                        ? "Task Spec requires a dual-mode login page with artifact-first iteration."
+                        : "Task Spec requires a dual-mode login page with artifact-first iteration. "
+                                + buildSelectedAgentInputContext(selectedAgent),
                 "Generated LoginPage.tsx and README.md for the workspace.",
                 List.of(
                         "TaskSpec: React Login Page Demo",
                         "Need email login and verification code login",
-                        "Artifact-centered iteration is enabled"),
+                        "Artifact-centered iteration is enabled",
+                        selectedAgentSummary),
                 List.of("LoginPage.tsx", "README.md"),
                 List.of(codeArtifact.getId(), readmeArtifact.getId()),
+                selectedAgentPreferredAdapter,
                 now);
 
         TaskStep backendStep = createAgentExecutedStep(
@@ -181,6 +213,9 @@ public class OrchestratorService {
                         "Keep the API contract ready for later integration"),
                 List.of("LoginPage.tsx", "README.md"),
                 List.of(apiContractArtifact.getId()),
+                agentRoutingService.resolvePreferredAdapterForStep(
+                        BuiltInAgentIds.BACKEND_WORKER,
+                        "Generate the login API contract based on the page fields and task scope."),
                 now);
 
         TaskStep reviewStep = createAgentExecutedStep(
@@ -200,6 +235,9 @@ public class OrchestratorService {
                         "Document issues, suggestions, and risk level"),
                 List.of("LoginPage.tsx", "README.md", "login-api-contract.json"),
                 List.of(reviewArtifact.getId()),
+                agentRoutingService.resolvePreferredAdapterForStep(
+                        BuiltInAgentIds.REVIEWER,
+                        "Review the generated page, README, API contract, and acceptance criteria."),
                 now);
 
         TaskPlan taskPlan = new TaskPlan(
@@ -213,7 +251,8 @@ public class OrchestratorService {
                 TaskRunStatus.COMPLETED,
                 taskPlan,
                 List.of(frontendStep, backendStep, reviewStep),
-                "Static demo task completed with code, docs, API contract, review report, and context handoff records.",
+                "Static demo task completed with code, docs, API contract, review report, and context handoff records. "
+                        + selectedAgentSummary,
                 now,
                 now);
         taskRepository.saveTaskRun(taskRun);
@@ -231,8 +270,10 @@ public class OrchestratorService {
                 List.of(
                         "Demo goal: build a React login page with README and review report",
                         "Artifact-centered iteration is enabled",
-                        "Reviewer must check acceptance criteria before closing the loop"),
-                "This snapshot contains the original user request, the generated Task Spec, three task steps, and the LoginPage.tsx, README.md, login-api-contract.json, and Review Report artifacts.",
+                        "Reviewer must check acceptance criteria before closing the loop",
+                        selectedAgentSummary),
+                "This snapshot contains the original user request, the generated Task Spec, three task steps, and the LoginPage.tsx, README.md, login-api-contract.json, and Review Report artifacts. "
+                        + selectedAgentSummary,
                 now);
         contextRepository.saveContextSnapshot(contextSnapshot);
 
@@ -241,16 +282,22 @@ public class OrchestratorService {
                 taskRunId,
                 frontendStep.getId(),
                 backendStep.getId(),
-                BuiltInAgentIds.FRONTEND_BUILDER,
+                selectedAgent == null ? BuiltInAgentIds.FRONTEND_BUILDER : selectedAgent.getId().value(),
                 BuiltInAgentIds.BACKEND_WORKER,
                 List.of(codeArtifact.getId(), readmeArtifact.getId()),
                 List.of(
-                        "Frontend Builder finalized the page fields for email and verification code login",
-                        "README draft already documents component structure and extension points"),
+                        selectedAgent == null
+                                ? "Frontend Builder finalized the page fields for email and verification code login"
+                                : "Selected Agent finalized the page fields for email and verification code login",
+                        "README draft already documents component structure and extension points",
+                        selectedAgentSummary),
                 List.of(
                         "The login API still needs an explicit request/response contract",
                         "Error handling and validation states are not yet implemented"),
-                "Frontend Builder hands off the page structure and README so Backend Worker can derive a stable API contract and data model assumptions.",
+                (selectedAgent == null
+                                ? "Frontend Builder hands off the page structure and README so Backend Worker can derive a stable API contract and data model assumptions. "
+                                : "Selected Agent hands off the page structure and README so Backend Worker can derive a stable API contract and data model assumptions. ")
+                        + selectedAgentSummary,
                 now);
 
         HandoffSummary backendToReviewer = new HandoffSummary(
@@ -407,6 +454,9 @@ public class OrchestratorService {
                         "Preserve artifact-centered iteration"),
                 List.of(originalArtifact.getTitle()),
                 List.of(revisedArtifact.getId()),
+                agentRoutingService.resolvePreferredAdapterForStep(
+                        BuiltInAgentIds.FRONTEND_BUILDER,
+                        "Revise the selected artifact according to the follow-up instruction."),
                 now);
 
         TaskStep reviewerStep = createAgentExecutedStep(
@@ -426,6 +476,9 @@ public class OrchestratorService {
                         "Check the instruction against the revised artifact"),
                 List.of(originalArtifact.getTitle(), revisedArtifact.getTitle()),
                 List.of(reviewArtifact.getId()),
+                agentRoutingService.resolvePreferredAdapterForStep(
+                        BuiltInAgentIds.REVIEWER,
+                        "Review whether the revised artifact satisfies the revision instruction and acceptance criteria."),
                 now);
 
         TaskPlan revisionPlan = new TaskPlan(
@@ -525,9 +578,9 @@ public class OrchestratorService {
             List<String> contextItems,
             List<String> artifactSummaries,
             List<ArtifactId> producedArtifactIds,
+            AgentAdapterType preferredAdapterType,
             Instant now) {
         TaskStepId stepId = new TaskStepId(idGenerator.nextId("step"));
-        AgentAdapterType preferredAdapterType = agentRoutingService.resolvePreferredAdapterForStep(agentId, taskDescription);
         AgentResponse adapterResponse = agentExecutorService.execute(
                 preferredAdapterType,
                 new AgentRequest(
@@ -568,6 +621,47 @@ public class OrchestratorService {
                 producedArtifactIds,
                 now,
                 now);
+    }
+
+    private Agent resolveSelectedAgent(String selectedAgentId) {
+        if (selectedAgentId == null || selectedAgentId.isBlank()) {
+            return null;
+        }
+
+        return agentApplicationService.getAgent(selectedAgentId);
+    }
+
+    private String buildSelectedAgentSummary(Agent selectedAgent) {
+        if (selectedAgent == null) {
+            return "Selected agent: built-in specialist chain.";
+        }
+
+        String preferredAdapterType = selectedAgent.getPreferredAdapterType() == null
+                || selectedAgent.getPreferredAdapterType().isBlank()
+                ? AgentAdapterType.MOCK.name()
+                : selectedAgent.getPreferredAdapterType();
+        return "Selected agent: %s (%s, preferred adapter %s).".formatted(
+                selectedAgent.getName(),
+                selectedAgent.getId().value(),
+                preferredAdapterType);
+    }
+
+    private String buildSelectedAgentInputContext(Agent selectedAgent) {
+        if (selectedAgent == null) {
+            return "";
+        }
+
+        String preferredAdapterType = selectedAgent.getPreferredAdapterType() == null
+                || selectedAgent.getPreferredAdapterType().isBlank()
+                ? AgentAdapterType.MOCK.name()
+                : selectedAgent.getPreferredAdapterType();
+        return "Selected agent context: name=%s, preferredAdapterType=%s, capabilityTags=%s, systemPrompt=%s".formatted(
+                selectedAgent.getName(),
+                preferredAdapterType,
+                selectedAgent.getCapabilityTags(),
+                selectedAgent.getSystemPrompt() == null || selectedAgent.getSystemPrompt().isBlank()
+                        ? "N/A"
+                        : selectedAgent.getSystemPrompt());
     }
 
     private Artifact createArtifact(

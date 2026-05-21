@@ -26,7 +26,10 @@ public class MessageController {
             @PathVariable String conversationId,
             @Valid @RequestBody SendMessageRequest request) {
         return ApiResponse.success(
-                messageApplicationService.sendUserMessage(conversationId, request.content()),
+                messageApplicationService.sendUserMessage(
+                        conversationId,
+                        request.content(),
+                        request.targetAgentId()),
                 "Message sent");
     }
 
@@ -36,4 +39,4 @@ public class MessageController {
     }
 }
 
-record SendMessageRequest(@NotBlank String content) {}
+record SendMessageRequest(@NotBlank String content, String targetAgentId) {}

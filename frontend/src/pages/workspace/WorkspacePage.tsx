@@ -51,6 +51,7 @@ function findTaskStep(taskRuns: TaskRun[], taskRunId: string | null, taskStepId:
 
 export function WorkspacePage() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [taskSpecs, setTaskSpecs] = useState<TaskSpec[]>([]);
@@ -117,6 +118,14 @@ export function WorkspacePage() {
       const firstConversationId = getIdValue(conversationData[0]?.id) || null;
 
       setAgents(agentData);
+      setSelectedAgent((previous) => {
+        if (!previous) {
+          return null;
+        }
+
+        const previousId = getIdValue(previous.id);
+        return agentData.find((agent) => getIdValue(agent.id) === previousId) ?? null;
+      });
       setConversations(conversationData);
       setCurrentConversationId((previousId) => previousId ?? firstConversationId);
     } catch (error) {
@@ -262,6 +271,14 @@ export function WorkspacePage() {
     };
   }, [selectedArtifactId]);
 
+  function handleSelectAgent(agent: Agent) {
+    setSelectedAgent(agent);
+  }
+
+  function handleClearSelectedAgent() {
+    setSelectedAgent(null);
+  }
+
   async function handleCreateDemoConversation() {
     setCreatingConversation(true);
     setErrorMessage(null);
@@ -291,7 +308,11 @@ export function WorkspacePage() {
     setErrorMessage(null);
 
     try {
-      await sendMessage(currentConversationId, draftMessage.trim());
+      await sendMessage(
+        currentConversationId,
+        draftMessage.trim(),
+        selectedAgent ? getIdValue(selectedAgent.id) : null
+      );
       const refreshedMessages = await getMessages(currentConversationId);
       setMessages(refreshedMessages);
       setDraftMessage("");
@@ -315,7 +336,8 @@ export function WorkspacePage() {
       const createdTaskRun = await createDemoTask(
         currentConversationId,
         getIdValue(latestUserMessage.id),
-        latestUserMessage.content
+        latestUserMessage.content,
+        selectedAgent ? getIdValue(selectedAgent.id) : null
       );
       const createdTaskRunId = getIdValue(createdTaskRun.id);
 
@@ -415,7 +437,12 @@ export function WorkspacePage() {
               <h3>Agents</h3>
               <span>{agents.length}</span>
             </div>
-            <AgentList agents={agents} loading={loadingAgents} />
+            <AgentList
+              agents={agents}
+              loading={loadingAgents}
+              selectedAgentId={selectedAgent ? getIdValue(selectedAgent.id) : null}
+              onSelectAgent={handleSelectAgent}
+            />
           </section>
         </div>
       </aside>
@@ -458,6 +485,33 @@ export function WorkspacePage() {
           </button>
         </div>
 
+        <div className="selected-agent-banner">
+          {selectedAgent ? (
+            <>
+              <div>
+                <div className="selected-agent-name">Selected Agent: {selectedAgent.name}</div>
+                <div className="selected-agent-adapter">
+                  Preferred Adapter: {selectedAgent.preferredAdapterType || "MOCK"} / Role: {selectedAgent.role}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="secondary-button clear-selected-agent-button"
+                onClick={handleClearSelectedAgent}
+              >
+                Clear Selection
+              </button>
+            </>
+          ) : (
+            <div>
+              <div className="selected-agent-name">No selected agent</div>
+              <div className="selected-agent-adapter">
+                Demo will use built-in agents if no selection is made.
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="workspace-main__content">
           <MessageStream
             messages={messages}
@@ -466,6 +520,7 @@ export function WorkspacePage() {
             onSelectArtifact={setSelectedArtifactId}
           />
           <TaskRunPanel
+            agents={agents}
             artifacts={artifacts}
             taskSpecs={taskSpecs}
             taskRuns={taskRuns}
@@ -484,6 +539,7 @@ export function WorkspacePage() {
             value={draftMessage}
             disabled={!currentConversationId}
             sending={sendingMessage}
+            selectedAgent={selectedAgent}
             onChange={setDraftMessage}
             onSend={handleSendMessage}
           />

@@ -1,112 +1,208 @@
-# Collaboration Protocol
+# Collaboration Protocol V0.5
 
-## 1. 协作协议目标
+## 1. 协议目标
 
-Collaboration Protocol 用于定义 AgentHub 中用户、Orchestrator、Specialist Agent、Reviewer 之间如何协同完成任务。
+Collaboration Protocol 用于定义 AgentHub 中用户、Orchestrator、Specialist Agent、Reviewer、Artifact 之间如何协同完成任务。它不是一句口号，而是当前比赛里用于体现 AI 协作能力的核心协议层。
 
-它的目标是让协作流程：
+目标：
 
-- 可规划
-- 可执行
-- 可追踪
 - 可解释
+- 可展示
+- 可在代码和界面中落地
 
-## 2. Orchestrator 的职责
+## 2. Spec 如何生成
 
-Orchestrator 是协作流程的协调者，而不是替代所有 Agent 的超级执行器。
+当前协议要求：
 
-职责包括：
+1. 用户先通过聊天输入任务
+2. 系统把用户输入结构化为 TaskSpec
+3. TaskSpec 至少包含：
+   - `userGoal`
+   - `userInput`
+   - `scope`
+   - `nonGoals`
+   - `acceptanceCriteria`
+   - `requiredSkills`
+   - `expectedArtifacts`
 
-- 从用户输入生成 Task Spec
-- 生成 TaskPlan
-- 基于 Skill 和 Routing Rules 分配 TaskStep
-- 管理执行顺序
+当前 Demo 体现方式：
+
+- demo-task 会生成静态 TaskSpec
+- ContextPanel 中可看到 TaskSpec 相关信息
+
+当前限制：
+
+- TaskSpec 仍是静态模板，不是真实模型抽取
+
+## 3. Skill 如何匹配
+
+当前协议中，Skill 的作用是把任务拆解到明确角色：
+
+- `frontend-builder`
+- `backend-worker`
+- `reviewer`
+
+Skill 匹配逻辑：
+
+- 页面、组件、UI、样式相关任务优先进入 Frontend Builder
+- API Contract、数据模型、服务逻辑相关任务优先进入 Backend Worker
+- 验收、质量检查、风险检查相关任务优先进入 Reviewer
+
+当前 Demo 体现方式：
+
+- TaskRunPanel 中可看到不同角色的 TaskStep
+
+## 4. Rules 如何约束执行
+
+当前协议要求 Orchestrator 和 Routing Rules 必须共同约束：
+
+- 任务先做 Specialist execution，再进入 Reviewer
+- Context 不应无差别传递完整聊天历史
+- Handoff 必须传核心 Artifact
+- Revision 必须显式带上 `parentArtifactId` 和 `revisionInstruction`
+
+当前 Demo 体现方式：
+
+- 路由策略体现在 TaskStep 的 Agent 分工
+- Handoff 体现在 ContextPanel 中的 HandoffSummary
+
+## 5. Orchestrator 如何拆解任务
+
+当前产品设计目标中，Orchestrator 类似 PM / PMO：
+
+- 理解任务
+- 拆解任务
+- 分配任务
 - 聚合结果
-- 在失败时触发降级或回退
+- 处理失败降级
 
-## 3. Specialist Agent 的职责
+当前代码状态：
 
-Specialist Agent 指承载具体 Skill 的执行 Agent。
+- 后端已有 `OrchestratorService`
+- demo-task 和 revision 主链路已通过该服务组织
+- 但当前拆解仍是静态 Demo 编排，不是真实动态任务规划
 
-职责包括：
+## 6. Specialist Agent 如何执行
 
-- 负责完成某个明确 TaskStep
-- 生成主产物 Artifact
-- 输出结构化 summary
-- 为下一个 Agent 提供 Handoff 基础
+Specialist Agent 指：
 
-## 4. Reviewer Agent 的职责
+- Frontend Builder
+- Backend Worker
 
-Reviewer 不负责替代主产物生成，而是负责：
+当前协议要求：
 
-- 检查 Acceptance Criteria
-- 检查 Artifact 是否完整
-- 检查风险和明显缺陷
-- 输出结构化 Review Report
+- Specialist Agent 负责生成主产物
+- 每个 TaskStep 应产出可继续传递的 Artifact
+- 执行时应附带 adapter 信息
 
-## 5. Human-in-the-loop 规则
+当前 Demo 体现方式：
 
-用户在以下关键点介入：
+- TaskStep 中已记录：
+  - `preferredAdapterType`
+  - `actualAdapterType`
+  - `adapterStatus`
+  - `adapterResponseSummary`
+  - `adapterErrorMessage`
 
-- 任务歧义较大时
-- 任务方向变化时
-- 失败需要重试或改路线时
-- 最终结果确认时
+## 7. Reviewer 如何验收
 
-原则：
+Reviewer 不负责主产物生成，而负责：
 
-- 不要让用户介入每个细节
-- 只在关键决策点拉用户进入
+- 检查 `acceptanceCriteria`
+- 检查代码和文档是否满足要求
+- 输出 `Review Report`
 
-## 6. Task Spec 生成流程
+当前 Demo 体现方式：
 
-1. 用户提交原始任务
-2. Orchestrator 提取 userGoal
-3. Orchestrator 明确 scope 和 nonGoals
-4. Orchestrator 生成 acceptanceCriteria
-5. Orchestrator 识别 requiredSkills 和 expectedArtifacts
-6. 形成 Task Spec
+- Reviewer 生成静态 Review Report
+- ContextPanel 中可看到 Reviewer 的上下文来源
+- ArtifactPanel 中可看到 Review Report
 
-## 7. Skill 匹配流程
+当前限制：
 
-1. Orchestrator 读取 Task Spec
-2. 根据 requiredSkills 找到合适 Skill
-3. AgentRouter 根据 Routing Rules 绑定 Agent
-4. 形成 TaskStep -> Agent 的映射
+- Reviewer 仍是静态审查，不是真实自动分析
 
-## 8. 上下文交接流程
+## 8. Context 如何交接
 
-1. 当前 TaskStep 完成
-2. 系统保存 Artifact
-3. ContextManager 生成 Handoff Summary
-4. 形成 ContextSnapshot
-5. 下一个 Agent 接收 Task Spec + Artifact + Handoff Summary
+交接原则：
 
-## 9. Artifact 迭代流程
+- TaskSpec 必须传给相关 Agent
+- 前一个 Agent 的 Artifact 是后一个 Agent 的核心上下文
+- 使用 HandoffSummary 压缩关键上下文
+- 不无差别传完整聊天历史
 
-1. Specialist Agent 生成 Artifact
-2. Artifact 在消息流中展示
-3. 用户或 Reviewer 基于 Artifact 给反馈
-4. Orchestrator 重新生成局部 TaskStep
-5. 新版本 Artifact 覆盖或追加
+当前 Demo 体现方式：
 
-## 10. 协作失败处理流程
+- ContextSnapshot 保存当前任务上下文快照
+- HandoffSummary 显示：
+  - `sourceAgentId`
+  - `targetAgentId`
+  - `passedArtifactIds`
+  - `keyDecisions`
+  - `openIssues`
 
-当协作失败时：
+当前限制：
 
-- 如果是信息不足，回到用户确认
-- 如果是某个 Agent 输出无效，重试或切换 fallback Agent
-- 如果 Web Preview 失败，以 Code / Markdown Artifact 兜底
-- 如果 Reviewer 无法完成完整检查，输出最小 Review Summary
+- 仍是静态构造
+- 不是真实长期 memory system
 
-## 11. 对比赛评分的价值
+## 9. Artifact 如何进入下一轮迭代
 
-Collaboration Protocol 直接对应比赛中的 AI 协作能力评分，因为它把：
+这是 AgentHub 当前最核心的协作设计：
 
-- Spec
-- Skill
-- Rules
-- Handoff
-- Reviewer
+1. Specialist Agent 先生成 Artifact
+2. Artifact 在右侧面板中成为可选工作对象
+3. 用户基于该 Artifact 发起 revision instruction
+4. 系统生成新的 revision TaskRun
+5. 生成新的版本 Artifact 和新的 Review Report
 
-串成了一套可执行协议，而不是停留在概念层。
+当前 Demo 体现方式：
+
+- `LoginPage.tsx v1 -> v2`
+- Version History
+- Diff Summary
+- Revision 来源提示
+
+## 10. Human-in-the-loop 何时介入
+
+用户在以下时点介入：
+
+- 初始任务输入
+- Artifact 选中与 revision 指令输入
+- 自定义 Agent 创建和配置
+
+当前未实现：
+
+- 更复杂的确认流
+- 审批式中断
+- 多人协作中的人工仲裁
+
+## 11. 当前静态 Demo 如何体现该协议
+
+当前 Demo 虽然是静态，但已经可见地体现了协议中的关键元素：
+
+- TaskSpec
+- TaskRun / TaskStep
+- Agent 分工
+- Adapter 路由与 fallback
+- ContextSnapshot
+- HandoffSummary
+- Artifact revision
+- Version History
+- Review Report
+
+这意味着当前版本已经可以用于说明“协作协议成立”，但不能误写成“真实模型驱动的协作系统已完整完成”。
+
+## 12. 后续真实 Agent 接入后的协议变化
+
+当未来接入真实 Agent provider 后，协议会有两点变化：
+
+1. TaskSpec 生成会从静态模板过渡到真实模型驱动
+2. Specialist / Reviewer 的输出会从静态模板过渡到真实 Agent 执行结果
+
+但即使接入真实 provider，以下协议层原则也不会变：
+
+- 聊天是主入口
+- Artifact 是协作核心对象
+- Context 和 Handoff 必须显式化
+- Reviewer 必须按验收标准输出结果

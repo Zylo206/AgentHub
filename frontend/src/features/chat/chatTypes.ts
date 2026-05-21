@@ -6,6 +6,7 @@ export interface Message {
   conversationId: IdValue;
   senderType: "USER" | "AGENT" | "SYSTEM" | string;
   senderId: string;
+  targetAgentId?: string | null;
   messageType: "TEXT" | "TASK_SPEC" | "TASK_STATUS" | "ARTIFACT_CARD" | "ERROR" | string;
   content: string;
   artifactIds: IdValue[];
@@ -34,6 +35,7 @@ export interface TaskStep {
   taskRunId: IdValue;
   stepOrder: number;
   assignedAgentId: IdValue;
+  assignedAgentName?: string;
   taskDescription: string;
   status: string;
   inputContext: string;
