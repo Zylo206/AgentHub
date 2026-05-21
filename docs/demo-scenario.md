@@ -1,34 +1,32 @@
-# AgentHub Demo 场景文档 V0.5
+# AgentHub Demo 场景文档
 
 ## 1. Demo 目标
 
-本次 Demo 的目标不是证明“模型很强”，而是证明以下产品链路已经成立：
+本次 Demo 的目标不是证明“模型很强”，而是证明以下闭环已经成立：
 
 - IM Workspace 是主入口
-- 多 Agent 协作可以被看见
-- TaskSpec、TaskRun、TaskStep、Context、Handoff、Artifact 形成闭环
-- 用户可以围绕已有 Artifact 发起二次修改
-- 自定义 Agent 最小闭环已打通
+- 用户可以选择或 `@Agent`
+- Orchestrator 可以生成可见 TaskRun / TaskStep
+- Adapter fallback 是显式可见的
+- ContextSnapshot / HandoffSummary 是可见的
+- Artifact 可以进入 revision 和版本演进
+- 仓库中存在完整 AI 协作开发记录
 
 ## 2. Demo 前置条件
 
-### 2.1 后端
+### 后端
 
 - backend 已启动
-- 默认地址为 `http://localhost:8080`
+- 地址为 `http://localhost:8080`
 
-### 2.2 前端
+### 前端
 
 - frontend 已启动
-- 打开 `/workspace` 和 `/agents` 可正常访问
+- `/workspace` 与 `/agents` 可访问
 
-### 2.3 当前说明
+### 数据准备
 
-需要提前说明：
-
-- 当前是静态 Demo
-- 当前 Adapter 以 Mock / placeholder / fallback 为主
-- 不展示真实 Codex / Claude Code 外部调用
+- 若要演示自定义 Agent，需先在 `/agents` 页面创建一个 `My Frontend Agent`
 
 ## 3. 启动方式
 
@@ -47,150 +45,83 @@ npm install
 npm run dev
 ```
 
-## 4. 演示路径
+## 4. 3 分钟时间分配
+
+### 0:00 - 0:20
+
+- 说明产品定位
+- 展示三栏 IM Workspace
+
+### 0:20 - 0:45
+
+- 打开 `/agents`
+- 创建一个自定义 Agent
+
+### 0:45 - 1:20
+
+- 回到 `/workspace`
+- 发送带 `@Agent` 的消息
+- 展示 `To: @Agent`
+
+### 1:20 - 2:05
+
+- 运行 Demo Task
+- 展示 TaskRun / TaskStep / assigned Agent / adapter fallback
+- 展示 ContextSnapshot / HandoffSummary
+
+### 2:05 - 2:40
+
+- 展示 Artifact
+- 执行 revision
+- 展示 `v1 -> v2`
+- 展示 Diff Summary
+
+### 2:40 - 3:00
+
+- 展示 `docs/collaboration`
+- 强调 AI 协作开发记录
+
+## 5. 分步骤演示路径
 
 ### Step 1：打开 `/workspace`
 
-展示能力：
+展示：
 
-- 三栏 IM 工作台
-- 左侧 Conversation List 和 Agent List
-- 中间 Message Stream、TaskRunPanel、ContextPanel
-- 右侧 ArtifactPanel
+- 三栏 IM Workspace
+- Conversation List
+- Agent List
+- Message Stream
+- TaskRunPanel
+- ContextPanel
+- ArtifactPanel
 
-讲解重点：
+讲解词：
 
-- AgentHub 不是普通 Chatbot
-- 主入口是聊天式工作台
+> AgentHub 不是普通 Chatbot，也不是以 Workflow Canvas 为主入口的工具。当前主入口是一个 IM Workspace，用户通过聊天组织多 Agent 协作，并围绕 Artifact 持续迭代。
 
-### Step 2：点击 `Create Demo Conversation`
+评分点：
 
-展示能力：
+- 产品定位
+- IM 主界面
+- 创新与产品感
 
-- 会话创建
-- 当前会话激活
+### Step 2：打开 `/agents`
 
-### Step 3：发送任务
+展示：
 
-输入：
+- Agent Builder 表单
+- 可配置 `preferredAdapterType`
 
-> 帮我生成一个 React 登录页面，要求支持邮箱登录和验证码登录，同时生成 README，最后检查代码质量并给出修改建议。
+讲解词：
 
-展示能力：
+> 这里用户可以创建自定义 Agent，而不是只能使用系统内置角色。当前支持最小保存闭环，包括名称、头像、System Prompt、能力标签、工具标签和 preferred adapter。
 
-- 用户消息进入聊天流
-- 后续 demo-task 的输入来源明确
+评分点：
 
-### Step 4：点击 `Run Demo Task`
+- 用户自建 Agent
+- Agent 联系人
 
-展示能力：
-
-- 生成 TaskRun
-- 生成多个 TaskStep
-- 生成 Artifact
-- 生成 ContextSnapshot / HandoffSummary
-
-讲解重点：
-
-- 这是一个静态 demo-task，但它体现了 Orchestrator 编排结构
-
-### Step 5：展示 TaskRun / TaskStep
-
-展示内容：
-
-- Frontend Builder step
-- Backend Worker step
-- Reviewer step
-
-额外重点：
-
-- 展示 Adapter 信息
-- Frontend Builder：preferred `CODEX`，actual `MOCK`，`FALLBACK_USED`
-- Backend Worker：`MOCK`
-- Reviewer：preferred `CLAUDE_CODE`，actual `MOCK`，`FALLBACK_USED`
-
-### Step 6：展示 ContextSnapshot / HandoffSummary
-
-展示能力：
-
-- ContextSnapshot 中的 summary、pinned context、artifact 引用
-- HandoffSummary 中的 `sourceAgent -> targetAgent`
-- `passedArtifacts`
-- `keyDecisions`
-- `openIssues`
-
-讲解重点：
-
-- 这部分对应 AI 协作能力评分中的 Spec / Rules / Context Handoff
-
-### Step 7：展示 Artifact Panel
-
-展示内容：
-
-- `LoginPage.tsx`
-- `README.md`
-- API Contract / Data Model
-- Review Report
-
-讲解重点：
-
-- Artifact 不是聊天结果附属品，而是后续迭代核心对象
-
-### Step 8：点击 `LoginPage.tsx`
-
-展示能力：
-
-- 右侧详情区
-- Version History
-- 当前版本信息
-
-### Step 9：输入 revision 指令
-
-输入：
-
-> 把按钮改成蓝色，并增加 loading 状态。
-
-然后点击 `Revise Selected Artifact`
-
-展示能力：
-
-- 基于已有 Artifact 创建 revision TaskRun
-- 生成 `LoginPage.tsx v2`
-- 生成新的 Review Report
-
-### Step 10：展示 v1 -> v2
-
-展示内容：
-
-- Version History 中的 `v1 -> v2`
-- revision 标签
-- parent artifact 来源提示
-
-讲解重点：
-
-- 体现 Artifact-centered iteration
-
-### Step 11：展示 Diff Summary
-
-展示内容：
-
-- Revision Instruction
-- Changed Items
-- Not Changed
-- Risk
-
-讲解重点：
-
-- 当前是静态 Diff Summary，不是真实代码 diff
-
-### Step 12：打开 `/agents`
-
-展示内容：
-
-- 自定义 Agent 表单
-- name / avatarUrl / systemPrompt / capabilityTags / toolTags / preferredAdapterType
-
-### Step 13：创建自定义 Agent
+### Step 3：创建 `My Frontend Agent`
 
 建议输入：
 
@@ -200,67 +131,244 @@ npm run dev
 - Tool Tags：`code, preview`
 - Preferred Adapter：`CODEX`
 
-### Step 14：回到 `/workspace`
+讲解词：
 
-展示能力：
+> 这一步的重点不是复杂配置，而是让自定义 Agent 真正进入后续执行链路。
 
-- Agent List 中出现新建 Agent
-- 显示 `CUSTOM`
-- 显示 capability tags
-- 显示 preferred adapter
+评分点：
 
-## 5. 讲解词草稿
+- 自定义 Agent 闭环
 
-可直接用于 3 分钟演示：
+### Step 4：回到 `/workspace`
 
-1. “AgentHub 的目标不是做一个普通聊天机器人，而是做一个以聊天为入口的人与多 Agent 协作平台。”
-2. “在这个工作台中，左侧是会话和 Agent 联系人，中间是消息、任务和上下文，右侧是产物和版本演进。”
-3. “我先发起一个复杂任务，系统会生成 TaskSpec，并拆成 Frontend Builder、Backend Worker、Reviewer 三个步骤。”
-4. “这里可以看到每个 TaskStep 的 Adapter 信息。当前 Codex 和 Claude Code 还只是 placeholder，所以会 fallback 到 Mock，这一点在界面里是显式可见的。”
-5. “任务执行后，右侧会出现代码、README、Review Report 等 Artifact。下方还能看到 ContextSnapshot 和 HandoffSummary，说明上下文和交接不是黑盒。”
-6. “接着我选中 `LoginPage.tsx`，输入一个修改要求。系统会基于已有 Artifact 创建 revision TaskRun，并生成 `v2` 版本。”
-7. “这里的 Version History 和 Diff Summary 体现了当前 Demo 的 Artifact-centered iteration。需要说明的是，这仍是静态 Demo，不是真实代码 diff 或真实模型修改。”
-8. “最后我切到 Agent Builder 页面，创建一个自定义 Agent，并回到工作台查看它已经进入 Agent List。这证明我们已经打通了最小的用户自建 Agent 闭环。”
+展示：
 
-## 6. 每一步展示什么能力
+- Agent List 中出现新 Agent
 
-| 步骤 | 主要展示能力 |
+讲解词：
+
+> 回到 Workspace 后，可以看到这个 Agent 已经作为联系人进入系统。
+
+评分点：
+
+- Agent 联系人展示
+
+### Step 5：在 ChatInput 输入带 `@Agent` 的消息
+
+建议输入：
+
+```text
+@My Frontend Agent 帮我生成一个 React 登录页面，要求支持邮箱登录和验证码登录，同时生成 README，最后检查代码质量并给出修改建议。
+```
+
+展示：
+
+- ChatInput 的 `@Agent` 提示
+- 发送后 MessageBubble 中的 `To: @My Frontend Agent`
+
+讲解词：
+
+> 当前支持最小 `@Agent` 文本标记解析。只要在消息开头输入 `@AgentName`，系统就会把这条消息显式指向对应 Agent。
+
+评分点：
+
+- `@Agent`
+- IM 交互
+
+### Step 6：点击 `Run Demo Task`
+
+展示：
+
+- 生成 TaskRun
+- 生成多个 TaskStep
+
+讲解词：
+
+> 这里的 demo-task 仍是静态 Demo，但它已经把 Orchestrator、TaskRun、TaskStep、Artifact、Context 和 Handoff 这条协作链路完整展示出来。
+
+评分点：
+
+- Orchestrator 结构
+- 任务拆解可见化
+
+### Step 7：展示 TaskRun / TaskStep / assigned Agent
+
+展示：
+
+- 第一个 step 的 assigned Agent 为 `My Frontend Agent`
+- preferred adapter / actual adapter / fallback 状态
+
+讲解词：
+
+> 这里可以看到，selectedAgent 和 `@Agent` 已经进入执行链路。第一个 specialist step 会优先使用这个 Agent 的 preferred adapter，但当前真实平台还没接通，所以会 fallback 到 Mock。
+
+评分点：
+
+- 多 Agent 接入架构
+- Adapter fallback 显式化
+
+### Step 8：展示 ContextSnapshot / HandoffSummary
+
+展示：
+
+- summary
+- pinnedContextItems
+- sourceAgent -> targetAgent
+- keyDecisions / openIssues
+
+讲解词：
+
+> Context 和 Handoff 是本项目对 AI 协作能力的重点回答。当前虽然仍是静态构造，但它说明系统已经把任务交接和上下文显式建模出来。
+
+评分点：
+
+- AI 协作能力
+- 上下文管理
+
+### Step 9：展示 ArtifactPanel
+
+展示：
+
+- `LoginPage.tsx`
+- `README.md`
+- API Contract
+- Review Report
+
+讲解词：
+
+> Artifact 在这里不是聊天附件，而是可继续迭代的核心对象。
+
+评分点：
+
+- 产物预览
+
+### Step 10：执行 Artifact Revision
+
+建议输入：
+
+```text
+把按钮改成蓝色，并增加 loading 状态。
+```
+
+展示：
+
+- revision TaskRun
+- 新 Artifact
+- 新 Review Report
+
+讲解词：
+
+> 这一步展示的是 Artifact-centered iteration。用户不是重新发起一个全新任务，而是围绕已有 Artifact 做持续修改。
+
+评分点：
+
+- 产物编辑 / 二次修改
+
+### Step 11：展示 `v1 -> v2`
+
+展示：
+
+- Version History
+- parent artifact 来源
+
+讲解词：
+
+> 当前版本已经能把同一份产物的 v1 到 v2 关系清楚地展示出来。
+
+评分点：
+
+- Version History
+
+### Step 12：展示 Diff Summary
+
+展示：
+
+- Revision Instruction
+- Changed Items
+- Not Changed
+- Risk
+
+讲解词：
+
+> 需要说明的是，这里的 Diff Summary 仍是静态摘要，不是真实代码 diff，但已经足以展示版本演进和修改意图。
+
+评分点：
+
+- 生成效果质量
+- 产物演进
+
+### Step 13：展示 `docs/collaboration`
+
+展示：
+
+- `development-workflow.md`
+- `prompt-template.md`
+- `dev-log.md`
+- `demo-checklist.md`
+- `decision-log.md`
+
+讲解词：
+
+> 这些文档对应比赛里 AI 协作能力 30% 的评分项。它们说明我们不是随手让 AI 写代码，而是形成了 Spec、Rules、Prompt、开发日志和决策记录的完整协作工作流。
+
+评分点：
+
+- AI 协作开发记录
+- 代码理解度
+
+## 6. 每一步讲解词要点
+
+建议统一口径：
+
+- 当前是 MVP 演示闭环
+- 当前有可见 Orchestrator / TaskRun / Artifact 结构
+- 当前有可见 selectedAgent / `@Agent`
+- 当前 Adapter 仍以 Mock fallback / placeholder 为主
+- 当前 Revision / Diff Summary / Context 仍有静态 Demo 成分
+
+## 7. 每一步展示的评分点
+
+| 步骤 | 主要评分点 |
 |---|---|
-| 打开 `/workspace` | IM Workspace 主入口 |
-| Create Demo Conversation | 会话管理 |
-| 发送任务 | 聊天驱动任务发起 |
-| Run Demo Task | Orchestrator 结构、TaskRun、TaskStep |
-| 查看 Adapter 信息 | Adapter Layer + fallback |
-| 查看 ContextPanel | ContextSnapshot / HandoffSummary |
-| 查看 ArtifactPanel | Artifact 预览 |
-| 执行 revision | Artifact-centered iteration |
-| 查看 Version History / Diff Summary | 版本演进与修改摘要 |
-| 创建自定义 Agent | Agent Builder 最小闭环 |
+| Workspace | 功能完整度、产品感 |
+| Agent Builder | 多 Agent 接入、自建 Agent |
+| `@Agent` 消息 | IM 主交互、协作语义 |
+| TaskRun / Adapter | Orchestrator、Adapter Layer、代码理解度 |
+| Context / Handoff | AI 协作能力 |
+| Artifact / Revision | 生成效果质量、产品感 |
+| collaboration docs | AI 协作能力、代码理解度 |
 
-## 7. 失败兜底方案
+## 8. 失败兜底方案
 
-### 7.1 demo-task 运行异常
+### demo-task 异常
 
-- 提前准备一个新创建会话
-- 重新点击 `Run Demo Task`
-- 如仍异常，优先展示已存在的 TaskRun 和 Artifact 结构
+- 重新创建新会话再试一次
+- 若仍失败，优先展示已有 TaskRun / Artifact 结构
 
-### 7.2 revision 失败
+### revision 异常
 
-- 优先展示当前已生成的 `v1`
-- 说明 revision 目标与设计已实现，当前接口若失败则回退展示已有版本关系结构
+- 优先展示已有 `v1`
+- 说明 revision 设计与链路已存在，当前接口偶发失败时保留结构展示
 
-### 7.3 前端页面局部异常
+### `/agents` 页面异常
 
-- 优先维持 `/workspace` 主链路演示
-- `/agents` 页面作为补充环节，可单独打开
+- 先完成 `/workspace` 主线
+- 再补讲 Agent Builder 功能
 
-## 8. 当前静态 Demo 说明
+## 9. 不要演示的功能
 
-演示时必须明确说明：
+以下内容不要放进 3 分钟视频主线：
 
-- demo-task 是静态编排，不是真实动态规划
-- revision 是静态模板，不是真实代码修改
-- Diff Summary 是静态摘要，不是真实代码 diff
-- ContextSnapshot / HandoffSummary 是静态构造，不是真实 memory system
-- Codex / Claude Code 仍是 placeholder + Mock fallback
+- 真实 Codex / Claude Code / OpenCode 外部调用
+- 真实部署
+- 多人协作
+- 多端同步
+- WebSocket / SSE
+- 复杂群聊调度
+- 多个 `@Agent`
+
+原因：
+
+- 当前这些能力未完成
+- 会增加演示不稳定性
+- 会稀释主线表达

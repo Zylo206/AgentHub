@@ -1,24 +1,27 @@
-# AgentHub Roadmap V0.5
+# AgentHub Roadmap
 
 ## 1. 已完成
 
-### 文档与资产
+### 文档与协作资产
 
-- 文档目录结构建立
-- Spec / Skill / Rules / Collaboration 基础文档建立
-- V0.5 文档同步版准备
+- Spec / Skill / Rules / Collaboration 文档体系
+- `development-workflow.md`
+- `prompt-template.md`
+- `dev-log.md`
+- `demo-checklist.md`
+- `decision-log.md`
 
-### 前后端骨架
+### 前后端基础工程
 
-- 前端 React + Vite 工程
-- 后端 Spring Boot 工程
+- React + Vite 前端工程
+- Spring Boot 后端工程
 - 核心领域模型
 - 内存 Repository
 - 基础 REST API
 
 ### 产品主链路
 
-- 三栏 IM 工作台
+- 三栏 IM Workspace
 - Conversation List
 - Agent List
 - Message Stream
@@ -27,118 +30,140 @@
 - ContextPanel
 - ArtifactPanel
 
-### 协作链路
+### 协作与执行链路
 
 - 静态 demo-task
-- TaskSpec / TaskRun / TaskStep 展示
+- TaskSpec / TaskRun / TaskStep
 - ContextSnapshot / HandoffSummary
+- Artifact Preview
 - Artifact Revision
 - Version History
 - Diff Summary
 - Agent Adapter Layer placeholder / Mock fallback
 - Agent Builder 最小闭环
+- selectedAgent
+- `Message.targetAgentId`
+- 最小 `@Agent` 文本解析
+- `targetAgentId -> selectedAgent` 推断链路
 
 ## 2. 当前阶段
 
+当前已进入**收敛式开发阶段**。
+
 当前阶段目标：
 
-- 完成 V0.5 文档同步
-- 校准 README / 产品设计 / 技术设计 / Demo 场景 / Roadmap
-- 保持当前 Web Demo 稳定
-- 保证“已完成”和“未完成”口径与代码一致
+- 课题要求对齐
+- README / 产品设计 / 技术设计 / Demo 场景文档同步
+- 演示主线收敛
+- 补齐最关键硬缺口
 
-当前阶段重点：
+当前阶段原则：
 
-- 不再继续堆功能
-- 优先统一文档、代码、演示话术
-- 为 3 分钟 Demo 形成稳定主线
+- 不再大范围扩功能
+- 只补对评分和演示最关键的能力
+- 先保证 Demo 稳定，再继续增强真实性
 
-## 3. 下一阶段
+## 3. 下一阶段优先级
 
-按优先级建议如下：
+### 1. Agent Adapter 半真实接入 / 最小真实模型调用
 
-### 1. Selected Agent / @Agent 最小执行链路
+原因：
 
-- 在 Workspace 中增加最小 Agent 指定能力
-- 让用户创建的自定义 Agent 能被选中或参与一次可见执行
+- 这是课题硬要求缺口
+- 当前 placeholder 不能算真实接入
 
-### 2. OrchestratorService 继续加强
+预期产出：
 
-- 减少静态编排逻辑散落
-- 把 demo-task / revision 的编排组织得更清晰
-- 为后续真实路由和真实执行做准备
+- 至少两个主流平台中的一个或两个具备最小真实/半真实接入
 
-### 3. 自定义 Agent preferredAdapter 接入执行链路
+### 2. OrchestratorService 规则化增强
 
-- 让 Custom Agent 的 `preferredAdapterType` 真正影响 TaskStep 执行
-- 形成“创建 Agent -> 选中 Agent -> 执行 step”的最小闭环
+原因：
 
-### 4. 至少两个 Agent 平台的最小真实 / 半真实接入
+- 当前 Orchestrator 仍偏静态 Demo
+- 需要更可解释的规则化 planning
 
-- 保留稳定 fallback
-- 但至少让两个主流平台中的一个或两个具备更真实的接入路径
+预期产出：
 
-### 5. SSE / WebSocket 流式状态
+- 更清晰的 step planning / routing 逻辑
 
-- TaskRun 状态更新
-- Message 流式输出
-- Adapter 执行状态可视化
+### 3. 静态 Deploy Status Card
 
-### 6. Deploy Status Card 静态展示
+原因：
 
-- 先做静态部署状态卡片
-- 后续再接真实部署链路
+- 展示力高
+- 成本可控
 
-### 7. MySQL 持久化
+预期产出：
 
-- 从内存 Repository 迁移到 MyBatis + MySQL
-- 保留当前 API 结构不变
+- Deploy Status Card 静态版
+- preview URL / build / publish 状态展示
 
-### 8. 最终文档 V1.0 和 3 分钟 Demo 视频
+### 4. Demo 视频脚本和录制
 
-- 最终产品设计文档
-- 最终技术文档
-- 最终 AI 协作开发记录
-- 最终录屏脚本和视频
+原因：
 
-## 4. 风险点
+- 当前主线已经足够开始准备录屏
 
-### 风险 1：静态 Demo 被误解为真实接入
+预期产出：
 
-缓解：
+- 3 分钟稳定脚本
+- 录屏版本 Demo
 
-- 文档中持续明确标注 placeholder / fallback / static demo
-- 演示时主动说明边界
+### 5. 最终文档 V1.0
 
-### 风险 2：硬要求未完成项过多
+原因：
 
-缓解：
+- 交付物要求明确
+- 文档必须与代码完全一致
 
-- 优先补最小 `@Agent`
-- 优先补最小真实/半真实 provider 接入
-- 优先补流式状态而不是扩散功能面
+预期产出：
 
-### 风险 3：文档、代码、演示口径不一致
+- README V1.0
+- 产品设计文档 V1.0
+- 技术文档 V1.0
+- Demo 场景文档 V1.0
 
-缓解：
+### 6. 自动化启动 / smoke test 脚本
 
-- 每个阶段先同步文档，再扩能力
-- 所有对外材料以当前仓库代码为准
+原因：
+
+- 降低演示风险
+
+预期产出：
+
+- 一键启动说明
+- smoke test 清单或脚本
+
+## 4. 暂停或后置
+
+以下内容当前建议后置：
+
+- MySQL
+- WebSocket / SSE
+- 多端真实实现
+- 多人协作
+- 复杂自然语言 `@Agent`
+- 完整群聊调度
+
+后置原因：
+
+- 对当前阶段评分收益不如前几项高
+- 会明显增加开发范围和演示不稳定性
 
 ## 5. 当前阶段结论
 
-当前 AgentHub 已经具备：
+当前 AgentHub 已具备：
 
 - 可运行 Web Demo
-- 可展示的多 Agent 协作结构
-- 可解释的 Task / Context / Artifact / Adapter 关系
-- 可演示的 Artifact 二次修改链路
-- 可保存的自定义 Agent 最小闭环
+- 可见多 Agent 协作结构
+- 可解释的 Task / Context / Artifact / Adapter 链路
+- 可展示的 Artifact-centered iteration
+- 可追踪的 AI 协作开发记录
 
-但距离赛题完整硬要求，仍需继续补：
+但在最终提交前仍需要优先补齐：
 
-- 最小 `@Agent`
-- 至少两个主流平台的更真实接入
-- 流式执行
-- 持久化
-- P2 部署与多端说明
+- 至少两个主流平台的最小真实/半真实接入
+- 更规则化的 Orchestrator
+- Deploy Status Card
+- 文档 V1.0 与视频交付物

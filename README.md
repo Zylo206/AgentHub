@@ -1,16 +1,29 @@
 # AgentHub
 
-AgentHub 是一个 Web 优先、IM 式多 Agent 协作平台，用于演示“人 + AI + 产物”的协作闭环。当前仓库已经不是 V0.1 骨架，而是包含可运行 Web Demo 的 V0.5 同步版：用户可以在三栏工作台中创建会话、发送任务、运行静态 demo-task、查看 TaskRun / Context / Artifact、执行 Artifact 二次修改，并创建自定义 Agent。
+AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原型，用于演示「用户发起任务 -> Orchestrator 编排 -> Agent 分工 -> Context / Handoff 可见 -> Artifact 预览与迭代」的完整闭环。
 
-## 产品定位
+当前仓库已经不是早期骨架，而是一个**可运行的 MVP 演示闭环**。用户可以在 Web Workspace 中创建会话、选择或 `@Agent`、发送消息、运行静态 demo-task、查看 TaskRun / Context / Artifact，并对已有 Artifact 发起 revision，观察版本演进和 Diff Summary。
 
-AgentHub 不是普通 Chatbot，也不是以 Workflow Canvas 为主入口的编排工具。当前产品主入口是 IM Workspace，核心体验围绕以下能力展开：
+## 当前阶段说明
 
-- 通过聊天发起复杂任务
-- 通过 Orchestrator 组织多 Agent 分工
-- 在聊天流中查看 TaskSpec、TaskRun、ContextSnapshot、HandoffSummary
-- 围绕 Artifact 进行预览、版本演进和二次修改
-- 通过统一 Agent Adapter Layer 为后续接入 Codex、Claude Code、OpenCode 做准备
+当前阶段可定义为：
+
+- 已形成 MVP 演示闭环
+- 已形成稳定 AI 协作开发工作流
+- 正处于收敛式开发阶段
+- 下一步重点是补齐硬要求，而不是继续扩散功能面
+
+当前版本适合：
+
+- 阶段性演示
+- 3 分钟 Demo 脚本准备
+- 比赛提交前的架构和产品说明收口
+
+当前版本不应被表述为：
+
+- 已完成真实多 Agent 平台接入
+- 已完成真实动态 Orchestrator
+- 已完成生产级部署与多人协作平台
 
 ## 当前已实现功能
 
@@ -31,70 +44,132 @@ AgentHub 不是普通 Chatbot，也不是以 Workflow Canvas 为主入口的编�
 - 静态 demo-task 主链路
 - 静态 Artifact revision 链路
 - ContextSnapshot / HandoffSummary 查询接口
-- TaskStep 记录 Adapter 执行信息
 - Agent Adapter Layer 第一版
   - MockAgentAdapter
   - CodexAgentAdapter placeholder
   - ClaudeCodeAgentAdapter placeholder
-  - fallback 到 MOCK
+  - Adapter fallback 到 MOCK
+- OrchestratorService
+- AgentRoutingService
+- `selectedAgentId` 接入 demo-task
+- `Message.targetAgentId`
+- Orchestrator 从 `Message.targetAgentId` 推断 selectedAgent
 - 用户自建 Agent 最小保存闭环
 
 ### 前端
 
 - React + Vite Web 前端
-- 三栏 IM 工作台
+- 三栏 IM Workspace
   - 左侧 Conversation List + Agent List
   - 中间 Message Stream + TaskRunPanel + ContextPanel + ChatInput
   - 右侧 ArtifactPanel
 - Agent Builder 页面
-  - 支持创建自定义 Agent
-  - 支持 `name`、`avatarUrl`、`systemPrompt`、`capabilityTags`、`toolTags`、`preferredAdapterType`
-- Artifact 预览与二次修改
+- selectedAgent 可视化展示
+- ChatInput 显式 `@Agent` token
+- 文本开头最小 `@AgentName` 解析
+- MessageBubble 显示 `To: @Agent`
+- TaskRunPanel 展示
+  - assigned Agent
+  - preferred adapter
+  - actual adapter
+  - fallback 状态
+- Artifact Preview
+- Artifact Revision
 - Version History
 - Diff Summary
 - Revision 来源提示
-- TaskStep 与 Artifact 高亮联动
 
-## 当前仍然是静态 Demo 的部分
+### AI 协作开发记录
 
-以下能力在当前版本中仍是静态 Demo 或 placeholder，不应视为真实完成：
+- `docs/spec`
+- `docs/skills`
+- `docs/rules`
+- `docs/collaboration`
+- `development-workflow.md`
+- `prompt-template.md`
+- `dev-log.md`
+- `demo-checklist.md`
+- `decision-log.md`
 
-- demo-task 仍是静态生成，不是真实动态 Orchestrator 规划
+## 当前仍是静态 Demo / Mock / Placeholder 的部分
+
+以下能力必须明确区分，不应写成真实完成：
+
+- demo-task 仍是静态编排，不是真实动态 Orchestrator
 - Artifact revision 仍是静态模板，不是真实代码修改
 - Diff Summary 是静态摘要，不是真实代码 diff
 - ContextSnapshot / HandoffSummary 是静态构造，不是真实长期 memory system
-- Codex / Claude Code / OpenCode 当前仍以 placeholder / fallback / Mock 为主，不是完整真实接入
-- 没有 MySQL 持久化
-- 没有 WebSocket / SSE 流式执行
-- 没有真实多人协作
-- 没有完整 `@Agent` 路由
-- 没有真实部署状态卡片和部署执行链路
+- Codex / Claude Code / OpenCode 当前仍以 placeholder / Mock fallback 为主
+- 当前没有真实 Codex / Claude Code / OpenCode 完整接入
+- 当前没有 MySQL 持久化
+- 当前没有 WebSocket / SSE 流式执行
+- 当前没有真实部署发布链路
+- 当前没有真实部署状态卡片
+- 当前没有多端同步
+- 当前没有真实多人协作
+- 当前没有完整群聊调度
 
-## 当前目录结构
+## 技术栈
+
+### 前端
+
+- React 18
+- TypeScript
+- Vite
+- React Router
+- 原生 `fetch`
+- CSS Modules 之外的项目级样式文件组织
+
+### 后端
+
+- Java 17
+- Spring Boot 3
+- Spring Web
+- Spring Validation
+- 内存 Repository
+
+## 目录结构
 
 ```text
 AgentHub/
-├─ backend/                      Spring Boot backend
-│  └─ src/main/java/com/agenthub
-│     ├─ api/                    REST API
-│     ├─ application/            application services
-│     ├─ common/                 ApiResponse, IdGenerator, TimeProvider
-│     ├─ domain/                 核心领域模型
-│     └─ infrastructure/         memory repository, adapter layer
-├─ frontend/                     React + Vite web app
-│  └─ src/
-│     ├─ api/
-│     ├─ features/
-│     ├─ layouts/
-│     ├─ pages/
-│     ├─ router/
-│     ├─ styles/
-│     └─ utils/
-├─ docs/                         产品、技术、协作、规则文档
-└─ scripts/                      预留脚本目录
+├── backend/
+│   └── src/main/java/com/agenthub
+│       ├── api/
+│       ├── application/
+│       ├── common/
+│       ├── domain/
+│       └── infrastructure/
+├── frontend/
+│   └── src/
+│       ├── api/
+│       ├── features/
+│       ├── layouts/
+│       ├── pages/
+│       ├── router/
+│       ├── styles/
+│       └── utils/
+├── docs/
+│   ├── collaboration/
+│   ├── rules/
+│   ├── skills/
+│   └── spec/
+└── scripts/
 ```
 
-## 前端启动方式
+## 启动方式
+
+### 启动后端
+
+```powershell
+cd backend
+mvn spring-boot:run
+```
+
+默认地址：
+
+- `http://localhost:8080`
+
+### 启动前端
 
 ```powershell
 cd frontend
@@ -102,7 +177,7 @@ npm install
 npm run dev
 ```
 
-默认前端开发地址由 Vite 提供，工作台入口路由：
+前端入口：
 
 - `/workspace`
 - `/agents`
@@ -113,91 +188,105 @@ npm run dev
 $env:VITE_API_BASE_URL="http://localhost:8080"
 ```
 
-## 后端启动方式
-
-```powershell
-cd backend
-mvn spring-boot:run
-```
-
-默认后端地址：
-
-- `http://localhost:8080`
-
-当前配置文件位置：
-
-- [application.yml](E:/CodeProject2/AgentHub/backend/src/main/resources/application.yml)
-
 ## Demo 操作流程
 
-推荐演示路径：
+推荐主线：
 
-1. 打开 `/workspace`
-2. 点击 `Create Demo Conversation`
-3. 发送任务：
-   - “帮我生成一个 React 登录页面，要求支持邮箱登录和验证码登录，同时生成 README，最后检查代码质量并给出修改建议。”
-4. 点击 `Run Demo Task`
-5. 查看 Message Stream、TaskRunPanel、ContextPanel、ArtifactPanel
-6. 点击 `LoginPage.tsx`
-7. 查看 Version History 和 Diff Summary
-8. 在 revision 输入框中输入：
-   - “把按钮改成蓝色，并增加 loading 状态。”
-9. 点击 `Revise Selected Artifact`
-10. 查看 `v1 -> v2` 演进
-11. 打开 `/agents`
-12. 创建一个自定义 Agent
-13. 返回 `/workspace`，确认 Agent List 中出现新 Agent
+1. 打开 `/agents`
+2. 创建一个自定义 Agent，例如 `My Frontend Agent`
+3. 回到 `/workspace`
+4. 在 Agent List 中看到该 Agent
+5. 在 ChatInput 输入：
+   - `@My Frontend Agent 帮我生成一个 React 登录页面`
+6. 发送消息，观察 `To: @My Frontend Agent`
+7. 点击 `Run Demo Task`
+8. 查看 TaskRun / TaskStep / assigned Agent
+9. 查看 adapter fallback 信息
+10. 查看 ContextSnapshot / HandoffSummary
+11. 在 ArtifactPanel 中查看 `LoginPage.tsx`
+12. 发起 revision
+13. 查看 `v1 -> v2`
+14. 查看 Diff Summary
 
-## 核心架构概览
+## 核心架构说明
+
+当前主链路可以概括为：
 
 ```text
 User
-  -> Frontend IM Workspace
-  -> Backend REST API
-  -> TaskApplicationService / OrchestratorService
+  -> ChatInput / selectedAgent / @Agent
+  -> Message(targetAgentId)
+  -> OrchestratorService
   -> AgentRoutingService
   -> AgentExecutorService
   -> AgentAdapterRegistry
-  -> Mock / Codex placeholder / Claude Code placeholder
-  -> Artifact / Context / Handoff persistence (in memory)
-  -> Frontend render of TaskRun / Artifact / Version History
+  -> Mock / Placeholder Adapter
+  -> TaskRun / TaskStep / Artifact
+  -> ContextSnapshot / HandoffSummary
+  -> Frontend Workspace Render
 ```
 
-关键原则：
+当前架构重点不是生产化，而是：
 
-- 聊天是主入口
-- Artifact 是后续迭代核心对象
-- Adapter Layer 是统一抽象层，不等于真实 provider 已接通
+- 把多 Agent 协作链路可视化
+- 把 Adapter fallback 显式化
+- 把 Artifact-centered iteration 做成可演示闭环
 
-## 比赛交付物对应关系
+## 课题要求对齐情况
 
-- 产品设计文档
-  - [docs/product-design.md](E:/CodeProject2/AgentHub/docs/product-design.md)
-- 技术文档
-  - [docs/technical-design.md](E:/CodeProject2/AgentHub/docs/technical-design.md)
-- 可运行 Demo
-  - 当前 `frontend + backend` 可演示静态多 Agent 协作链路
+### 已基本满足
+
+- IM 聊天主界面
+- 对话列表
+- 用户自建 Agent
+- Agent 作为联系人展示
+- 统一 Agent Adapter Layer 骨架
+- Artifact Preview
+- Artifact Revision
+- Version History
 - AI 协作开发记录
-  - `docs/spec` / `docs/skills` / `docs/rules` / `docs/collaboration`
-- 3 分钟 Demo 视频
-  - 参考 [docs/demo-scenario.md](E:/CodeProject2/AgentHub/docs/demo-scenario.md)
+- 可运行 Web Demo
+
+### 部分满足
+
+- 单聊模式
+- `@Agent`
+- 上下文管理
+- 主 Agent Orchestrator
+- 对话式局部修改
+
+### 当前仍是静态 Demo / Placeholder
+
+- 动态任务拆解
+- 真实 Agent 执行
+- 真实代码 diff
+- 真实长期 memory
+- 真实平台接入
+
+### 当前未完成
+
+- 至少两个主流 Agent 平台的真实 / 半真实接入
+- 群聊模式
+- 并行调度
+- 代码冲突处理
+- 部署状态卡片
+- 多端支持
+- 多人协作
+- WebSocket / SSE
 
 ## 下一阶段 Roadmap
 
-优先级建议：
-
-1. Selected Agent / `@Agent` 最小执行链路
-2. 把自定义 Agent 的 `preferredAdapterType` 真正接入执行路径
-3. 强化 OrchestratorService，减少静态编排逻辑散落
-4. 至少两个 Agent 平台的最小真实或半真实接入
-5. SSE / WebSocket 流式状态
-6. Deploy Status Card 静态展示
-7. MySQL 持久化
-8. 最终文档 V1.0 和 3 分钟 Demo 视频
+1. Agent Adapter 半真实接入 / 最小真实模型调用
+2. OrchestratorService 规则化增强
+3. 静态 Deploy Status Card
+4. Demo 视频脚本与录制
+5. 最终文档 V1.0
+6. 自动化启动 / smoke test 脚本
 
 ## 注意事项
 
-- 当前版本适合比赛演示，不适合作为“真实多 Agent 生产系统”描述
-- Adapter fallback 是为了稳定 Demo，不代表真实 provider 调用成功
-- 当前路由和协作信息已经可见，但 `@Agent`、多人协作、真实部署仍未完成
-- 若文档与代码冲突，以当前仓库代码为准
+- 当前 Adapter 仍以 Mock fallback / placeholder 为主
+- 当前没有真实 Codex / Claude Code / OpenCode 完整接入
+- 当前没有 MySQL、SSE、真实部署、多端同步
+- 当前文档与代码应始终以“已完成 / 静态 Demo / Placeholder / 未完成”明确区分
+- 若用于答辩或视频演示，建议严格遵循 `docs/demo-scenario.md` 中的主线，避免现场演示未完成功能

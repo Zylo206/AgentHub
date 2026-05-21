@@ -25,6 +25,19 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
     }
 
     @Override
+    public AgentAdapterDescriptor describe() {
+        return new AgentAdapterDescriptor(
+                AgentAdapterType.CLAUDE_CODE,
+                AgentAdapterHealthStatus.PLACEHOLDER,
+                enabled,
+                true,
+                enabled
+                        ? "Claude Code adapter is enabled in config, but this build still uses a placeholder implementation."
+                        : "Claude Code adapter is a placeholder in this demo build.",
+                "No real external Claude Code call is implemented in this build.");
+    }
+
+    @Override
     public AgentResponse execute(AgentRequest request) {
         Instant startedAt = timeProvider.now();
         String content = enabled

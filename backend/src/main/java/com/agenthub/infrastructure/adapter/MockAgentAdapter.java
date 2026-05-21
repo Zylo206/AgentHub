@@ -20,6 +20,17 @@ public class MockAgentAdapter implements AgentAdapter {
     }
 
     @Override
+    public AgentAdapterDescriptor describe() {
+        return new AgentAdapterDescriptor(
+                AgentAdapterType.MOCK,
+                AgentAdapterHealthStatus.AVAILABLE,
+                true,
+                false,
+                "Stable local mock adapter for deterministic demo responses.",
+                null);
+    }
+
+    @Override
     public AgentResponse execute(AgentRequest request) {
         Instant startedAt = timeProvider.now();
         String prompt = ((request.taskDescription() == null ? "" : request.taskDescription()) + "\n"

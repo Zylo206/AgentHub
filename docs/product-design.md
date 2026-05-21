@@ -1,374 +1,334 @@
-# AgentHub 产品设计文档 V0.5
+# AgentHub 产品设计文档
 
-## 1. 项目背景
+## 1. 产品定位
 
-AgentHub 面向 AI 全栈挑战赛，目标不是做一个普通聊天机器人，而是构建一个以 IM 聊天为核心交互范式的人与 AI 协作平台。用户通过会话、消息、单聊、群聊、后续 `@Agent` 指定等方式与不同 Agent 协作，由主 Agent Orchestrator 负责理解任务、拆解任务、路由执行、上下文交接和结果聚合。
+AgentHub 是一个以 IM Workspace 为主入口的多 Agent 协作平台原型。
 
-比赛明确要求平台围绕多 Agent 协作和 Artifact 迭代展开，因此 AgentHub 的产品主线不是“回答问题”，而是“组织协作并围绕产物持续推进任务”。
+它不是普通 Chatbot，也不是以 Workflow Canvas 为主入口的编排工具。当前产品形态强调：
 
-## 2. 产品定位
+- 用户通过聊天发起任务
+- Orchestrator 负责任务拆解和路由
+- Specialist Agent 负责执行不同子任务
+- Artifact 是后续迭代的核心对象
+- Context / Handoff 必须可见，而不是黑盒
 
-一句话定位：
+## 2. 目标用户
 
-> AgentHub 是一个基于 IM Workspace 的多 Agent 协作平台，用户通过聊天发起复杂任务，由 Orchestrator 协调多个专业 Agent 完成任务，并围绕代码、文档、网页预览等 Artifact 持续迭代。
+当前版本面向两类用户：
 
-产品定位边界：
+- 比赛评审和导师
+  - 关注产品是否真正体现多 Agent 协作
+  - 关注 AI 协作记录是否完整
+- 产品 / 工程混合型开发者
+  - 需要在聊天中组织任务
+  - 需要围绕代码、文档、评审报告做迭代
 
-- 不是普通 Chatbot
-- 不是 Workflow Canvas 优先产品
-- 是聊天优先、协作优先、Artifact 优先的平台
+## 3. 核心痛点
 
-## 3. 目标用户
+传统 Chatbot 产品主要存在以下问题：
 
-### 3.1 比赛评审
+- 任务拆解不可见
+- 多 Agent 协作关系不可见
+- Context 交接不可见
+- 产物只是聊天回复附件，不是可持续迭代对象
+- 用户自建 Agent 很难真正进入执行链路
 
-关注点：
+## 4. 产品目标
 
-- AI 协作能力是否可见
-- 产品主线是否清晰
-- 技术实现是否可解释
-- Demo 是否稳定
+当前阶段的产品目标不是做全量平台，而是做一个可演示、可解释、可迭代的 MVP：
 
-### 3.2 开发型用户
+- 用 IM Workspace 作为主入口
+- 让 Orchestrator / TaskRun / TaskStep 可见
+- 让 ContextSnapshot / HandoffSummary 可见
+- 让 Artifact 能被预览、修订、版本演进
+- 让自定义 Agent 从“能创建”进入“可见执行链路”
 
-典型任务：
+## 5. 核心用户流程
 
-- 生成页面
-- 生成 README
-- 输出 API Contract
-- 检查代码质量
-- 基于已有产物继续修改
+当前最重要的用户流程是：
 
-### 3.3 任务发起者
+1. 创建或选择会话
+2. 选择 Agent，或在输入框中使用 `@AgentName`
+3. 发送消息
+4. 运行 demo-task
+5. 查看 TaskRun / TaskStep
+6. 查看 assigned Agent 与 adapter fallback
+7. 查看 Context / Handoff
+8. 查看 Artifact
+9. 发起 Artifact revision
+10. 查看版本演进与 Diff Summary
 
-希望：
+## 6. 页面结构
 
-- 一句话发起复杂任务
-- 不需要自己手动串接多个工具
-- 能直接基于已有产物继续迭代
+### `/workspace`
 
-## 4. 核心痛点
+三栏结构：
 
-### 4.1 单 Agent 模式难以处理复杂任务
+- 左侧：Conversation List + Agent List
+- 中间：Message Stream + TaskRunPanel + ContextPanel + ChatInput
+- 右侧：ArtifactPanel
 
-复杂任务通常包含页面生成、文档补充、接口设计、质量检查等多个步骤，单 Agent 模式难以同时兼顾角色分工、执行可见性和后续协作。
+### `/agents`
 
-### 4.2 多 Agent 协作中的上下文容易混乱
+最小 Agent Builder：
 
-如果没有明确的 ContextSnapshot 和 HandoffSummary，前一个 Agent 的输出很难稳定地传给后一个 Agent。
+- name
+- avatarUrl
+- systemPrompt
+- capabilityTags
+- toolTags
+- preferredAdapterType
 
-### 4.3 纯问答模式无法围绕产物持续推进
+## 7. IM Workspace 设计
 
-如果系统只返回一段文本，用户很难把代码、文档、页面预览当成可继续修改的工作对象。
+IM Workspace 是当前产品的核心入口。
 
-### 4.4 协作过程不可见
+设计原则：
 
-如果界面里看不到 TaskSpec、TaskRun、TaskStep、Routing、Handoff、Review，评审很难认可平台具备真正的 AI 协作能力。
+- 所有主要操作都应围绕聊天流展开
+- 聊天不是结果展示层，而是任务发起和协作组织层
+- TaskRun、Context、Artifact 都需要嵌入在 Workspace 语义内
 
-## 5. 产品目标
-
-### 5.1 比赛目标
-
-通过稳定的 Web Demo 证明：
-
-- 多 Agent 协作链路成立
-- Orchestrator 具备清晰的任务编排职责
-- Artifact-centered iteration 可以被看见和解释
-- Spec / Skill / Rules / Collaboration Protocol 已形成可提交资产
-
-### 5.2 MVP 目标
-
-当前 MVP 聚焦：
-
-- 三栏 IM Workspace
-- 静态 demo-task 主链路
-- 静态 Artifact revision 链路
-- Context / Handoff 展示
-- Adapter fallback 展示
-- 自定义 Agent 创建与展示
-
-## 6. 核心使用场景
-
-### 6.1 多步骤任务生成
-
-用户输入一个复杂需求，系统生成 TaskSpec，拆分为 Frontend Builder、Backend Worker、Reviewer 三个执行步骤，并在聊天流和右侧面板中展示产物。
-
-### 6.2 基于已有 Artifact 的二次修改
-
-用户选中 `LoginPage.tsx`，输入 revision 指令，系统生成 revision TaskRun、`LoginPage.tsx v2`、新的 Review Report，并展示版本关系和修改摘要。
-
-### 6.3 自定义 Agent 创建
-
-用户在 `/agents` 页面配置自定义 Agent 的名称、Prompt、标签和 preferredAdapterType，创建后回到 Workspace 可在 Agent List 中看到该 Agent。
-
-## 7. 当前产品形态
-
-当前仓库中的产品已经不是单纯骨架，而是具备可演示主链路的 Web 原型：
-
-- `/workspace` 提供三栏 IM 工作台
-- `/agents` 提供最小 Agent Builder 表单
-- 后端提供静态任务生成、revision、context、handoff、adapter placeholder 支持
-
-但当前版本仍是比赛导向的静态 Demo，不应误写成真实多 Agent 生产系统。
-
-## 8. 页面结构
-
-### 8.1 `/workspace`
-
-三栏布局：
-
-- 左侧
-  - Conversation List
-  - Agent List
-- 中间
-  - 当前会话标题
-  - Message Stream
-  - TaskRunPanel
-  - ContextPanel
-  - ChatInput
-- 右侧
-  - ArtifactPanel
-  - Version History
-  - Diff Summary
-  - Revision 输入区
-
-### 8.2 `/agents`
-
-最小 Agent Builder 页面：
-
-- Agent Name
-- Avatar URL
-- System Prompt
-- Capability Tags
-- Tool Tags
-- Preferred Adapter
-- Create Agent 按钮
-- Created Agent Summary
-
-## 9. 用户流程
-
-### 9.1 主流程
-
-1. 用户进入 `/workspace`
-2. 创建 Demo Conversation
-3. 发送复杂任务
-4. 运行 `Run Demo Task`
-5. 系统展示 TaskSpec、TaskRun、TaskStep
-6. 系统展示 Artifact、ContextSnapshot、HandoffSummary
-7. 用户选中一个 Artifact
-8. 用户发起 revision
-9. 系统生成新版本产物和新的 Review Report
-
-### 9.2 自定义 Agent 流程
-
-1. 用户进入 `/agents`
-2. 填写名称、Prompt、标签和 preferredAdapterType
-3. 点击 `Create Agent`
-4. 页面展示创建成功
-5. 返回 `/workspace`
-6. Agent List 中出现新建 Agent
-
-## 10. IM 聊天设计
-
-当前设计强调：
-
-- 聊天是主入口
-- Task 信息和执行信息内联在聊天场景中理解
-- 右侧面板用于集中查看 Artifact，而不是把聊天和产物完全割裂
-
-当前已实现：
+当前 Workspace 已体现：
 
 - 对话列表
-- 消息流
-- 发送消息
-- 运行 Demo Task
+- Agent 联系人列表
+- 任务发起
+- 消息目标 Agent 显示
+- 任务执行状态可视化
+- Artifact 侧栏查看与修订
 
-当前未完成：
+## 8. Agent List / Agent Builder 设计
 
-- 消息回复、引用、重新生成
-- 完整消息操作体系
-- 多会话并行交互打磨
+### Agent List
 
-## 11. 单聊 / 群聊 / @Agent 设计
+Agent 以联系人形式展示，包含：
 
-当前仓库状态：
-
-- 已具备“多 Agent 参与一个 TaskRun”的展示形态
-- 已具备 Agent List 和多角色 TaskStep 展示
-
-当前未完成：
-
-- 真正的单聊模式切换
-- 真正的群聊成员视图
-- 完整 `@Agent` 指定执行链路
-
-因此 V0.5 文档中应将“单聊 / 群聊 / @Agent”写为赛题硬要求和下一阶段目标，而不是写成当前已完整实现。
-
-## 12. Agent 联系人设计
-
-Agent 在当前产品中以联系人列表形式展示，包含：
-
-- avatarUrl 或首字母占位
-- name
+- 头像或首字母占位
+- 名称
 - role
 - status
 - preferredAdapterType
 - capabilityTags
 - toolTags
 
-这满足了“Agent 作为联系人”的最小产品感要求。
+### Agent Builder
 
-## 13. 用户自建 Agent 设计
+当前是最小保存闭环，不是完整配置系统。
 
-当前已实现的最小闭环：
+它的价值在于：
 
-- 支持创建 `CUSTOM` 角色 Agent
-- 支持配置 `preferredAdapterType`
-- 支持配置 `systemPrompt`
-- 支持配置 `capabilityTags`
-- 支持配置 `toolTags`
-- 支持配置 `avatarUrl`
+- 让“用户自建 Agent”不再停留在文档层
+- 能进入 Workspace 可见执行链路
+- 为后续 `@Agent` 和更复杂路由预留入口
 
-当前未完成：
+## 9. selectedAgent / @Agent 设计
 
-- Agent 编辑
-- Agent 删除
-- 自定义 Agent 真实进入执行链路
-- 自定义 Agent 的会话级选择和 `@Agent`
+当前支持两种目标 Agent 指定方式：
 
-## 14. Orchestrator 协作设计
+### 方式一：左侧 selectedAgent
 
-产品设计目标：
+- 点击 Agent List 中的 Agent
+- Workspace 显示 Selected Agent banner
+- ChatInput 展示 `@Agent` token
 
-- Orchestrator 作为 PM / PMO 式协调器
-- 理解任务
-- 拆解任务
-- 分派给 Specialist Agent
-- 聚合结果
-- 处理失败降级
+### 方式二：消息开头文本 `@AgentName`
 
-当前实现状态：
+例如：
 
-- 后端已抽离 `OrchestratorService`
-- 但 demo-task 仍是静态编排，不是真实动态规划
-- 任务拆解逻辑主要服务于 Demo 展示
+```text
+@My Frontend Agent 帮我生成一个登录页面
+```
 
-## 15. Artifact 预览与编辑设计
+当前规则：
 
-当前已实现：
+- 只解析消息开头
+- 只支持一个 Agent
+- 文本 `@Agent` 优先级高于左侧 selectedAgent
+- 匹配失败时阻止消息发送并显示错误
 
-- Artifact 列表
-- 详情预览
-- CODE / MARKDOWN / REVIEW_REPORT / API_CONTRACT / DATA_MODEL 展示
-- revision 输入区
-- 基于选中 Artifact 的二次修改链路
+## 10. Orchestrator 协作设计
 
-当前未完成：
+当前 Orchestrator 的定位是：
 
-- 真正代码编辑器
-- 网页 iframe 真实预览链路完善
-- 文件附件上传与处理
-- 文档段落引用后交给 Agent 处理
+- 读取 source message
+- 推断 selectedAgent
+- 创建 TaskSpec
+- 创建 TaskRun / TaskStep
+- 调用 Agent Adapter 执行 step
+- 生成 Context / Handoff / Artifact
 
-## 16. Version History / Diff Summary 设计
+需要明确：
 
-当前已实现：
+- 当前仍是规则化、静态 Demo 编排
+- 还不是真实复杂动态规划系统
+- 但已经可以把“任务拆解 -> 执行 -> 交接 -> 产物”完整展示出来
 
-- 基于当前会话 Artifact 数据的轻量 Version History
-- `v1 -> v2` 的 lineage 展示
-- Revision 来源提示
-- 静态 Diff Summary
+## 11. Context / Handoff 展示设计
 
-当前未完成：
+当前设计目标是让协作过程显式化。
 
-- 真实代码 diff
-- 后端版 artifact lineage service
-- 多轮 revision 图谱
+### ContextSnapshot 展示
 
-## 17. Context / Handoff 展示设计
+展示内容包括：
 
-当前已实现：
+- summary
+- pinnedContextItems
+- includedMessageIds
+- includedArtifactIds
 
-- ContextPanel
-- ContextSnapshot 展示
-- HandoffSummary 展示
-- TaskSpec、Acceptance Criteria、Agent 间交接信息可见化
+### HandoffSummary 展示
 
-当前未完成：
+展示内容包括：
 
-- 真实长期 memory system
-- 复杂上下文压缩策略
-- 基于多轮对话的自动上下文裁剪
+- sourceAgentId
+- targetAgentId
+- passedArtifactIds
+- keyDecisions
+- openIssues
+- summary
 
-## 18. P0 / P1 / P2 功能范围
+作用：
 
-### 18.1 P0
+- 支撑 AI 协作能力评分点
+- 让评审看到“上下文交接不是黑盒”
+
+## 12. Artifact Preview / Revision 设计
+
+Artifact 是产品的第二核心对象，仅次于聊天流。
+
+当前支持：
+
+- 产物列表
+- 产物详情查看
+- revision 指令输入
+- revision TaskRun 生成
+- revision 后的新 Artifact 和新 Review Report
+
+当前重点是：
+
+- 让用户能看到“围绕已有 Artifact 持续迭代”
+- 强化 Artifact-centered iteration
+
+## 13. Version History / Diff Summary 设计
+
+### Version History
+
+当前基于：
+
+- `title`
+- `version`
+- `parentArtifactId`
+- `revisionInstruction`
+
+构建轻量 lineage 展示。
+
+### Diff Summary
+
+当前不是实际代码 diff，而是静态摘要，展示：
+
+- Revision Instruction
+- Changed Items
+- Not Changed
+- Risk
+
+设计目标是：
+
+- 先让“版本演进”清晰可见
+- 后续再考虑真实 diff
+
+## 14. P0 / P1 / P2 范围
+
+### P0
 
 - 三栏 IM Workspace
-- 会话列表
-- 消息流
-- 静态 demo-task
-- TaskRun / TaskStep 展示
-- ContextSnapshot / HandoffSummary 展示
-- ArtifactPanel
-- Artifact revision
-- Adapter fallback 展示
+- demo-task 主链路
+- TaskRun / TaskStep
+- Context / Handoff
+- Artifact Preview
+- Artifact Revision
+- Version History / Diff Summary
 - Agent Builder 最小闭环
+- selectedAgent / `@Agent`
 
-### 18.2 P1
+### P1
 
-- Selected Agent / `@Agent` 最小链路
-- 自定义 Agent 接入执行路径
-- 更明确的 Orchestrator 路由说明
-- SSE / WebSocket 流式状态
+- 半真实 Agent Adapter 接入
+- 更清晰的 Orchestrator 规则化规划
+- Deploy Status Card 静态版
+- 更强的多 Agent 显式协作语义
 
-### 18.3 P2
+### P2
 
-- 部署发布
-- 部署状态卡片
-- 预览 URL
+- 真实部署
 - 多端支持
-- 多人协作与冲突处理
-
-## 19. 非目标范围 Non-goals
-
-当前版本不包含：
-
-- 真实 Codex / Claude Code / OpenCode 接入完成
-- 真实多人协作
+- 多人协作
+- WebSocket / SSE
 - MySQL 持久化
-- WebSocket / SSE 流式执行完成
-- 完整部署系统
-- Workflow Canvas 主入口
+- 复杂群聊调度
 
-## 20. 评分点对应关系
+## 15. 当前已实现 / 未实现对照表
 
-| 评分维度 | 当前设计对应 |
-|---|---|
-| AI 协作能力 30% | Spec / Skill / Rules / Collaboration Protocol + Context / Handoff + Adapter 路由展示 |
-| 功能完整度 25% | IM Workspace、TaskRun、Artifact、revision、自定义 Agent |
-| 生成效果质量 20% | 三栏工作台、Version History、Diff Summary、Artifact 展示 |
-| 代码理解度 15% | 明确的领域模型、服务分层、Adapter Layer、OrchestratorService |
-| 创新与产品感 10% | Artifact-centered iteration、自定义 Agent、fallback 可视化 |
+### 已实现
 
-## 21. 当前已实现与未实现对照表
+- IM Workspace
+- Conversation List
+- Agent List
+- Agent Builder
+- selectedAgent
+- 最小 `@Agent`
+- TaskRun / TaskStep
+- ContextSnapshot / HandoffSummary
+- Artifact Preview
+- Artifact Revision
+- Version History
+- Diff Summary
+- AI 协作开发记录
 
-| 能力 | 当前状态 |
-|---|---|
-| 三栏 IM Workspace | 已实现 |
-| Conversation List | 已实现 |
-| Agent List | 已实现 |
-| TaskRun / TaskStep 展示 | 已实现 |
-| ContextSnapshot / HandoffSummary | 已实现 |
-| Artifact 预览 | 已实现 |
-| Artifact revision | 已实现 |
-| Version History | 已实现 |
-| Diff Summary | 已实现，静态摘要 |
-| 用户自建 Agent 最小闭环 | 已实现 |
-| Agent Adapter Layer | 已实现第一版骨架 |
-| 至少两个主流 Agent 平台真实接入 | 未完成 |
-| 真实动态 Orchestrator | 未完成 |
-| 完整 `@Agent` | 未完成 |
-| WebSocket / SSE | 未完成 |
-| Deploy Status Card | 未完成 |
-| 多端支持 | 未完成 |
+### 静态 Demo / Mock / Placeholder
+
+- demo-task 编排
+- Artifact revision 内容生成
+- Context / Handoff 内容生成
+- Diff Summary
+- Codex / Claude Code Adapter
+
+### 未实现
+
+- 真正群聊模式
+- 多个 `@Agent`
+- 真实平台接入
+- 真实部署状态卡片
+- 多端同步
+- 多人协作
+
+## 16. 评分点对齐说明
+
+### AI 协作能力
+
+当前优势明显：
+
+- Spec / Skill / Rules / Collaboration 文档齐全
+- 工作流文档已沉淀
+- dev-log 可追踪每轮演进
+
+### 功能完整度
+
+当前 MVP 主线已经闭环，但群聊、多平台真实接入仍是硬缺口。
+
+### 生成效果质量
+
+当前 UI 已有较强演示力，但产物质量仍受限于静态 Demo。
+
+### 代码理解度
+
+领域模型、Orchestrator、Adapter、Context/Handoff 关系清晰，可用于答辩讲解。
+
+### 创新与产品感
+
+当前创新点主要体现在：
+
+- IM Workspace 主入口
+- Context / Handoff 可见化
+- Artifact-centered iteration
+- 自定义 Agent 进入执行链路

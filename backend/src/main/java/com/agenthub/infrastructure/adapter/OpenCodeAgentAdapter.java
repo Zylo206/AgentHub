@@ -7,48 +7,48 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-public class CodexAgentAdapter implements AgentAdapter {
+public class OpenCodeAgentAdapter implements AgentAdapter {
 
     private final TimeProvider timeProvider;
     private final boolean enabled;
 
-    public CodexAgentAdapter(
+    public OpenCodeAgentAdapter(
             TimeProvider timeProvider,
-            @Value("${agenthub.adapters.codex.enabled:false}") boolean enabled) {
+            @Value("${agenthub.adapters.open-code.enabled:false}") boolean enabled) {
         this.timeProvider = timeProvider;
         this.enabled = enabled;
     }
 
     @Override
     public AgentAdapterType type() {
-        return AgentAdapterType.CODEX;
+        return AgentAdapterType.OPEN_CODE;
     }
 
     @Override
     public AgentAdapterDescriptor describe() {
         return new AgentAdapterDescriptor(
-                AgentAdapterType.CODEX,
+                AgentAdapterType.OPEN_CODE,
                 AgentAdapterHealthStatus.PLACEHOLDER,
                 enabled,
                 true,
                 enabled
-                        ? "Codex adapter is enabled in config, but this build still uses a placeholder implementation."
-                        : "Codex adapter is a placeholder in this demo build.",
-                "No real external Codex call is implemented in this build.");
+                        ? "OpenCode adapter is enabled in config, but this build still uses a placeholder implementation."
+                        : "OpenCode adapter is a placeholder in this demo build.",
+                "No real external OpenCode call is implemented in this build.");
     }
 
     @Override
     public AgentResponse execute(AgentRequest request) {
         Instant startedAt = timeProvider.now();
         String content = enabled
-                ? "Codex adapter is marked enabled in config, but this demo build does not perform any real external Codex call."
-                : "Codex adapter is configured as a placeholder in this demo build. No real external Codex call was made.";
+                ? "OpenCode adapter is marked enabled in config, but this demo build does not perform any real external OpenCode call."
+                : "OpenCode adapter is configured as a placeholder in this demo build. No real external OpenCode call was made.";
 
         return new AgentResponse(
                 request.requestId(),
-                AgentAdapterType.CODEX,
-                AgentAdapterType.CODEX,
-                AgentAdapterType.CODEX,
+                AgentAdapterType.OPEN_CODE,
+                AgentAdapterType.OPEN_CODE,
+                AgentAdapterType.OPEN_CODE,
                 false,
                 AgentExecutionStatus.FALLBACK_USED,
                 content,

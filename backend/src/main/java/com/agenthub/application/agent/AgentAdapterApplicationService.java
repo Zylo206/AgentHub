@@ -1,6 +1,8 @@
 package com.agenthub.application.agent;
 
 import com.agenthub.common.IdGenerator;
+import com.agenthub.infrastructure.adapter.AgentAdapterDescriptor;
+import com.agenthub.infrastructure.adapter.AgentAdapterHealthStatus;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
 import com.agenthub.infrastructure.adapter.AgentRequest;
 import com.agenthub.infrastructure.adapter.AgentResponse;
@@ -27,15 +29,15 @@ public class AgentAdapterApplicationService {
     }
 
     public List<AvailableAdapterView> listAdapters() {
-        List<AgentAdapterType> availableTypes = agentExecutorService.listAvailableAdapters();
-
-        return List.of(AgentAdapterType.values()).stream()
-                .map(type -> new AvailableAdapterView(
-                        type.name(),
-                        availableTypes.contains(type),
-                        type != AgentAdapterType.MOCK,
-                        describeAdapter(type),
-                        type == defaultAdapterType))
+        return agentExecutorService.listAdapterDescriptors().stream()
+                .map(descriptor -> new AvailableAdapterView(
+                        descriptor.adapterType().name(),
+                        descriptor.status().name(),
+                        descriptor.enabled(),
+                        descriptor.placeholder(),
+                        descriptor.description(),
+                        descriptor.failureReason(),
+                        descriptor.adapterType() == defaultAdapterType))
                 .toList();
     }
 
@@ -72,15 +74,6 @@ public class AgentAdapterApplicationService {
         }
     }
 
-    private String describeAdapter(AgentAdapterType adapterType) {
-        return switch (adapterType) {
-            case MOCK -> "Stable local mock adapter for deterministic demo responses.";
-            case CODEX -> "Placeholder adapter for future Codex integration. No external call is made in this build.";
-            case CLAUDE_CODE -> "Placeholder adapter for future Claude Code integration. No external call is made in this build.";
-            case OPEN_CODE -> "Reserved adapter type for future OpenCode integration.";
-        };
-    }
-
     public record ExecuteAgentAdapterCommand(
             String conversationId,
             String taskRunId,
@@ -97,9 +90,11 @@ public class AgentAdapterApplicationService {
 
     public record AvailableAdapterView(
             String type,
-            boolean available,
+            String status,
+            boolean enabled,
             boolean placeholder,
             String description,
+            String failureReason,
             boolean isDefault) {
     }
 }

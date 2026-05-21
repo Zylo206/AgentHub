@@ -39,6 +39,14 @@ public class AgentAdapterRegistry {
         return List.copyOf(adapterTypes);
     }
 
+    public List<AgentAdapterDescriptor> listDescriptors() {
+        List<AgentAdapterDescriptor> descriptors = adapterMap.values().stream()
+                .map(AgentAdapter::describe)
+                .sorted(Comparator.comparing(descriptor -> descriptor.adapterType().name()))
+                .toList();
+        return List.copyOf(descriptors);
+    }
+
     public AgentAdapter getAdapter(AgentAdapterType type) {
         AgentAdapter adapter = adapterMap.get(type);
         if (adapter == null) {
@@ -65,12 +73,24 @@ public class AgentAdapterRegistry {
                     request);
         }
 
+        AgentAdapterDescriptor descriptor = preferredAdapter.describe();
+        if (descriptor.status() != AgentAdapterHealthStatus.AVAILABLE) {
+            return buildFallbackResponse(
+                    preferredType,
+                    descriptor.failureReason() == null ? descriptor.description() : descriptor.failureReason(),
+                    request);
+        }
+
         AgentResponse preferredResponse = preferredAdapter.execute(request);
         if (preferredResponse.status() == AgentExecutionStatus.COMPLETED) {
             return buildDirectResponse(preferredType, preferredType, preferredResponse);
         }
 
-        return buildFallbackResponse(preferredType, preferredResponse.content(), request);
+        String fallbackReason = preferredResponse.errorMessage();
+        if (fallbackReason == null || fallbackReason.isBlank()) {
+            fallbackReason = preferredResponse.content();
+        }
+        return buildFallbackResponse(preferredType, fallbackReason, request);
     }
 
     private AgentResponse buildDirectResponse(
@@ -110,7 +130,7 @@ public class AgentAdapterRegistry {
                 AgentExecutionStatus.FALLBACK_USED,
                 content,
                 mockResponse.producedArtifactHints(),
-                mockResponse.errorMessage(),
+                reason,
                 mockResponse.startedAt() == null ? timeProvider.now() : mockResponse.startedAt(),
                 timeProvider.now());
     }

@@ -1,6 +1,7 @@
 package com.agenthub.application.agent;
 
 import com.agenthub.infrastructure.adapter.AgentAdapterRegistry;
+import com.agenthub.infrastructure.adapter.AgentAdapterDescriptor;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
 import com.agenthub.infrastructure.adapter.AgentRequest;
 import com.agenthub.infrastructure.adapter.AgentResponse;
@@ -26,5 +27,9 @@ public class AgentExecutorService {
 
     public List<AgentAdapterType> listAvailableAdapters() {
         return agentAdapterRegistry.listAdapters();
+    }
+
+    public List<AgentAdapterDescriptor> listAdapterDescriptors() {
+        return agentAdapterRegistry.listDescriptors();
     }
 }

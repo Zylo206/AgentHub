@@ -4,5 +4,6 @@ public enum AgentAdapterType {
     MOCK,
     CODEX,
     CLAUDE_CODE,
-    OPEN_CODE
+    OPEN_CODE,
+    OPENAI_COMPATIBLE
 }

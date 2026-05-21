@@ -487,3 +487,90 @@
 - 继续推进消息层 `@Agent` 指定与任务触发入口的一致性
 - 让前端更明确地区分文本 `@Agent` 与左侧 selectedAgent 的当前生效来源
 - 在保持稳定 Demo 的前提下，再评估是否支持更轻量的多 Agent 指定语法
+
+## Phase 17：课题要求对齐与 V0.5 / V0.8 文档同步
+
+### 目标
+
+- 将 README、产品设计文档、技术设计文档、Demo 场景文档和 Roadmap 同步到当前 MVP 演示闭环状态
+- 明确区分已完成、静态 Demo、Mock、Placeholder、未完成和下一阶段
+
+### 主要变更
+
+- 重写 `README.md`，同步当前 MVP 演示闭环、技术栈、启动方式、Demo 主线和课题要求对齐情况
+- 更新 `docs/product-design.md`，同步 IM Workspace、selectedAgent / `@Agent`、Artifact-centered iteration 和当前已实现 / 未实现边界
+- 更新 `docs/technical-design.md`，同步 OrchestratorService、Message.targetAgentId 推断链路、Adapter Layer、Artifact Revision 和迁移设计
+- 更新 `docs/demo-scenario.md`，整理为可直接用于 3 分钟视频的脚本草案
+- 更新 `docs/roadmap.md`，切换到收敛式开发阶段视角
+
+### 验证方式
+
+- 本轮仅改文档，不执行前后端构建
+- 逐项核对文档内容是否与当前代码状态一致
+- 重点核对 selectedAgent、`@Agent`、`targetAgentId -> selectedAgent` 推断、TaskRun / Artifact / Revision / Context / Handoff 是否已在文档中正确体现
+
+### 静态 / Mock / Placeholder 部分
+
+- demo-task 仍是静态 Demo
+- Artifact revision 仍是静态模板
+- Diff Summary 仍是静态摘要
+- ContextSnapshot / HandoffSummary 仍是静态构造
+- Codex / Claude Code / OpenCode 仍以 Placeholder / Mock fallback 为主
+
+### 遗留问题
+
+- 至少两个主流 Agent 平台的真实 / 半真实接入仍未完成
+- 群聊模式和多 Agent 协作语义仍未完成
+- Deploy Status Card 仍未实现
+- 最终文档 V1.0 和 3 分钟视频仍未完成
+
+### 下一步建议
+
+- 优先补两个主流平台的最小真实 / 半真实接入
+- 继续增强 OrchestratorService 的规则化规划能力
+- 补静态 Deploy Status Card
+- 以当前文档为基础开始收敛最终视频脚本和 V1.0 交付材料
+
+## Phase 18：Agent Adapter 半真实接入与 OpenAI Compatible 配置化调用
+
+### 目标
+
+- 降低 Adapter placeholder 风险，新增可配置真实模型 Adapter，同时保留 Mock fallback
+
+### 主要变更
+
+- 新增 `OPENAI_COMPATIBLE` adapter type
+- 新增 `OpenAICompatibleAgentAdapter`
+- 新增 `OpenCodeAgentAdapter` placeholder
+- 为 Adapter Layer 增加 descriptor / health status
+- `/api/adapters` 返回 adapter status、enabled、placeholder、failureReason
+- `application.yml` 增加 OpenAI Compatible 配置结构
+- 新增 `.env.example` 说明环境变量
+- Agent Builder 可选择 `OPENAI_COMPATIBLE`
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- 手动测试 `/api/adapters`
+- 手动测试 `POST /api/adapters/MOCK/execute`
+- 手动测试 `POST /api/adapters/OPENAI_COMPATIBLE/execute`
+
+### 静态 / Mock / Placeholder 部分
+
+- Codex / Claude Code / OpenCode 仍是 placeholder，未实现真实外部调用
+- OpenAI Compatible 需要环境变量，未配置时会 fallback 到 Mock
+- demo-task 的 Artifact 仍是静态生成
+- 本轮不代表完整主流 Agent 平台接入完成
+
+### 遗留问题
+
+- 真实 Codex / Claude Code / OpenCode 接入仍未完成
+- 当前只有一个可配置真实模型 Adapter 入口
+- 仍未实现流式调用、真实并行调度和真实部署链路
+
+### 下一步建议
+
+- 优先验证一个真实可用的 OpenAI Compatible 环境配置
+- 在此基础上补第二个主流平台的最小真实 / 半真实接入
+- 继续增强 OrchestratorService 的规则化 planning 与任务路由解释能力

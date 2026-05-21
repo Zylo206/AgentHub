@@ -1,8 +1,8 @@
-# AgentHub 技术设计文档 V0.5
+# AgentHub 技术设计文档
 
 ## 1. 总体架构
 
-AgentHub 当前采用前后端分离结构：
+当前 AgentHub 采用前后端分离结构：
 
 ```text
 User
@@ -13,74 +13,71 @@ User
   -> AgentRoutingService
   -> AgentExecutorService
   -> AgentAdapterRegistry
-  -> Mock / Codex placeholder / Claude Code placeholder
+  -> Mock / Placeholder Adapter
   -> InMemory Repository
   -> Frontend render of Message / TaskRun / Context / Artifact
 ```
 
-当前架构目标不是“完整生产化”，而是先稳定支撑比赛 Demo 的多 Agent 协作主链路。
+当前架构目标不是生产化，而是：
 
-## 2. 前端架构
+- 稳定支撑 MVP 演示闭环
+- 显式展示多 Agent 协作结构
+- 为后续真实 Adapter、MySQL、SSE 迁移预留清晰入口
+
+## 2. 前端模块结构
 
 前端位于：
 
 - [frontend](E:/CodeProject2/AgentHub/frontend)
 
-主要技术栈：
-
-- React 18
-- TypeScript
-- Vite
-- React Router
-- 原生 `fetch`
-
-主要页面：
-
-- `/workspace`
-- `/agents`
-
 主要模块：
 
-- `features/conversations`
-- `features/agents`
-- `features/chat`
-- `features/artifacts`
-- `features/context`
+- `src/api`
+- `src/features/agents`
+- `src/features/chat`
+- `src/features/context`
+- `src/features/artifacts`
+- `src/pages/workspace`
+- `src/pages/agents`
+- `src/styles`
 
-当前前端强调：
+当前前端职责：
 
-- 三栏 IM Workspace
-- 低依赖、低复杂度
-- 强可视展示，而不是复杂状态管理
+- 渲染三栏 Workspace
+- 管理会话、Agent、消息、TaskRun、Artifact 状态
+- 处理 selectedAgent 和最小 `@Agent` 解析
+- 展示 Context / Handoff / Version History / Diff Summary
 
-## 3. 后端架构
+## 3. 后端模块结构
 
 后端位于：
 
 - [backend](E:/CodeProject2/AgentHub/backend)
 
-主要技术栈：
+主要分层：
 
-- Java 17
-- Spring Boot 3.5.x
-- Spring Web
-- Spring Validation
-- MyBatis 依赖已预留
+- `api`
+- `application`
+- `domain`
+- `infrastructure`
+  - `adapter`
+  - `persistence/memory`
 
-当前后端特点：
+当前后端职责：
 
-- 领域模型已成型
-- Repository 以内存实现为主
-- API 已可支撑 Demo 联调
-- Adapter Layer 已有 placeholder + Mock fallback
+- 提供 REST API
+- 管理内存模型与状态
+- 编排 demo-task 与 revision
+- 调用 Adapter Layer
+- 生成 Context / Handoff / Artifact
 
 ## 4. 核心领域模型
 
-### 4.1 Agent
+### Agent
 
 用途：
 
-- 表示可参与协作的系统内置 Agent 或用户自定义 Agent
+- 表示内置 Agent 或用户自建 Agent
 
 关键字段：
 
@@ -88,31 +85,27 @@ User
 - `name`
 - `avatarUrl`
 - `role`
-- `description`
 - `systemPrompt`
 - `preferredAdapterType`
 - `capabilityTags`
 - `toolTags`
 - `status`
-- `createdAt`
-- `updatedAt`
 
 关系：
 
-- 被 Conversation / TaskStep 间接引用
-- 被 AgentRoutingService 用于选择 preferred adapter
+- 被 `Conversation`、`TaskStep` 间接引用
+- 被 `AgentRoutingService` 用于选择 preferred adapter
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 已支持 `CUSTOM` Agent 创建
-- 已支持 `avatarUrl` 和 `preferredAdapterType`
+- 支持 `CUSTOM` Agent
 
-### 4.2 Conversation
+### Conversation
 
 用途：
 
-- 表示一个聊天会话
+- 表示聊天会话
 
 关键字段：
 
@@ -120,24 +113,21 @@ User
 - `title`
 - `type`
 - `participantAgentIds`
-- `createdAt`
-- `updatedAt`
 
 关系：
 
-- 关联多个 Message
-- 关联多个 TaskSpec / TaskRun / Artifact / ContextSnapshot
+- 关联多条 `Message`
+- 关联多条 `TaskSpec / TaskRun / Artifact`
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 主要用于单条 Demo 主链路展示
 
-### 4.3 Message
+### Message
 
 用途：
 
-- 表示聊天流中的消息
+- 表示聊天流中的一条消息
 
 关键字段：
 
@@ -148,19 +138,19 @@ User
 - `messageType`
 - `content`
 - `artifactIds`
-- `createdAt`
+- `targetAgentId`
 
 关系：
 
-- 属于某个 Conversation
-- 可关联 Artifact
+- 属于某个 `Conversation`
+- 可作为 `TaskSpec.sourceMessageId`
+- `targetAgentId` 可被 Orchestrator 用于推断 selectedAgent
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 支撑聊天流、TaskSpec 卡片消息、Artifact card 消息
 
-### 4.4 TaskSpec
+### TaskSpec
 
 用途：
 
@@ -179,21 +169,18 @@ User
 - `acceptanceCriteria`
 - `requiredSkills`
 - `expectedArtifacts`
-- `status`
-- `createdAt`
-- `updatedAt`
 
 关系：
 
 - 来源于用户消息
-- 驱动后续 TaskRun
+- 驱动后续 `TaskRun`
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 当前由静态 demo-task 生成，不是真实 LLM 推导
+- 当前由静态 demo-task 生成
 
-### 4.5 TaskRun
+### TaskRun
 
 用途：
 
@@ -207,30 +194,27 @@ User
 - `status`
 - `steps`
 - `resultSummary`
-- `createdAt`
-- `updatedAt`
 
 关系：
 
-- 包含多个 TaskStep
-- 关联多个 Artifact
-- 关联多个 ContextSnapshot / HandoffSummary
+- 包含多个 `TaskStep`
+- 关联多个 `Artifact`
+- 关联多个 `ContextSnapshot / HandoffSummary`
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 同时支持初始 Demo 任务和 revision TaskRun
+- 支持初始 demo-task 和 revision TaskRun
 
-### 4.6 TaskStep
+### TaskStep
 
 用途：
 
-- 表示 TaskRun 中的一个子步骤
+- 表示 TaskRun 中的一个执行步骤
 
 关键字段：
 
 - `id`
-- `taskRunId`
 - `stepOrder`
 - `assignedAgentId`
 - `taskDescription`
@@ -244,24 +228,22 @@ User
 - `adapterStatus`
 - `adapterResponseSummary`
 - `adapterErrorMessage`
-- `createdAt`
-- `updatedAt`
 
 关系：
 
-- 隶属于某个 TaskRun
-- 产生多个 Artifact
+- 隶属于 `TaskRun`
+- 产出多个 `Artifact`
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 已能展示 preferred adapter、actual adapter、fallback 状态
+- 已能展示 preferred / actual / fallback
 
-### 4.7 Artifact
+### Artifact
 
 用途：
 
-- 表示代码、文档、Review Report、API Contract 等产物
+- 表示代码、文档、评审报告、接口契约等产物
 
 关键字段：
 
@@ -271,29 +253,27 @@ User
 - `title`
 - `type`
 - `status`
-- `language`
-- `content`
 - `version`
+- `content`
+- `language`
 - `parentArtifactId`
 - `revisionInstruction`
-- `createdAt`
-- `updatedAt`
 
 关系：
 
-- 属于某个 TaskRun
-- 可参与 revision 形成版本链
+- 来自某个 `TaskRun`
+- 可进入 revision
+- 可形成版本链路
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 已支持 `v1 -> v2` 关系的前端展示
 
-### 4.8 ContextSnapshot
+### ContextSnapshot
 
 用途：
 
-- 记录一次任务执行的上下文快照
+- 表示一次任务执行中的上下文快照
 
 关键字段：
 
@@ -304,22 +284,22 @@ User
 - `includedArtifactIds`
 - `pinnedContextItems`
 - `summary`
-- `createdAt`
 
 关系：
 
-- 与 TaskRun、Artifact、Message 相关
+- 关联 `TaskRun`
+- 引用 Message 和 Artifact
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 当前由静态 demo-task / revision 流程构造
+- 当前内容由静态 demo 生成
 
-### 4.9 HandoffSummary
+### HandoffSummary
 
 用途：
 
-- 表示 Agent 之间的交接摘要
+- 表示 Agent 间交接摘要
 
 关键字段：
 
@@ -333,60 +313,83 @@ User
 - `keyDecisions`
 - `openIssues`
 - `summary`
-- `createdAt`
 
 关系：
 
-- 与 TaskRun、TaskStep、Artifact 强关联
+- 关联 `TaskRun`
+- 串联不同 `TaskStep`
 
-当前实现状态：
+当前状态：
 
 - 已实现
-- 当前为静态构造，不是真实 memory handoff engine
+- 当前内容由静态 demo 生成
 
 ## 5. API 分层
 
-当前后端 API 位于 `backend/src/main/java/com/agenthub/api`，已覆盖以下能力：
+当前主要 API 分层如下：
 
-- Health
-- Agents
-- Conversations
-- Messages
-- Tasks
-- Artifacts
-- Context
-- Adapters
+- `api/agent`
+- `api/message`
+- `api/task`
+- `api/artifact`
+- `api/context`
+- `api/adapter`
 
-关键接口包括：
+API 主要提供：
 
-- `GET /api/agents`
-- `POST /api/agents`
-- `POST /api/conversations`
-- `POST /api/conversations/{conversationId}/messages`
-- `POST /api/conversations/{conversationId}/demo-task`
-- `POST /api/artifacts/{artifactId}/demo-revision`
-- `GET /api/conversations/{conversationId}/task-runs`
-- `GET /api/conversations/{conversationId}/artifacts`
-- `GET /api/task-runs/{taskRunId}/handoff-summaries`
-- `GET /api/adapters`
-- `POST /api/adapters/{adapterType}/execute`
+- Agent 创建与查询
+- Conversation / Message 查询与发送
+- demo-task 触发
+- revision 触发
+- Context / Handoff 查询
+- Adapter 测试调用
 
-## 6. Orchestrator / TaskApplicationService 当前实现说明
+## 6. Orchestrator 当前实现
 
-当前实现特点：
+当前核心入口是：
 
-- `TaskApplicationService` 仍是 Task 领域的应用入口
-- `OrchestratorService` 已抽离，负责 demo-task 和 revision 的主要编排流程
-- 当前编排流程仍是静态 Demo 逻辑，不是真实动态规划
+- [OrchestratorService.java](E:/CodeProject2/AgentHub/backend/src/main/java/com/agenthub/application/orchestrator/OrchestratorService.java)
 
-当前含义：
+当前职责：
 
-- 已有“Orchestrator 结构”
-- 但还没有“真实 Orchestrator 智能”
+- 读取 source message
+- 解析显式 `selectedAgentId`
+- 在需要时从 `Message.targetAgentId` 推断 selectedAgent
+- 创建 TaskSpec
+- 创建 TaskRun / TaskStep
+- 调用 AgentExecutorService
+- 生成 Artifact
+- 生成 ContextSnapshot / HandoffSummary
 
-## 7. Agent Adapter Layer 设计
+必须明确：
 
-当前 Adapter Layer 已实现第一版骨架：
+- 当前 Orchestrator 仍偏规则化、静态 Demo
+- 不是复杂动态规划系统
+- 不是基于真实 LLM 的多轮拆解器
+
+## 7. Message.targetAgentId 到 selectedAgent 推断链路
+
+当前链路已打通：
+
+1. 前端发送消息时可附带 `targetAgentId`
+2. `MessageApplicationService` 保存 `targetAgentId`
+3. `demo-task` 请求仍可显式传 `selectedAgentId`
+4. `OrchestratorService` 优先使用显式 `selectedAgentId`
+5. 若显式值为空，则读取 source message 的 `targetAgentId`
+6. 将推断出的 selectedAgent 注入第一个 specialist step
+
+影响范围：
+
+- `assignedAgentId`
+- `inputContext`
+- preferred adapter 选择
+- `TaskRun.resultSummary`
+- `ContextSnapshot`
+- `HandoffSummary`
+
+## 8. Agent Adapter Layer 设计
+
+当前实现包括：
 
 - `AgentAdapter`
 - `AgentRequest`
@@ -395,194 +398,158 @@ User
 - `AgentAdapterType`
 - `AgentAdapterRegistry`
 - `AgentExecutorService`
-- `AgentAdapterApplicationService`
+- `MockAgentAdapter`
+- `CodexAgentAdapter`
+- `ClaudeCodeAgentAdapter`
 
-当前支持的类型：
+作用：
 
-- `MOCK`
-- `CODEX`
-- `CLAUDE_CODE`
-- `OPEN_CODE`
+- 统一不同平台的执行接口
+- 让 TaskStep 显式记录 adapter 行为
+- 提供稳定 demo fallback
 
-## 8. Mock / Codex / Claude Code / OpenCode 的接入状态
+## 9. Mock / Placeholder / Real integration 边界
 
-### MOCK
+### MockAdapter
 
-- 已实现
-- 当前是主要稳定执行器
-- 所有 Demo 主链路默认可 fallback 到它
+- 当前是稳定 Demo 兜底
+- 会根据 taskDescription 返回静态前端 / backend / review 文本
 
-### CODEX
+### CodexAgentAdapter
 
-- 只有 placeholder adapter
-- 不发起真实外部调用
-- 用于体现 preferred adapter 设计
+- 当前是 placeholder
+- 不做真实外部调用
 
-### CLAUDE_CODE
+### ClaudeCodeAgentAdapter
 
-- 只有 placeholder adapter
-- 不发起真实外部调用
-- 用于体现 preferred adapter 设计
+- 当前是 placeholder
+- 不做真实外部调用
 
-### OPEN_CODE
+### Real integration
 
-- 当前仅保留枚举与设计空间
-- 未形成真实接入链路
+- 当前未完成
+- 文档和演示中不得写成“已接入完成”
 
-## 9. Agent Builder 设计
+## 10. Agent Builder 设计
 
-当前已实现：
+后端支持：
 
 - `POST /api/agents`
-- 自定义 Agent 保存到内存 Repository
-- `/agents` 页面可创建 Agent
-- Agent List 可展示内置 Agent + 自定义 Agent
+- `GET /api/agents`
+- `GET /api/agents/{agentId}`
 
-当前未实现：
+前端支持：
 
-- 更新 Agent
-- 删除 Agent
-- 自定义 Agent 进入真实 `@Agent` 执行链路
+- `AgentBuilderPage`
+- name / avatarUrl / systemPrompt / capabilityTags / toolTags / preferredAdapterType
 
-## 10. ContextSnapshot / HandoffSummary 设计
+当前价值：
 
-当前设计目标是把“上下文”和“交接”从隐式逻辑变成显式对象。
+- 让自建 Agent 从文档概念变成可保存配置
+- 让 selectedAgent / `@Agent` / demo-task 首步执行链路成立
 
-当前实现：
+## 11. ContextSnapshot / HandoffSummary 设计
 
-- demo-task 创建 ContextSnapshot
-- revision 也创建 ContextSnapshot
-- HandoffSummary 至少覆盖关键 Agent 之间的交接
+当前实现目标是显式化上下文与交接。
 
-当前限制：
+后端：
 
-- 仍是静态构造
-- 不具备真实长期 memory 管理
+- demo-task 生成 ContextSnapshot
+- demo-task 和 revision 生成 HandoffSummary
 
-## 11. Artifact Service / Revision 设计
+前端：
 
-当前后端已经支持：
+- `ContextPanel` 展示 snapshot / handoff
 
-- 查询 Artifact
-- 查询 TaskRun 关联的 Artifact
-- 对单个 Artifact 发起静态 revision
+边界说明：
 
-revision 流程当前行为：
+- 当前是静态 demo 内容，不是生产级 memory system
 
-- 基于原 Artifact 创建新的 TaskSpec
-- 生成新的 TaskRun
-- 生成 revision Artifact v2
+## 12. Artifact Revision 设计
+
+当前 revision 链路支持：
+
+- 基于已有 Artifact 发起 revision
+- 生成 revision TaskRun
+- 生成新 Artifact
 - 生成新的 Review Report
-- 生成新的 ContextSnapshot / HandoffSummary
+- 生成新的 Context / Handoff
 
-当前限制：
+目标：
 
-- 不是基于真实代码分析
-- 不是基于真实 LLM 修改
+- 让 Artifact 成为持续迭代对象
+- 强化“聊天不是终点，Artifact 才是迭代核心”
 
-## 12. Version History / Diff Summary 前端设计
+## 13. Version History / Diff Summary 前端设计
 
-这部分目前主要在前端实现：
+### Version History
 
-- 基于当前会话已加载的 Artifact 计算 lineage
-- 基于 `parentArtifactId`、`revisionInstruction`、`title + version` 推导版本关系
-- 静态生成 Diff Summary
+由前端基于以下字段计算：
 
-当前限制：
+- `title`
+- `version`
+- `parentArtifactId`
+- `revisionInstruction`
 
-- 没有真实 diff 算法
-- 没有后端版版本图谱服务
+### Diff Summary
 
-## 13. TaskRun / TaskStep 状态流转
+当前是静态摘要，不是真实 diff 算法。
 
-当前使用的关键状态：
+设计意图：
 
-- TaskRun
-  - `PENDING`
-  - `RUNNING`
-  - `COMPLETED`
-  - `FAILED`
-  - `BLOCKED`
-  - `CANCELLED`
-- TaskStep
-  - `WAITING`
-  - `RUNNING`
-  - `COMPLETED`
-  - `FAILED`
-  - `SKIPPED`
-
-当前 demo 中大多数状态以 `COMPLETED` 为主，用于稳定展示主链路。
+- 先把版本演进关系可视化
+- 后续再考虑真实 diff
 
 ## 14. 当前内存 Repository 设计
 
-当前仓库主要依赖内存 Repository：
-
-- `InMemoryAgentRepository`
-- `InMemoryConversationRepository`
-- `InMemoryMessageRepository`
-- `InMemoryTaskRepository`
-- `InMemoryArtifactRepository`
-- `InMemoryContextRepository`
+当前所有核心模型都使用内存 Repository。
 
 优点：
 
-- 联调快
-- 适合比赛 Demo
-- 便于快速重置数据
+- 开发快
+- 演示稳定
+- 无需数据库依赖
 
-缺点：
+限制：
 
-- 刷新进程后数据丢失
-- 不适合真实多用户协作
+- 无持久化
+- 无并发控制
+- 无跨进程状态保持
 
-## 15. 未来 MyBatis + MySQL 迁移设计
+## 15. 后续 MySQL / SSE / 真实 Adapter 迁移设计
 
-当前依赖中已经引入 MyBatis 和 MySQL connector，但真实持久化尚未完成。
+### MySQL
 
-建议迁移顺序：
+后续可把当前内存 Repository 迁移到 MyBatis + MySQL，保持 API 和领域模型尽量稳定。
 
-1. Agent
-2. Conversation
-3. Message
-4. TaskSpec
-5. TaskRun / TaskStep
-6. Artifact
-7. ContextSnapshot / HandoffSummary
+### SSE / WebSocket
 
-迁移原则：
+后续可用于：
 
-- 先保持 Repository 接口不变
-- 再替换内存实现为 MyBatis 实现
-- 前端 API 不感知存储层变化
+- Message 流式输出
+- TaskRun 状态更新
+- Adapter 执行进度反馈
 
-## 16. WebSocket / SSE 后续设计
+### 真实 Adapter
 
-当前未实现流式执行。
+后续目标：
 
-后续建议：
+- 至少接入两个主流平台
+- 让 preferredAdapterType 影响真实执行
+- 保留 Mock fallback 作为兜底
 
-- TaskRun 状态更新走 SSE 或 WebSocket
-- Message Stream 支持 Agent 增量输出
-- Adapter 执行过程支持实时状态推送
+## 16. 风险与扩展点
 
-当前文档中应明确：
+当前主要风险：
 
-- 这仍是下一阶段能力
-- 不是 V0.5 已完成内容
+- static demo 容易被误解为真实执行
+- Adapter placeholder 不满足硬要求
+- 文档可能滞后于代码
+- 演示链路依赖静态模板
 
-## 17. 风险与扩展点
+当前最重要的扩展点：
 
-### 当前风险
-
-- Demo 逻辑较多依赖静态模板
-- placeholder adapter 易被误解为真实接入
-- 内存存储无法支撑持久演示环境
-
-### 扩展点
-
-- 自定义 Agent 接入执行链路
-- 真实 provider 接入
-- SSE / WebSocket
-- 持久化存储
+- 两个平台最小真实/半真实接入
+- 更规则化的 Orchestrator
 - Deploy Status Card
-- 多端和多人协作
+- 更强的多 Agent 协作语义

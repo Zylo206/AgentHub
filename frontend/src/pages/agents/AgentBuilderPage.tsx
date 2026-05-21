@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createAgent } from "../../api/agenthubApi";
 import type { Agent } from "../../features/agents/agentTypes";
 
-const ADAPTER_OPTIONS = ["MOCK", "CODEX", "CLAUDE_CODE", "OPEN_CODE"] as const;
+const ADAPTER_OPTIONS = ["MOCK", "CODEX", "CLAUDE_CODE", "OPEN_CODE", "OPENAI_COMPATIBLE"] as const;
 
 function parseTags(input: string): string[] {
   return input
