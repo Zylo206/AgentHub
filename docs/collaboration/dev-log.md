@@ -414,3 +414,76 @@
 - 让 selectedAgent / `targetAgentId` 进入更多任务触发入口
 - 继续推进最小 `@Agent` 指定语法与后端解析规则
 - 在不破坏稳定 Demo 的前提下，逐步接近真实多 Agent 路由
+
+## Phase 15：Message targetAgentId 到 Orchestrator selectedAgent 推断
+
+### 目标
+
+- 让消息层的 `targetAgentId` 不只用于展示，也能被 Orchestrator 用于推断任务目标 Agent
+
+### 主要变更
+
+- Orchestrator 在 `selectedAgentId` 为空时，支持从 source message 的 `targetAgentId` 推断 selectedAgent
+- MessageApplicationService 补充 message 查询能力，供 Orchestrator 读取 source message
+- demo-task 的第一个 specialist step、resultSummary、ContextSnapshot、HandoffSummary 会记录 selectedAgent 的推断来源
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- 手动测试：先发送带 `targetAgentId` 的消息，再在不显式传 `selectedAgentId` 的情况下运行 demo-task，检查第一个 step 的 assigned agent 与上下文说明
+
+### 静态 / Mock / Placeholder 部分
+
+- 仍不做自然语言 `@Agent` 解析
+- 仍不支持多个 `@Agent`
+- 仍不接真实外部 Agent
+- demo-task 仍是静态 Demo
+
+### 遗留问题
+
+- 多 Agent 群聊调度未完成
+- 真实 Agent Adapter 未完成
+- 多轮上下文推断未完成
+
+### 下一步建议
+
+- 让前端提供一个更明确的“只依赖消息 targetAgentId 触发 demo-task”的测试入口
+- 继续推进最小 `@Agent` 指定语法与后端解析规则
+- 在保持稳定 Demo 的前提下，逐步收敛到更真实的 Agent 路由行为
+
+## Phase 16：最小 @Agent 文本标记解析
+
+### 目标
+
+- 让用户可以通过消息开头的 `@AgentName` 显式指定目标 Agent
+
+### 主要变更
+
+- 新增 `@Agent` 解析工具
+- WorkspacePage 在发送消息前解析开头的 `@Agent`
+- ChatInput 增加 `@Agent` 使用提示
+- 增加 `Unknown agent mention` 错误处理
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动测试：输入 `@My Frontend Agent 帮我生成登录页面`，确认消息正文发送为清理后的内容，且 MessageBubble 继续显示 `To: @My Frontend Agent`
+
+### 静态 / Mock / Placeholder 部分
+
+- 仍不做多个 `@Agent`
+- 仍不做复杂自然语言理解
+- 仍不触发真实外部 Agent 调用
+- demo-task 仍是静态 Demo
+
+### 遗留问题
+
+- 多 Agent 群聊调度未完成
+- 多个 `@Agent` 未完成
+- 真实 Agent Adapter 未完成
+
+### 下一步建议
+
+- 继续推进消息层 `@Agent` 指定与任务触发入口的一致性
+- 让前端更明确地区分文本 `@Agent` 与左侧 selectedAgent 的当前生效来源
+- 在保持稳定 Demo 的前提下，再评估是否支持更轻量的多 Agent 指定语法

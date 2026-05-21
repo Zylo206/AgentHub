@@ -46,9 +46,14 @@ export function ChatInput({
         onChange={(event) => onChange(event.target.value)}
       />
       <div className="chat-input__actions">
-        <span className="chat-input__hint">
-          Use chat as the main entry, then trigger Demo Task for Orchestrator flow.
-        </span>
+        <div className="chat-input__hint-group">
+          <span className="chat-input__hint">
+            Use chat as the main entry, then trigger Demo Task for Orchestrator flow.
+          </span>
+          <span className="chat-input__hint">
+            You can type @AgentName at the beginning of a message.
+          </span>
+        </div>
         <button
           type="submit"
           className="primary-button"

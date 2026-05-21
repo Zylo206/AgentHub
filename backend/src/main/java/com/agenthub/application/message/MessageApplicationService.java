@@ -11,6 +11,7 @@ import com.agenthub.domain.message.MessageRepository;
 import com.agenthub.domain.message.MessageSenderType;
 import com.agenthub.domain.message.MessageType;
 import java.util.List;
+import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -57,6 +58,11 @@ public class MessageApplicationService {
 
     public List<Message> listMessages(String conversationId) {
         return messageRepository.findByConversationId(new ConversationId(conversationId));
+    }
+
+    public Message getMessage(String messageId) {
+        return messageRepository.findById(new MessageId(messageId))
+                .orElseThrow(() -> new NoSuchElementException("Message not found: " + messageId));
     }
 
     public Message appendAgentMessage(String conversationId, String agentId, String content) {

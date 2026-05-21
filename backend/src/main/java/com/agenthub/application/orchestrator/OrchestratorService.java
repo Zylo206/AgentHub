@@ -88,8 +88,14 @@ public class OrchestratorService {
         Instant now = timeProvider.now();
         ConversationId conversationRef = new ConversationId(conversationId);
         MessageId sourceMessageId = new MessageId(messageId);
-        Agent selectedAgent = resolveSelectedAgent(selectedAgentId);
-        String selectedAgentSummary = buildSelectedAgentSummary(selectedAgent);
+        Message sourceMessage = messageApplicationService.getMessage(messageId);
+        if (!sourceMessage.getConversationId().equals(conversationRef)) {
+            throw new IllegalArgumentException("Source message does not belong to the provided conversation.");
+        }
+
+        SelectedAgentResolution selectedAgentResolution = resolveSelectedAgent(selectedAgentId, sourceMessage);
+        Agent selectedAgent = selectedAgentResolution.agent();
+        String selectedAgentSummary = buildSelectedAgentSummary(selectedAgentResolution);
         AgentAdapterType selectedAgentPreferredAdapter = selectedAgent == null
                 ? agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.FRONTEND_BUILDER,
@@ -184,12 +190,13 @@ public class OrchestratorService {
                 selectedAgent == null
                         ? "Task Spec requires a dual-mode login page with artifact-first iteration."
                         : "Task Spec requires a dual-mode login page with artifact-first iteration. "
-                                + buildSelectedAgentInputContext(selectedAgent),
+                                + buildSelectedAgentInputContext(selectedAgent, selectedAgentResolution),
                 "Generated LoginPage.tsx and README.md for the workspace.",
                 List.of(
                         "TaskSpec: React Login Page Demo",
                         "Need email login and verification code login",
                         "Artifact-centered iteration is enabled",
+                        selectedAgentResolution.sourceDescription(),
                         selectedAgentSummary),
                 List.of("LoginPage.tsx", "README.md"),
                 List.of(codeArtifact.getId(), readmeArtifact.getId()),
@@ -252,6 +259,7 @@ public class OrchestratorService {
                 taskPlan,
                 List.of(frontendStep, backendStep, reviewStep),
                 "Static demo task completed with code, docs, API contract, review report, and context handoff records. "
+                        + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary,
                 now,
                 now);
@@ -271,8 +279,10 @@ public class OrchestratorService {
                         "Demo goal: build a React login page with README and review report",
                         "Artifact-centered iteration is enabled",
                         "Reviewer must check acceptance criteria before closing the loop",
+                        selectedAgentResolution.sourceDescription(),
                         selectedAgentSummary),
                 "This snapshot contains the original user request, the generated Task Spec, three task steps, and the LoginPage.tsx, README.md, login-api-contract.json, and Review Report artifacts. "
+                        + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary,
                 now);
         contextRepository.saveContextSnapshot(contextSnapshot);
@@ -289,6 +299,7 @@ public class OrchestratorService {
                         selectedAgent == null
                                 ? "Frontend Builder finalized the page fields for email and verification code login"
                                 : "Selected Agent finalized the page fields for email and verification code login",
+                        selectedAgentResolution.sourceDescription(),
                         "README draft already documents component structure and extension points",
                         selectedAgentSummary),
                 List.of(
@@ -623,45 +634,72 @@ public class OrchestratorService {
                 now);
     }
 
-    private Agent resolveSelectedAgent(String selectedAgentId) {
-        if (selectedAgentId == null || selectedAgentId.isBlank()) {
-            return null;
+    private SelectedAgentResolution resolveSelectedAgent(String explicitSelectedAgentId, Message sourceMessage) {
+        String normalizedExplicitSelectedAgentId = normalizeAgentId(explicitSelectedAgentId);
+        if (normalizedExplicitSelectedAgentId != null) {
+            return new SelectedAgentResolution(
+                    agentApplicationService.getAgent(normalizedExplicitSelectedAgentId),
+                    "Selected agent was provided by demo-task request.");
         }
 
-        return agentApplicationService.getAgent(selectedAgentId);
+        String inferredSelectedAgentId = normalizeAgentId(sourceMessage.getTargetAgentId());
+        if (inferredSelectedAgentId != null) {
+            return new SelectedAgentResolution(
+                    agentApplicationService.getAgent(inferredSelectedAgentId),
+                    "Selected agent was inferred from source message targetAgentId.");
+        }
+
+        return new SelectedAgentResolution(null, "Selected agent: built-in specialist chain.");
     }
 
-    private String buildSelectedAgentSummary(Agent selectedAgent) {
+    private String buildSelectedAgentSummary(SelectedAgentResolution selectedAgentResolution) {
+        Agent selectedAgent = selectedAgentResolution.agent();
         if (selectedAgent == null) {
-            return "Selected agent: built-in specialist chain.";
+            return selectedAgentResolution.sourceDescription();
         }
 
         String preferredAdapterType = selectedAgent.getPreferredAdapterType() == null
                 || selectedAgent.getPreferredAdapterType().isBlank()
                 ? AgentAdapterType.MOCK.name()
                 : selectedAgent.getPreferredAdapterType();
-        return "Selected agent: %s (%s, preferred adapter %s).".formatted(
+        return "%s Selected agent: %s (%s, preferred adapter %s).".formatted(
+                selectedAgentResolution.sourceDescription(),
                 selectedAgent.getName(),
                 selectedAgent.getId().value(),
                 preferredAdapterType);
     }
 
-    private String buildSelectedAgentInputContext(Agent selectedAgent) {
+    private String buildSelectedAgentInputContext(
+            Agent selectedAgent,
+            SelectedAgentResolution selectedAgentResolution) {
         if (selectedAgent == null) {
-            return "";
+            return selectedAgentResolution.sourceDescription();
         }
 
         String preferredAdapterType = selectedAgent.getPreferredAdapterType() == null
                 || selectedAgent.getPreferredAdapterType().isBlank()
                 ? AgentAdapterType.MOCK.name()
                 : selectedAgent.getPreferredAdapterType();
-        return "Selected agent context: name=%s, preferredAdapterType=%s, capabilityTags=%s, systemPrompt=%s".formatted(
+        return "%s Selected agent context: name=%s, preferredAdapterType=%s, capabilityTags=%s, systemPrompt=%s".formatted(
+                selectedAgentResolution.sourceDescription(),
                 selectedAgent.getName(),
                 preferredAdapterType,
                 selectedAgent.getCapabilityTags(),
                 selectedAgent.getSystemPrompt() == null || selectedAgent.getSystemPrompt().isBlank()
                         ? "N/A"
                         : selectedAgent.getSystemPrompt());
+    }
+
+    private String normalizeAgentId(String agentId) {
+        if (agentId == null) {
+            return null;
+        }
+
+        String normalized = agentId.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private record SelectedAgentResolution(Agent agent, String sourceDescription) {
     }
 
     private Artifact createArtifact(

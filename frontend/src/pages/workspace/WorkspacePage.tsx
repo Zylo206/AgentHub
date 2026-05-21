@@ -19,6 +19,7 @@ import type { Agent } from "../../features/agents/agentTypes";
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
 import { ChatInput } from "../../features/chat/ChatInput";
+import { parseLeadingAgentMention } from "../../features/chat/agentMention";
 import { MessageStream } from "../../features/chat/MessageStream";
 import { TaskRunPanel } from "../../features/chat/TaskRunPanel";
 import type { Message, TaskRun, TaskSpec, TaskStep } from "../../features/chat/chatTypes";
@@ -304,14 +305,34 @@ export function WorkspacePage() {
       return;
     }
 
+    const parsedMention = parseLeadingAgentMention(draftMessage, agents);
+    if (parsedMention.error) {
+      setErrorMessage(parsedMention.error);
+      return;
+    }
+
+    const targetAgent = parsedMention.matchedAgent ?? selectedAgent;
+    const contentToSend = parsedMention.matchedAgent
+      ? parsedMention.cleanedContent.trim()
+      : draftMessage.trim();
+
+    if (!contentToSend) {
+      setErrorMessage(
+        parsedMention.rawMention
+          ? `Please add message content after ${parsedMention.rawMention}.`
+          : "Please add message content before sending."
+      );
+      return;
+    }
+
     setSendingMessage(true);
     setErrorMessage(null);
 
     try {
       await sendMessage(
         currentConversationId,
-        draftMessage.trim(),
-        selectedAgent ? getIdValue(selectedAgent.id) : null
+        contentToSend,
+        targetAgent ? getIdValue(targetAgent.id) : null
       );
       const refreshedMessages = await getMessages(currentConversationId);
       setMessages(refreshedMessages);

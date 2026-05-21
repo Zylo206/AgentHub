@@ -644,6 +644,12 @@
   font-weight: 700;
 }
 
+.chat-input__hint-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .chat-input__textarea {
   width: 100%;
   resize: vertical;
