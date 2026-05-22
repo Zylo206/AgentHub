@@ -94,6 +94,51 @@ export function getVersionHistoryEntries(
     });
 }
 
+export function findArtifactVersionGroup(currentArtifact: Artifact, artifacts: Artifact[]): Artifact[] {
+  const currentArtifactId = getIdValue(currentArtifact.id);
+  const currentRootId = resolveRootArtifactId(artifacts, currentArtifact);
+  const relatedByLineage = artifacts.filter((artifact) => {
+    const artifactId = getIdValue(artifact.id);
+    const artifactRootId = resolveRootArtifactId(artifacts, artifact);
+
+    return (
+      artifactId === currentArtifactId ||
+      artifactId === currentRootId ||
+      artifactRootId === currentRootId ||
+      artifactRootId === currentArtifactId
+    );
+  });
+
+  const versionGroup = relatedByLineage.length > 1
+    ? relatedByLineage
+    : artifacts.filter((artifact) => artifact.title === currentArtifact.title);
+
+  return versionGroup.sort((left, right) => {
+    if (left.version !== right.version) {
+      return left.version - right.version;
+    }
+
+    return toTimestamp(left.createdAt) - toTimestamp(right.createdAt);
+  });
+}
+
+export function buildArtifactVersions(
+  currentArtifact: Artifact,
+  artifacts: Artifact[]
+): VersionHistoryEntry[] {
+  return findArtifactVersionGroup(currentArtifact, artifacts).map((artifact) => {
+    const parentArtifact = resolveParentArtifact(artifacts, artifact);
+
+    return {
+      artifact,
+      artifactId: getIdValue(artifact.id),
+      parentArtifact,
+      basedOnVersionLabel: parentArtifact ? `v${parentArtifact.version}` : null,
+      isRevision: isRevisionArtifact(artifact)
+    };
+  });
+}
+
 export function buildDiffSummary(artifacts: Artifact[], artifact: Artifact): DiffSummary {
   const parentArtifact = resolveParentArtifact(artifacts, artifact);
   const instruction = artifact.revisionInstruction?.trim() || null;

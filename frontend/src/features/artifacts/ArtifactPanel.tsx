@@ -90,6 +90,18 @@ export function ArtifactPanel({
     await onCreateDeployment(selectedArtifactId);
   }
 
+  async function handleCopyPreviewUrl(previewUrl: string) {
+    try {
+      if (!navigator.clipboard) {
+        throw new Error("Clipboard API is not available.");
+      }
+
+      await navigator.clipboard.writeText(previewUrl);
+    } catch (error) {
+      console.warn("Failed to copy preview URL.", error);
+    }
+  }
+
   return (
     <div className="artifact-panel">
       <div className="artifact-panel__sidebar">
@@ -225,6 +237,25 @@ export function ArtifactPanel({
                       >
                         {deployment.previewUrl}
                       </a>
+                      <div className="deploy-status-card__actions">
+                        <a
+                          className="primary-button deploy-status-card__button"
+                          href={deployment.previewUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open Preview
+                        </a>
+                        <button
+                          type="button"
+                          className="secondary-button deploy-status-card__button"
+                          onClick={() => {
+                            void handleCopyPreviewUrl(deployment.previewUrl);
+                          }}
+                        >
+                          Copy URL
+                        </button>
+                      </div>
                       <p>{deployment.message}</p>
                     </div>
                   ))}

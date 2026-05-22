@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
+const FRONTEND_BASE = (process.env.AGENTHUB_FRONTEND_BASE_URL || "http://127.0.0.1:5173").replace(/\/$/, "");
 
 const DEMO_PROMPT = "帮我生成一个 React 登录页面，支持邮箱登录和验证码登录，同时生成 README，并检查代码质量。";
 const REVISION_INSTRUCTION = "把按钮改成蓝色，并增加 loading 状态。";
@@ -72,6 +73,34 @@ function requireValue(value, message) {
   return value;
 }
 
+function resolvePreviewUrl(previewUrl) {
+  const value = requireValue(previewUrl, "deployment previewUrl missing");
+  try {
+    return new URL(value).toString();
+  } catch {
+    if (!String(value).startsWith("/")) {
+      throw new Error(`Invalid preview URL: ${value}`);
+    }
+    return `${FRONTEND_BASE}${value}`;
+  }
+}
+
+async function verifyPreviewUrl(previewUrl) {
+  const resolvedUrl = resolvePreviewUrl(previewUrl);
+  let response;
+  try {
+    response = await fetch(resolvedUrl);
+  } catch (error) {
+    throw new Error(
+      `Cannot reach frontend preview at ${resolvedUrl}. Start frontend first or set AGENTHUB_FRONTEND_BASE_URL. ${error.message}`
+    );
+  }
+  if (response.status !== 200) {
+    throw new Error(`Preview URL expected HTTP 200, got ${response.status}: ${resolvedUrl}`);
+  }
+  return resolvedUrl;
+}
+
 function pickCodeArtifact(artifacts) {
   const codeArtifacts = artifacts.filter((artifact) => artifact.artifactType === "CODE" || artifact.type === "CODE");
   return (
@@ -83,6 +112,7 @@ function pickCodeArtifact(artifacts) {
 
 async function runSmokeTest() {
   console.log(`AgentHub smoke test target: ${API_BASE}`);
+  console.log(`AgentHub frontend preview target: ${FRONTEND_BASE}`);
 
   const health = await request("/api/health");
   if (health?.status !== "UP") {
@@ -174,8 +204,11 @@ async function runSmokeTest() {
   if (deployment.status !== "SUCCESS") {
     throw new Error(`deployment status expected SUCCESS, got ${deployment.status}`);
   }
-  requireValue(deployment.previewUrl, "deployment previewUrl missing");
+  const deploymentPreviewUrl = requireValue(deployment.previewUrl, "deployment previewUrl missing");
   pass(`deployment created: ${deploymentId}`);
+
+  const resolvedPreviewUrl = await verifyPreviewUrl(deploymentPreviewUrl);
+  pass(`preview page reachable: ${resolvedPreviewUrl}`);
 
   const deployments = await request(`/api/conversations/${conversationId}/deployments`);
   if (!Array.isArray(deployments) || deployments.length < 1) {

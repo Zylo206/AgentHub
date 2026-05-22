@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "../layouts/AppLayout";
 import { AgentBuilderPage } from "../pages/agents/AgentBuilderPage";
+import { PreviewPage } from "../pages/preview/PreviewPage";
 import { WorkspacePage } from "../pages/workspace/WorkspacePage";
 
 export function AppRouter() {
@@ -10,6 +11,7 @@ export function AppRouter() {
         <Route path="/" element={<Navigate to="/workspace" replace />} />
         <Route path="/workspace" element={<WorkspacePage />} />
         <Route path="/agents" element={<AgentBuilderPage />} />
+        <Route path="/preview/:artifactId" element={<PreviewPage />} />
       </Route>
     </Routes>
   );

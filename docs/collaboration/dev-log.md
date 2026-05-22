@@ -867,3 +867,164 @@
 - 增加一个 `scripts/start-demo` 或说明文档，降低启动前后端和执行 smoke test 的手动成本
 - 后续在 GitHub Actions 或本地 CI 中复用该脚本
 - 为 `/preview/{artifactId}` 增加轻量页面，让 Deploy Preview URL 的手动验收更完整
+
+## Phase 26：静态 Artifact Preview 页面与 Deploy URL 闭环
+
+### 目标
+
+- 补齐 Deploy Status Card 的 Preview URL 闭环，让 `/preview/:artifactId` 可以展示 Artifact 内容
+
+### 主要变更
+
+- 新增 `PreviewPage`
+- 在 React Router 中新增 `/preview/:artifactId` 路由
+- 复用 `getArtifact(artifactId)` API client 读取 Artifact
+- 根据 Artifact 类型展示 code block、文本预览、review report、结构化文本或 HTML iframe
+- 补充 Preview 页面样式，与当前 Workspace / Artifact Studio 风格保持一致
+- 保持 Deploy Status Card 的 previewUrl 链接兼容，不改变部署创建逻辑
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动打开 `/preview/{artifactId}`
+- 手动从 Deploy Status Card 点击 Preview URL
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是静态 Artifact 预览页，不是真实部署页面
+- Preview URL 是本地模拟 URL
+- 不代表真实生产部署
+- 不做真实构建或公网发布
+
+### 遗留问题
+
+- 真实部署未完成
+- 真实构建日志未完成
+- 真实公网预览 URL 未完成
+- Markdown 富渲染仍可后续增强
+- iframe 沙箱策略仍可后续细化
+
+### 下一步建议
+
+- 为 Deploy Status Card 增加更明确的 `Open Preview` 按钮文案
+- 为 Preview 页面增加 artifact version 切换入口
+- 后续可补真实 line diff 和代码复制能力
+
+## Phase 27：Deploy Preview 页面增强与 Artifact 版本切换
+
+### 目标
+
+- 增强 Deploy Status Card 的 Open Preview 体验，并让 `/preview/:artifactId` 支持 Artifact v1 / v2 版本切换
+
+### 主要变更
+
+- Deploy Status Card 增加 `Open Preview` 和 `Copy URL` 操作
+- PreviewPage 加载当前 Artifact 后，会继续按 conversation 查询相关 Artifact
+- 复用并补充 `artifactLineage` 版本链计算逻辑
+- Preview 页面展示 Version Switcher，支持点击 v1 / v2 跳转对应 `/preview/{artifactId}`
+- Preview 页面继续支持 code block、文本预览、review report、结构化文本和 HTML iframe
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动从 Deploy Status Card 点击 Open Preview
+- 手动测试 `/preview/{artifactId}`
+- 手动测试 v1 / v2 切换
+
+### 静态 / Mock / Placeholder 部分
+
+- Preview 页面仍是本地静态 Artifact 内容展示
+- Preview URL 仍是本地模拟 URL
+- 不代表真实部署
+- 不做真实构建或公网发布
+
+### 遗留问题
+
+- 真实部署未完成
+- 真实构建日志未完成
+- Markdown 富渲染未完成
+- iframe 沙箱策略仍可增强
+- Copy URL 当前失败时只通过 console.warn 提示
+
+### 下一步建议
+
+- 为 Preview 页面补充代码复制能力
+- 为 Deploy Status Card 增加静态构建日志卡片
+- 后续将 smoke test 增加 preview URL 可访问性检查
+
+## Phase 28：Smoke Test Preview URL 自动验证
+
+### 目标
+
+- 将 Deploy Preview URL 可访问性纳入本地 smoke test，验证部署后 `/preview/{artifactId}` 静态预览页至少返回 HTTP 200
+
+### 主要变更
+
+- `scripts/smoke-test.mjs` 新增 `AGENTHUB_FRONTEND_BASE_URL` 配置，默认指向 `http://127.0.0.1:5173`
+- 部署成功后从 `deployment.previewUrl` 解析完整 Preview URL
+- 支持相对路径 `/preview/{artifactId}` 和完整 URL 两种形式
+- 请求 Preview URL 并校验 HTTP 200，前端未启动时输出明确失败原因
+- `scripts/README.md` 补充前端地址配置和 Preview URL reachability 检查说明
+
+### 验证方式
+
+- `node scripts/smoke-test.mjs`
+- 运行前需要先启动 backend 和 frontend
+- smoke test 会先验证 backend API 主链路，再验证部署后的本地 Preview URL 可访问
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只验证本地静态 Preview 页面 HTTP 可达
+- 不做浏览器级 E2E
+- 不解析 DOM 或校验页面具体文案
+- 不验证真实 LLM、真实外部 Agent 或真实部署
+- Preview URL 仍是本地模拟部署预览 URL
+
+### 遗留问题
+
+- 仍缺浏览器级 E2E 测试
+- 仍缺 Preview 页面内容断言
+- 仍缺真实部署可用性验证
+- 仍缺 CI 环境中的前后端联动 smoke test 配置
+
+### 下一步建议
+
+- 在最终提交前固定一套本地 Demo 验收命令顺序
+- 后续可增加 Preview 页面内容关键词的轻量检查，但不要替代浏览器级 E2E
+- 如果需要进入 CI，再增加独立的前后端启动脚本和端口等待逻辑
+
+## Phase 29：MVP 课题要求对齐评估文档
+
+### 目标
+
+- 将当前 AgentHub MVP 与课题要求的对齐情况固化为仓库文档，明确已实现、部分实现、静态 Demo、半真实和未完成能力
+
+### 主要变更
+
+- 新增 `docs/mvp-requirements-alignment.md`
+- 按 IM 聊天、Orchestrator、多 Agent 接入、Artifact、部署、多端、交付物和评分维度进行对齐
+- 明确当前项目处于 MVP 功能扩展期，不急于最终 Demo 收敛
+- 梳理下一阶段优先级：群聊多 Agent 最小闭环、Context pin、真实 Adapter 输出进入 Artifact、消息操作、真实 line diff
+
+### 验证方式
+
+- 人工检查 Markdown 表格结构
+- 对照当前仓库已实现模块：Workspace、Agent Builder、Orchestrator、Adapter、Artifact、Deploy Preview、smoke test、协作文档
+
+### 静态 / Mock / Placeholder 部分
+
+- 文档明确区分静态 Demo、Mock fallback、CLI 探测型半真实 Adapter 和未完成能力
+- 未将 Codex / Claude Code / OpenCode CLI 探测写成完整深度平台接入
+- 未将静态 Deploy Preview 写成真实部署
+
+### 遗留问题
+
+- 技术文档和 Roadmap 仍需在后续阶段同步最新 Orchestrator / Deploy / Preview / smoke test 状态
+- 群聊多 Agent、真实上下文、消息操作和真实 Adapter 输出仍是下一阶段重点缺口
+- 当前评估文档是人工阶段评估，不是自动测试报告
+
+### 下一步建议
+
+- 优先实现群聊多 Agent 最小消息流
+- 随后补 Context pin 和消息操作最小集
+- 在真实 Adapter 输出能进入 Artifact 后，再更新 technical-design 和 roadmap 到下一版
