@@ -5,9 +5,7 @@ import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import type { Artifact } from "./artifactTypes";
 import { getVersionHistoryEntries } from "./artifactLineage";
 import { formatId, getIdValue } from "../../utils/id";
-
-const DEFAULT_REVISION_INSTRUCTION =
-  "把按钮改成蓝色，并增加 loading 状态。";
+import { displayArtifactType, displayStatus } from "../../utils/displayLabels";
 
 interface ArtifactPanelProps {
   artifacts: Artifact[];
@@ -24,6 +22,8 @@ interface ArtifactPanelProps {
   onShowAllArtifacts: () => void;
   onCreateRevision: (artifactId: string, revisionInstruction: string) => Promise<void>;
 }
+
+const PRODUCT_REVISION_INSTRUCTION = "把主按钮改成蓝色，并增加 loading 状态。";
 
 function renderArtifactContent(artifact: Artifact) {
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
@@ -58,13 +58,13 @@ export function ArtifactPanel({
   onShowAllArtifacts,
   onCreateRevision
 }: ArtifactPanelProps) {
-  const [revisionInstruction, setRevisionInstruction] = useState(DEFAULT_REVISION_INSTRUCTION);
+  const [revisionInstruction, setRevisionInstruction] = useState(PRODUCT_REVISION_INSTRUCTION);
   const versionEntries = getVersionHistoryEntries(allArtifacts, selectedArtifact);
   const selectedVersionEntry =
     versionEntries.find((entry) => entry.artifactId === selectedArtifactId) ?? null;
 
   useEffect(() => {
-    setRevisionInstruction(selectedArtifact?.revisionInstruction || DEFAULT_REVISION_INSTRUCTION);
+    setRevisionInstruction(selectedArtifact?.revisionInstruction || PRODUCT_REVISION_INSTRUCTION);
   }, [selectedArtifact]);
 
   async function handleCreateRevision() {
@@ -79,7 +79,7 @@ export function ArtifactPanel({
     <div className="artifact-panel">
       <div className="artifact-panel__sidebar">
         <div className="section-header">
-          <h3>Artifacts</h3>
+          <h3>产物</h3>
           <span>
             {artifacts.length} / {totalArtifactCount}
           </span>
@@ -87,14 +87,14 @@ export function ArtifactPanel({
 
         {filteredByTaskStep ? (
           <button type="button" className="show-all-button" onClick={onShowAllArtifacts}>
-            Show All Artifacts
+            显示全部产物
           </button>
         ) : null}
 
         {loadingArtifacts ? (
-          <div className="panel-empty">Loading artifacts...</div>
+          <div className="panel-empty">正在加载产物...</div>
         ) : artifacts.length === 0 ? (
-          <div className="panel-empty">Run the demo task to generate artifacts.</div>
+          <div className="panel-empty">运行 Demo Task 后会生成产物。</div>
         ) : (
           <div className="artifact-card-list">
             {artifacts.map((artifact) => {
@@ -115,30 +115,29 @@ export function ArtifactPanel({
 
       <div className="artifact-panel__detail">
         <div className="section-header">
-          <h3>Artifact Detail</h3>
-          {selectedArtifact ? <span>{selectedArtifact.type}</span> : null}
+          <h3>产物详情</h3>
+          {selectedArtifact ? <span>{displayArtifactType(selectedArtifact.type)}</span> : null}
         </div>
 
         {loadingArtifactDetail ? (
-          <div className="panel-empty">Loading artifact detail...</div>
+          <div className="panel-empty">正在加载产物详情...</div>
         ) : !selectedArtifact ? (
-          <div className="panel-empty">Select an artifact to inspect its content.</div>
+          <div className="panel-empty">选择一个产物后查看内容。</div>
         ) : (
           <div className="artifact-preview">
             <div className="artifact-preview__meta">
               <div>
                 <strong>{selectedArtifact.title}</strong>
                 <p>
-                  {selectedArtifact.type} / {selectedArtifact.status} / v{selectedArtifact.version}
+                  {displayArtifactType(selectedArtifact.type)} / {displayStatus(selectedArtifact.status)} / v{selectedArtifact.version}
                 </p>
                 {selectedVersionEntry?.parentArtifact ? (
                   <p className="artifact-preview__line revision-origin">
-                    Based on {selectedVersionEntry.parentArtifact.title} v
-                    {selectedVersionEntry.parentArtifact.version}
+                    基于 {selectedVersionEntry.parentArtifact.title} v{selectedVersionEntry.parentArtifact.version}
                   </p>
                 ) : selectedArtifact.revisionInstruction ? (
                   <p className="artifact-preview__line revision-origin">
-                    Revision artifact generated from a previous version in this conversation.
+                    该 revision 产物基于当前会话中的上一版生成。
                   </p>
                 ) : null}
               </div>
@@ -149,8 +148,8 @@ export function ArtifactPanel({
             </div>
             <div className="artifact-revision-box">
               <div className="artifact-revision-box__header">
-                <strong>Artifact Revision</strong>
-                <span>Static demo iteration</span>
+                <strong>产物二次修改</strong>
+                <span>静态 Demo 迭代</span>
               </div>
               <textarea
                 className="artifact-revision-box__input"
@@ -166,7 +165,7 @@ export function ArtifactPanel({
                   void handleCreateRevision();
                 }}
               >
-                {revisingArtifact ? "Revising..." : "Revise Selected Artifact"}
+                {revisingArtifact ? "修改中..." : "修改选中产物"}
               </button>
             </div>
             <VersionHistoryPanel

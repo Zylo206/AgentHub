@@ -18,8 +18,17 @@ agenthub:
       model: ${AGENTHUB_OPENAI_MODEL:}
       timeout-seconds: 30
     codex:
-      enabled: false
+      enabled: ${AGENTHUB_CODEX_ENABLED:false}
+      command: ${AGENTHUB_CODEX_COMMAND:codex}
+      args-template: ${AGENTHUB_CODEX_ARGS_TEMPLATE:}
+      timeout-seconds: 30
     claude-code:
-      enabled: false
+      enabled: ${AGENTHUB_CLAUDE_CODE_ENABLED:false}
+      command: ${AGENTHUB_CLAUDE_CODE_COMMAND:claude}
+      args-template: ${AGENTHUB_CLAUDE_CODE_ARGS_TEMPLATE:}
+      timeout-seconds: 30
     open-code:
-      enabled: false
+      enabled: ${AGENTHUB_OPEN_CODE_ENABLED:false}
+      command: ${AGENTHUB_OPEN_CODE_COMMAND:opencode}
+      args-template: ${AGENTHUB_OPEN_CODE_ARGS_TEMPLATE:}
+      timeout-seconds: 30

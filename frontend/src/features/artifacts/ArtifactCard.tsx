@@ -1,5 +1,6 @@
 import type { Artifact } from "./artifactTypes";
 import { formatId, getIdValue } from "../../utils/id";
+import { displayArtifactType, displayStatus } from "../../utils/displayLabels";
 
 interface ArtifactCardProps {
   artifact: Artifact;
@@ -25,15 +26,15 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
         <span className="artifact-card__version version-badge">v{artifact.version}</span>
       </div>
       <div className="artifact-card__meta">
-        <span>{artifact.type}</span>
-        <span>{artifact.status}</span>
+        <span>{displayArtifactType(artifact.type)}</span>
+        <span>{displayStatus(artifact.status)}</span>
       </div>
       {isRevision ? (
         <div className="artifact-card__tags">
-          <span className="artifact-card__tag revision-badge">Revision</span>
+          <span className="artifact-card__tag revision-badge">二次修改</span>
           {artifact.parentArtifactId ? (
             <span className="artifact-card__tag artifact-card__tag--lineage">
-              Based on previous artifact
+              基于上一版产物
             </span>
           ) : null}
         </div>

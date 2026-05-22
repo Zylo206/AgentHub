@@ -2,6 +2,7 @@ import type { Artifact } from "../artifacts/artifactTypes";
 import type { Agent } from "../agents/agentTypes";
 import type { TaskRun, TaskSpec, TaskStep } from "./chatTypes";
 import { formatId, getIdValue } from "../../utils/id";
+import { displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
 interface TaskRunPanelProps {
   agents: Agent[];
@@ -12,10 +13,6 @@ interface TaskRunPanelProps {
   selectedTaskRunId: string | null;
   selectedTaskStepId: string | null;
   onSelectStep: (taskRunId: string, step: TaskStep) => void;
-}
-
-function normalizeStatus(status: string): string {
-  return status.toLowerCase().replace(/_/g, "-");
 }
 
 function summarizeAdapterResponse(responseSummary?: string): string | null {
@@ -79,13 +76,13 @@ export function TaskRunPanel({
   const agentNameMap = new Map(agents.map((agent) => [getIdValue(agent.id), agent.name]));
 
   if (loading) {
-    return <div className="task-panel__empty">Loading task runs...</div>;
+    return <div className="task-panel__empty">正在加载 TaskRun...</div>;
   }
 
   if (taskRuns.length === 0) {
     return (
       <div className="task-panel__empty">
-        No task runs yet. Run the demo task to populate this panel.
+        暂无 TaskRun。运行 Demo Task 后会在这里展示执行步骤。
       </div>
     );
   }
@@ -94,9 +91,9 @@ export function TaskRunPanel({
     <div className="task-panel">
       <div className="task-panel__header">
         <div>
-          <h3>Task Runs</h3>
+          <h3>任务运行</h3>
           <p>
-            {taskSpecs.length} TaskSpec / {taskRuns.length} TaskRun
+            {taskSpecs.length} 个 TaskSpec / {taskRuns.length} 个 TaskRun
           </p>
         </div>
       </div>
@@ -127,24 +124,24 @@ export function TaskRunPanel({
                   <strong>{formatId(taskRun.id)}</strong>
                   <p>{taskRun.resultSummary}</p>
                 </div>
-                <span className={`status-pill status-pill--${normalizeStatus(taskRun.status)}`}>
-                  {taskRun.status}
+                <span className={`status-pill status-pill--${normalizeStatusClass(taskRun.status)}`}>
+                  {displayStatus(taskRun.status)}
                 </span>
               </div>
               <div className="task-run-card__goal">
-                {taskRun.taskPlan?.goal || "No task plan goal available."}
+                {taskRun.taskPlan?.goal || "暂无任务计划目标。"}
               </div>
               {revisionOrigin ? (
                 <div className="revision-origin task-run-card__revision">
-                  <strong>Revision TaskRun</strong>
+                  <strong>产物修改任务</strong>
                   <span>
-                    Based on artifact:{" "}
+                    基于产物：{" "}
                     {revisionOrigin.parentArtifact
                       ? `${revisionOrigin.parentArtifact.title} v${revisionOrigin.parentArtifact.version}`
-                      : "previous artifact"}
+                      : "上一版产物"}
                   </span>
                   {revisionOrigin.artifact.revisionInstruction ? (
-                    <p>Instruction: {revisionOrigin.artifact.revisionInstruction}</p>
+                    <p>修改指令：{revisionOrigin.artifact.revisionInstruction}</p>
                   ) : null}
                 </div>
               ) : null}
@@ -165,38 +162,41 @@ export function TaskRunPanel({
                       onClick={() => onSelectStep(getIdValue(taskRun.id), step)}
                     >
                       <div className="task-step-item__row">
-                        <span className="task-step-item__order">Step {step.stepOrder}</span>
-                        <span className={`status-pill status-pill--${normalizeStatus(step.status)}`}>
-                          {step.status}
+                        <span className="task-step-item__order">步骤 {step.stepOrder}</span>
+                        <span className={`status-pill status-pill--${normalizeStatusClass(step.status)}`}>
+                          {displayStatus(step.status)}
                         </span>
                       </div>
                       <div className="task-step-item__description">{step.taskDescription}</div>
                       <div className="task-step-item__meta step-agent-meta">
-                        <span>Assigned Agent: {assignedAgentName}</span>
-                        <span>{step.producedArtifactIds.length} artifacts</span>
+                        <span>执行 Agent：{assignedAgentName}</span>
+                        <span>{step.producedArtifactIds.length} 个产物</span>
                       </div>
                       <div className="step-adapter-meta">
                         {adapterDisplay.fallbackUsed ? (
                           <div className="step-adapter-fallback">
                             <span className="step-adapter-preferred">
-                              Preferred: {adapterDisplay.preferred}
+                              首选：{adapterDisplay.preferred}
                             </span>
                             <span className="step-adapter-actual">
-                              Actual: {adapterDisplay.actual}
+                              实际：{adapterDisplay.actual}
                             </span>
                             <span className="step-adapter-status step-adapter-status--fallback">
-                              Status: {adapterDisplay.status || "FALLBACK_USED"}
+                              状态：{displayStatus(adapterDisplay.status || "FALLBACK_USED")}
+                            </span>
+                            <span className="step-adapter-fallback-note">
+                              首选 Adapter 不可用，已使用 fallback。
                             </span>
                           </div>
                         ) : (
                           <span className="step-adapter-status">
-                            Adapter: {adapterDisplay.actual || "not recorded"}
-                            {adapterDisplay.status ? ` · ${adapterDisplay.status}` : ""}
+                            Adapter：{adapterDisplay.actual || "未记录"}
+                            {adapterDisplay.status ? ` · ${displayStatus(adapterDisplay.status)}` : ""}
                           </span>
                         )}
                         {step.adapterResponseSummary ? (
                           <div className="step-adapter-response">
-                            <strong>Adapter Response:</strong> {summarizeAdapterResponse(step.adapterResponseSummary)}
+                            <strong>Adapter 响应：</strong> {summarizeAdapterResponse(step.adapterResponseSummary)}
                           </div>
                         ) : null}
                         {step.adapterErrorMessage ? (

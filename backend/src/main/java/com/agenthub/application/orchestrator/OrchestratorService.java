@@ -99,34 +99,34 @@ public class OrchestratorService {
         AgentAdapterType selectedAgentPreferredAdapter = selectedAgent == null
                 ? agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.FRONTEND_BUILDER,
-                        "Generate the React login page and the initial README draft.")
+                        "生成 React 登录页面和初始 README 草案。")
                 : agentRoutingService.resolvePreferredAdapterForAgent(selectedAgent);
 
         TaskSpec taskSpec = new TaskSpec(
                 new TaskSpecId(idGenerator.nextId("spec")),
                 conversationRef,
                 sourceMessageId,
-                "React Login Page Demo",
-                "Build a React login page with documentation and a final review report.",
+                "React 登录页 Demo",
+                "生成一个 React 登录页面，并配套 README、API 契约和最终评审报告。",
                 userInput,
                 List.of(
-                        "Build a login page with email login and verification code login",
-                        "Provide a README for page usage and structure",
-                        "Generate an API contract artifact for the login flow",
-                        "Produce a final review report based on acceptance criteria"),
+                        "构建支持邮箱登录和验证码登录的登录页面",
+                        "提供 README，说明页面用法和组件结构",
+                        "为登录流程生成 API 契约产物",
+                        "基于验收标准生成最终评审报告"),
                 List.of(
-                        "Real LLM execution",
-                        "Real deployment",
-                        "Real database persistence",
-                        "Real third-party agent adapter invocation"),
+                        "真实 LLM 执行",
+                        "真实部署发布",
+                        "真实数据库持久化",
+                        "真实第三方 Agent 平台调用"),
                 List.of(
-                        "Support email login and verification code login",
-                        "Provide README with usage notes and extension points",
-                        "Provide an API contract artifact for backend collaboration",
-                        "Provide a review report with issues, suggestions, and risk level",
+                        "支持邮箱登录和验证码登录",
+                        "README 包含使用说明和扩展点",
+                        "提供用于后端协作的 API 契约产物",
+                        "评审报告包含问题、建议和风险等级",
                         selectedAgent == null
-                                ? "Allow the built-in specialist agent chain to complete the demo task"
-                                : "Route the first specialist step through the selected agent configuration"),
+                                ? "允许内置 Specialist Agent 链路完成 Demo 任务"
+                                : "第一个 Specialist Step 使用用户选择的 Agent 配置执行"),
                 List.of("frontend-builder", "backend-worker", "reviewer"),
                 List.of("CODE", "MARKDOWN", "API_CONTRACT", "REVIEW_REPORT"),
                 TaskSpecStatus.APPROVED,
@@ -163,7 +163,7 @@ public class OrchestratorService {
         Artifact reviewArtifact = createArtifact(
                 conversationRef,
                 taskRunId,
-                "Review Report",
+                "评审报告",
                 ArtifactType.REVIEW_REPORT,
                 "md",
                 staticReviewReportContent(),
@@ -179,23 +179,23 @@ public class OrchestratorService {
                 taskRunId,
                 1,
                 selectedAgent == null ? BuiltInAgentIds.FRONTEND_BUILDER : selectedAgent.getId().value(),
-                selectedAgent == null ? "Frontend Builder" : selectedAgent.getName(),
+                selectedAgent == null ? "前端构建 Agent" : selectedAgent.getName(),
                 userInput,
                 selectedAgent == null
-                        ? "You are responsible for frontend implementation in the AgentHub demo."
+                        ? "你负责 AgentHub Demo 中的前端实现。"
                         : selectedAgent.getSystemPrompt(),
                 selectedAgent == null
-                        ? "Generate the React login page and the initial README draft."
-                        : "Selected Agent executes frontend artifact generation.",
+                        ? "生成 React 登录页面和初始 README 草案。"
+                        : "由用户选择的 Agent 执行前端产物生成。",
                 selectedAgent == null
-                        ? "Task Spec requires a dual-mode login page with artifact-first iteration."
-                        : "Task Spec requires a dual-mode login page with artifact-first iteration. "
+                        ? "Task Spec 要求生成双模式登录页，并支持以 Artifact 为中心的迭代。"
+                        : "Task Spec 要求生成双模式登录页，并支持以 Artifact 为中心的迭代。"
                                 + buildSelectedAgentInputContext(selectedAgent, selectedAgentResolution),
-                "Generated LoginPage.tsx and README.md for the workspace.",
+                "已为工作台生成 LoginPage.tsx 和 README.md。",
                 List.of(
-                        "TaskSpec: React Login Page Demo",
-                        "Need email login and verification code login",
-                        "Artifact-centered iteration is enabled",
+                        "TaskSpec：React 登录页 Demo",
+                        "需要支持邮箱登录和验证码登录",
+                        "已启用以 Artifact 为中心的迭代",
                         selectedAgentResolution.sourceDescription(),
                         selectedAgentSummary),
                 List.of("LoginPage.tsx", "README.md"),
@@ -208,21 +208,21 @@ public class OrchestratorService {
                 taskRunId,
                 2,
                 BuiltInAgentIds.BACKEND_WORKER,
-                "Backend Worker",
+                "后端协作 Agent",
                 userInput,
-                "You are responsible for API contract and backend structure in the AgentHub demo.",
-                "Generate the login API contract based on the page fields and task scope.",
-                "Use the login page inputs as contract inputs and keep the API compatible with future iteration.",
-                "Generated login-api-contract.json for downstream review.",
+                "你负责 AgentHub Demo 中的 API 契约和后端结构说明。",
+                "根据页面字段和任务范围生成登录 API 契约。",
+                "使用登录页输入作为契约输入，并保持 API 便于后续迭代。",
+                "已生成 login-api-contract.json，供后续评审使用。",
                 List.of(
-                        "TaskSpec: React Login Page Demo",
-                        "Frontend artifacts are available for field reference",
-                        "Keep the API contract ready for later integration"),
+                        "TaskSpec：React 登录页 Demo",
+                        "前端产物可作为字段参考",
+                        "API 契约需要为后续集成预留空间"),
                 List.of("LoginPage.tsx", "README.md"),
                 List.of(apiContractArtifact.getId()),
                 agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.BACKEND_WORKER,
-                        "Generate the login API contract based on the page fields and task scope."),
+                        "根据页面字段和任务范围生成登录 API 契约。"),
                 now);
 
         TaskStep reviewStep = createAgentExecutedStep(
@@ -230,25 +230,25 @@ public class OrchestratorService {
                 taskRunId,
                 3,
                 BuiltInAgentIds.REVIEWER,
-                "Reviewer",
+                "评审 Agent",
                 userInput,
-                "You are responsible for review and acceptance checks in the AgentHub demo.",
-                "Review the generated page, README, API contract, and acceptance criteria.",
-                "Review Task Spec, code artifact, README artifact, and API contract artifact together.",
-                "Generated a structured review report with pass/fail basis and risk level.",
+                "你负责 AgentHub Demo 中的评审和验收检查。",
+                "检查生成的页面、README、API 契约和验收标准。",
+                "结合 Task Spec、代码产物、README 产物和 API 契约产物一起评审。",
+                "已生成结构化评审报告，包含通过依据和风险等级。",
                 List.of(
-                        "TaskSpec acceptance criteria are the review baseline",
-                        "Review code, README, and API contract together",
-                        "Document issues, suggestions, and risk level"),
+                        "TaskSpec 验收标准是评审基线",
+                        "需要同时检查代码、README 和 API 契约",
+                        "记录问题、建议和风险等级"),
                 List.of("LoginPage.tsx", "README.md", "login-api-contract.json"),
                 List.of(reviewArtifact.getId()),
                 agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.REVIEWER,
-                        "Review the generated page, README, API contract, and acceptance criteria."),
+                        "检查生成的页面、README、API 契约和验收标准。"),
                 now);
 
         TaskPlan taskPlan = new TaskPlan(
-                "Generate login page, docs, API contract, and review artifacts.",
+                "生成登录页、说明文档、API 契约和评审产物。",
                 List.of(frontendStep, backendStep, reviewStep));
 
         TaskRun taskRun = new TaskRun(
@@ -258,7 +258,7 @@ public class OrchestratorService {
                 TaskRunStatus.COMPLETED,
                 taskPlan,
                 List.of(frontendStep, backendStep, reviewStep),
-                "Static demo task completed with code, docs, API contract, review report, and context handoff records. "
+                "静态 Demo 任务已完成，产出代码、文档、API 契约、评审报告和上下文交接记录。"
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary,
                 now,
@@ -276,12 +276,12 @@ public class OrchestratorService {
                         apiContractArtifact.getId(),
                         reviewArtifact.getId()),
                 List.of(
-                        "Demo goal: build a React login page with README and review report",
-                        "Artifact-centered iteration is enabled",
-                        "Reviewer must check acceptance criteria before closing the loop",
+                        "Demo 目标：生成 React 登录页、README 和评审报告",
+                        "已启用以 Artifact 为中心的迭代",
+                        "Reviewer 必须基于验收标准完成闭环检查",
                         selectedAgentResolution.sourceDescription(),
                         selectedAgentSummary),
-                "This snapshot contains the original user request, the generated Task Spec, three task steps, and the LoginPage.tsx, README.md, login-api-contract.json, and Review Report artifacts. "
+                "该快照包含原始用户请求、生成的 Task Spec、三个 TaskStep，以及 LoginPage.tsx、README.md、login-api-contract.json 和评审报告产物。"
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary,
                 now);
@@ -297,17 +297,17 @@ public class OrchestratorService {
                 List.of(codeArtifact.getId(), readmeArtifact.getId()),
                 List.of(
                         selectedAgent == null
-                                ? "Frontend Builder finalized the page fields for email and verification code login"
-                                : "Selected Agent finalized the page fields for email and verification code login",
+                                ? "前端构建 Agent 已确定邮箱登录和验证码登录所需页面字段"
+                                : "用户选择的 Agent 已确定邮箱登录和验证码登录所需页面字段",
                         selectedAgentResolution.sourceDescription(),
-                        "README draft already documents component structure and extension points",
+                        "README 草案已记录组件结构和扩展点",
                         selectedAgentSummary),
                 List.of(
-                        "The login API still needs an explicit request/response contract",
-                        "Error handling and validation states are not yet implemented"),
+                        "登录 API 仍需要明确请求和响应契约",
+                        "错误处理和表单校验状态尚未实现"),
                 (selectedAgent == null
-                                ? "Frontend Builder hands off the page structure and README so Backend Worker can derive a stable API contract and data model assumptions. "
-                                : "Selected Agent hands off the page structure and README so Backend Worker can derive a stable API contract and data model assumptions. ")
+                        ? "前端构建 Agent 交接页面结构和 README，后端协作 Agent 可据此推导稳定 API 契约和数据模型假设。"
+                        : "用户选择的 Agent 交接页面结构和 README，后端协作 Agent 可据此推导稳定 API 契约和数据模型假设。")
                         + selectedAgentSummary,
                 now);
 
@@ -320,12 +320,12 @@ public class OrchestratorService {
                 BuiltInAgentIds.REVIEWER,
                 List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId()),
                 List.of(
-                        "Backend Worker defined the login request payload and success/error response schema",
-                        "Reviewer should evaluate code artifact, README, and API contract against Task Spec acceptance criteria"),
+                        "后端协作 Agent 已定义登录请求 payload 和成功/失败响应结构",
+                        "评审 Agent 应根据 Task Spec 验收标准检查代码产物、README 和 API 契约"),
                 List.of(
-                        "Frontend code still lacks form validation and API integration",
-                        "README does not yet describe real deployment or persistence behavior"),
-                "Backend Worker hands off the API contract and artifact chain so Reviewer can validate the end-to-end acceptance criteria and identify remaining risks.",
+                        "前端代码仍缺少表单校验和 API 集成",
+                        "README 尚未描述真实部署或持久化行为"),
+                "后端协作 Agent 交接 API 契约和产物链路，评审 Agent 可据此验证端到端验收标准并识别剩余风险。",
                 now);
 
         contextRepository.saveHandoffSummary(frontendToBackend);
@@ -334,32 +334,32 @@ public class OrchestratorService {
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.TASK_SPEC,
-                "Task Spec created: React Login Page Demo",
+                "已创建 Task Spec：React 登录页 Demo",
                 List.of());
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.TASK_STATUS,
-                "TaskRun completed with 3 TaskStep items and 4 artifacts.",
+                "TaskRun 已完成：3 个 TaskStep，4 个产物。",
                 List.of());
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.ARTIFACT_CARD,
-                "Artifact created: LoginPage.tsx",
+                "已创建产物：LoginPage.tsx",
                 List.of(codeArtifact.getId()));
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.ARTIFACT_CARD,
-                "Artifact created: README.md",
+                "已创建产物：README.md",
                 List.of(readmeArtifact.getId()));
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.ARTIFACT_CARD,
-                "Artifact created: login-api-contract.json",
+                "已创建产物：login-api-contract.json",
                 List.of(apiContractArtifact.getId()));
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.ARTIFACT_CARD,
-                "Artifact created: Review Report",
+                "已创建产物：评审报告",
                 List.of(reviewArtifact.getId()));
 
         return taskRun;
@@ -392,21 +392,21 @@ public class OrchestratorService {
                 new TaskSpecId(idGenerator.nextId("spec")),
                 conversationRef,
                 revisionMessage.getId(),
-                "Revise " + originalArtifact.getTitle(),
-                "Revise the selected artifact based on a follow-up instruction while preserving artifact-centered iteration.",
+                "修改 " + originalArtifact.getTitle(),
+                "根据用户追问指令修改选中产物，并保留 Artifact-centered iteration 链路。",
                 revisionInstruction,
                 List.of(
-                        "Update the selected artifact based on the revision instruction",
-                        "Generate a new artifact version without overwriting the previous version",
-                        "Generate a fresh review report for the revised artifact"),
+                        "根据 revision 指令更新选中产物",
+                        "生成新的产物版本，不覆盖上一版",
+                        "为修改后的产物生成新的评审报告"),
                 List.of(
-                        "Real code execution",
-                        "Real LLM reasoning",
-                        "Automated visual diff generation"),
+                        "真实代码执行",
+                        "真实 LLM 推理",
+                        "自动化视觉 diff 生成"),
                 List.of(
-                        "The revised artifact reflects the requested button color update",
-                        "The revised artifact includes a visible loading state",
-                        "A new review report explains whether the revision satisfies the request"),
+                        "修改后的产物体现按钮颜色调整",
+                        "修改后的产物包含可见 loading 状态",
+                        "新的评审报告说明 revision 是否满足请求"),
                 List.of("frontend-builder", "reviewer"),
                 List.of("CODE", "REVIEW_REPORT"),
                 TaskSpecStatus.APPROVED,
@@ -438,7 +438,7 @@ public class OrchestratorService {
                 taskRunId,
                 revisedArtifact.getId().value(),
                 revisionInstruction,
-                "Review Report - " + originalArtifact.getTitle() + " v" + revisedArtifact.getVersion(),
+                "评审报告 - " + originalArtifact.getTitle() + " v" + revisedArtifact.getVersion(),
                 ArtifactType.REVIEW_REPORT,
                 ArtifactStatus.ACCEPTED,
                 "md",
@@ -453,21 +453,21 @@ public class OrchestratorService {
                 taskRunId,
                 1,
                 BuiltInAgentIds.FRONTEND_BUILDER,
-                "Frontend Builder",
+                "前端构建 Agent",
                 revisionInstruction,
-                "You are responsible for frontend revision in the AgentHub demo.",
-                "Revise the selected artifact according to the follow-up instruction.",
-                "Use the original artifact as the base context and apply the requested UI change.",
-                "Generated a revised LoginPage.tsx with a blue button and a clearer loading state.",
+                "你负责 AgentHub Demo 中的前端二次修改。",
+                "根据追问指令修改选中的产物。",
+                "以上一版产物为基础上下文，应用用户请求的 UI 修改。",
+                "已生成修改后的 LoginPage.tsx，主按钮变为蓝色并具备更清晰的 loading 状态。",
                 List.of(
-                        "Original artifact: " + originalArtifact.getTitle() + " v" + originalArtifact.getVersion(),
-                        "Revision instruction: " + revisionInstruction,
-                        "Preserve artifact-centered iteration"),
+                        "原始产物：" + originalArtifact.getTitle() + " v" + originalArtifact.getVersion(),
+                        "修改指令：" + revisionInstruction,
+                        "保留以 Artifact 为中心的迭代链路"),
                 List.of(originalArtifact.getTitle()),
                 List.of(revisedArtifact.getId()),
                 agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.FRONTEND_BUILDER,
-                        "Revise the selected artifact according to the follow-up instruction."),
+                        "根据追问指令修改选中的产物。"),
                 now);
 
         TaskStep reviewerStep = createAgentExecutedStep(
@@ -475,25 +475,25 @@ public class OrchestratorService {
                 taskRunId,
                 2,
                 BuiltInAgentIds.REVIEWER,
-                "Reviewer",
+                "评审 Agent",
                 revisionInstruction,
-                "You are responsible for revision review in the AgentHub demo.",
-                "Review whether the revised artifact satisfies the revision instruction and acceptance criteria.",
-                "Check the revised artifact, the original artifact, and the revision instruction together.",
-                "Generated a revision review report with pass/fail basis, issues, and suggestions.",
+                "你负责 AgentHub Demo 中的 revision 评审。",
+                "检查修改后的产物是否满足 revision 指令和验收标准。",
+                "同时检查修改后产物、原始产物和 revision 指令。",
+                "已生成 revision 评审报告，包含通过依据、问题和建议。",
                 List.of(
-                        "Original artifact: " + originalArtifact.getTitle() + " v" + originalArtifact.getVersion(),
-                        "Revised artifact: " + revisedArtifact.getTitle() + " v" + revisedArtifact.getVersion(),
-                        "Check the instruction against the revised artifact"),
+                        "原始产物：" + originalArtifact.getTitle() + " v" + originalArtifact.getVersion(),
+                        "修改后产物：" + revisedArtifact.getTitle() + " v" + revisedArtifact.getVersion(),
+                        "根据修改后产物检查 revision 指令是否被满足"),
                 List.of(originalArtifact.getTitle(), revisedArtifact.getTitle()),
                 List.of(reviewArtifact.getId()),
                 agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.REVIEWER,
-                        "Review whether the revised artifact satisfies the revision instruction and acceptance criteria."),
+                        "检查修改后的产物是否满足 revision 指令和验收标准。"),
                 now);
 
         TaskPlan revisionPlan = new TaskPlan(
-                "Revise the selected artifact and review the new version.",
+                "修改选中产物并评审新版本。",
                 List.of(frontendRevisionStep, reviewerStep));
 
         TaskRun taskRun = new TaskRun(
@@ -503,7 +503,7 @@ public class OrchestratorService {
                 TaskRunStatus.COMPLETED,
                 revisionPlan,
                 List.of(frontendRevisionStep, reviewerStep),
-                "Artifact-centered revision completed with a new code version and a follow-up review report.",
+                "Artifact-centered revision 已完成，产出新的代码版本和后续评审报告。",
                 now,
                 now);
         taskRepository.saveTaskRun(taskRun);
@@ -515,11 +515,11 @@ public class OrchestratorService {
                 List.of(revisionMessage.getId()),
                 List.of(originalArtifact.getId(), revisedArtifact.getId(), reviewArtifact.getId()),
                 List.of(
-                        "Artifact-centered iteration is enabled for the selected artifact",
-                        "Revision instruction: " + revisionInstruction,
-                        "Original artifact version: v" + originalArtifact.getVersion(),
-                        "Revised artifact version: v" + revisedArtifact.getVersion()),
-                "This revision snapshot links the original artifact, the revision instruction, the revised artifact, and the new review report to demonstrate a second-pass artifact-centered iteration.",
+                        "已为选中产物启用 Artifact-centered iteration",
+                        "修改指令：" + revisionInstruction,
+                        "原始产物版本：v" + originalArtifact.getVersion(),
+                        "修改后产物版本：v" + revisedArtifact.getVersion()),
+                "该 revision 快照关联原始产物、修改指令、修改后产物和新评审报告，用于展示第二轮以 Artifact 为中心的迭代。",
                 now);
         contextRepository.saveContextSnapshot(contextSnapshot);
 
@@ -532,44 +532,43 @@ public class OrchestratorService {
                 BuiltInAgentIds.REVIEWER,
                 List.of(revisedArtifact.getId()),
                 List.of(
-                        "button style changed to blue",
-                        "loading state added"),
+                        "按钮样式已改为蓝色",
+                        "已增加 loading 状态"),
                 List.of(
-                        "The revised page is still a static UI mock and not connected to a backend API",
-                        "Form validation and success/error feedback can be refined in the next iteration"),
-                "Frontend Builder hands the revised LoginPage.tsx to Reviewer so the second-pass artifact can be checked against the follow-up instruction.",
+                        "修改后的页面仍是静态 UI mock，尚未连接真实后端 API",
+                        "表单校验、成功/失败反馈可在下一轮继续完善"),
+                "前端构建 Agent 将修改后的 LoginPage.tsx 交接给评审 Agent，便于检查第二轮产物是否满足追问指令。",
                 now);
         contextRepository.saveHandoffSummary(handoffSummary);
 
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.TASK_SPEC,
-                "Revision Task Spec created: Revise " + originalArtifact.getTitle(),
+                "已创建 Revision Task Spec：修改 " + originalArtifact.getTitle(),
                 List.of());
         messageApplicationService.appendAgentMessage(
                 conversationId,
                 BuiltInAgentIds.FRONTEND_BUILDER,
-                "Frontend Builder updated " + originalArtifact.getTitle()
-                        + " to v" + revisedArtifact.getVersion()
-                        + " based on the revision instruction.");
+                "前端构建 Agent 已根据 revision 指令将 " + originalArtifact.getTitle()
+                        + " 更新到 v" + revisedArtifact.getVersion() + "。");
         messageApplicationService.appendAgentMessage(
                 conversationId,
                 BuiltInAgentIds.REVIEWER,
-                "Reviewer completed the revision check and generated a new review report for the updated artifact.");
+                "评审 Agent 已完成 revision 检查，并为更新后的产物生成新的评审报告。");
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.TASK_STATUS,
-                "Revision TaskRun completed with 2 TaskStep items and 2 revision artifacts.",
+                "Revision TaskRun 已完成：2 个 TaskStep，2 个 revision 产物。",
                 List.of());
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.ARTIFACT_CARD,
-                "Artifact revised: " + revisedArtifact.getTitle() + " v" + revisedArtifact.getVersion(),
+                "产物已修改：" + revisedArtifact.getTitle() + " v" + revisedArtifact.getVersion(),
                 List.of(revisedArtifact.getId()));
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.ARTIFACT_CARD,
-                "Artifact created: " + reviewArtifact.getTitle(),
+                "已创建产物：" + reviewArtifact.getTitle(),
                 List.of(reviewArtifact.getId()));
 
         return new TaskApplicationService.ArtifactRevisionResult(taskRun, revisedArtifact, reviewArtifact);
@@ -612,8 +611,8 @@ public class OrchestratorService {
 
         String adapterSummary = summarizeAdapterResponse(adapterResponse.content());
         String outputContent = baseOutputContent
-                + "\n\nAdapter execution:\n"
-                + (adapterSummary == null ? "No adapter response recorded." : adapterSummary);
+                + "\n\nAdapter 执行信息：\n"
+                + (adapterSummary == null ? "未记录 Adapter 响应。" : adapterSummary);
 
         return new TaskStep(
                 stepId,
@@ -639,17 +638,17 @@ public class OrchestratorService {
         if (normalizedExplicitSelectedAgentId != null) {
             return new SelectedAgentResolution(
                     agentApplicationService.getAgent(normalizedExplicitSelectedAgentId),
-                    "Selected agent was provided by demo-task request.");
+                    "Selected Agent 来源：demo-task 请求显式传入。");
         }
 
         String inferredSelectedAgentId = normalizeAgentId(sourceMessage.getTargetAgentId());
         if (inferredSelectedAgentId != null) {
             return new SelectedAgentResolution(
                     agentApplicationService.getAgent(inferredSelectedAgentId),
-                    "Selected agent was inferred from source message targetAgentId.");
+                    "Selected Agent 来源：从源消息 targetAgentId 推断。");
         }
 
-        return new SelectedAgentResolution(null, "Selected agent: built-in specialist chain.");
+        return new SelectedAgentResolution(null, "Selected Agent：使用内置 Specialist Agent 链路。");
     }
 
     private String buildSelectedAgentSummary(SelectedAgentResolution selectedAgentResolution) {
@@ -662,7 +661,7 @@ public class OrchestratorService {
                 || selectedAgent.getPreferredAdapterType().isBlank()
                 ? AgentAdapterType.MOCK.name()
                 : selectedAgent.getPreferredAdapterType();
-        return "%s Selected agent: %s (%s, preferred adapter %s).".formatted(
+        return "%s Selected Agent：%s（%s，首选 Adapter：%s）。".formatted(
                 selectedAgentResolution.sourceDescription(),
                 selectedAgent.getName(),
                 selectedAgent.getId().value(),
@@ -680,7 +679,7 @@ public class OrchestratorService {
                 || selectedAgent.getPreferredAdapterType().isBlank()
                 ? AgentAdapterType.MOCK.name()
                 : selectedAgent.getPreferredAdapterType();
-        return "%s Selected agent context: name=%s, preferredAdapterType=%s, capabilityTags=%s, systemPrompt=%s".formatted(
+        return "%s Selected Agent 上下文：name=%s，preferredAdapterType=%s，capabilityTags=%s，systemPrompt=%s".formatted(
                 selectedAgentResolution.sourceDescription(),
                 selectedAgent.getName(),
                 preferredAdapterType,
@@ -749,16 +748,16 @@ public class OrchestratorService {
                   return (
                     <div className="login-page">
                       <div className="login-card">
-                        <h1>Login</h1>
+                        <h1>登录</h1>
                         <input
                           className="input"
-                          placeholder="Email"
+                          placeholder="邮箱"
                           value={email}
                           onChange={(event) => setEmail(event.target.value)}
                         />
                         <input
                           className="input"
-                          placeholder="Verification Code"
+                          placeholder="验证码"
                           value={code}
                           onChange={(event) => setCode(event.target.value)}
                         />
@@ -767,7 +766,7 @@ public class OrchestratorService {
                           disabled={loading}
                           onClick={() => setLoading(true)}
                         >
-                          {loading ? "Loading..." : "Login"}
+                          {loading ? "登录中..." : "登录"}
                         </button>
                       </div>
                     </div>
@@ -778,32 +777,32 @@ public class OrchestratorService {
 
     private String staticReadmeContent() {
         return """
-                # Login Page Demo
+                # 登录页 Demo
 
-                ## Page Features
+                ## 页面能力
 
-                - Supports email input
-                - Supports verification code input
-                - Includes a loading state on the login button
+                - 支持邮箱输入
+                - 支持验证码输入
+                - 登录按钮包含 loading 状态
 
-                ## Usage
+                ## 使用方式
 
-                1. Render `LoginPage.tsx`
-                2. Enter email and verification code
-                3. Click the login button to observe loading feedback
+                1. 渲染 `LoginPage.tsx`
+                2. 输入邮箱和验证码
+                3. 点击登录按钮，观察 loading 反馈
 
-                ## Component Structure
+                ## 组件结构
 
                 - `LoginPage`
                 - `login-card`
                 - `input`
                 - `login-button`
 
-                ## Extension Points
+                ## 后续扩展点
 
-                - Add email format validation
-                - Add a send-code button and countdown state
-                - Connect the page to the generated login API contract
+                - 增加邮箱格式校验
+                - 增加发送验证码按钮和倒计时状态
+                - 将页面提交动作连接到生成的登录 API 契约
                 """;
     }
 
@@ -823,7 +822,7 @@ public class OrchestratorService {
                   },
                   "errorResponse": {
                     "code": "INVALID_CODE",
-                    "message": "Verification code is invalid or expired"
+                    "message": "验证码无效或已过期"
                   }
                 }
                 """;
@@ -847,17 +846,17 @@ public class OrchestratorService {
                   return (
                     <div className="login-page">
                       <div className="login-card">
-                        <h1>Login</h1>
-                        <p className="login-caption">Artifact-centered iteration demo</p>
+                        <h1>登录</h1>
+                        <p className="login-caption">Artifact-centered iteration 演示</p>
                         <input
                           className="input"
-                          placeholder="Email"
+                          placeholder="邮箱"
                           value={email}
                           onChange={(event) => setEmail(event.target.value)}
                         />
                         <input
                           className="input"
-                          placeholder="Verification Code"
+                          placeholder="验证码"
                           value={code}
                           onChange={(event) => setCode(event.target.value)}
                         />
@@ -866,7 +865,7 @@ public class OrchestratorService {
                           disabled={loading}
                           onClick={handleLogin}
                         >
-                          {loading ? "Loading..." : "Login"}
+                          {loading ? "登录中..." : "登录"}
                         </button>
                       </div>
                     </div>
@@ -877,19 +876,19 @@ public class OrchestratorService {
 
     private String staticReviewReportContent() {
         return """
-                Passed: true
+                通过：是
 
-                Issues:
-                - The page currently demonstrates UI flow only and does not call a real backend API
-                - Validation and error handling are still missing from the login form
+                问题：
+                - 当前页面只演示 UI 流程，尚未调用真实后端 API
+                - 登录表单仍缺少校验和错误处理
 
-                Suggestions:
-                - Add form validation for email format and empty verification code
-                - Connect the submit action to the generated API contract
-                - Add an error message state and success redirect behavior
+                建议：
+                - 增加邮箱格式和空验证码校验
+                - 将提交动作连接到生成的 API 契约
+                - 增加错误消息状态和成功跳转行为
 
-                Risk Level:
-                MEDIUM
+                风险等级：
+                中
                 """;
     }
 
@@ -898,26 +897,26 @@ public class OrchestratorService {
             Artifact revisedArtifact,
             String revisionInstruction) {
         return """
-                Passed: true
+                通过：是
 
-                Revision Instruction:
+                修改指令：
                 %s
 
-                Compared Versions:
-                - Original: %s v%s
-                - Revised: %s v%s
+                对比版本：
+                - 原始版本：%s v%s
+                - 修改后版本：%s v%s
 
-                Issues:
-                - The revised artifact is still a static demo and does not execute a real login request
-                - Visual polish, validation, and error messaging can be improved in a future iteration
+                问题：
+                - 修改后产物仍是静态 Demo，不会执行真实登录请求
+                - 视觉细节、校验和错误提示仍可在后续迭代中增强
 
-                Suggestions:
-                - Add disabled input styling while loading
-                - Add success and failure feedback after the loading state ends
-                - Preserve revision metadata so future iterations can show a full history chain
+                建议：
+                - loading 期间增加输入框禁用态样式
+                - loading 结束后补充成功和失败反馈
+                - 保留 revision 元数据，便于后续展示完整版本链路
 
-                Risk Level:
-                LOW
+                风险等级：
+                低
                 """.formatted(
                 revisionInstruction,
                 originalArtifact.getTitle(),

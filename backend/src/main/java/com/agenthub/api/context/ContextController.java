@@ -18,18 +18,18 @@ public class ContextController {
     }
 
     @GetMapping("/conversations/{conversationId}/context-snapshots")
-    public ApiResponse<?> listContextSnapshotsByConversation(@PathVariable String conversationId) {
+    public ApiResponse<?> listContextSnapshotsByConversation(@PathVariable("conversationId") String conversationId) {
         return ApiResponse.success(
                 contextApplicationService.listContextSnapshotsByConversation(conversationId));
     }
 
     @GetMapping("/task-runs/{taskRunId}/context-snapshots")
-    public ApiResponse<?> listContextSnapshotsByTaskRun(@PathVariable String taskRunId) {
+    public ApiResponse<?> listContextSnapshotsByTaskRun(@PathVariable("taskRunId") String taskRunId) {
         return ApiResponse.success(contextApplicationService.listContextSnapshotsByTaskRun(taskRunId));
     }
 
     @GetMapping("/task-runs/{taskRunId}/handoff-summaries")
-    public ApiResponse<?> listHandoffSummariesByTaskRun(@PathVariable String taskRunId) {
+    public ApiResponse<?> listHandoffSummariesByTaskRun(@PathVariable("taskRunId") String taskRunId) {
         return ApiResponse.success(contextApplicationService.listHandoffSummariesByTaskRun(taskRunId));
     }
 }

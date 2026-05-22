@@ -89,7 +89,7 @@ public class AgentAdapterApplicationService {
     }
 
     public record AvailableAdapterView(
-            String type,
+            String adapterType,
             String status,
             boolean enabled,
             boolean placeholder,

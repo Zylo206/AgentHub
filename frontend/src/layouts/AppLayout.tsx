@@ -7,7 +7,7 @@ export function AppLayout() {
         <div className="app-header__brand">
           <span className="app-header__title">AgentHub</span>
           <span className="app-header__subtitle">
-            IM-style multi-agent collaboration workspace
+            IM 式多 Agent 协作工作台
           </span>
         </div>
         <nav className="app-header__nav">
@@ -17,7 +17,7 @@ export function AppLayout() {
               `app-nav-link ${isActive ? "app-nav-link--active" : ""}`
             }
           >
-            Workspace
+            工作台
           </NavLink>
           <NavLink
             to="/agents"
@@ -25,7 +25,7 @@ export function AppLayout() {
               `app-nav-link ${isActive ? "app-nav-link--active" : ""}`
             }
           >
-            Agent Builder
+            Agent 构建器
           </NavLink>
         </nav>
       </header>

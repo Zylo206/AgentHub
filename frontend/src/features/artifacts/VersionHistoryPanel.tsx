@@ -1,5 +1,6 @@
 import type { Artifact } from "./artifactTypes";
 import { getVersionHistoryEntries } from "./artifactLineage";
+import { displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
 interface VersionHistoryPanelProps {
   artifacts: Artifact[];
@@ -16,10 +17,6 @@ export function VersionHistoryPanel({
 }: VersionHistoryPanelProps) {
   const entries = getVersionHistoryEntries(artifacts, selectedArtifact);
 
-  function normalizeStatus(status: string): string {
-    return status.toLowerCase().replace(/_/g, "-");
-  }
-
   if (!selectedArtifact) {
     return null;
   }
@@ -27,7 +24,7 @@ export function VersionHistoryPanel({
   return (
     <section className="version-history">
       <div className="artifact-detail-section__header">
-        <strong>Version History</strong>
+        <strong>版本历史</strong>
         <span>{selectedArtifact.title}</span>
       </div>
 
@@ -45,23 +42,23 @@ export function VersionHistoryPanel({
               <div className="version-history-item__row">
                 <div className="version-history-item__meta">
                   <strong>v{entry.artifact.version}</strong>
-                  <span>{entry.artifact.type}</span>
+                  <span>{displayArtifactType(entry.artifact.type)}</span>
                 </div>
-                <span className={`status-pill status-pill--${normalizeStatus(entry.artifact.status)}`}>
-                  {entry.artifact.status}
+                <span className={`status-pill status-pill--${normalizeStatusClass(entry.artifact.status)}`}>
+                  {displayStatus(entry.artifact.status)}
                 </span>
               </div>
               <div className="version-history-item__notes">
                 {entry.isRevision ? (
                   <>
-                    <span className="revision-badge">Revision</span>
-                    {entry.basedOnVersionLabel ? <span>Based on {entry.basedOnVersionLabel}</span> : null}
+                    <span className="revision-badge">二次修改</span>
+                    {entry.basedOnVersionLabel ? <span>基于 {entry.basedOnVersionLabel}</span> : null}
                     {entry.artifact.revisionInstruction ? (
-                      <p>Instruction: {entry.artifact.revisionInstruction}</p>
+                      <p>修改指令：{entry.artifact.revisionInstruction}</p>
                     ) : null}
                   </>
                 ) : (
-                  <span>Initial artifact</span>
+                  <span>初始产物</span>
                 )}
               </div>
             </button>

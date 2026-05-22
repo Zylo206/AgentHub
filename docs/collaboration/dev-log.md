@@ -574,3 +574,169 @@
 - 优先验证一个真实可用的 OpenAI Compatible 环境配置
 - 在此基础上补第二个主流平台的最小真实 / 半真实接入
 - 继续增强 OrchestratorService 的规则化 planning 与任务路由解释能力
+
+## Phase 19：Adapter 状态可视化与 OPENAI_COMPATIBLE 前端接入
+
+### 目标
+
+- 让已有 OPENAI_COMPATIBLE Adapter 从后端能力变成前端可见、可选择、可演示的产品能力
+
+### 主要变更
+
+- `getAdapters` API client
+- `AdapterDescriptor` 前端类型
+- Agent Builder preferred adapter 动态选项与状态展示
+- AgentList / selectedAgent banner adapter health 展示
+- `.env.example` / `README.md` 补充 OPENAI_COMPATIBLE 配置说明
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- 手动测试 `/agents` 和 `/workspace`
+
+### 静态 / Mock / Placeholder 部分
+
+- Codex / Claude Code / OpenCode 仍是 placeholder，未实现真实外部调用
+- OPENAI_COMPATIBLE 需要环境变量，未配置时 fallback
+- demo-task Artifact 仍是静态生成
+- 不代表完整主流 Agent 平台接入完成
+
+### 遗留问题
+
+- 真实 Codex / Claude Code / OpenCode 接入仍未完成
+- OPENAI_COMPATIBLE 仍非流式
+- 真实 Agent 产物尚未替代静态 Artifact
+
+### 下一步建议
+
+- 优先验证一个真实可用的 OPENAI_COMPATIBLE 环境
+- 再补第二个主流平台的最小真实 / 半真实接入
+- 继续增强 OrchestratorService 的规则化 planning 和路由解释能力
+
+## Phase 20：前端 UI/UX 产品级打磨
+
+### 目标
+
+- 提升 AgentHub 三栏 IM 工作台和 Agent Builder 的产品观感，为后续完整功能展示和答辩演示打基础
+
+### 主要变更
+
+- 重写 `global.css` 的全局视觉基调、导航、按钮、输入框和 Agent Builder 样式
+- 重写 `workspace.css` 的三栏布局、Sidebar、Message Stream、TaskRunPanel、ContextPanel、ArtifactPanel 和状态 badge 样式
+- Agent Builder 增加正式配置页布局、adapter 状态卡片和 agent preview 区域
+- 修正 Workspace 与 Artifact Revision 的默认演示文案，避免乱码影响演示
+- 保留 selectedAgent、@Agent、adapter health、fallback、Artifact Revision、Version History、Diff Summary 等现有功能链路
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动检查 `/workspace`
+- 手动检查 `/agents`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只做 UI 打磨，不改变 mock / placeholder / static demo 本质
+- Codex / Claude Code / OpenCode 仍是 placeholder，未实现真实外部调用
+- OPENAI_COMPATIBLE 仍依赖环境变量配置，未配置时会 fallback 到 Mock
+- demo-task Artifact 仍可能是静态生成
+
+### 遗留问题
+
+- 仍需继续补 Adapter 深度和第二个主流平台最小接入
+- 仍需 OrchestratorService 规则化增强
+- 仍需 Deploy Status Card
+- 仍需最终 Demo 视频和文档 V1.0
+
+### 下一步建议
+
+- 优先补静态 Deploy Status Card，提升 3 分钟演示完整度
+- 然后继续推进第二个主流 Agent 平台的最小真实 / 半真实接入
+- 最后做最终 Demo 视频脚本校准和文档 V1.0 收口
+
+## Phase 21：前端视觉设计升级与产品级 UI 打磨
+
+### 目标
+
+- 提升 AgentHub 前端产品感，让 Workspace、Agent Builder、Artifact Studio 更适合比赛展示
+
+### 主要变更
+
+- Workspace 三栏改为深色 IM Sidebar、浅色 Chat Workspace 和 Artifact Studio 检查器风格
+- Sidebar 中 Conversation / Agent item 更接近联系人列表，并压缩 Agent 标签展示密度
+- Message Stream、ChatInput、selectedAgent banner 和错误提示统一为现代 SaaS / IM 风格
+- TaskRunPanel 通过 CSS 升级为 timeline 视觉，强化 TaskStep、assigned Agent 和 Adapter fallback 层级
+- ContextPanel、ArtifactPanel、Version History、Diff Summary 统一卡片、badge、状态色和代码预览样式
+- Agent Builder 保留原业务流程，增强为表单 + sticky preview 的 Agent 配置台视觉
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动检查 `/workspace`
+- 手动检查 `/agents`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只改视觉，不改变 mock / placeholder / static demo 本质
+- Adapter 真实接入能力没有因 UI 打磨而变化
+- Codex / Claude Code / OpenCode 如未真实接入，仍然不是完整真实接入
+- demo-task Artifact 仍可能是静态生成
+
+### 遗留问题
+
+- 仍需补更完整 Adapter 接入
+- 仍需 Orchestrator 规则化增强
+- 仍需 Deploy Status Card
+- 仍需最终 Demo 视频脚本和文档 V1.0 收口
+
+### 下一步建议
+
+- 先做静态 Deploy Status Card，补齐 P2 加分项可视化入口
+- 再做 Demo 视频脚本与手动 smoke checklist 收敛
+- 最后按演示反馈微调 Artifact Studio 和 TaskRun timeline 的信息密度
+
+## Phase 22：Demo Checklist 补充与 CLI 探测型 Adapter
+
+### 目标
+
+- 补充完整 Demo 验收清单
+- 将 Codex / Claude Code / OpenCode 从纯 placeholder 推进为可配置、可探测、可 fallback 的半真实 Adapter
+
+### 主要变更
+
+- 重写 `docs/collaboration/demo-checklist.md`，覆盖 Workspace 主链路、Artifact Revision、Agent Builder、selectedAgent、文本 @Agent、Adapter fallback、Context / Handoff、AI 协作记录和仓库卫生
+- 新增 `CliAgentCommandRunner`，负责 CLI command availability detection、args-template 解析、ProcessBuilder 执行、stdout / stderr 捕获和 timeout 控制
+- 新增 `CliAgentAdapterSupport`，复用 Codex / Claude Code / OpenCode 的 CLI Adapter 行为
+- 升级 `CodexAgentAdapter`、`ClaudeCodeAgentAdapter`、`OpenCodeAgentAdapter` 为 CLI 探测型 Adapter
+- 补充 `application.yml`、`.env.example` 和 `README.md` 中的 CLI Adapter 配置说明
+- 补充 `.gitignore` 中的 `*.tsbuildinfo`，避免新的 TypeScript build cache 被误提交
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- 手动测试 `/api/adapters`
+- 手动测试 `POST /api/adapters/CODEX/execute`
+- 手动测试 `POST /api/adapters/CLAUDE_CODE/execute`
+- 手动测试 `POST /api/adapters/OPEN_CODE/execute`
+- 手动检查 `docs/collaboration/demo-checklist.md`
+
+### 静态 / Mock / Placeholder 部分
+
+- 这仍不是完整深度 Codex / Claude Code / OpenCode 接入
+- CLI 未配置、不可用、超时或执行失败时仍 fallback 到 MOCK
+- demo-task Artifact 仍是静态生成
+- 没有流式输出
+- demo-checklist 是验收文档，不代表自动化测试
+
+### 遗留问题
+
+- 真实平台深度 API / CLI 参数适配仍未完成
+- 真实 Agent 产物尚未替代静态 Artifact
+- 未实现流式执行状态
+- demo-checklist 仍需在提交前实际跑一遍
+
+### 下一步建议
+
+- 用一台真实安装 Codex / Claude Code / OpenCode CLI 的环境验证 args-template
+- 为至少一个 CLI Adapter 沉淀推荐 args-template 示例
+- 补一个静态 Deploy Status Card，增强最终 Demo 的发布闭环感

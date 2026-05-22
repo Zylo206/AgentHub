@@ -59,6 +59,6 @@ export function parseLeadingAgentMention(input: string, agents: Agent[]): Parsed
     matchedAgent: null,
     cleanedContent: input,
     rawMention,
-    error: `Unknown agent mention: ${rawMention}`
+    error: `未找到这个 Agent：${rawMention}`
   };
 }

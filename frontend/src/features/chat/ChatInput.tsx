@@ -31,16 +31,16 @@ export function ChatInput({
         {selectedAgent ? (
           <>
             <span className="chat-target-agent-token">@{selectedAgent.name}</span>
-            <span className="chat-input__hint">via {selectedAgent.preferredAdapterType || "MOCK"}</span>
+            <span className="chat-input__hint">通过 {selectedAgent.preferredAdapterType || "MOCK"}</span>
           </>
         ) : (
-          <span className="chat-input__hint">No target agent selected</span>
+          <span className="chat-input__hint">未选择目标 Agent</span>
         )}
       </div>
       <textarea
         className="chat-input__textarea"
         rows={4}
-        placeholder="Describe a multi-step task for AgentHub..."
+        placeholder="描述一个需要 AgentHub 协作完成的多步骤任务..."
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
@@ -48,10 +48,10 @@ export function ChatInput({
       <div className="chat-input__actions">
         <div className="chat-input__hint-group">
           <span className="chat-input__hint">
-            Use chat as the main entry, then trigger Demo Task for Orchestrator flow.
+            先通过聊天描述任务，再触发 Demo Task 查看 Orchestrator 流程。
           </span>
           <span className="chat-input__hint">
-            You can type @AgentName at the beginning of a message.
+            可以在消息开头输入 @AgentName 指定目标 Agent。
           </span>
         </div>
         <button
@@ -59,7 +59,7 @@ export function ChatInput({
           className="primary-button"
           disabled={disabled || sending || !value.trim()}
         >
-          {sending ? "Sending..." : "Send Message"}
+          {sending ? "发送中..." : "发送消息"}
         </button>
       </div>
     </form>

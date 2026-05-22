@@ -28,23 +28,23 @@ public class ArtifactController {
     }
 
     @GetMapping("/api/conversations/{conversationId}/artifacts")
-    public ApiResponse<?> listArtifactsByConversation(@PathVariable String conversationId) {
+    public ApiResponse<?> listArtifactsByConversation(@PathVariable("conversationId") String conversationId) {
         return ApiResponse.success(artifactApplicationService.listArtifactsByConversation(conversationId));
     }
 
     @GetMapping("/api/task-runs/{taskRunId}/artifacts")
-    public ApiResponse<?> listArtifactsByTaskRun(@PathVariable String taskRunId) {
+    public ApiResponse<?> listArtifactsByTaskRun(@PathVariable("taskRunId") String taskRunId) {
         return ApiResponse.success(artifactApplicationService.listArtifactsByTaskRun(taskRunId));
     }
 
     @GetMapping("/api/artifacts/{artifactId}")
-    public ApiResponse<?> getArtifact(@PathVariable String artifactId) {
+    public ApiResponse<?> getArtifact(@PathVariable("artifactId") String artifactId) {
         return ApiResponse.success(artifactApplicationService.getArtifact(artifactId));
     }
 
     @PostMapping("/api/artifacts/{artifactId}/demo-revision")
     public ApiResponse<?> createDemoRevision(
-            @PathVariable String artifactId,
+            @PathVariable("artifactId") String artifactId,
             @Valid @RequestBody CreateArtifactRevisionRequest request) {
         TaskApplicationService.ArtifactRevisionResult result = taskApplicationService.createDemoArtifactRevision(
                 request.conversationId(),

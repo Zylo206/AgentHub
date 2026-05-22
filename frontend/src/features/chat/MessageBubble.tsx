@@ -50,7 +50,7 @@ export function MessageBubble({
         </div>
         {message.senderType === "USER" && message.targetAgentId ? (
           <div className="message-target-agent">
-            <span>To:</span>
+            <span>发送给：</span>
             <span className="message-target-agent-name">@{targetAgentLabel || message.targetAgentId}</span>
           </div>
         ) : null}
@@ -64,7 +64,7 @@ export function MessageBubble({
                 className="artifact-link"
                 onClick={() => onSelectArtifact(artifactId)}
               >
-                Open {artifactId}
+                打开 {artifactId}
               </button>
             ))}
           </div>

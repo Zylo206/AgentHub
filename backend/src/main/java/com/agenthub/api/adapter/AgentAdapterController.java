@@ -31,7 +31,7 @@ public class AgentAdapterController {
 
     @PostMapping("/{adapterType}/execute")
     public ApiResponse<?> execute(
-            @PathVariable String adapterType,
+            @PathVariable("adapterType") String adapterType,
             @Valid @RequestBody ExecuteAdapterRequest request) {
         return ApiResponse.success(
                 agentAdapterApplicationService.execute(

@@ -36,7 +36,7 @@ public class ConversationController {
     }
 
     @GetMapping("/{conversationId}")
-    public ApiResponse<?> getConversation(@PathVariable String conversationId) {
+    public ApiResponse<?> getConversation(@PathVariable("conversationId") String conversationId) {
         return ApiResponse.success(conversationApplicationService.getConversation(conversationId));
     }
 }

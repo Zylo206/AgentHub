@@ -16,27 +16,27 @@ export function DiffSummaryPanel({ artifacts, artifact }: DiffSummaryPanelProps)
   return (
     <section className="diff-summary">
       <div className="artifact-detail-section__header">
-        <strong>Diff Summary</strong>
-        <span>{summary.isInitialVersion ? "Initial Version" : "Static Revision Summary"}</span>
+        <strong>Diff 摘要</strong>
+        <span>{summary.isInitialVersion ? "初始版本" : "静态 Revision 摘要"}</span>
       </div>
 
       <div className="diff-summary-section">
-        <span className="diff-summary-section__label">Revision Instruction</span>
-        <p>{summary.instruction || "This artifact is the initial version."}</p>
+        <span className="diff-summary-section__label">修改指令</span>
+        <p>{summary.instruction || "该产物是初始版本。"}</p>
       </div>
 
       <div className="diff-summary-section">
-        <span className="diff-summary-section__label">Based On</span>
-        <p>{summary.basedOnLabel || "No parent artifact."}</p>
+        <span className="diff-summary-section__label">基于版本</span>
+        <p>{summary.basedOnLabel || "没有父级产物。"}</p>
       </div>
 
       <div className="diff-summary-section">
-        <span className="diff-summary-section__label">Summary</span>
+        <span className="diff-summary-section__label">摘要</span>
         <p>{summary.summary}</p>
       </div>
 
       <div className="diff-summary-section">
-        <span className="diff-summary-section__label">Changed Items</span>
+        <span className="diff-summary-section__label">变更项</span>
         {summary.changedItems.length > 0 ? (
           <ul>
             {summary.changedItems.map((item) => (
@@ -44,12 +44,12 @@ export function DiffSummaryPanel({ artifacts, artifact }: DiffSummaryPanelProps)
             ))}
           </ul>
         ) : (
-          <p>No revision summary available.</p>
+          <p>暂无 revision 摘要。</p>
         )}
       </div>
 
       <div className="diff-summary-section">
-        <span className="diff-summary-section__label">Not Changed</span>
+        <span className="diff-summary-section__label">未变更</span>
         {summary.notChanged.length > 0 ? (
           <ul>
             {summary.notChanged.map((item) => (
@@ -57,12 +57,12 @@ export function DiffSummaryPanel({ artifacts, artifact }: DiffSummaryPanelProps)
             ))}
           </ul>
         ) : (
-          <p>No unchanged areas were recorded for this initial version.</p>
+          <p>初始版本暂无未变更记录。</p>
         )}
       </div>
 
       <div className="diff-summary-section">
-        <span className="diff-summary-section__label">Risk</span>
+        <span className="diff-summary-section__label">风险</span>
         <p>{summary.risk}</p>
       </div>
     </section>

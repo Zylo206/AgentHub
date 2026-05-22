@@ -290,3 +290,59 @@ User
 - 当前没有 MySQL、SSE、真实部署、多端同步
 - 当前文档与代码应始终以“已完成 / 静态 Demo / Placeholder / 未完成”明确区分
 - 若用于答辩或视频演示，建议严格遵循 `docs/demo-scenario.md` 中的主线，避免现场演示未完成功能
+
+## OPENAI_COMPATIBLE 配置说明
+
+当前仓库已包含一个可配置的 `OPENAI_COMPATIBLE` Adapter，用于最小真实 / 半真实模型接入探索。
+
+环境变量示例见：
+
+- [`.env.example`](E:/CodeProject2/AgentHub/.env.example)
+
+所需变量：
+
+```env
+AGENTHUB_OPENAI_BASE_URL=
+AGENTHUB_OPENAI_API_KEY=
+AGENTHUB_OPENAI_MODEL=
+```
+
+说明：
+
+- 不要提交真实 API key
+- 未配置时，前端会显示 `DISABLED` 或 `MISCONFIGURED`
+- 未配置或调用失败时，执行链路会 fallback 到 `MOCK`
+- 该 Adapter 是 OpenAI-compatible 模型调用入口，不代表 Codex / Claude Code / OpenCode 已完整真实接入
+## CLI Agent Adapter 配置说明
+
+当前 Codex / Claude Code / OpenCode 通过 CLI 探测型 Adapter 做半真实接入探索。
+
+配置示例见：
+
+- [`.env.example`](E:/CodeProject2/AgentHub/.env.example)
+
+相关变量：
+
+```env
+AGENTHUB_CODEX_ENABLED=false
+AGENTHUB_CODEX_COMMAND=codex
+AGENTHUB_CODEX_ARGS_TEMPLATE=
+
+AGENTHUB_CLAUDE_CODE_ENABLED=false
+AGENTHUB_CLAUDE_CODE_COMMAND=claude
+AGENTHUB_CLAUDE_CODE_ARGS_TEMPLATE=
+
+AGENTHUB_OPEN_CODE_ENABLED=false
+AGENTHUB_OPEN_CODE_COMMAND=opencode
+AGENTHUB_OPEN_CODE_ARGS_TEMPLATE=
+```
+
+说明：
+
+- 未启用时，Adapter 状态显示 `DISABLED`。
+- 启用但 `command` 不可用时，Adapter 状态显示 `MISCONFIGURED`。
+- `command` 可用但 `args-template` 为空时仍不能执行，会 fallback 到 `MOCK`。
+- `args-template` 支持 `{prompt}`、`{taskDescription}`、`{userInput}` 占位符。
+- 配置不完整、CLI 超时、退出码非 0 或执行失败时，执行链路会 fallback 到 `MOCK`。
+- 这是 CLI 探测型半真实接入，不代表 Codex / Claude Code / OpenCode 已完成深度平台集成。
+- 不要提交真实密钥或本机敏感路径。

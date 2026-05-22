@@ -3,6 +3,7 @@ import {
   createConversation,
   createDemoArtifactRevision,
   createDemoTask,
+  getAdapters,
   getAgents,
   getArtifact,
   getArtifactsByConversation,
@@ -15,7 +16,7 @@ import {
   sendMessage
 } from "../../api/agenthubApi";
 import { AgentList } from "../../features/agents/AgentList";
-import type { Agent } from "../../features/agents/agentTypes";
+import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
 import { ChatInput } from "../../features/chat/ChatInput";
@@ -28,9 +29,10 @@ import type { Conversation } from "../../features/conversations/conversationType
 import { ContextPanel } from "../../features/context/ContextPanel";
 import type { ContextSnapshot, HandoffSummary } from "../../features/context/contextTypes";
 import { getIdValue } from "../../utils/id";
+import { displayAgentRole, displayConversationType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import "../../styles/workspace.css";
 
-const DEMO_PROMPT =
+const PRODUCT_DEMO_PROMPT =
   "帮我生成一个 React 登录页面，要求支持邮箱登录和验证码登录，同时生成 README，最后检查代码质量并给出修改建议。";
 
 function getErrorMessage(error: unknown): string {
@@ -38,7 +40,7 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return "Unknown error";
+  return "未知错误";
 }
 
 function findTaskStep(taskRuns: TaskRun[], taskRunId: string | null, taskStepId: string | null): TaskStep | null {
@@ -52,6 +54,7 @@ function findTaskStep(taskRuns: TaskRun[], taskRunId: string | null, taskStepId:
 
 export function WorkspacePage() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [adapterDescriptors, setAdapterDescriptors] = useState<AdapterDescriptor[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -66,7 +69,7 @@ export function WorkspacePage() {
   const [selectedTaskRunId, setSelectedTaskRunId] = useState<string | null>(null);
   const [selectedTaskStepId, setSelectedTaskStepId] = useState<string | null>(null);
   const [showAllArtifacts, setShowAllArtifacts] = useState(true);
-  const [draftMessage, setDraftMessage] = useState(DEMO_PROMPT);
+  const [draftMessage, setDraftMessage] = useState(PRODUCT_DEMO_PROMPT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [loadingAgents, setLoadingAgents] = useState(false);
@@ -83,13 +86,10 @@ export function WorkspacePage() {
 
   const currentConversation =
     conversations.find((conversation) => getIdValue(conversation.id) === currentConversationId) ?? null;
-  const latestUserMessage =
-    [...messages].reverse().find((message) => message.senderType === "USER") ?? null;
+  const latestUserMessage = [...messages].reverse().find((message) => message.senderType === "USER") ?? null;
 
   const selectedTaskRun =
-    taskRuns.find((taskRun) => getIdValue(taskRun.id) === selectedTaskRunId) ??
-    taskRuns[taskRuns.length - 1] ??
-    null;
+    taskRuns.find((taskRun) => getIdValue(taskRun.id) === selectedTaskRunId) ?? taskRuns[taskRuns.length - 1] ?? null;
   const activeTaskSpec =
     taskSpecs.find((taskSpec) => getIdValue(taskSpec.id) === getIdValue(selectedTaskRun?.taskSpecId)) ??
     taskSpecs[taskSpecs.length - 1] ??
@@ -109,16 +109,30 @@ export function WorkspacePage() {
     return artifacts.filter((artifact) => highlightedArtifactIds.includes(getIdValue(artifact.id)));
   }, [artifacts, highlightedArtifactIds, selectedTaskStep, showAllArtifacts]);
 
+  const selectedAgentAdapterDescriptor = useMemo(() => {
+    if (!selectedAgent) {
+      return null;
+    }
+
+    const preferredAdapterType = selectedAgent.preferredAdapterType || "MOCK";
+    return adapterDescriptors.find((descriptor) => descriptor.adapterType === preferredAdapterType) ?? null;
+  }, [adapterDescriptors, selectedAgent]);
+
   const loadInitialData = useCallback(async () => {
     setErrorMessage(null);
     setLoadingAgents(true);
     setLoadingConversations(true);
 
     try {
-      const [agentData, conversationData] = await Promise.all([getAgents(), getConversations()]);
+      const [agentData, conversationData, adapterData] = await Promise.all([
+        getAgents(),
+        getConversations(),
+        getAdapters().catch(() => [])
+      ]);
       const firstConversationId = getIdValue(conversationData[0]?.id) || null;
 
       setAgents(agentData);
+      setAdapterDescriptors(adapterData);
       setSelectedAgent((previous) => {
         if (!previous) {
           return null;
@@ -158,9 +172,7 @@ export function WorkspacePage() {
       setShowAllArtifacts(true);
       setSelectedTaskStepId(null);
       setSelectedTaskRunId((previousId) => {
-        const previousExists = previousId
-          ? taskRunData.some((taskRun) => getIdValue(taskRun.id) === previousId)
-          : false;
+        const previousExists = previousId ? taskRunData.some((taskRun) => getIdValue(taskRun.id) === previousId) : false;
 
         return previousExists ? previousId : getIdValue(taskRunData[taskRunData.length - 1]?.id) || null;
       });
@@ -285,7 +297,7 @@ export function WorkspacePage() {
     setErrorMessage(null);
 
     try {
-      const conversation = await createConversation("Login Page Demo", "GROUP");
+      const conversation = await createConversation("登录页 Demo", "GROUP");
       const createdId = getIdValue(conversation.id);
 
       setConversations((previous) => {
@@ -312,16 +324,10 @@ export function WorkspacePage() {
     }
 
     const targetAgent = parsedMention.matchedAgent ?? selectedAgent;
-    const contentToSend = parsedMention.matchedAgent
-      ? parsedMention.cleanedContent.trim()
-      : draftMessage.trim();
+    const contentToSend = parsedMention.matchedAgent ? parsedMention.cleanedContent.trim() : draftMessage.trim();
 
     if (!contentToSend) {
-      setErrorMessage(
-        parsedMention.rawMention
-          ? `Please add message content after ${parsedMention.rawMention}.`
-          : "Please add message content before sending."
-      );
+      setErrorMessage(parsedMention.rawMention ? `请在 ${parsedMention.rawMention} 后补充消息内容。` : "请先输入消息内容。");
       return;
     }
 
@@ -329,11 +335,10 @@ export function WorkspacePage() {
     setErrorMessage(null);
 
     try {
-      await sendMessage(
-        currentConversationId,
-        contentToSend,
-        targetAgent ? getIdValue(targetAgent.id) : null
-      );
+      await sendMessage(currentConversationId, contentToSend, targetAgent ? getIdValue(targetAgent.id) : null);
+      if (parsedMention.matchedAgent) {
+        setSelectedAgent(parsedMention.matchedAgent);
+      }
       const refreshedMessages = await getMessages(currentConversationId);
       setMessages(refreshedMessages);
       setDraftMessage("");
@@ -346,7 +351,7 @@ export function WorkspacePage() {
 
   async function handleRunDemoTask() {
     if (!currentConversationId || !latestUserMessage) {
-      setErrorMessage("Please send a user message before running the demo task.");
+      setErrorMessage("请先发送一条用户消息，再运行 Demo Task。");
       return;
     }
 
@@ -375,7 +380,7 @@ export function WorkspacePage() {
 
   async function handleCreateArtifactRevision(artifactId: string, revisionInstruction: string) {
     if (!currentConversationId) {
-      setErrorMessage("Please create or select a conversation before revising an artifact.");
+      setErrorMessage("请先创建或选择一个会话，再修改产物。");
       return;
     }
 
@@ -383,11 +388,7 @@ export function WorkspacePage() {
     setErrorMessage(null);
 
     try {
-      const revisionResult = await createDemoArtifactRevision(
-        artifactId,
-        currentConversationId,
-        revisionInstruction
-      );
+      const revisionResult = await createDemoArtifactRevision(artifactId, currentConversationId, revisionInstruction);
       const createdTaskRunId = getIdValue(revisionResult.taskRun.id);
       const revisedArtifactId = getIdValue(revisionResult.revisedArtifact.id);
 
@@ -408,9 +409,7 @@ export function WorkspacePage() {
     setSelectedTaskStepId(getIdValue(step.id));
     setShowAllArtifacts(false);
 
-    const firstArtifactId = step.producedArtifactIds.length > 0
-      ? getIdValue(step.producedArtifactIds[0])
-      : null;
+    const firstArtifactId = step.producedArtifactIds.length > 0 ? getIdValue(step.producedArtifactIds[0]) : null;
 
     if (firstArtifactId) {
       setSelectedArtifactId(firstArtifactId);
@@ -427,22 +426,17 @@ export function WorkspacePage() {
         <div className="workspace-sidebar__header">
           <div className="workspace-brand">
             <h1>AgentHub</h1>
-            <p>Chat-first workspace for Orchestrator, TaskRun and Artifact collaboration.</p>
+            <p>面向 Orchestrator、TaskRun 和 Artifact 的 IM 式协作工作台。</p>
           </div>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={creatingConversation}
-            onClick={handleCreateDemoConversation}
-          >
-            {creatingConversation ? "Creating..." : "Create Demo Conversation"}
+          <button type="button" className="primary-button" disabled={creatingConversation} onClick={handleCreateDemoConversation}>
+            {creatingConversation ? "创建中..." : "创建 Demo 会话"}
           </button>
         </div>
 
         <div className="workspace-sidebar__body">
           <section className="workspace-section">
             <div className="section-header">
-              <h3>Conversations</h3>
+              <h3>会话</h3>
               <span>{conversations.length}</span>
             </div>
             <ConversationList
@@ -455,11 +449,12 @@ export function WorkspacePage() {
 
           <section className="workspace-section">
             <div className="section-header">
-              <h3>Agents</h3>
+              <h3>Agent 联系人</h3>
               <span>{agents.length}</span>
             </div>
             <AgentList
               agents={agents}
+              adapterDescriptors={adapterDescriptors}
               loading={loadingAgents}
               selectedAgentId={selectedAgent ? getIdValue(selectedAgent.id) : null}
               onSelectAgent={handleSelectAgent}
@@ -470,31 +465,27 @@ export function WorkspacePage() {
 
       <main className="workspace-main">
         <div className="workspace-main__header">
-          <h2>{currentConversation?.title || "No active conversation"}</h2>
+          <h2>{currentConversation?.title || "暂无活跃会话"}</h2>
           <p>
             {currentConversation
-              ? `${currentConversation.type} conversation / ${currentConversation.participantAgentIds.length} agents`
-              : "Create a demo conversation to start the AgentHub flow."}
+              ? `${displayConversationType(currentConversation.type)} / ${currentConversation.participantAgentIds.length} 个 Agent`
+              : "创建一个 Demo 会话后开始 AgentHub 流程。"}
           </p>
         </div>
 
         {errorMessage ? (
           <div className="workspace-error">
             <span>{errorMessage}</span>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setErrorMessage(null)}
-            >
-              Dismiss
+            <button type="button" className="secondary-button" onClick={() => setErrorMessage(null)}>
+              关闭
             </button>
           </div>
         ) : null}
 
         <div className="workspace-main__toolbar">
           <div className="section-header">
-            <h3>Message Stream</h3>
-            <span>{messages.length} messages</span>
+            <h3>消息流</h3>
+            <span>{messages.length} 条消息</span>
           </div>
           <button
             type="button"
@@ -502,7 +493,7 @@ export function WorkspacePage() {
             disabled={!currentConversationId || !latestUserMessage || runningDemoTask}
             onClick={handleRunDemoTask}
           >
-            {runningDemoTask ? "Running Demo Task..." : "Run Demo Task"}
+            {runningDemoTask ? "运行中..." : "运行 Demo Task"}
           </button>
         </div>
 
@@ -510,36 +501,35 @@ export function WorkspacePage() {
           {selectedAgent ? (
             <>
               <div>
-                <div className="selected-agent-name">Selected Agent: {selectedAgent.name}</div>
+                <div className="selected-agent-name">当前 Agent：{selectedAgent.name}</div>
                 <div className="selected-agent-adapter">
-                  Preferred Adapter: {selectedAgent.preferredAdapterType || "MOCK"} / Role: {selectedAgent.role}
+                  首选 Adapter：{selectedAgent.preferredAdapterType || "MOCK"} / 角色：{displayAgentRole(selectedAgent.role)}
                 </div>
+                {selectedAgentAdapterDescriptor ? (
+                  <div className="selected-agent-health">
+                    <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(selectedAgentAdapterDescriptor.status)}`}>
+                      Adapter 状态：{displayStatus(selectedAgentAdapterDescriptor.status)}
+                    </span>
+                    {selectedAgentAdapterDescriptor.status !== "AVAILABLE" ? (
+                      <span className="selected-agent-health__hint">不可用时会回退到 MOCK。</span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
-              <button
-                type="button"
-                className="secondary-button clear-selected-agent-button"
-                onClick={handleClearSelectedAgent}
-              >
-                Clear Selection
+              <button type="button" className="secondary-button clear-selected-agent-button" onClick={handleClearSelectedAgent}>
+                清除选择
               </button>
             </>
           ) : (
             <div>
-              <div className="selected-agent-name">No selected agent</div>
-              <div className="selected-agent-adapter">
-                Demo will use built-in agents if no selection is made.
-              </div>
+              <div className="selected-agent-name">未选择 Agent</div>
+              <div className="selected-agent-adapter">未选择时，Demo 会使用内置 Agent 流程。</div>
             </div>
           )}
         </div>
 
         <div className="workspace-main__content">
-          <MessageStream
-            messages={messages}
-            agents={agents}
-            loading={loadingMessages}
-            onSelectArtifact={setSelectedArtifactId}
-          />
+          <MessageStream messages={messages} agents={agents} loading={loadingMessages} onSelectArtifact={setSelectedArtifactId} />
           <TaskRunPanel
             agents={agents}
             artifacts={artifacts}

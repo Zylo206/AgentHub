@@ -12,11 +12,11 @@ interface MessageStreamProps {
 
 function resolveSenderLabel(message: Message, agents: Agent[]): string {
   if (message.senderType === "USER") {
-    return "You";
+    return "你";
   }
 
   if (message.senderType === "SYSTEM") {
-    return "System";
+    return "系统";
   }
 
   const matchedAgent = agents.find((agent) => getIdValue(agent.id) === message.senderId);
@@ -30,13 +30,13 @@ export function MessageStream({
   onSelectArtifact
 }: MessageStreamProps) {
   if (loading) {
-    return <div className="panel-empty">Loading messages...</div>;
+    return <div className="panel-empty">正在加载消息...</div>;
   }
 
   if (messages.length === 0) {
     return (
       <div className="panel-empty">
-        No messages yet. Send a prompt to start the AgentHub workflow.
+        暂无消息。发送一条任务描述后开始 AgentHub 工作流。
       </div>
     );
   }

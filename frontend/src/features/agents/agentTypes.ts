@@ -14,3 +14,13 @@ export interface Agent {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface AdapterDescriptor {
+  adapterType: string;
+  status: string;
+  enabled: boolean;
+  placeholder: boolean;
+  description: string;
+  failureReason?: string | null;
+  isDefault?: boolean;
+}

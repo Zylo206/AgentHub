@@ -1,5 +1,6 @@
 import type { Conversation } from "./conversationTypes";
 import { formatId, getIdValue } from "../../utils/id";
+import { displayConversationType } from "../../utils/displayLabels";
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -23,11 +24,11 @@ export function ConversationList({
   onSelect
 }: ConversationListProps) {
   if (loading) {
-    return <div className="panel-empty">Loading conversations...</div>;
+    return <div className="panel-empty">正在加载会话...</div>;
   }
 
   if (conversations.length === 0) {
-    return <div className="panel-empty">No conversation yet. Create a demo conversation to start.</div>;
+    return <div className="panel-empty">暂无会话。创建一个 Demo 会话后开始。</div>;
   }
 
   return (
@@ -45,10 +46,10 @@ export function ConversationList({
           >
             <div className="conversation-item__row">
               <strong>{conversation.title}</strong>
-              <span className="conversation-item__type">{conversation.type}</span>
+              <span className="conversation-item__type">{displayConversationType(conversation.type)}</span>
             </div>
             <div className="conversation-item__meta">
-              {conversation.participantAgentIds.length} agents
+              {conversation.participantAgentIds.length} 个 Agent
             </div>
             <div className="conversation-item__time">{formatDateTime(conversation.updatedAt)}</div>
           </button>

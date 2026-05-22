@@ -23,7 +23,7 @@ public class TaskController {
 
     @PostMapping("/conversations/{conversationId}/demo-task")
     public ApiResponse<?> createDemoTask(
-            @PathVariable String conversationId,
+            @PathVariable("conversationId") String conversationId,
             @Valid @RequestBody CreateDemoTaskRequest request) {
         return ApiResponse.success(
                 taskApplicationService.createDemoTaskFromMessage(
@@ -35,22 +35,22 @@ public class TaskController {
     }
 
     @GetMapping("/task-specs/{taskSpecId}")
-    public ApiResponse<?> getTaskSpec(@PathVariable String taskSpecId) {
+    public ApiResponse<?> getTaskSpec(@PathVariable("taskSpecId") String taskSpecId) {
         return ApiResponse.success(taskApplicationService.getTaskSpec(taskSpecId));
     }
 
     @GetMapping("/conversations/{conversationId}/task-specs")
-    public ApiResponse<?> listTaskSpecsByConversation(@PathVariable String conversationId) {
+    public ApiResponse<?> listTaskSpecsByConversation(@PathVariable("conversationId") String conversationId) {
         return ApiResponse.success(taskApplicationService.listTaskSpecsByConversation(conversationId));
     }
 
     @GetMapping("/task-runs/{taskRunId}")
-    public ApiResponse<?> getTaskRun(@PathVariable String taskRunId) {
+    public ApiResponse<?> getTaskRun(@PathVariable("taskRunId") String taskRunId) {
         return ApiResponse.success(taskApplicationService.getTaskRun(taskRunId));
     }
 
     @GetMapping("/conversations/{conversationId}/task-runs")
-    public ApiResponse<?> listTaskRunsByConversation(@PathVariable String conversationId) {
+    public ApiResponse<?> listTaskRunsByConversation(@PathVariable("conversationId") String conversationId) {
         return ApiResponse.success(taskApplicationService.listTaskRunsByConversation(conversationId));
     }
 }

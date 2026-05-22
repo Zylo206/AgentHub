@@ -23,7 +23,7 @@ public class MessageController {
 
     @PostMapping
     public ApiResponse<?> sendMessage(
-            @PathVariable String conversationId,
+            @PathVariable("conversationId") String conversationId,
             @Valid @RequestBody SendMessageRequest request) {
         return ApiResponse.success(
                 messageApplicationService.sendUserMessage(
@@ -34,7 +34,7 @@ public class MessageController {
     }
 
     @GetMapping
-    public ApiResponse<?> listMessages(@PathVariable String conversationId) {
+    public ApiResponse<?> listMessages(@PathVariable("conversationId") String conversationId) {
         return ApiResponse.success(messageApplicationService.listMessages(conversationId));
     }
 }

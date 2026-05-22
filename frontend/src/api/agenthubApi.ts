@@ -1,4 +1,4 @@
-import type { Agent } from "../features/agents/agentTypes";
+import type { AdapterDescriptor, Agent } from "../features/agents/agentTypes";
 import type { Artifact } from "../features/artifacts/artifactTypes";
 import type { Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
 import type { Conversation } from "../features/conversations/conversationTypes";
@@ -25,8 +25,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       }
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown network error";
-    throw new Error(`Request failed: ${message}`);
+    const message = error instanceof Error ? error.message : "未知网络错误";
+    throw new Error(`请求失败：${message}`);
   }
 
   let payload: ApiResponse<T> | null = null;
@@ -37,23 +37,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       payload = JSON.parse(text) as ApiResponse<T>;
     } catch {
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        throw new Error(`请求失败，状态码：${response.status}`);
       }
-      throw new Error("Invalid server response");
+      throw new Error("服务端响应格式无效");
     }
   }
 
   if (!response.ok) {
-    const message = payload?.message || `Request failed with status ${response.status}`;
+    const message = payload?.message || `请求失败，状态码：${response.status}`;
     throw new Error(message);
   }
 
   if (!payload) {
-    throw new Error("Empty server response");
+    throw new Error("服务端响应为空");
   }
 
   if (!payload.success) {
-    throw new Error(payload.message || payload.errorCode || "Unknown API error");
+    throw new Error(payload.message || payload.errorCode || "未知 API 错误");
   }
 
   return payload.data;
@@ -83,6 +83,10 @@ export function createAgent(requestBody: CreateAgentRequest): Promise<Agent> {
     method: "POST",
     body: JSON.stringify(requestBody)
   });
+}
+
+export function getAdapters(): Promise<AdapterDescriptor[]> {
+  return request<AdapterDescriptor[]>("/api/adapters");
 }
 
 export function createConversation(title: string, type: "SINGLE" | "GROUP"): Promise<Conversation> {
