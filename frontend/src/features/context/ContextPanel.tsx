@@ -1,10 +1,11 @@
 import type { TaskSpec } from "../chat/chatTypes";
-import type { ContextSnapshot, HandoffSummary } from "./contextTypes";
+import type { ContextSnapshot, HandoffSummary, PinnedContext } from "./contextTypes";
 import { formatId } from "../../utils/id";
 import { displayArtifactType, displayStatus } from "../../utils/displayLabels";
 
 interface ContextPanelProps {
   taskSpec: TaskSpec | null;
+  pinnedContexts: PinnedContext[];
   contextSnapshots: ContextSnapshot[];
   handoffSummaries: HandoffSummary[];
   loading: boolean;
@@ -18,8 +19,13 @@ function formatDateTime(value: string): string {
   return new Date(value).toLocaleString();
 }
 
+function formatPinnedSource(pinnedContext: PinnedContext): string {
+  return `${pinnedContext.sourceType || "MESSAGE"} · ${pinnedContext.sourceId}`;
+}
+
 export function ContextPanel({
   taskSpec,
+  pinnedContexts,
   contextSnapshots,
   handoffSummaries,
   loading
@@ -65,6 +71,28 @@ export function ContextPanel({
         </section>
       ) : null}
 
+      <section className="context-card context-card--pinned">
+        <div className="context-card__header">
+          <strong>手动固定上下文</strong>
+          <span>{pinnedContexts.length} 条</span>
+        </div>
+        {pinnedContexts.length === 0 ? (
+          <p className="context-card__summary">还没有固定消息。可以在消息气泡中点击“固定到 Context”，让下一次 Demo Task 使用这些长期上下文。</p>
+        ) : (
+          <div className="pinned-context-list">
+            {pinnedContexts.map((pinnedContext) => (
+              <article className="pinned-context-item" key={pinnedContext.id}>
+                <div className="pinned-context-item__meta">
+                  <span>{formatPinnedSource(pinnedContext)}</span>
+                  <span>{formatDateTime(pinnedContext.createdAt)}</span>
+                </div>
+                <p>{pinnedContext.content}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="context-section">
         <div className="section-header">
           <h3>上下文快照</h3>
@@ -87,11 +115,15 @@ export function ContextPanel({
                 </div>
                 <div className="context-list-block">
                   <span className="context-list-block__label">固定上下文</span>
-                  <ul>
-                    {snapshot.pinnedContextItems.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
+                  {snapshot.pinnedContextItems.length === 0 ? (
+                    <p className="context-card__summary">该 TaskRun 没有使用手动固定上下文。</p>
+                  ) : (
+                    <ul>
+                      {snapshot.pinnedContextItems.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </section>
             ))}

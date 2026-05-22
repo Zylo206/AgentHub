@@ -63,6 +63,128 @@ function getRevisionOrigin(artifacts: Artifact[], taskRun: TaskRun) {
   };
 }
 
+function getTaskSpecForRun(taskSpecs: TaskSpec[], taskRun: TaskRun): TaskSpec | null {
+  const taskSpecId = getIdValue(taskRun.taskSpecId);
+  return taskSpecs.find((taskSpec) => getIdValue(taskSpec.id) === taskSpecId) ?? null;
+}
+
+function getProducedArtifactsForRun(artifacts: Artifact[], taskRun: TaskRun): Artifact[] {
+  const producedArtifactIds = new Set(
+    taskRun.steps.flatMap((step) => step.producedArtifactIds.map((artifactId) => getIdValue(artifactId)))
+  );
+
+  return artifacts.filter((artifact) => producedArtifactIds.has(getIdValue(artifact.id)));
+}
+
+function countFallbackSteps(taskRun: TaskRun): number {
+  return taskRun.steps.filter((step) => {
+    const adapterDisplay = getAdapterDisplay(step);
+    return adapterDisplay.fallbackUsed || adapterDisplay.status === "FALLBACK_USED";
+  }).length;
+}
+
+function getStepAgentName(step: TaskStep, agentNameMap: Map<string | null, string>): string {
+  const assignedAgentId = getIdValue(step.assignedAgentId);
+  return agentNameMap.get(assignedAgentId) || step.assignedAgentName || assignedAgentId || "Agent";
+}
+
+function OrchestratorExplainPanel({
+  taskRun,
+  taskSpec,
+  producedArtifacts,
+  agentNameMap
+}: {
+  taskRun: TaskRun;
+  taskSpec: TaskSpec | null;
+  producedArtifacts: Artifact[];
+  agentNameMap: Map<string | null, string>;
+}) {
+  const fallbackCount = countFallbackSteps(taskRun);
+  const expectedArtifacts = taskSpec?.expectedArtifacts ?? [];
+  const requiredSkills = taskSpec?.requiredSkills ?? [];
+
+  return (
+    <section className="orchestrator-explain-panel" aria-label="Orchestrator 决策链">
+      <div className="orchestrator-explain-panel__header">
+        <div>
+          <strong>Orchestrator 决策链</strong>
+          <p>Planner / Router / Executor / Aggregator 的规则化执行说明</p>
+        </div>
+        <span className="orchestrator-mode-pill">规则化 Planner</span>
+      </div>
+
+      <div className="orchestrator-stage-grid">
+        <article className="orchestrator-stage-card">
+          <span className="orchestrator-stage-card__label">Planner</span>
+          <strong>拆解任务</strong>
+          <p>{taskRun.taskPlan?.goal || taskSpec?.userGoal || "基于用户消息生成 Demo Task 计划。"}</p>
+          <div className="orchestrator-stage-card__meta">
+            <span>{taskRun.steps.length} 个 TaskStep</span>
+            <span>{expectedArtifacts.length || producedArtifacts.length} 类预期产物</span>
+          </div>
+          {requiredSkills.length > 0 ? (
+            <div className="orchestrator-chip-row">
+              {requiredSkills.map((skill) => (
+                <span className="orchestrator-chip" key={skill}>{skill}</span>
+              ))}
+            </div>
+          ) : null}
+        </article>
+
+        <article className="orchestrator-stage-card">
+          <span className="orchestrator-stage-card__label">Router</span>
+          <strong>路由 Agent</strong>
+          <div className="orchestrator-route-list">
+            {taskRun.steps.map((step) => {
+              const adapterDisplay = getAdapterDisplay(step);
+              return (
+                <div className="orchestrator-route-item" key={formatId(step.id)}>
+                  <span>Step {step.stepOrder}</span>
+                  <strong>{getStepAgentName(step, agentNameMap)}</strong>
+                  <em>{adapterDisplay.preferred || "MOCK"}</em>
+                </div>
+              );
+            })}
+          </div>
+        </article>
+
+        <article className="orchestrator-stage-card">
+          <span className="orchestrator-stage-card__label">Executor</span>
+          <strong>执行与 fallback</strong>
+          <p>记录每个 Step 的 preferred / actual Adapter、执行状态和错误信息。</p>
+          <div className="orchestrator-stage-card__meta">
+            <span>{taskRun.steps.length} 个 Step 已执行</span>
+            <span>{fallbackCount} 个 fallback</span>
+          </div>
+          <div className="orchestrator-chip-row">
+            {taskRun.steps.map((step) => {
+              const adapterDisplay = getAdapterDisplay(step);
+              return (
+                <span
+                  className={`orchestrator-chip ${adapterDisplay.fallbackUsed ? "orchestrator-chip--warning" : ""}`}
+                  key={formatId(step.id)}
+                >
+                  Step {step.stepOrder}: {adapterDisplay.actual || "未记录"}
+                </span>
+              );
+            })}
+          </div>
+        </article>
+
+        <article className="orchestrator-stage-card">
+          <span className="orchestrator-stage-card__label">Aggregator</span>
+          <strong>聚合结果</strong>
+          <p>{taskRun.resultSummary}</p>
+          <div className="orchestrator-stage-card__meta">
+            <span>{producedArtifacts.length} 个产物</span>
+            <span>{displayStatus(taskRun.status)}</span>
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 export function TaskRunPanel({
   agents,
   artifacts,
@@ -113,6 +235,8 @@ export function TaskRunPanel({
         {taskRuns.map((taskRun) => {
           const isActiveRun = selectedTaskRunId === getIdValue(taskRun.id);
           const revisionOrigin = getRevisionOrigin(artifacts, taskRun);
+          const activeTaskSpec = getTaskSpecForRun(taskSpecs, taskRun);
+          const producedArtifacts = getProducedArtifactsForRun(artifacts, taskRun);
 
           return (
             <section
@@ -131,6 +255,12 @@ export function TaskRunPanel({
               <div className="task-run-card__goal">
                 {taskRun.taskPlan?.goal || "暂无任务计划目标。"}
               </div>
+              <OrchestratorExplainPanel
+                taskRun={taskRun}
+                taskSpec={activeTaskSpec}
+                producedArtifacts={producedArtifacts}
+                agentNameMap={agentNameMap}
+              />
               {revisionOrigin ? (
                 <div className="revision-origin task-run-card__revision">
                   <strong>产物修改任务</strong>

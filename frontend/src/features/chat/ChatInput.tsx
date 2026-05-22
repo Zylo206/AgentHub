@@ -1,12 +1,16 @@
 import { FormEvent } from "react";
 import type { Agent } from "../agents/agentTypes";
+import type { Message } from "./chatTypes";
+import { formatId } from "../../utils/id";
 
 interface ChatInputProps {
   value: string;
   disabled: boolean;
   sending: boolean;
   selectedAgent?: Agent | null;
+  quotedMessage?: Message | null;
   onChange: (value: string) => void;
+  onClearQuote?: () => void;
   onSend: () => void;
 }
 
@@ -15,7 +19,9 @@ export function ChatInput({
   disabled,
   sending,
   selectedAgent,
+  quotedMessage,
   onChange,
+  onClearQuote,
   onSend
 }: ChatInputProps) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -37,6 +43,18 @@ export function ChatInput({
           <span className="chat-input__hint">未选择目标 Agent</span>
         )}
       </div>
+      {quotedMessage ? (
+        <div className="chat-quote-preview">
+          <div>
+            <strong>引用消息</strong>
+            <p>{quotedMessage.content}</p>
+            <span>{formatId(quotedMessage.id)}</span>
+          </div>
+          <button type="button" className="ghost-button" onClick={onClearQuote}>
+            取消引用
+          </button>
+        </div>
+      ) : null}
       <textarea
         className="chat-input__textarea"
         rows={4}

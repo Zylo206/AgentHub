@@ -66,6 +66,14 @@ public class MessageApplicationService {
     }
 
     public Message appendAgentMessage(String conversationId, String agentId, String content) {
+        return appendAgentMessage(conversationId, agentId, content, List.of());
+    }
+
+    public Message appendAgentMessage(
+            String conversationId,
+            String agentId,
+            String content,
+            List<ArtifactId> artifactIds) {
         Message message = new Message(
                 new MessageId(idGenerator.nextId("msg")),
                 new ConversationId(conversationId),
@@ -73,7 +81,7 @@ public class MessageApplicationService {
                 agentId,
                 MessageType.TEXT,
                 content,
-                List.of(),
+                artifactIds == null ? List.of() : artifactIds,
                 timeProvider.now());
         return messageRepository.save(message);
     }

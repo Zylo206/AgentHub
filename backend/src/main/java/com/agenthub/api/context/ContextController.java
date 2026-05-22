@@ -2,8 +2,10 @@ package com.agenthub.api.context;
 
 import com.agenthub.application.context.ContextApplicationService;
 import com.agenthub.common.ApiResponse;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,6 +28,27 @@ public class ContextController {
     @GetMapping("/task-runs/{taskRunId}/context-snapshots")
     public ApiResponse<?> listContextSnapshotsByTaskRun(@PathVariable("taskRunId") String taskRunId) {
         return ApiResponse.success(contextApplicationService.listContextSnapshotsByTaskRun(taskRunId));
+    }
+
+    @GetMapping("/conversations/{conversationId}/pinned-contexts")
+    public ApiResponse<?> listPinnedContextsByConversation(@PathVariable("conversationId") String conversationId) {
+        return ApiResponse.success(contextApplicationService.listPinnedContextsByConversation(conversationId));
+    }
+
+    @PostMapping("/conversations/{conversationId}/messages/{messageId}/pin")
+    public ApiResponse<?> pinMessage(
+            @PathVariable("conversationId") String conversationId,
+            @PathVariable("messageId") String messageId) {
+        return ApiResponse.success(
+                contextApplicationService.pinMessage(conversationId, messageId),
+                "Message pinned as context");
+    }
+
+    @DeleteMapping("/pinned-contexts/{pinnedContextId}")
+    public ApiResponse<?> unpinContext(@PathVariable("pinnedContextId") String pinnedContextId) {
+        return ApiResponse.success(
+                contextApplicationService.unpinContext(pinnedContextId),
+                "Pinned context removed");
     }
 
     @GetMapping("/task-runs/{taskRunId}/handoff-summaries")

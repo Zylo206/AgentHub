@@ -10,8 +10,10 @@ import com.agenthub.domain.conversation.ConversationRepository;
 import com.agenthub.domain.conversation.ConversationType;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -56,5 +58,26 @@ public class ConversationApplicationService {
     public Conversation getConversation(String conversationId) {
         return conversationRepository.findById(new ConversationId(conversationId))
                 .orElseThrow(() -> new NoSuchElementException("Conversation not found: " + conversationId));
+    }
+
+    public Conversation addParticipantAgents(String conversationId, List<String> agentIds) {
+        Conversation conversation = getConversation(conversationId);
+        Set<String> participantIds = new LinkedHashSet<>();
+        conversation.getParticipantAgentIds().forEach(agentId -> participantIds.add(agentId.value()));
+        if (agentIds != null) {
+            agentIds.stream()
+                    .filter(agentId -> agentId != null && !agentId.isBlank())
+                    .map(String::trim)
+                    .forEach(participantIds::add);
+        }
+
+        Conversation updatedConversation = new Conversation(
+                conversation.getId(),
+                conversation.getTitle(),
+                conversation.getType(),
+                participantIds.stream().map(AgentId::new).toList(),
+                conversation.getCreatedAt(),
+                timeProvider.now());
+        return conversationRepository.save(updatedConversation);
     }
 }

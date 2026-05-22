@@ -2,7 +2,7 @@ import type { AdapterDescriptor, Agent } from "../features/agents/agentTypes";
 import type { Artifact } from "../features/artifacts/artifactTypes";
 import type { Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
 import type { Conversation } from "../features/conversations/conversationTypes";
-import type { ContextSnapshot, HandoffSummary } from "../features/context/contextTypes";
+import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../features/context/contextTypes";
 import type { DeploymentRecord } from "../features/deployments/deploymentTypes";
 
 interface ApiResponse<T> {
@@ -150,6 +150,22 @@ export function getContextSnapshotsByConversation(conversationId: string): Promi
 
 export function getContextSnapshotsByTaskRun(taskRunId: string): Promise<ContextSnapshot[]> {
   return request<ContextSnapshot[]>(`/api/task-runs/${taskRunId}/context-snapshots`);
+}
+
+export function getPinnedContextsByConversation(conversationId: string): Promise<PinnedContext[]> {
+  return request<PinnedContext[]>(`/api/conversations/${conversationId}/pinned-contexts`);
+}
+
+export function pinMessageAsContext(conversationId: string, messageId: string): Promise<PinnedContext> {
+  return request<PinnedContext>(`/api/conversations/${conversationId}/messages/${messageId}/pin`, {
+    method: "POST"
+  });
+}
+
+export function unpinContext(pinnedContextId: string): Promise<PinnedContext> {
+  return request<PinnedContext>(`/api/pinned-contexts/${pinnedContextId}`, {
+    method: "DELETE"
+  });
 }
 
 export function getHandoffSummariesByTaskRun(taskRunId: string): Promise<HandoffSummary[]> {

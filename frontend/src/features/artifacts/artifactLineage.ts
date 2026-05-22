@@ -9,6 +9,21 @@ export interface VersionHistoryEntry {
   isRevision: boolean;
 }
 
+export interface LineDiffStats {
+  added: number;
+  removed: number;
+  unchanged: number;
+  changed: number;
+  total: number;
+}
+
+export interface LineDiffEntry {
+  operation: "added" | "removed" | "context";
+  oldLineNumber: number | null;
+  newLineNumber: number | null;
+  content: string;
+}
+
 export interface DiffSummary {
   instruction: string | null;
   basedOnLabel: string | null;
@@ -17,6 +32,9 @@ export interface DiffSummary {
   notChanged: string[];
   risk: string;
   isInitialVersion: boolean;
+  hasRealLineDiff: boolean;
+  lineDiffStats: LineDiffStats;
+  lineDiffEntries: LineDiffEntry[];
 }
 
 function toTimestamp(value: string): number {
@@ -143,37 +161,150 @@ export function buildDiffSummary(artifacts: Artifact[], artifact: Artifact): Dif
   const parentArtifact = resolveParentArtifact(artifacts, artifact);
   const instruction = artifact.revisionInstruction?.trim() || null;
   const basedOnLabel = parentArtifact ? `${parentArtifact.title} v${parentArtifact.version}` : null;
+  const emptyLineDiffStats: LineDiffStats = {
+    added: 0,
+    removed: 0,
+    unchanged: 0,
+    changed: 0,
+    total: 0
+  };
 
-  if (!instruction) {
+  if (!instruction || !parentArtifact) {
     return {
-      instruction: null,
+      instruction,
       basedOnLabel,
-      summary: "这是初始版本，暂无 revision 摘要。",
+      summary: instruction
+        ? "该 revision 缺少可对比的父级 Artifact，暂时只能展示 revision 元数据。"
+        : "这是初始版本，暂无可对比的父级 Artifact。",
       changedItems: [],
       notChanged: [],
-      risk: "这是静态 Demo 产物，尚未执行真实 diff 分析。",
-      isInitialVersion: true
+      risk: "未找到父级 Artifact 时无法执行真实行级 diff。",
+      isInitialVersion: !instruction,
+      hasRealLineDiff: false,
+      lineDiffStats: emptyLineDiffStats,
+      lineDiffEntries: []
     };
   }
 
-  const normalizedInstruction = instruction.toLowerCase();
-  const mentionsBlue = instruction.includes("蓝") || normalizedInstruction.includes("blue");
-  const mentionsLoading =
-    normalizedInstruction.includes("loading") || instruction.includes("加载") || instruction.includes("等待");
-
-  const changedItems = [
-    mentionsBlue ? "按钮样式已调整为蓝色。" : "主操作样式已更新。",
-    mentionsLoading ? "增加 loading 状态，避免重复提交。" : "主操作交互状态已更新。",
-    mentionsLoading ? "加载过程中按钮文案会变化。" : "产物文案已根据修改指令调整。"
-  ];
+  const lineDiffEntries = buildLineDiffEntries(parentArtifact.content || "", artifact.content || "");
+  const lineDiffStats = summarizeLineDiff(lineDiffEntries);
+  const hasRealLineDiff = lineDiffStats.added > 0 || lineDiffStats.removed > 0;
+  const changedItems = hasRealLineDiff
+    ? [
+        `新增 ${lineDiffStats.added} 行。`,
+        `删除 ${lineDiffStats.removed} 行。`,
+        `估算修改块 ${lineDiffStats.changed} 处。`
+      ]
+    : ["未检测到内容行变化。"];
+  const notChanged = lineDiffStats.unchanged > 0
+    ? [`保留 ${lineDiffStats.unchanged} 行未变化。`]
+    : [];
 
   return {
     instruction,
     basedOnLabel,
-    summary: "这是一次基于上一版产物和用户追问指令的静态 Artifact-centered iteration。",
+    summary: hasRealLineDiff
+      ? `已基于 ${basedOnLabel} 和当前 v${artifact.version} 内容执行轻量行级 diff。`
+      : `已对比 ${basedOnLabel} 和当前 v${artifact.version}，未发现内容行变化。`,
     changedItems,
-    notChanged: ["邮箱输入框保持不变。", "验证码输入框保持不变。", "组件结构保持轻量，便于预览。"],
-    risk: "这是静态 Demo revision，不是由真实代码分析生成。",
-    isInitialVersion: false
+    notChanged,
+    risk: "当前是前端轻量行级 diff，不做语义级代码理解、AST diff 或冲突合并。",
+    isInitialVersion: false,
+    hasRealLineDiff,
+    lineDiffStats,
+    lineDiffEntries
+  };
+}
+
+function splitLines(content: string): string[] {
+  if (!content) {
+    return [];
+  }
+
+  return content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+}
+
+function buildLineDiffEntries(previousContent: string, nextContent: string): LineDiffEntry[] {
+  const previousLines = splitLines(previousContent);
+  const nextLines = splitLines(nextContent);
+  const table = Array.from({ length: previousLines.length + 1 }, () =>
+    Array.from({ length: nextLines.length + 1 }, () => 0)
+  );
+
+  for (let previousIndex = previousLines.length - 1; previousIndex >= 0; previousIndex -= 1) {
+    for (let nextIndex = nextLines.length - 1; nextIndex >= 0; nextIndex -= 1) {
+      table[previousIndex][nextIndex] = previousLines[previousIndex] === nextLines[nextIndex]
+        ? table[previousIndex + 1][nextIndex + 1] + 1
+        : Math.max(table[previousIndex + 1][nextIndex], table[previousIndex][nextIndex + 1]);
+    }
+  }
+
+  const entries: LineDiffEntry[] = [];
+  let previousIndex = 0;
+  let nextIndex = 0;
+
+  while (previousIndex < previousLines.length && nextIndex < nextLines.length) {
+    if (previousLines[previousIndex] === nextLines[nextIndex]) {
+      entries.push({
+        operation: "context",
+        oldLineNumber: previousIndex + 1,
+        newLineNumber: nextIndex + 1,
+        content: previousLines[previousIndex]
+      });
+      previousIndex += 1;
+      nextIndex += 1;
+    } else if (table[previousIndex + 1][nextIndex] >= table[previousIndex][nextIndex + 1]) {
+      entries.push({
+        operation: "removed",
+        oldLineNumber: previousIndex + 1,
+        newLineNumber: null,
+        content: previousLines[previousIndex]
+      });
+      previousIndex += 1;
+    } else {
+      entries.push({
+        operation: "added",
+        oldLineNumber: null,
+        newLineNumber: nextIndex + 1,
+        content: nextLines[nextIndex]
+      });
+      nextIndex += 1;
+    }
+  }
+
+  while (previousIndex < previousLines.length) {
+    entries.push({
+      operation: "removed",
+      oldLineNumber: previousIndex + 1,
+      newLineNumber: null,
+      content: previousLines[previousIndex]
+    });
+    previousIndex += 1;
+  }
+
+  while (nextIndex < nextLines.length) {
+    entries.push({
+      operation: "added",
+      oldLineNumber: null,
+      newLineNumber: nextIndex + 1,
+      content: nextLines[nextIndex]
+    });
+    nextIndex += 1;
+  }
+
+  return entries;
+}
+
+function summarizeLineDiff(entries: LineDiffEntry[]): LineDiffStats {
+  const added = entries.filter((entry) => entry.operation === "added").length;
+  const removed = entries.filter((entry) => entry.operation === "removed").length;
+  const unchanged = entries.filter((entry) => entry.operation === "context").length;
+
+  return {
+    added,
+    removed,
+    unchanged,
+    changed: Math.min(added, removed),
+    total: entries.length
   };
 }

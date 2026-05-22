@@ -15,6 +15,16 @@ public interface ContextRepository {
 
     List<ContextSnapshot> findContextSnapshotsByTaskRunId(TaskRunId taskRunId);
 
+    PinnedContext savePinnedContext(PinnedContext pinnedContext);
+
+    Optional<PinnedContext> findPinnedContextById(String pinnedContextId);
+
+    Optional<PinnedContext> findPinnedContextBySource(ConversationId conversationId, String sourceType, String sourceId);
+
+    List<PinnedContext> findPinnedContextsByConversationId(ConversationId conversationId);
+
+    void deletePinnedContext(String pinnedContextId);
+
     HandoffSummary saveHandoffSummary(HandoffSummary summary);
 
     List<HandoffSummary> findHandoffSummariesByTaskRunId(TaskRunId taskRunId);

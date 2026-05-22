@@ -29,6 +29,53 @@ interface ArtifactPanelProps {
 
 const PRODUCT_REVISION_INSTRUCTION = "把主按钮改成蓝色，并增加 loading 状态。";
 
+function getArtifactFileExtension(artifact: Artifact): string {
+  const language = (artifact.language || "").toLowerCase();
+
+  if (["tsx", "ts", "jsx", "js", "css", "html"].includes(language)) {
+    return language;
+  }
+  if (language === "md" || artifact.type === "MARKDOWN" || artifact.type === "REVIEW_REPORT") {
+    return "md";
+  }
+  if (language === "json" || artifact.type === "API_CONTRACT" || artifact.type === "DATA_MODEL") {
+    return "json";
+  }
+  if (artifact.type === "WEB_PREVIEW") {
+    return "html";
+  }
+
+  return "txt";
+}
+
+function getArtifactMimeType(artifact: Artifact): string {
+  const extension = getArtifactFileExtension(artifact);
+
+  if (extension === "html") {
+    return "text/html;charset=utf-8";
+  }
+  if (extension === "json") {
+    return "application/json;charset=utf-8";
+  }
+  if (extension === "md") {
+    return "text/markdown;charset=utf-8";
+  }
+
+  return "text/plain;charset=utf-8";
+}
+
+function getSafeArtifactFileName(artifact: Artifact): string {
+  const baseName = artifact.title
+    .trim()
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "artifact";
+
+  return `${baseName}-v${artifact.version}.${getArtifactFileExtension(artifact)}`;
+}
+
 function renderArtifactContent(artifact: Artifact) {
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
     return (
@@ -66,12 +113,14 @@ export function ArtifactPanel({
   onCreateDeployment
 }: ArtifactPanelProps) {
   const [revisionInstruction, setRevisionInstruction] = useState(PRODUCT_REVISION_INSTRUCTION);
+  const [artifactOperationMessage, setArtifactOperationMessage] = useState<string | null>(null);
   const versionEntries = getVersionHistoryEntries(allArtifacts, selectedArtifact);
   const selectedVersionEntry =
     versionEntries.find((entry) => entry.artifactId === selectedArtifactId) ?? null;
 
   useEffect(() => {
     setRevisionInstruction(selectedArtifact?.revisionInstruction || PRODUCT_REVISION_INSTRUCTION);
+    setArtifactOperationMessage(null);
   }, [selectedArtifact]);
 
   async function handleCreateRevision() {
@@ -90,16 +139,55 @@ export function ArtifactPanel({
     await onCreateDeployment(selectedArtifactId);
   }
 
+  async function copyTextToClipboard(text: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  }
+
   async function handleCopyPreviewUrl(previewUrl: string) {
     try {
-      if (!navigator.clipboard) {
-        throw new Error("Clipboard API is not available.");
-      }
-
-      await navigator.clipboard.writeText(previewUrl);
+      await copyTextToClipboard(previewUrl);
+      setArtifactOperationMessage("Preview URL 已复制。");
     } catch (error) {
       console.warn("Failed to copy preview URL.", error);
+      setArtifactOperationMessage("Preview URL 复制失败，请手动复制。");
     }
+  }
+
+  async function handleCopyArtifactContent(artifact: Artifact) {
+    try {
+      await copyTextToClipboard(artifact.content || "");
+      setArtifactOperationMessage("Artifact 内容已复制。");
+    } catch (error) {
+      console.warn("Failed to copy artifact content.", error);
+      setArtifactOperationMessage("Artifact 内容复制失败，请手动复制。");
+    }
+  }
+
+  function handleDownloadArtifact(artifact: Artifact) {
+    const blob = new Blob([artifact.content || ""], { type: getArtifactMimeType(artifact) });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = getSafeArtifactFileName(artifact);
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    setArtifactOperationMessage(`已生成下载文件：${anchor.download}`);
   }
 
   return (
@@ -172,6 +260,29 @@ export function ArtifactPanel({
                 <span>{formatId(selectedArtifact.id)}</span>
                 <span>{selectedArtifact.language || "plain"}</span>
               </div>
+            </div>
+            <div className="artifact-preview__actions">
+              <button
+                type="button"
+                className="secondary-button artifact-preview__action-button"
+                disabled={!selectedArtifact.content}
+                onClick={() => {
+                  void handleCopyArtifactContent(selectedArtifact);
+                }}
+              >
+                复制内容
+              </button>
+              <button
+                type="button"
+                className="secondary-button artifact-preview__action-button"
+                disabled={!selectedArtifact.content}
+                onClick={() => handleDownloadArtifact(selectedArtifact)}
+              >
+                下载文件
+              </button>
+              {artifactOperationMessage ? (
+                <span className="artifact-preview__operation-message">{artifactOperationMessage}</span>
+              ) : null}
             </div>
             <div className="artifact-revision-box">
               <div className="artifact-revision-box__header">

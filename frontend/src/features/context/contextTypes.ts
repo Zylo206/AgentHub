@@ -11,6 +11,15 @@ export interface ContextSnapshot {
   createdAt: string;
 }
 
+export interface PinnedContext {
+  id: string;
+  conversationId: IdValue;
+  content: string;
+  sourceType: string;
+  sourceId: string;
+  createdAt: string;
+}
+
 export interface HandoffSummary {
   id: string;
   taskRunId: IdValue;

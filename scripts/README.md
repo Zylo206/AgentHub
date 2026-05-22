@@ -9,10 +9,16 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - backend health
 - adapter list
 - conversation creation
+- conversation participants
 - message creation
+- manual message pin as context
 - demo task run
+- task input context / ContextSnapshot pinned context
+- message-based demo task rerun
+- group chat Agent messages
 - task run query
 - artifact query
+- conditional Adapter Output artifact check when a non-MOCK adapter succeeds
 - artifact revision
 - demo deployment
 - preview URL reachability

@@ -4,6 +4,7 @@ import com.agenthub.domain.context.ContextRepository;
 import com.agenthub.domain.context.ContextSnapshot;
 import com.agenthub.domain.context.ContextSnapshotId;
 import com.agenthub.domain.context.HandoffSummary;
+import com.agenthub.domain.context.PinnedContext;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.task.TaskRunId;
 import java.util.Comparator;
@@ -17,6 +18,7 @@ public class InMemoryContextRepository implements ContextRepository {
 
     private final ConcurrentHashMap<String, ContextSnapshot> contextSnapshotStorage = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, HandoffSummary> handoffSummaryStorage = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, PinnedContext> pinnedContextStorage = new ConcurrentHashMap<>();
 
     @Override
     public ContextSnapshot saveContextSnapshot(ContextSnapshot snapshot) {
@@ -43,6 +45,42 @@ public class InMemoryContextRepository implements ContextRepository {
                 .filter(snapshot -> snapshot.getTaskRunId().equals(taskRunId))
                 .sorted(Comparator.comparing(ContextSnapshot::getCreatedAt))
                 .toList();
+    }
+
+    @Override
+    public PinnedContext savePinnedContext(PinnedContext pinnedContext) {
+        pinnedContextStorage.put(pinnedContext.getId(), pinnedContext);
+        return pinnedContext;
+    }
+
+    @Override
+    public Optional<PinnedContext> findPinnedContextById(String pinnedContextId) {
+        return Optional.ofNullable(pinnedContextStorage.get(pinnedContextId));
+    }
+
+    @Override
+    public Optional<PinnedContext> findPinnedContextBySource(
+            ConversationId conversationId,
+            String sourceType,
+            String sourceId) {
+        return pinnedContextStorage.values().stream()
+                .filter(pinnedContext -> pinnedContext.getConversationId().equals(conversationId))
+                .filter(pinnedContext -> pinnedContext.getSourceType().equals(sourceType))
+                .filter(pinnedContext -> pinnedContext.getSourceId().equals(sourceId))
+                .findFirst();
+    }
+
+    @Override
+    public List<PinnedContext> findPinnedContextsByConversationId(ConversationId conversationId) {
+        return pinnedContextStorage.values().stream()
+                .filter(pinnedContext -> pinnedContext.getConversationId().equals(conversationId))
+                .sorted(Comparator.comparing(PinnedContext::getCreatedAt))
+                .toList();
+    }
+
+    @Override
+    public void deletePinnedContext(String pinnedContextId) {
+        pinnedContextStorage.remove(pinnedContextId);
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.agenthub.application.orchestrator;
 
 import com.agenthub.application.agent.AgentApplicationService;
 import com.agenthub.application.agent.AgentExecutorService;
+import com.agenthub.application.conversation.ConversationApplicationService;
 import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.application.task.TaskApplicationService;
 import com.agenthub.common.IdGenerator;
@@ -18,6 +19,7 @@ import com.agenthub.domain.context.ContextRepository;
 import com.agenthub.domain.context.ContextSnapshot;
 import com.agenthub.domain.context.ContextSnapshotId;
 import com.agenthub.domain.context.HandoffSummary;
+import com.agenthub.domain.context.PinnedContext;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.message.Message;
 import com.agenthub.domain.message.MessageId;
@@ -37,6 +39,7 @@ import com.agenthub.infrastructure.adapter.AgentAdapterType;
 import com.agenthub.infrastructure.adapter.AgentRequest;
 import com.agenthub.infrastructure.adapter.AgentResponse;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -49,6 +52,7 @@ public class OrchestratorService {
     private final ArtifactRepository artifactRepository;
     private final ContextRepository contextRepository;
     private final MessageApplicationService messageApplicationService;
+    private final ConversationApplicationService conversationApplicationService;
     private final AgentApplicationService agentApplicationService;
     private final AgentExecutorService agentExecutorService;
     private final AgentRoutingService agentRoutingService;
@@ -64,6 +68,7 @@ public class OrchestratorService {
             ArtifactRepository artifactRepository,
             ContextRepository contextRepository,
             MessageApplicationService messageApplicationService,
+            ConversationApplicationService conversationApplicationService,
             AgentApplicationService agentApplicationService,
             AgentExecutorService agentExecutorService,
             AgentRoutingService agentRoutingService,
@@ -77,6 +82,7 @@ public class OrchestratorService {
         this.artifactRepository = artifactRepository;
         this.contextRepository = contextRepository;
         this.messageApplicationService = messageApplicationService;
+        this.conversationApplicationService = conversationApplicationService;
         this.agentApplicationService = agentApplicationService;
         this.agentExecutorService = agentExecutorService;
         this.agentRoutingService = agentRoutingService;
@@ -104,6 +110,9 @@ public class OrchestratorService {
         if (!sourceMessage.getConversationId().equals(conversationRef)) {
             throw new IllegalArgumentException("Source message does not belong to the provided conversation.");
         }
+        List<PinnedContext> pinnedContexts = contextRepository.findPinnedContextsByConversationId(conversationRef);
+        List<String> pinnedContextItems = buildPinnedContextItems(pinnedContexts);
+        String pinnedInputContext = buildPinnedInputContext(pinnedContextItems);
 
         SelectedAgentResolution selectedAgentResolution = resolveSelectedAgent(selectedAgentId, sourceMessage);
         Agent selectedAgent = selectedAgentResolution.agent();
@@ -115,6 +124,13 @@ public class OrchestratorService {
         AgentRouter.RoutedAgent frontendRoute = agentRouter.route(frontendStepPlan, selectedAgent);
         AgentRouter.RoutedAgent backendRoute = agentRouter.route(backendStepPlan, selectedAgent);
         AgentRouter.RoutedAgent reviewRoute = agentRouter.route(reviewStepPlan, selectedAgent);
+        conversationApplicationService.addParticipantAgents(
+                conversationId,
+                List.of(
+                        BuiltInAgentIds.ORCHESTRATOR,
+                        frontendRoute.agentId(),
+                        backendRoute.agentId(),
+                        reviewRoute.agentId()));
         AgentAdapterType selectedAgentPreferredAdapter = selectedAgent == null
                 ? agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.FRONTEND_BUILDER,
@@ -206,10 +222,11 @@ public class OrchestratorService {
                 selectedAgent == null
                         ? "生成 React 登录页面和初始 README 草案。"
                         : "由用户选择的 Agent 执行前端产物生成。",
-                selectedAgent == null
+                (selectedAgent == null
                         ? "Task Spec 要求生成双模式登录页，并支持以 Artifact 为中心的迭代。"
                         : "Task Spec 要求生成双模式登录页，并支持以 Artifact 为中心的迭代。"
-                                + buildSelectedAgentInputContext(selectedAgent, selectedAgentResolution),
+                                + buildSelectedAgentInputContext(selectedAgent, selectedAgentResolution))
+                        + pinnedInputContext,
                 "已为工作台生成 LoginPage.tsx 和 README.md。",
                 List.of(
                         "TaskSpec：React 登录页 Demo",
@@ -270,7 +287,7 @@ public class OrchestratorService {
                 "生成登录页、说明文档、API 契约和评审产物。",
                 List.of(frontendStep, backendStep, reviewStep));
         List<TaskStep> demoSteps = List.of(frontendStep, backendStep, reviewStep);
-        List<Artifact> demoArtifacts = List.of(codeArtifact, readmeArtifact, apiContractArtifact, reviewArtifact);
+        List<Artifact> demoArtifacts = artifactRepository.findByTaskRunId(taskRunId);
         String resultSummary = resultAggregator.summarizeDemoTask(
                 taskSpec,
                 orchestratorPlan,
@@ -297,18 +314,14 @@ public class OrchestratorService {
                 new ContextSnapshotId(idGenerator.nextId("ctx")),
                 conversationRef,
                 taskRunId,
-                List.of(sourceMessageId),
-                List.of(
-                        codeArtifact.getId(),
-                        readmeArtifact.getId(),
-                        apiContractArtifact.getId(),
-                        reviewArtifact.getId()),
-                List.of(
+                buildIncludedMessageIds(sourceMessageId, pinnedContexts),
+                artifactIdsOf(demoArtifacts),
+                mergePinnedContextItems(List.of(
                         "Demo 目标：生成 React 登录页、README 和评审报告",
                         "已启用以 Artifact 为中心的迭代",
                         "Reviewer 必须基于验收标准完成闭环检查",
                         selectedAgentResolution.sourceDescription(),
-                        selectedAgentSummary),
+                        selectedAgentSummary), pinnedContextItems),
                 "该快照包含原始用户请求、生成的 Task Spec、三个 TaskStep，以及 LoginPage.tsx、README.md、login-api-contract.json 和评审报告产物。"
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary,
@@ -359,6 +372,20 @@ public class OrchestratorService {
         contextRepository.saveHandoffSummary(frontendToBackend);
         contextRepository.saveHandoffSummary(backendToReviewer);
 
+        appendDemoGroupChatMessages(
+                conversationId,
+                selectedAgent == null ? BuiltInAgentIds.FRONTEND_BUILDER : selectedAgent.getId().value(),
+                selectedAgent == null ? "Frontend Builder" : selectedAgent.getName(),
+                selectedAgentResolution.sourceDescription(),
+                selectedAgentSummary,
+                frontendStep,
+                backendStep,
+                reviewStep,
+                codeArtifact,
+                readmeArtifact,
+                apiContractArtifact,
+                reviewArtifact);
+
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.TASK_SPEC,
@@ -367,7 +394,7 @@ public class OrchestratorService {
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.TASK_STATUS,
-                "TaskRun 已完成：3 个 TaskStep，4 个产物。",
+                "TaskRun 已完成：3 个 TaskStep，" + demoArtifacts.size() + " 个产物。",
                 List.of());
         messageApplicationService.appendSystemMessage(
                 conversationId,
@@ -389,6 +416,10 @@ public class OrchestratorService {
                 MessageType.ARTIFACT_CARD,
                 "已创建产物：评审报告",
                 List.of(reviewArtifact.getId()));
+        appendAdapterOutputArtifactMessages(
+                conversationId,
+                demoArtifacts,
+                List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId()));
 
         return taskRun;
     }
@@ -686,6 +717,152 @@ public class OrchestratorService {
                 .filter(step -> step.stepOrder() == stepOrder)
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Orchestrator step plan not found: " + stepOrder));
+    }
+
+    private void appendDemoGroupChatMessages(
+            String conversationId,
+            String frontendAgentId,
+            String frontendAgentName,
+            String selectedAgentSource,
+            String selectedAgentSummary,
+            TaskStep frontendStep,
+            TaskStep backendStep,
+            TaskStep reviewStep,
+            Artifact codeArtifact,
+            Artifact readmeArtifact,
+            Artifact apiContractArtifact,
+            Artifact reviewArtifact) {
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                BuiltInAgentIds.ORCHESTRATOR,
+                "群聊协作已启动：Orchestrator 已将用户目标拆成 3 个 Agent Step，并按 Frontend -> Backend -> Reviewer 顺序协调执行。"
+                        + " 关联 TaskStep：步骤 1 / 2 / 3。"
+                        + " " + selectedAgentSource);
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                frontendAgentId,
+                "TaskStep 1 / Frontend："
+                        + frontendAgentName
+                        + " 已完成前端产物生成。assignedAgentId="
+                        + frontendStep.getAssignedAgentId().value()
+                        + "。产出："
+                        + artifactTitle(codeArtifact)
+                        + "、"
+                        + artifactTitle(readmeArtifact)
+                        + "。"
+                        + buildAdapterSummary(frontendStep),
+                List.of(codeArtifact.getId(), readmeArtifact.getId()));
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                BuiltInAgentIds.BACKEND_WORKER,
+                "TaskStep 2 / Backend：Backend Worker 已根据前端页面字段补齐登录 API 契约。assignedAgentId="
+                        + backendStep.getAssignedAgentId().value()
+                        + "。产出："
+                        + artifactTitle(apiContractArtifact)
+                        + "。"
+                        + buildAdapterSummary(backendStep),
+                List.of(apiContractArtifact.getId()));
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                BuiltInAgentIds.REVIEWER,
+                "TaskStep 3 / Reviewer：Reviewer 已完成质量检查和验收建议。assignedAgentId="
+                        + reviewStep.getAssignedAgentId().value()
+                        + "。产出："
+                        + artifactTitle(reviewArtifact)
+                        + "。"
+                        + buildAdapterSummary(reviewStep),
+                List.of(reviewArtifact.getId()));
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                BuiltInAgentIds.ORCHESTRATOR,
+                "群聊协作汇总：Orchestrator 已聚合 Frontend / Backend / Reviewer 产出，当前 TaskRun 生成 4 个核心 Artifact。"
+                        + " selectedAgentContext="
+                        + selectedAgentSummary
+                        + " fallbackSummary="
+                        + buildFallbackSummary(List.of(frontendStep, backendStep, reviewStep))
+                        + "。");
+    }
+
+    private String buildAdapterSummary(TaskStep step) {
+        return " Adapter：preferred=" + step.getPreferredAdapterType()
+                + "，actual=" + step.getActualAdapterType()
+                + "，status=" + step.getAdapterStatus()
+                + (isFallbackStep(step) ? "，fallbackUsed=true" : "")
+                + "。";
+    }
+
+    private String buildFallbackSummary(List<TaskStep> steps) {
+        long fallbackCount = steps.stream().filter(this::isFallbackStep).count();
+        if (fallbackCount == 0) {
+            return "no fallback";
+        }
+
+        return fallbackCount + " step(s) used fallback";
+    }
+
+    private boolean isFallbackStep(TaskStep step) {
+        return "FALLBACK_USED".equals(step.getAdapterStatus());
+    }
+
+    private String artifactTitle(Artifact artifact) {
+        return artifact.getTitle() + "(" + artifact.getId().value() + ")";
+    }
+
+    private List<String> buildPinnedContextItems(List<PinnedContext> pinnedContexts) {
+        return pinnedContexts.stream()
+                .map(pinnedContext -> "Pinned context from message "
+                        + pinnedContext.getSourceId()
+                        + ": "
+                        + pinnedContext.getContent())
+                .toList();
+    }
+
+    private List<MessageId> buildIncludedMessageIds(MessageId sourceMessageId, List<PinnedContext> pinnedContexts) {
+        List<MessageId> includedMessageIds = new ArrayList<>();
+        includedMessageIds.add(sourceMessageId);
+        pinnedContexts.stream()
+                .filter(pinnedContext -> "MESSAGE".equals(pinnedContext.getSourceType()))
+                .map(PinnedContext::getSourceId)
+                .filter(sourceId -> sourceId != null && !sourceId.isBlank())
+                .map(MessageId::new)
+                .filter(messageId -> !includedMessageIds.contains(messageId))
+                .forEach(includedMessageIds::add);
+        return includedMessageIds;
+    }
+
+    private String buildPinnedInputContext(List<String> pinnedContextItems) {
+        if (pinnedContextItems.isEmpty()) {
+            return "";
+        }
+
+        return " User pinned context for this run: " + String.join(" | ", pinnedContextItems);
+    }
+
+    private List<String> mergePinnedContextItems(List<String> baseItems, List<String> pinnedContextItems) {
+        List<String> mergedItems = new ArrayList<>(baseItems);
+        mergedItems.addAll(pinnedContextItems);
+        return mergedItems;
+    }
+
+    private List<ArtifactId> artifactIdsOf(List<Artifact> artifacts) {
+        return artifacts.stream().map(Artifact::getId).toList();
+    }
+
+    private void appendAdapterOutputArtifactMessages(
+            String conversationId,
+            List<Artifact> artifacts,
+            List<ArtifactId> staticArtifactIds) {
+        artifacts.stream()
+                .filter(artifact -> !containsArtifactId(staticArtifactIds, artifact.getId()))
+                .forEach(artifact -> messageApplicationService.appendSystemMessage(
+                        conversationId,
+                        MessageType.ARTIFACT_CARD,
+                        "已创建 Adapter 输出产物：" + artifact.getTitle(),
+                        List.of(artifact.getId())));
+    }
+
+    private boolean containsArtifactId(List<ArtifactId> artifactIds, ArtifactId targetArtifactId) {
+        return artifactIds.stream().anyMatch(artifactId -> artifactId.equals(targetArtifactId));
     }
 
     private SelectedAgentResolution resolveSelectedAgent(String explicitSelectedAgentId, Message sourceMessage) {

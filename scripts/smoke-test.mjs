@@ -73,6 +73,33 @@ function requireValue(value, message) {
   return value;
 }
 
+function getParticipantIds(conversation) {
+  const participantAgentIds = Array.isArray(conversation?.participantAgentIds)
+    ? conversation.participantAgentIds
+    : [];
+
+  return participantAgentIds.map(getIdValue).filter(Boolean);
+}
+
+function assertBuiltInParticipants(conversation, label) {
+  const participantIds = getParticipantIds(conversation);
+  const requiredParticipants = [
+    "agent_orchestrator",
+    "agent_frontend_builder",
+    "agent_backend_worker",
+    "agent_reviewer"
+  ];
+  const missingParticipants = requiredParticipants.filter((participantId) => !participantIds.includes(participantId));
+
+  if (missingParticipants.length > 0) {
+    throw new Error(
+      `${label} missing required participants: ${missingParticipants.join(", ")}. actual=${participantIds.join(", ")}`
+    );
+  }
+
+  return participantIds;
+}
+
 function resolvePreviewUrl(previewUrl) {
   const value = requireValue(previewUrl, "deployment previewUrl missing");
   try {
@@ -142,6 +169,9 @@ async function runSmokeTest() {
   const conversationId = requireValue(getIdValue(conversation.id), "conversationId missing");
   pass(`conversation created: ${conversationId}`);
 
+  const initialParticipantIds = assertBuiltInParticipants(conversation, "created conversation");
+  pass(`conversation participants initialized: ${initialParticipantIds.join(", ")}`);
+
   const message = await request(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
     body: JSON.stringify({
@@ -150,6 +180,18 @@ async function runSmokeTest() {
   });
   const messageId = requireValue(getIdValue(message.id), "messageId missing");
   pass(`message sent: ${messageId}`);
+
+  const pinnedContext = await request(`/api/conversations/${conversationId}/messages/${messageId}/pin`, {
+    method: "POST"
+  });
+  const pinnedContextId = requireValue(pinnedContext.id, "pinnedContextId missing");
+  pass(`message pinned as context: ${pinnedContextId}`);
+
+  const pinnedContexts = await request(`/api/conversations/${conversationId}/pinned-contexts`);
+  if (!Array.isArray(pinnedContexts) || !pinnedContexts.some((item) => item.sourceId === messageId)) {
+    throw new Error("pinned message context not found");
+  }
+  pass(`pinned contexts loaded: ${pinnedContexts.length}`);
 
   const taskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
     method: "POST",
@@ -166,7 +208,43 @@ async function runSmokeTest() {
   if (steps.length < 3) {
     throw new Error(`demo task expected at least 3 steps, got ${steps.length}`);
   }
+  if (!String(steps[0]?.inputContext || "").includes("Pinned context")) {
+    throw new Error("first task step inputContext did not reference pinned context");
+  }
   pass(`demo task completed: ${taskRunId}, steps=${steps.length}`);
+
+  const rerunTaskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
+    method: "POST",
+    body: JSON.stringify({
+      messageId,
+      userInput: DEMO_PROMPT
+    })
+  });
+  const rerunTaskRunId = requireValue(getIdValue(rerunTaskRun.id), "rerun taskRunId missing");
+  const rerunSteps = Array.isArray(rerunTaskRun.steps) ? rerunTaskRun.steps : [];
+  if (rerunTaskRun.status !== "COMPLETED") {
+    throw new Error(`message rerun task status expected COMPLETED, got ${rerunTaskRun.status}`);
+  }
+  if (rerunSteps.length < 3) {
+    throw new Error(`message rerun task expected at least 3 steps, got ${rerunSteps.length}`);
+  }
+  pass(`message rerun demo task completed: ${rerunTaskRunId}, steps=${rerunSteps.length}`);
+
+  const refreshedConversation = await request(`/api/conversations/${conversationId}`);
+  const refreshedParticipantIds = assertBuiltInParticipants(refreshedConversation, "refreshed conversation");
+  pass(`conversation participants loaded: ${refreshedParticipantIds.length}`);
+
+  const contextSnapshots = await request(`/api/task-runs/${taskRunId}/context-snapshots`);
+  const hasPinnedSnapshotItem = Array.isArray(contextSnapshots) && contextSnapshots.some((snapshot) =>
+    (Array.isArray(snapshot.pinnedContextItems) &&
+      snapshot.pinnedContextItems.some((item) => String(item).includes(messageId))) ||
+    (Array.isArray(snapshot.includedMessageIds) &&
+      snapshot.includedMessageIds.some((item) => getIdValue(item) === messageId))
+  );
+  if (!hasPinnedSnapshotItem) {
+    throw new Error("context snapshot did not include pinned message context");
+  }
+  pass(`context snapshots include pinned context: ${contextSnapshots.length}`);
 
   const taskRuns = await request(`/api/conversations/${conversationId}/task-runs`);
   if (!Array.isArray(taskRuns) || taskRuns.length < 1) {
@@ -184,6 +262,19 @@ async function runSmokeTest() {
   }
   const artifactId = requireValue(getIdValue(artifact.id), "artifactId missing");
   pass(`artifacts loaded: ${artifacts.length}, selected=${artifact.title || artifactId}`);
+
+  const realAdapterSteps = steps.filter(
+    (step) => step.actualAdapterType && step.actualAdapterType !== "MOCK" && step.adapterStatus === "COMPLETED"
+  );
+  const adapterOutputArtifacts = artifacts.filter((item) => String(item.title || "").startsWith("Adapter Output -"));
+  if (realAdapterSteps.length > 0 && adapterOutputArtifacts.length < realAdapterSteps.length) {
+    throw new Error(
+      `expected adapter output artifacts for real adapter steps. realAdapterSteps=${realAdapterSteps.length}, adapterOutputArtifacts=${adapterOutputArtifacts.length}`
+    );
+  }
+  if (adapterOutputArtifacts.length > 0) {
+    pass(`adapter output artifacts loaded: ${adapterOutputArtifacts.length}`);
+  }
 
   const revision = await request(`/api/artifacts/${artifactId}/demo-revision`, {
     method: "POST",
@@ -234,7 +325,34 @@ async function runSmokeTest() {
   if (!hasDeployMessage) {
     throw new Error("deployment status message not found in message list");
   }
+  const agentMessages = messages.filter((item) => item.senderType === "AGENT");
+  const requiredAgentSenders = [
+    "agent_orchestrator",
+    "agent_frontend_builder",
+    "agent_backend_worker",
+    "agent_reviewer"
+  ];
+  const missingAgentSenders = requiredAgentSenders.filter(
+    (senderId) => !agentMessages.some((item) => item.senderId === senderId)
+  );
+  const orchestratorMessages = agentMessages.filter((item) => item.senderId === "agent_orchestrator");
+  const hasOrchestratorSummary = orchestratorMessages.some((item) =>
+    String(item.content || "").includes("群聊协作汇总")
+  );
+  const taskStepAgentMessages = agentMessages.filter((item) => String(item.content || "").includes("TaskStep"));
+  if (
+    agentMessages.length < 5 ||
+    missingAgentSenders.length > 0 ||
+    orchestratorMessages.length < 2 ||
+    !hasOrchestratorSummary ||
+    taskStepAgentMessages.length < 3
+  ) {
+    throw new Error(
+      `expected group chat agent messages from Orchestrator and 3 TaskSteps, got agentMessages=${agentMessages.length}, taskStepMessages=${taskStepAgentMessages.length}, missing=${missingAgentSenders.join(",") || "none"}, orchestratorMessages=${orchestratorMessages.length}, hasSummary=${hasOrchestratorSummary}`
+    );
+  }
   pass(`messages loaded: ${messages.length}`);
+  pass(`group chat agent messages loaded: ${agentMessages.length}, orchestrator=${orchestratorMessages.length}, taskStep=${taskStepAgentMessages.length}`);
 
   console.log("Smoke test completed successfully.");
 }

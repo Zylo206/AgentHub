@@ -9,13 +9,17 @@ import {
   getArtifact,
   getArtifactsByConversation,
   getContextSnapshotsByTaskRun,
+  getConversation,
   getConversations,
   getDeploymentsByConversation,
   getHandoffSummariesByTaskRun,
   getMessages,
+  getPinnedContextsByConversation,
   getTaskRunsByConversation,
   getTaskSpecsByConversation,
-  sendMessage
+  pinMessageAsContext,
+  sendMessage,
+  unpinContext
 } from "../../api/agenthubApi";
 import { AgentList } from "../../features/agents/AgentList";
 import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
@@ -29,7 +33,7 @@ import type { Message, TaskRun, TaskSpec, TaskStep } from "../../features/chat/c
 import { ConversationList } from "../../features/conversations/ConversationList";
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import { ContextPanel } from "../../features/context/ContextPanel";
-import type { ContextSnapshot, HandoffSummary } from "../../features/context/contextTypes";
+import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../../features/context/contextTypes";
 import type { DeploymentRecord } from "../../features/deployments/deploymentTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayConversationType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
@@ -65,6 +69,7 @@ export function WorkspacePage() {
   const [taskRuns, setTaskRuns] = useState<TaskRun[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
+  const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
   const [contextSnapshots, setContextSnapshots] = useState<ContextSnapshot[]>([]);
   const [handoffSummaries, setHandoffSummaries] = useState<HandoffSummary[]>([]);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
@@ -75,6 +80,8 @@ export function WorkspacePage() {
   const [showAllArtifacts, setShowAllArtifacts] = useState(true);
   const [draftMessage, setDraftMessage] = useState(PRODUCT_DEMO_PROMPT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [operationMessage, setOperationMessage] = useState<string | null>(null);
+  const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
 
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(false);
@@ -86,12 +93,28 @@ export function WorkspacePage() {
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [runningDemoTask, setRunningDemoTask] = useState(false);
+  const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [revisingArtifact, setRevisingArtifact] = useState(false);
   const [deployingArtifact, setDeployingArtifact] = useState(false);
 
   const currentConversation =
     conversations.find((conversation) => getIdValue(conversation.id) === currentConversationId) ?? null;
   const latestUserMessage = [...messages].reverse().find((message) => message.senderType === "USER") ?? null;
+  const currentParticipantAgents = useMemo(() => {
+    if (!currentConversation) {
+      return [];
+    }
+
+    return (currentConversation.participantAgentIds ?? []).map((participantAgentId) => {
+      const participantId = getIdValue(participantAgentId);
+      const agent = agents.find((item) => getIdValue(item.id) === participantId);
+      return {
+        id: participantId,
+        name: agent?.name || participantId,
+        role: agent?.role || "AGENT"
+      };
+    });
+  }, [agents, currentConversation]);
 
   const selectedTaskRun =
     taskRuns.find((taskRun) => getIdValue(taskRun.id) === selectedTaskRunId) ?? taskRuns[taskRuns.length - 1] ?? null;
@@ -167,12 +190,13 @@ export function WorkspacePage() {
     setLoadingArtifacts(true);
 
     try {
-      const [messageData, taskSpecData, taskRunData, artifactData, deploymentData] = await Promise.all([
+      const [messageData, taskSpecData, taskRunData, artifactData, deploymentData, pinnedContextData] = await Promise.all([
         getMessages(conversationId),
         getTaskSpecsByConversation(conversationId),
         getTaskRunsByConversation(conversationId),
         getArtifactsByConversation(conversationId),
-        getDeploymentsByConversation(conversationId)
+        getDeploymentsByConversation(conversationId),
+        getPinnedContextsByConversation(conversationId)
       ]);
 
       setMessages(messageData);
@@ -180,6 +204,7 @@ export function WorkspacePage() {
       setTaskRuns(taskRunData);
       setArtifacts(artifactData);
       setDeployments(deploymentData);
+      setPinnedContexts(pinnedContextData);
       setShowAllArtifacts(true);
       setSelectedTaskStepId(null);
       setSelectedTaskRunId((previousId) => {
@@ -226,6 +251,7 @@ export function WorkspacePage() {
       setTaskRuns([]);
       setArtifacts([]);
       setDeployments([]);
+      setPinnedContexts([]);
       setContextSnapshots([]);
       setHandoffSummaries([]);
       setSelectedArtifactId(null);
@@ -343,21 +369,126 @@ export function WorkspacePage() {
       return;
     }
 
+    const finalContentToSend = quotedMessage
+      ? `引用消息（${quotedMessage.senderType} · ${getIdValue(quotedMessage.id)}）：\n${quotedMessage.content}\n\n${contentToSend}`
+      : contentToSend;
+
     setSendingMessage(true);
     setErrorMessage(null);
+    setOperationMessage(null);
 
     try {
-      await sendMessage(currentConversationId, contentToSend, targetAgent ? getIdValue(targetAgent.id) : null);
+      await sendMessage(currentConversationId, finalContentToSend, targetAgent ? getIdValue(targetAgent.id) : null);
       if (parsedMention.matchedAgent) {
         setSelectedAgent(parsedMention.matchedAgent);
       }
       const refreshedMessages = await getMessages(currentConversationId);
       setMessages(refreshedMessages);
       setDraftMessage("");
+      setQuotedMessage(null);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setSendingMessage(false);
+    }
+  }
+
+  async function handleToggleMessagePin(messageId: string, pinnedContextId?: string | null) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    setErrorMessage(null);
+
+    try {
+      if (pinnedContextId) {
+        await unpinContext(pinnedContextId);
+      } else {
+        await pinMessageAsContext(currentConversationId, messageId);
+      }
+
+      const refreshedPinnedContexts = await getPinnedContextsByConversation(currentConversationId);
+      setPinnedContexts(refreshedPinnedContexts);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function copyTextToClipboard(text: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  }
+
+  async function handleCopyMessage(message: Message) {
+    setErrorMessage(null);
+
+    try {
+      await copyTextToClipboard(message.content);
+      setOperationMessage("消息内容已复制。");
+    } catch (error) {
+      setErrorMessage(`复制失败：${getErrorMessage(error)}`);
+    }
+  }
+
+  function handleQuoteMessage(message: Message) {
+    setQuotedMessage(message);
+    setOperationMessage("已引用消息，发送时会带入引用内容。");
+  }
+
+  async function runDemoTaskFromMessage(message: Message) {
+    const sourceConversationId = currentConversationId;
+    if (!sourceConversationId) {
+      return;
+    }
+
+    const sourceMessageId = getIdValue(message.id);
+    if (!sourceMessageId) {
+      setErrorMessage("无法识别消息 ID，不能重新运行 Demo Task。");
+      return;
+    }
+
+    setRunningDemoTask(true);
+    setRerunningMessageId(sourceMessageId);
+    setErrorMessage(null);
+    setOperationMessage(null);
+
+    try {
+      const createdTaskRun = await createDemoTask(
+        sourceConversationId,
+        sourceMessageId,
+        message.content,
+        selectedAgent ? getIdValue(selectedAgent.id) : null
+      );
+      const createdTaskRunId = getIdValue(createdTaskRun.id);
+      const refreshedConversation = await getConversation(sourceConversationId);
+
+      await loadConversationData(sourceConversationId);
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          getIdValue(conversation.id) === sourceConversationId ? refreshedConversation : conversation
+        )
+      );
+      setSelectedTaskRunId(createdTaskRunId);
+      setSelectedTaskStepId(null);
+      setShowAllArtifacts(true);
+      setOperationMessage("已基于选中消息重新运行 Demo Task。");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setRunningDemoTask(false);
+      setRerunningMessageId(null);
     }
   }
 
@@ -367,27 +498,15 @@ export function WorkspacePage() {
       return;
     }
 
-    setRunningDemoTask(true);
-    setErrorMessage(null);
+    await runDemoTaskFromMessage(latestUserMessage);
+  }
 
-    try {
-      const createdTaskRun = await createDemoTask(
-        currentConversationId,
-        getIdValue(latestUserMessage.id),
-        latestUserMessage.content,
-        selectedAgent ? getIdValue(selectedAgent.id) : null
-      );
-      const createdTaskRunId = getIdValue(createdTaskRun.id);
-
-      await loadConversationData(currentConversationId);
-      setSelectedTaskRunId(createdTaskRunId);
-      setSelectedTaskStepId(null);
-      setShowAllArtifacts(true);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setRunningDemoTask(false);
+  async function handleRerunFromMessage(message: Message) {
+    if (message.senderType !== "USER") {
+      return;
     }
+
+    await runDemoTaskFromMessage(message);
   }
 
   async function handleCreateArtifactRevision(artifactId: string, revisionInstruction: string) {
@@ -508,12 +627,33 @@ export function WorkspacePage() {
               ? `${displayConversationType(currentConversation.type)} / ${currentConversation.participantAgentIds.length} 个 Agent`
               : "创建一个 Demo 会话后开始 AgentHub 流程。"}
           </p>
+          {currentConversation ? (
+            <div className="conversation-participants">
+              <span className="conversation-participants__label">参与 Agent</span>
+              <div className="conversation-participants__list">
+                {currentParticipantAgents.map((participant) => (
+                  <span key={participant.id} className="conversation-participant-pill" title={participant.id}>
+                    {participant.name}
+                    <small>{displayAgentRole(participant.role)}</small>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {errorMessage ? (
           <div className="workspace-error">
             <span>{errorMessage}</span>
             <button type="button" className="secondary-button" onClick={() => setErrorMessage(null)}>
+              关闭
+            </button>
+          </div>
+        ) : null}
+        {operationMessage ? (
+          <div className="workspace-notice">
+            <span>{operationMessage}</span>
+            <button type="button" className="secondary-button" onClick={() => setOperationMessage(null)}>
               关闭
             </button>
           </div>
@@ -566,7 +706,18 @@ export function WorkspacePage() {
         </div>
 
         <div className="workspace-main__content">
-          <MessageStream messages={messages} agents={agents} loading={loadingMessages} onSelectArtifact={setSelectedArtifactId} />
+          <MessageStream
+            messages={messages}
+            agents={agents}
+            pinnedContexts={pinnedContexts}
+            loading={loadingMessages}
+            rerunningMessageId={rerunningMessageId}
+            onSelectArtifact={setSelectedArtifactId}
+            onToggleMessagePin={handleToggleMessagePin}
+            onCopyMessage={handleCopyMessage}
+            onQuoteMessage={handleQuoteMessage}
+            onRerunFromMessage={handleRerunFromMessage}
+          />
           <TaskRunPanel
             agents={agents}
             artifacts={artifacts}
@@ -579,6 +730,7 @@ export function WorkspacePage() {
           />
           <ContextPanel
             taskSpec={activeTaskSpec}
+            pinnedContexts={pinnedContexts}
             contextSnapshots={contextSnapshots}
             handoffSummaries={handoffSummaries}
             loading={loadingContext}
@@ -588,7 +740,9 @@ export function WorkspacePage() {
             disabled={!currentConversationId}
             sending={sendingMessage}
             selectedAgent={selectedAgent}
+            quotedMessage={quotedMessage}
             onChange={setDraftMessage}
+            onClearQuote={() => setQuotedMessage(null)}
             onSend={handleSendMessage}
           />
         </div>

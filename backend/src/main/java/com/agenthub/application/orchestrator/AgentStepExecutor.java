@@ -3,15 +3,22 @@ package com.agenthub.application.orchestrator;
 import com.agenthub.application.agent.AgentExecutorService;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.domain.agent.AgentId;
+import com.agenthub.domain.artifact.Artifact;
 import com.agenthub.domain.artifact.ArtifactId;
+import com.agenthub.domain.artifact.ArtifactRepository;
+import com.agenthub.domain.artifact.ArtifactStatus;
+import com.agenthub.domain.artifact.ArtifactType;
+import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.task.TaskRunId;
 import com.agenthub.domain.task.TaskStep;
 import com.agenthub.domain.task.TaskStepId;
 import com.agenthub.domain.task.TaskStepStatus;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
+import com.agenthub.infrastructure.adapter.AgentExecutionStatus;
 import com.agenthub.infrastructure.adapter.AgentRequest;
 import com.agenthub.infrastructure.adapter.AgentResponse;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -21,10 +28,15 @@ public class AgentStepExecutor {
 
     private final AgentExecutorService agentExecutorService;
     private final IdGenerator idGenerator;
+    private final ArtifactRepository artifactRepository;
 
-    public AgentStepExecutor(AgentExecutorService agentExecutorService, IdGenerator idGenerator) {
+    public AgentStepExecutor(
+            AgentExecutorService agentExecutorService,
+            IdGenerator idGenerator,
+            ArtifactRepository artifactRepository) {
         this.agentExecutorService = agentExecutorService;
         this.idGenerator = idGenerator;
+        this.artifactRepository = artifactRepository;
     }
 
     public TaskStep execute(StepExecutionCommand command) {
@@ -53,6 +65,8 @@ public class AgentStepExecutor {
                 + "\n\nAdapter 执行信息：\n"
                 + (adapterSummary == null ? "未记录 Adapter 响应。" : adapterSummary);
 
+        List<ArtifactId> producedArtifactIds = appendAdapterOutputArtifactIfReal(command, stepId, adapterResponse);
+
         return new TaskStep(
                 stepId,
                 command.taskRunId(),
@@ -67,7 +81,7 @@ public class AgentStepExecutor {
                 adapterResponse.status().name(),
                 adapterSummary,
                 adapterResponse.errorMessage(),
-                command.producedArtifactIds(),
+                producedArtifactIds,
                 command.now(),
                 command.now());
     }
@@ -83,6 +97,76 @@ public class AgentStepExecutor {
         }
 
         return normalized.substring(0, 217) + "...";
+    }
+
+    private List<ArtifactId> appendAdapterOutputArtifactIfReal(
+            StepExecutionCommand command,
+            TaskStepId stepId,
+            AgentResponse adapterResponse) {
+        List<ArtifactId> producedArtifactIds = new ArrayList<>(command.producedArtifactIds());
+        if (!shouldPersistAdapterOutput(adapterResponse)) {
+            return List.copyOf(producedArtifactIds);
+        }
+
+        Artifact adapterOutputArtifact = new Artifact(
+                new ArtifactId(idGenerator.nextId("artifact")),
+                new ConversationId(command.conversationId()),
+                command.taskRunId(),
+                "Adapter Output - " + command.agentName() + " - Step " + command.stepOrder() + ".md",
+                resolveAdapterOutputArtifactType(command),
+                ArtifactStatus.CREATED,
+                "md",
+                buildAdapterOutputArtifactContent(command, stepId, adapterResponse),
+                1,
+                command.now(),
+                command.now());
+        artifactRepository.save(adapterOutputArtifact);
+        producedArtifactIds.add(adapterOutputArtifact.getId());
+        return List.copyOf(producedArtifactIds);
+    }
+
+    private boolean shouldPersistAdapterOutput(AgentResponse adapterResponse) {
+        return adapterResponse != null
+                && adapterResponse.status() == AgentExecutionStatus.COMPLETED
+                && !adapterResponse.fallbackUsed()
+                && adapterResponse.actualAdapterType() != null
+                && adapterResponse.actualAdapterType() != AgentAdapterType.MOCK
+                && adapterResponse.content() != null
+                && !adapterResponse.content().isBlank();
+    }
+
+    private ArtifactType resolveAdapterOutputArtifactType(StepExecutionCommand command) {
+        String normalizedSkill = command.requiredSkill() == null ? "" : command.requiredSkill().toLowerCase();
+        String normalizedTask = command.taskDescription() == null ? "" : command.taskDescription().toLowerCase();
+        if (normalizedSkill.contains("review") || normalizedTask.contains("review") || normalizedTask.contains("检查")) {
+            return ArtifactType.REVIEW_REPORT;
+        }
+        return ArtifactType.MARKDOWN;
+    }
+
+    private String buildAdapterOutputArtifactContent(
+            StepExecutionCommand command,
+            TaskStepId stepId,
+            AgentResponse adapterResponse) {
+        return """
+                # Adapter Output
+
+                - Agent: %s
+                - TaskStep: %s
+                - Preferred Adapter: %s
+                - Actual Adapter: %s
+                - Status: %s
+
+                ## Response
+
+                %s
+                """.formatted(
+                command.agentName(),
+                stepId.value(),
+                adapterResponse.preferredAdapterType(),
+                adapterResponse.actualAdapterType(),
+                adapterResponse.status(),
+                adapterResponse.content());
     }
 
     public record StepExecutionCommand(

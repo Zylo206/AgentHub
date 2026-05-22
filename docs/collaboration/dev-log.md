@@ -1028,3 +1028,455 @@
 - 优先实现群聊多 Agent 最小消息流
 - 随后补 Context pin 和消息操作最小集
 - 在真实 Adapter 输出能进入 Artifact 后，再更新 technical-design 和 roadmap 到下一版
+
+## Phase 30：群聊多 Agent 最小消息流
+
+### 目标
+
+- 补齐课题中“群聊协作”和“Agent 依次回复”的最小可见链路，让 Run Demo Task 后 Message Stream 中出现 Orchestrator、Frontend、Backend、Reviewer 的多条 Agent 消息
+
+### 主要变更
+
+- 后端 demo-task 完成后追加 Orchestrator 群聊协调消息
+- 后端为 Frontend / Backend / Reviewer 三个 TaskStep 追加 Agent 消息
+- Specialist Agent 消息关联对应 Artifact，仍可从聊天流点击打开产物
+- 前端 MessageBubble 对 AGENT 消息展示 Agent role
+- smoke test 增加 group chat Agent messages 检查
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动测试 `/workspace`：创建会话、发送消息、运行 Demo Task，确认消息流出现多个 Agent 回复
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是最小群聊消息流，不是真正并行调度
+- 不支持多个自然语言 `@Agent`
+- 不改变 Codex / Claude Code / OpenCode 的半真实 CLI 探测边界
+- Artifact 内容仍可能来自 static demo，Adapter 不可用时仍 fallback 到 MOCK
+
+### 遗留问题
+
+- Conversation participants 最小模型尚未实现
+- 多 Agent 动态调度未完成
+- 多个 `@Agent` 群聊路由未完成
+- Agent 消息和 TaskStep 仍通过文本内容弱关联，尚未引入结构化 message metadata
+
+### 下一步建议
+
+- 实现 Conversation participants 最小模型
+- 增加手动 pin 消息作为 Context
+- 再推进真实 / 半真实 Adapter 输出进入 Artifact
+
+## Phase 31：Conversation Participants 最小模型
+
+### 目标
+
+- 让 Conversation 明确记录当前会话参与的 Agent，为后续真正群聊模式、多 Agent 路由和参与者管理打基础
+
+### 主要变更
+
+- `ConversationApplicationService` 新增 `addParticipantAgents`，可在不破坏原会话数据的前提下合并参与 Agent
+- demo-task 编排完成路由后，将 Orchestrator、Frontend、Backend、Reviewer 以及被 selectedAgent 替换的自定义 Agent 写入 Conversation participants
+- Workspace 会话头部展示当前参与 Agent pill，显示 Agent 名称和角色
+- Run Demo Task 后前端刷新当前 Conversation，确保 participantAgentIds 能及时反映后端更新
+- smoke test 增加 Conversation participants 初始化和查询校验
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动测试 `/workspace`：创建 GROUP 会话后查看参与 Agent，运行 Demo Task 后确认会话参与者仍正常展示
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只补 Conversation participants 元数据，不实现完整参与者管理 UI
+- 不支持多个自然语言 `@Agent`
+- 不实现真正并行调度或动态群聊路由
+- Adapter fallback、static demo Artifact、Deploy Preview 的边界保持不变
+
+### 遗留问题
+
+- 还没有手动添加 / 移除会话参与 Agent
+- 还没有 Conversation participants 与多个 `@Agent` 的群聊调度闭环
+- 参与者数据仍使用内存 Repository，刷新后不会持久化
+- Agent 消息与 TaskStep 的结构化 metadata 仍可继续增强
+
+### 下一步建议
+
+- 推进 P0-3：手动 pin 消息作为 Context
+- 随后补消息操作最小集，例如引用消息、复制内容、基于消息重新运行 Demo Task
+- 再推进真实 / 半真实 Adapter 输出进入 Artifact
+
+## Phase 32：手动 Pin 消息作为 Context
+
+### 目标
+
+- 将上下文管理从静态 ContextSnapshot 展示推进到用户可操作能力，让用户可以把聊天消息固定为长期上下文，并让后续 Demo Task 引用这些 pinned messages
+
+### 主要变更
+
+- `ContextRepository` / `InMemoryContextRepository` 增加 `PinnedContext` 保存、查询、按 source 去重和删除能力
+- `ContextApplicationService` 增加 pin message、unpin context、list pinned contexts 的应用服务能力
+- `ContextController` 新增 pinned context API：
+  - `GET /api/conversations/{conversationId}/pinned-contexts`
+  - `POST /api/conversations/{conversationId}/messages/{messageId}/pin`
+  - `DELETE /api/pinned-contexts/{pinnedContextId}`
+- Orchestrator demo-task 会读取当前会话 pinned contexts，并写入第一个 TaskStep 的 `inputContext` 和 `ContextSnapshot.pinnedContextItems`
+- 前端 MessageBubble 增加“固定到 Context / 已固定到 Context”操作
+- Workspace 加载并维护 pinned contexts，ContextPanel 增加“手动固定上下文”区域
+- smoke test 增加 pin message、pinned context 查询、TaskStep inputContext 和 ContextSnapshot pinned items 校验
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动测试 `/workspace`：发送消息后点击固定到 Context，再运行 Demo Task，确认 ContextPanel 和 TaskStep inputContext 能看到 pinned message
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只实现手动 pin 消息的最小闭环，不实现复杂自动上下文选择
+- pinned context 仍存放在内存 Repository，刷新后不持久化
+- Orchestrator 仍是规则化 demo-task，不是真实 LLM context reasoning
+- Adapter fallback、静态 Artifact、静态 Deploy Preview 边界不变
+
+### 遗留问题
+
+- 还没有 pin Artifact、pin 文档段落或 pin 代码片段
+- 还没有 Context 权重、过期策略或 token budget 管理
+- 还没有把 pinned contexts 接入真实外部 Agent 调用的上下文窗口
+- 还没有浏览器级 E2E 覆盖 Pin / Unpin 交互
+
+### 下一步建议
+
+- 推进 P0-4：真实 / 半真实 Adapter 输出进入 Artifact
+- 或先做 P0-5 的消息操作最小集：复制、引用、基于消息重新运行 Demo Task
+- 后续再将 pinned context 与多个 `@Agent` 群聊路由联动
+
+## Phase 33：Adapter 成功输出进入 Artifact
+
+### 目标
+
+- 降低“Adapter 只是状态展示”的风险，让真实 / 半真实 Adapter 在成功执行且未 fallback 时，其响应内容能够沉淀为可见 Artifact
+
+### 主要变更
+
+- `AgentStepExecutor` 在 Adapter 响应满足以下条件时自动创建 Adapter Output Artifact：
+  - `status = COMPLETED`
+  - `fallbackUsed = false`
+  - `actualAdapterType != MOCK`
+  - `content` 非空
+- Adapter Output Artifact 使用 Markdown 内容保存，包含 Agent、TaskStep、Preferred Adapter、Actual Adapter、Status 和完整 response
+- Adapter Output Artifact 会追加到对应 TaskStep 的 `producedArtifactIds`
+- demo-task 的 Artifact 汇总改为从 `ArtifactRepository.findByTaskRunId` 读取，确保真实 / 半真实 Adapter 产物进入 TaskRun 汇总和 ContextSnapshot
+- demo-task 追加 Adapter Output 的 Artifact Card 消息，让 Message Stream 能看到该产物
+- smoke test 增加条件校验：如果存在非 MOCK 成功 step，则必须存在对应 Adapter Output Artifact
+- `scripts/README.md` 补充 Adapter Output Artifact 条件校验说明
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `node scripts/smoke-test.mjs`
+- 默认未配置 Adapter 场景：全部 fallback / MOCK，smoke test 通过，Artifact 数量保持静态 Demo 路径
+- 临时配置 CODEX CLI 探测场景：
+  - `AGENTHUB_CODEX_ENABLED=true`
+  - `AGENTHUB_CODEX_COMMAND=cmd`
+  - `AGENTHUB_CODEX_ARGS_TEMPLATE=/c echo Codex adapter output from {taskDescription}`
+  - smoke test 显示 `CODEX=AVAILABLE`
+  - Artifact 数量从 4 增加到 5
+  - smoke test 输出 `adapter output artifacts loaded: 1`
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认环境下 Codex / Claude Code / OpenCode 仍可能是 DISABLED 或 MISCONFIGURED
+- 未配置或执行失败时仍 fallback 到 MOCK，不创建虚假的 Adapter Output Artifact
+- 这不是完整真实平台深度接入，只是把成功的半真实 Adapter response 落入 Artifact 链路
+- demo-task 其他静态 Artifact 仍然保留
+
+### 遗留问题
+
+- Adapter Output Artifact 目前按 Markdown / Review Report 保存，尚未根据 response 自动生成 CODE / API_CONTRACT 等类型
+- 真实 Adapter 输出尚未替代静态 LoginPage / README / API Contract
+- 没有对真实 Adapter response 做结构化解析或质量校验
+- 没有在前端单独突出“该产物来自真实 / 半真实 Adapter”
+
+### 下一步建议
+
+- 推进 P0-5：消息操作最小集，包括复制、引用、基于消息重新运行 Demo Task
+- 或继续增强 Adapter Output：让 OPENAI_COMPATIBLE 成功输出能按 prompt 类型生成 Review Report / Markdown / Code Artifact
+- 后续再补真实 line diff，让 Artifact Revision 更可信
+
+## Phase 34：消息操作最小集
+
+### 目标
+
+- 补齐 IM 核心体验中的基础消息操作，让用户可以复制消息、引用消息，并基于某条用户消息重新运行 Demo Task
+
+### 主要变更
+
+- `MessageBubble` 增加消息操作区：
+  - 复制消息
+  - 引用消息
+  - 用户消息可重新运行 Demo Task
+  - 保留 Pin / Unpin Context 操作
+- `MessageStream` 透传复制、引用、重新运行事件，并支持当前重跑消息的 loading 状态
+- `WorkspacePage` 增加：
+  - Clipboard 复制及 textarea fallback
+  - quoted message 状态和 ChatInput 引用预览
+  - 发送时将引用消息写入正文，避免新增后端消息模型
+  - 基于指定 Message 调用现有 `createDemoTask` 的重新运行逻辑
+- `ChatInput` 展示引用预览并支持取消引用
+- `workspace.css` 补充消息操作按钮、引用预览和操作提示样式
+- `scripts/smoke-test.mjs` 增加基于同一条消息再次运行 demo-task 的 API 验证
+- `scripts/README.md` 补充 message-based demo task rerun 覆盖说明
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动测试 `/workspace`：
+  - 点击消息“复制”，确认消息内容进入剪贴板
+  - 点击消息“引用”，确认 ChatInput 出现引用预览
+  - 发送引用消息，确认消息正文包含引用内容
+  - 对用户消息点击“重新运行 Demo Task”，确认 TaskRun / Artifact / Context 正常刷新
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮不新增后端消息引用模型，引用内容以文本方式写入下一条消息正文
+- 复制和引用是前端交互，API smoke test 不验证浏览器剪贴板或 DOM 行为
+- 重新运行 Demo Task 复用现有 demo-task 静态 / mock / fallback 链路
+- 不改变真实 Adapter、Artifact Revision、Deploy Preview 的能力边界
+
+### 遗留问题
+
+- 还没有结构化 quotedMessageId 字段
+- 还没有“重新生成 Agent 回复”或按 TaskStep 重跑
+- 还没有一键应用 Diff
+- 还没有浏览器级 E2E 覆盖消息操作
+
+### 下一步建议
+
+- 推进 P1：真实 line diff 轻量版，提升 Revision / Diff Summary 可信度
+- 或继续补消息操作：复制代码块、一键应用 Diff、按引用消息生成局部修改任务
+- 后续可将引用消息升级为后端结构化关系，便于 Orchestrator 精准读取上下文
+
+## Phase 35：轻量真实 Line Diff 与 Diff Summary 增强
+
+### 目标
+
+- 将 Artifact Revision 的 Diff Summary 从静态文案升级为基于父级 Artifact 和当前 Artifact 内容的轻量行级 diff，提高产物二次修改的可信度
+
+### 主要变更
+
+- `artifactLineage.ts` 增加轻量 LCS 行级 diff：
+  - 读取 `parentArtifactId` 找到父级 Artifact
+  - 对比父级 `content` 和当前 Artifact `content`
+  - 生成 added / removed / context 行
+  - 统计新增行、删除行、未变行和估算修改块
+- `DiffSummaryPanel` 展示真实行级 diff：
+  - 行级统计
+  - 变更项
+  - 未变更项
+  - 暗色 diff viewer
+  - 新增 / 删除 / context 行号
+- `workspace.css` 增加 line diff viewer、统计 badge、added / removed 行样式
+- 保留 Version History / Revision / Deploy Preview / Artifact Studio 原有交互
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动测试建议：
+  - 在 `/workspace` 运行 Demo Task
+  - 选择 `LoginPage.tsx`
+  - 执行 Artifact Revision
+  - 选择 v2，查看 Diff Summary 是否展示真实行级统计和 diff 行
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮实现的是前端轻量行级 diff，不是 AST diff、语义 diff 或冲突合并
+- Revision 产物内容仍可能来自 static demo
+- 不引入 Monaco Editor、Markdown 渲染库或真实代码编辑器
+- 不改变后端 Artifact Revision 生成逻辑
+
+### 遗留问题
+
+- 还没有语义级代码变更解释
+- 还没有一键应用 Diff
+- 还没有冲突检测 / merge 策略
+- 大文件 diff 目前只做前端轻量计算和截断展示
+
+### 下一步建议
+
+- 增加 Artifact 代码复制 / 下载能力
+- 或继续做 Orchestrator 可解释面板，展示 Planner / Router / Executor / Aggregator 决策链
+- 后续可将 line diff 结果沉淀为后端结构化 Diff Artifact
+
+## Phase 36：Artifact 内容复制与文件下载
+
+### 目标
+
+- 提升 Artifact Studio 可用性，让用户可以直接复制当前 Artifact 内容或下载当前 Artifact 文件，补齐产物操作的基础能力
+
+### 主要变更
+
+- `ArtifactPanel` 新增 Artifact 操作区：
+  - 复制内容
+  - 下载文件
+  - 操作结果提示
+- 复制逻辑复用 Clipboard API，并提供隐藏 textarea fallback，避免不支持 Clipboard API 时直接失败
+- 下载逻辑使用浏览器 Blob / Object URL 本地生成文件，不新增后端接口
+- 下载文件名根据 Artifact title 和 version 生成，例如 `LoginPage-v2.tsx`
+- 文件扩展名根据 Artifact language / type 推断：
+  - CODE 使用 `tsx` / `ts` / `js` / `css` 等 language
+  - MARKDOWN / REVIEW_REPORT 使用 `md`
+  - API_CONTRACT / DATA_MODEL 使用 `json`
+  - WEB_PREVIEW 使用 `html`
+  - 其他类型降级为 `txt`
+- `workspace.css` 增加 Artifact 操作区、按钮和操作提示样式
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动测试建议：
+  - 在 `/workspace` 运行 Demo Task
+  - 选择 `LoginPage.tsx`
+  - 点击“复制内容”，确认代码内容进入剪贴板
+  - 点击“下载文件”，确认浏览器下载 `LoginPage-v1.tsx` 或对应版本文件
+  - 对 README / Review Report / API Contract 产物重复验证
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只做前端本地复制和下载，不新增后端文件存储或真实附件服务
+- 下载内容来自当前 Artifact `content`
+- 不实现源码打包下载、目录结构下载或真实构建产物下载
+- 不改变 Artifact Revision、Deploy Preview、Adapter fallback 的能力边界
+
+### 遗留问题
+
+- 还没有批量下载多个 Artifact
+- 还没有源码 zip 打包
+- 还没有文件附件上传 / 下载模型
+- 还没有代码块级复制按钮
+
+### 下一步建议
+
+- 推进 Orchestrator 可解释面板，增强答辩时对 Planner / Router / Executor / Aggregator 的解释力
+- 或继续补消息操作：一键应用 Diff、按引用消息生成局部修改任务
+
+## Phase 37：群聊多 Agent 消息流与手动 Pin Context 完善
+
+### 目标
+
+- 将已有群聊 Agent 消息和手动 Pin Context 链路从“可用”补强到“可验收、可解释、可展示”
+- 让 Demo Task 后的 MessageStream 更明确呈现 Orchestrator / Frontend / Backend / Reviewer 多 Agent 依次回复
+- 让手动固定消息更清楚地进入 ContextPanel、TaskStep inputContext 和 ContextSnapshot
+
+### 主要变更
+
+- `OrchestratorService` 补强 demo-task 群聊消息：
+  - 保留 Orchestrator 启动消息
+  - Frontend / Backend / Reviewer 消息补充 TaskStep、assignedAgentId、Artifact 和 Adapter fallback 信息
+  - 新增 Orchestrator 聚合总结消息，说明产物数量、selectedAgent 来源和 fallback 汇总
+- `MessageStream` / `MessageBubble` 展示增强：
+  - 为内置 Agent 补充名称和角色兜底映射
+  - 从 Agent 消息内容中识别 TaskStep 标签
+  - Pin 按钮显示“已固定 / 取消固定”状态
+- `ContextPanel` 展示增强：
+  - 手动固定上下文改为独立列表卡片
+  - 展示 sourceType、sourceId、createdAt 和 content snapshot
+  - ContextSnapshot 无 pinned items 时显示明确空状态
+- `scripts/smoke-test.mjs` 强化断言：
+  - 校验 Orchestrator / Frontend / Backend / Reviewer Agent 消息
+  - 校验 Orchestrator 汇总消息
+  - 校验 pinned context 进入 ContextSnapshot pinned items 或 includedMessageIds
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动测试建议：
+  - 打开 `/workspace`
+  - 创建 Demo Conversation
+  - 发送消息并运行 Demo Task
+  - 检查 MessageStream 是否出现 Orchestrator / Frontend / Backend / Reviewer 多条 Agent 回复
+  - Pin 一条消息后再次运行 Demo Task
+  - 检查 ContextPanel、TaskStep inputContext 和 ContextSnapshot 是否体现 pinned context
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮仍不是完整真实并行多 Agent 调度
+- Planner 仍是规则化，不是 LLM planner
+- Adapter 仍可能 fallback 到 MOCK
+- Pin Context 是最小用户可操作上下文，不是完整长期记忆系统
+- smoke test 仍是 API 级验证，不是浏览器 E2E
+
+### 遗留问题
+
+- 多个 `@Agent` 群聊调度仍未完成
+- Agent 回复仍由 demo-task 静态编排追加，不是实时流式生成
+- Context pin 还没有结构化 quotedMessageId / message reference 模型
+- 还没有基于 pinned context 的真实 LLM 推理
+
+### 下一步建议
+
+- 推进 Orchestrator 可解释面板，展示 Planner / Router / Executor / Aggregator 决策链
+- 或继续补消息操作：一键应用 Diff、按引用消息生成局部修改任务
+- 后续可将 pinned context 升级为更结构化的 ContextItem 模型
+
+## Phase 38：Orchestrator 可解释面板
+
+### 目标
+
+- 在 Workspace 的 TaskRunPanel 中直接展示 Planner / Router / Executor / Aggregator 决策链
+- 提升答辩时对主 Agent Orchestrator 的解释力，让规则化编排不只停留在后端代码和日志中
+
+### 主要变更
+
+- `TaskRunPanel` 新增 Orchestrator 决策链面板：
+  - Planner：展示任务目标、TaskStep 数量、预期产物和 required skills
+  - Router：展示每个 Step 路由到的 Agent 和 preferred Adapter
+  - Executor：展示执行 Step 数量、actual Adapter 和 fallback 数量
+  - Aggregator：展示 TaskRun resultSummary 和产物数量
+- `workspace.css` 增加可解释面板样式：
+  - stage card
+  - route item
+  - mode pill
+  - Adapter / fallback chip
+- 本轮复用现有 TaskRun / TaskSpec / TaskStep / Artifact 字段派生说明，不新增后端 API 或领域模型
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动测试建议：
+  - 打开 `/workspace`
+  - 运行 Demo Task
+  - 在 TaskRunPanel 中检查 Orchestrator 决策链是否展示 Planner / Router / Executor / Aggregator
+  - 检查 selectedAgent、Adapter fallback、Artifact Revision、Deploy Preview 不受影响
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只是前端可解释展示，不改变 Orchestrator 实际执行能力
+- Planner 仍是规则化，不是 LLM planner
+- Router / Executor / Aggregator 的展示由现有 TaskRun 数据派生
+- Adapter 仍可能 fallback 到 MOCK
+- 不是动态 DAG、并行调度或真实 Agent 流式执行
+
+### 遗留问题
+
+- 还没有后端结构化 OrchestratorDecision DTO
+- 还没有展示 Planner 规则命中的具体关键词
+- 还没有展示多 Agent 并行调度或失败恢复树
+- 还没有将可解释信息纳入 smoke test
+
+### 下一步建议
+
+- 将 Orchestrator 决策链补充到 technical-design / demo-checklist
+- 或继续实现 Adapter 成功输出进入更真实的 Artifact 编辑链路
+- 后续可新增后端结构化 decision trace，替代前端派生展示
