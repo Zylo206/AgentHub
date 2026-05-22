@@ -52,6 +52,10 @@ public class OrchestratorService {
     private final AgentApplicationService agentApplicationService;
     private final AgentExecutorService agentExecutorService;
     private final AgentRoutingService agentRoutingService;
+    private final TaskPlanner taskPlanner;
+    private final AgentRouter agentRouter;
+    private final AgentStepExecutor agentStepExecutor;
+    private final ResultAggregator resultAggregator;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
 
@@ -63,6 +67,10 @@ public class OrchestratorService {
             AgentApplicationService agentApplicationService,
             AgentExecutorService agentExecutorService,
             AgentRoutingService agentRoutingService,
+            TaskPlanner taskPlanner,
+            AgentRouter agentRouter,
+            AgentStepExecutor agentStepExecutor,
+            ResultAggregator resultAggregator,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.taskRepository = taskRepository;
@@ -72,6 +80,10 @@ public class OrchestratorService {
         this.agentApplicationService = agentApplicationService;
         this.agentExecutorService = agentExecutorService;
         this.agentRoutingService = agentRoutingService;
+        this.taskPlanner = taskPlanner;
+        this.agentRouter = agentRouter;
+        this.agentStepExecutor = agentStepExecutor;
+        this.resultAggregator = resultAggregator;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
@@ -96,6 +108,13 @@ public class OrchestratorService {
         SelectedAgentResolution selectedAgentResolution = resolveSelectedAgent(selectedAgentId, sourceMessage);
         Agent selectedAgent = selectedAgentResolution.agent();
         String selectedAgentSummary = buildSelectedAgentSummary(selectedAgentResolution);
+        OrchestratorPlan orchestratorPlan = taskPlanner.planDemoTask(userInput, selectedAgent);
+        OrchestratorStepPlan frontendStepPlan = findStepPlan(orchestratorPlan, 1);
+        OrchestratorStepPlan backendStepPlan = findStepPlan(orchestratorPlan, 2);
+        OrchestratorStepPlan reviewStepPlan = findStepPlan(orchestratorPlan, 3);
+        AgentRouter.RoutedAgent frontendRoute = agentRouter.route(frontendStepPlan, selectedAgent);
+        AgentRouter.RoutedAgent backendRoute = agentRouter.route(backendStepPlan, selectedAgent);
+        AgentRouter.RoutedAgent reviewRoute = agentRouter.route(reviewStepPlan, selectedAgent);
         AgentAdapterType selectedAgentPreferredAdapter = selectedAgent == null
                 ? agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.FRONTEND_BUILDER,
@@ -200,7 +219,7 @@ public class OrchestratorService {
                         selectedAgentSummary),
                 List.of("LoginPage.tsx", "README.md"),
                 List.of(codeArtifact.getId(), readmeArtifact.getId()),
-                selectedAgentPreferredAdapter,
+                frontendRoute.preferredAdapterType(),
                 now);
 
         TaskStep backendStep = createAgentExecutedStep(
@@ -250,6 +269,15 @@ public class OrchestratorService {
         TaskPlan taskPlan = new TaskPlan(
                 "生成登录页、说明文档、API 契约和评审产物。",
                 List.of(frontendStep, backendStep, reviewStep));
+        List<TaskStep> demoSteps = List.of(frontendStep, backendStep, reviewStep);
+        List<Artifact> demoArtifacts = List.of(codeArtifact, readmeArtifact, apiContractArtifact, reviewArtifact);
+        String resultSummary = resultAggregator.summarizeDemoTask(
+                taskSpec,
+                orchestratorPlan,
+                demoSteps,
+                demoArtifacts,
+                selectedAgentResolution.sourceDescription(),
+                selectedAgentSummary);
 
         TaskRun taskRun = new TaskRun(
                 taskRunId,
@@ -257,10 +285,10 @@ public class OrchestratorService {
                 taskSpec.getId(),
                 TaskRunStatus.COMPLETED,
                 taskPlan,
-                List.of(frontendStep, backendStep, reviewStep),
+                demoSteps,
                 "静态 Demo 任务已完成，产出代码、文档、API 契约、评审报告和上下文交接记录。"
                         + selectedAgentResolution.sourceDescription() + " "
-                        + selectedAgentSummary,
+                        + selectedAgentSummary + " " + resultSummary,
                 now,
                 now);
         taskRepository.saveTaskRun(taskRun);
@@ -590,6 +618,26 @@ public class OrchestratorService {
             List<ArtifactId> producedArtifactIds,
             AgentAdapterType preferredAdapterType,
             Instant now) {
+        if (agentStepExecutor != null) {
+            return agentStepExecutor.execute(new AgentStepExecutor.StepExecutionCommand(
+                    conversationId,
+                    taskRunId,
+                    stepOrder,
+                    agentId,
+                    agentName,
+                    userInput,
+                    systemPrompt,
+                    taskDescription,
+                    "DEMO_STEP",
+                    inputContext,
+                    baseOutputContent,
+                    contextItems,
+                    artifactSummaries,
+                    producedArtifactIds,
+                    preferredAdapterType,
+                    now));
+        }
+
         TaskStepId stepId = new TaskStepId(idGenerator.nextId("step"));
         AgentResponse adapterResponse = agentExecutorService.execute(
                 preferredAdapterType,
@@ -631,6 +679,13 @@ public class OrchestratorService {
                 producedArtifactIds,
                 now,
                 now);
+    }
+
+    private OrchestratorStepPlan findStepPlan(OrchestratorPlan plan, int stepOrder) {
+        return plan.steps().stream()
+                .filter(step -> step.stepOrder() == stepOrder)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Orchestrator step plan not found: " + stepOrder));
     }
 
     private SelectedAgentResolution resolveSelectedAgent(String explicitSelectedAgentId, Message sourceMessage) {

@@ -785,3 +785,85 @@
 - 为 `/preview/{artifactId}` 增加轻量占位页面，提升 Preview URL 点击后的完整度
 - 后续可补静态构建日志卡片和部署失败状态模拟
 - 最终提交前把 Deploy Status Card 纳入 Demo 视频脚本
+
+## Phase 24：Orchestrator 规则化增强与 Planner / Router / Aggregator 拆分
+
+### 目标
+
+- 将当前 demo-task 静态编排整理为更清晰的 Orchestrator 内部结构，让主 Agent 更符合 PM / PMO 协调器定位
+
+### 主要变更
+
+- 新增 `OrchestratorPlan` 和 `OrchestratorStepPlan`，用于表达应用层规则计划
+- 新增 `TaskPlanner`，按规则生成 Frontend Builder、Backend Worker、Reviewer 三段式 demo plan
+- 新增 `AgentRouter`，集中表达 selectedAgent 优先和默认 Agent preferredAdapter 路由策略
+- 新增 `AgentStepExecutor`，集中构造 `AgentRequest`、调用 `AgentExecutorService` 并写回 TaskStep Adapter 执行字段
+- 新增 `ResultAggregator`，集中生成 demo-task 的 Orchestrator 汇总信息
+- 调整 `OrchestratorService`，在 demo-task 主链路中接入 plan、route、execute、aggregate 的内部阶段
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- 手动测试 `/workspace` demo-task
+- 手动测试 revision / deploy 不受影响
+
+### 静态 / Mock / Placeholder 部分
+
+- Planner 仍是规则化 planner，不是 LLM planner
+- Artifact 内容仍是静态 Demo 生成
+- Adapter 仍可能 fallback 到 Mock
+- 当前不是完整动态 DAG 引擎
+
+### 遗留问题
+
+- 真实 LLM planning 未完成
+- 并行调度未完成
+- 代码冲突处理未完成
+- 动态多 Agent 规划未完成
+- Planner 规则还没有外部化为可配置策略
+
+### 下一步建议
+
+- 为 Orchestrator plan 增加前端可视化说明，让答辩时能直接展示 Planner / Router / Executor / Aggregator 四段结构
+- 补充最小 smoke test 覆盖 demo-task、revision、deploy 三条链路
+- 后续再考虑 LLM planner 或半动态 DAG，不要在当前 Demo 收敛阶段大改主链路
+
+## Phase 25：本地 Smoke Test 与 Demo 主链路验证脚本
+
+### 目标
+
+- 为当前 MVP 主链路增加可重复执行的 API 级 smoke test，降低后续功能开发导致回归的风险
+
+### 主要变更
+
+- 新增 `scripts/smoke-test.mjs`
+- 更新 `scripts/README.md`，说明运行方式和 `AGENTHUB_API_BASE_URL` 配置
+- smoke test 覆盖 health、adapter、conversation、message、demo-task、task-run、artifact、revision、deployment、message stream
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 后端需要先启动
+
+### 静态 / Mock / Placeholder 部分
+
+- smoke test 验证的是当前 static demo / mock fallback 主链路
+- 不验证真实 LLM
+- 不验证真实外部 Agent
+- 不验证真实部署
+- 不验证浏览器 UI
+
+### 遗留问题
+
+- 仍缺浏览器级 E2E 测试
+- 仍缺真实 Adapter 输出验证
+- 仍缺真实部署可用性验证
+- 仍缺 CI 环境中的自动执行配置
+
+### 下一步建议
+
+- 增加一个 `scripts/start-demo` 或说明文档，降低启动前后端和执行 smoke test 的手动成本
+- 后续在 GitHub Actions 或本地 CI 中复用该脚本
+- 为 `/preview/{artifactId}` 增加轻量页面，让 Deploy Preview URL 的手动验收更完整
