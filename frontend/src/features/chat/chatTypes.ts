@@ -7,7 +7,7 @@ export interface Message {
   senderType: "USER" | "AGENT" | "SYSTEM" | string;
   senderId: string;
   targetAgentId?: string | null;
-  messageType: "TEXT" | "TASK_SPEC" | "TASK_STATUS" | "ARTIFACT_CARD" | "ERROR" | string;
+  messageType: "TEXT" | "TASK_SPEC" | "TASK_STATUS" | "DEPLOY_STATUS" | "ARTIFACT_CARD" | "ERROR" | string;
   content: string;
   artifactIds: IdValue[];
   createdAt: string;

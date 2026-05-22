@@ -29,6 +29,10 @@ function getBubbleVariant(message: Message): string {
     return "task-status";
   }
 
+  if (message.messageType === "DEPLOY_STATUS") {
+    return "deploy-status";
+  }
+
   return "system";
 }
 

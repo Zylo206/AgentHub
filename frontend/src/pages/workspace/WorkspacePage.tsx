@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createConversation,
   createDemoArtifactRevision,
+  createDemoDeployment,
   createDemoTask,
   getAdapters,
   getAgents,
@@ -9,6 +10,7 @@ import {
   getArtifactsByConversation,
   getContextSnapshotsByTaskRun,
   getConversations,
+  getDeploymentsByConversation,
   getHandoffSummariesByTaskRun,
   getMessages,
   getTaskRunsByConversation,
@@ -28,6 +30,7 @@ import { ConversationList } from "../../features/conversations/ConversationList"
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import { ContextPanel } from "../../features/context/ContextPanel";
 import type { ContextSnapshot, HandoffSummary } from "../../features/context/contextTypes";
+import type { DeploymentRecord } from "../../features/deployments/deploymentTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayConversationType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import "../../styles/workspace.css";
@@ -61,6 +64,7 @@ export function WorkspacePage() {
   const [taskSpecs, setTaskSpecs] = useState<TaskSpec[]>([]);
   const [taskRuns, setTaskRuns] = useState<TaskRun[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
   const [contextSnapshots, setContextSnapshots] = useState<ContextSnapshot[]>([]);
   const [handoffSummaries, setHandoffSummaries] = useState<HandoffSummary[]>([]);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
@@ -83,6 +87,7 @@ export function WorkspacePage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [runningDemoTask, setRunningDemoTask] = useState(false);
   const [revisingArtifact, setRevisingArtifact] = useState(false);
+  const [deployingArtifact, setDeployingArtifact] = useState(false);
 
   const currentConversation =
     conversations.find((conversation) => getIdValue(conversation.id) === currentConversationId) ?? null;
@@ -95,6 +100,10 @@ export function WorkspacePage() {
     taskSpecs[taskSpecs.length - 1] ??
     null;
   const selectedTaskStep = findTaskStep(taskRuns, selectedTaskRunId, selectedTaskStepId);
+  const selectedArtifactDeployments = useMemo(
+    () => deployments.filter((deployment) => getIdValue(deployment.artifactId) === selectedArtifactId),
+    [deployments, selectedArtifactId]
+  );
 
   const highlightedArtifactIds = useMemo(
     () => (selectedTaskStep ? selectedTaskStep.producedArtifactIds.map((artifactId) => getIdValue(artifactId)) : []),
@@ -158,17 +167,19 @@ export function WorkspacePage() {
     setLoadingArtifacts(true);
 
     try {
-      const [messageData, taskSpecData, taskRunData, artifactData] = await Promise.all([
+      const [messageData, taskSpecData, taskRunData, artifactData, deploymentData] = await Promise.all([
         getMessages(conversationId),
         getTaskSpecsByConversation(conversationId),
         getTaskRunsByConversation(conversationId),
-        getArtifactsByConversation(conversationId)
+        getArtifactsByConversation(conversationId),
+        getDeploymentsByConversation(conversationId)
       ]);
 
       setMessages(messageData);
       setTaskSpecs(taskSpecData);
       setTaskRuns(taskRunData);
       setArtifacts(artifactData);
+      setDeployments(deploymentData);
       setShowAllArtifacts(true);
       setSelectedTaskStepId(null);
       setSelectedTaskRunId((previousId) => {
@@ -214,6 +225,7 @@ export function WorkspacePage() {
       setTaskSpecs([]);
       setTaskRuns([]);
       setArtifacts([]);
+      setDeployments([]);
       setContextSnapshots([]);
       setHandoffSummaries([]);
       setSelectedArtifactId(null);
@@ -404,6 +416,31 @@ export function WorkspacePage() {
     }
   }
 
+  async function handleCreateDeployment(artifactId: string) {
+    if (!currentConversationId) {
+      setErrorMessage("请先创建或选择一个会话，再部署产物。");
+      return;
+    }
+
+    setDeployingArtifact(true);
+    setErrorMessage(null);
+
+    try {
+      const deployment = await createDemoDeployment(artifactId);
+      const [refreshedMessages, refreshedDeployments] = await Promise.all([
+        getMessages(currentConversationId),
+        getDeploymentsByConversation(currentConversationId)
+      ]);
+      setMessages(refreshedMessages);
+      setDeployments(refreshedDeployments);
+      setSelectedArtifactId(getIdValue(deployment.artifactId) || artifactId);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setDeployingArtifact(false);
+    }
+  }
+
   function handleSelectTaskStep(taskRunId: string, step: TaskStep) {
     setSelectedTaskRunId(taskRunId);
     setSelectedTaskStepId(getIdValue(step.id));
@@ -569,9 +606,12 @@ export function WorkspacePage() {
           highlightedArtifactIds={highlightedArtifactIds}
           filteredByTaskStep={Boolean(selectedTaskStep) && !showAllArtifacts}
           revisingArtifact={revisingArtifact}
+          deployments={selectedArtifactDeployments}
+          deployingArtifact={deployingArtifact}
           onSelectArtifact={setSelectedArtifactId}
           onShowAllArtifacts={handleShowAllArtifacts}
           onCreateRevision={handleCreateArtifactRevision}
+          onCreateDeployment={handleCreateDeployment}
         />
       </aside>
     </section>

@@ -508,6 +508,11 @@
   border-left: 4px solid var(--blue);
 }
 
+.message-bubble--deploy-status {
+  border-left: 4px solid var(--success);
+  background: linear-gradient(180deg, #ffffff, var(--success-soft));
+}
+
 .message-bubble--artifact-card {
   border-left: 4px solid var(--green);
 }
@@ -911,6 +916,7 @@
 }
 
 .artifact-revision-box,
+.deploy-status-box,
 .version-history,
 .diff-summary {
   border: 1px solid var(--line);
@@ -920,6 +926,60 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.deploy-status-empty {
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  color: var(--text-muted);
+  background: #ffffff;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.deploy-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.deploy-status-card {
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  border-radius: 16px;
+  padding: 12px;
+  background: linear-gradient(180deg, #ffffff, var(--success-soft));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deploy-status-card__row,
+.deploy-status-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.deploy-status-card__meta {
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.deploy-status-card p {
+  margin: 0;
+  color: #166534;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.deploy-preview-link {
+  overflow-wrap: anywhere;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .artifact-revision-box__header {
@@ -1649,6 +1709,7 @@
 }
 
 .artifact-revision-box,
+.deploy-status-box,
 .version-history,
 .diff-summary {
   border-radius: 18px;

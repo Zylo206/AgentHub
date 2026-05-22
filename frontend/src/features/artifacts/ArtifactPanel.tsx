@@ -3,9 +3,10 @@ import { ArtifactCard } from "./ArtifactCard";
 import { DiffSummaryPanel } from "./DiffSummaryPanel";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import type { Artifact } from "./artifactTypes";
+import type { DeploymentRecord } from "../deployments/deploymentTypes";
 import { getVersionHistoryEntries } from "./artifactLineage";
 import { formatId, getIdValue } from "../../utils/id";
-import { displayArtifactType, displayStatus } from "../../utils/displayLabels";
+import { displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
 interface ArtifactPanelProps {
   artifacts: Artifact[];
@@ -18,9 +19,12 @@ interface ArtifactPanelProps {
   highlightedArtifactIds: string[];
   filteredByTaskStep: boolean;
   revisingArtifact: boolean;
+  deployments: DeploymentRecord[];
+  deployingArtifact: boolean;
   onSelectArtifact: (artifactId: string) => void;
   onShowAllArtifacts: () => void;
   onCreateRevision: (artifactId: string, revisionInstruction: string) => Promise<void>;
+  onCreateDeployment: (artifactId: string) => Promise<void>;
 }
 
 const PRODUCT_REVISION_INSTRUCTION = "把主按钮改成蓝色，并增加 loading 状态。";
@@ -54,9 +58,12 @@ export function ArtifactPanel({
   highlightedArtifactIds,
   filteredByTaskStep,
   revisingArtifact,
+  deployments,
+  deployingArtifact,
   onSelectArtifact,
   onShowAllArtifacts,
-  onCreateRevision
+  onCreateRevision,
+  onCreateDeployment
 }: ArtifactPanelProps) {
   const [revisionInstruction, setRevisionInstruction] = useState(PRODUCT_REVISION_INSTRUCTION);
   const versionEntries = getVersionHistoryEntries(allArtifacts, selectedArtifact);
@@ -73,6 +80,14 @@ export function ArtifactPanel({
     }
 
     await onCreateRevision(selectedArtifactId, revisionInstruction.trim());
+  }
+
+  async function handleCreateDeployment() {
+    if (!selectedArtifactId) {
+      return;
+    }
+
+    await onCreateDeployment(selectedArtifactId);
   }
 
   return (
@@ -167,6 +182,54 @@ export function ArtifactPanel({
               >
                 {revisingArtifact ? "修改中..." : "修改选中产物"}
               </button>
+            </div>
+            <div className="deploy-status-box">
+              <div className="artifact-revision-box__header">
+                <strong>Deploy Status</strong>
+                <span>Static demo simulation</span>
+              </div>
+              <button
+                type="button"
+                className="primary-button artifact-revision-box__button"
+                disabled={deployingArtifact}
+                onClick={() => {
+                  void handleCreateDeployment();
+                }}
+              >
+                {deployingArtifact ? "Deploying..." : "Deploy Selected Artifact"}
+              </button>
+              {deployments.length === 0 ? (
+                <div className="deploy-status-empty">
+                  No deployment yet. Deploy this artifact to generate a static preview card.
+                </div>
+              ) : (
+                <div className="deploy-status-list">
+                  {deployments.map((deployment) => (
+                    <div className="deploy-status-card" key={deployment.deploymentId}>
+                      <div className="deploy-status-card__row">
+                        <strong>{deployment.artifactTitle}</strong>
+                        <span className={`status-pill status-pill--${normalizeStatusClass(deployment.status)}`}>
+                          {displayStatus(deployment.status)}
+                        </span>
+                      </div>
+                      <div className="deploy-status-card__meta">
+                        <span>Target: {deployment.deployTarget}</span>
+                        <span>ID: {deployment.deploymentId}</span>
+                        <span>{new Date(deployment.createdAt).toLocaleString()}</span>
+                      </div>
+                      <a
+                        className="deploy-preview-link"
+                        href={deployment.previewUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {deployment.previewUrl}
+                      </a>
+                      <p>{deployment.message}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <VersionHistoryPanel
               artifacts={allArtifacts}

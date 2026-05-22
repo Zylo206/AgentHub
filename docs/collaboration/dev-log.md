@@ -740,3 +740,48 @@
 - 用一台真实安装 Codex / Claude Code / OpenCode CLI 的环境验证 args-template
 - 为至少一个 CLI Adapter 沉淀推荐 args-template 示例
 - 补一个静态 Deploy Status Card，增强最终 Demo 的发布闭环感
+
+## Phase 23：静态 Deploy Status Card 与部署状态模拟
+
+### 目标
+
+- 补齐课题中的部署状态卡片能力，让 Artifact 支持静态部署模拟和 Preview URL 展示
+
+### 主要变更
+
+- 新增 `DeploymentRecord`、`DeploymentStatus`、`DeploymentRepository`
+- 新增 `InMemoryDeploymentRepository`
+- 新增 `DeploymentApplicationService`
+- 新增 `DeploymentController`
+- 新增 `POST /api/artifacts/{artifactId}/demo-deploy`
+- 新增 deployment 查询接口：conversation、artifact、deploymentId 三种维度
+- MessageType 新增 `DEPLOY_STATUS`，部署成功后向 Message Stream 追加部署状态消息
+- 前端新增 `DeploymentRecord` 类型和 deployment API client 方法
+- ArtifactPanel 增加 `Deploy Selected Artifact` 按钮和 Deploy Status Card
+- WorkspacePage 集成 deployments 状态，部署后刷新 messages 和 deployments
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- 手动测试 `/workspace` deploy flow
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮部署是 static demo simulation
+- 没有真实 Vercel / Netlify / Docker / Kubernetes 部署
+- Preview URL 是模拟 URL
+- 不代表真实生产部署能力
+
+### 遗留问题
+
+- 真实部署未完成
+- 构建日志未完成
+- 部署失败恢复未完成
+- 部署状态流式更新未完成
+
+### 下一步建议
+
+- 为 `/preview/{artifactId}` 增加轻量占位页面，提升 Preview URL 点击后的完整度
+- 后续可补静态构建日志卡片和部署失败状态模拟
+- 最终提交前把 Deploy Status Card 纳入 Demo 视频脚本

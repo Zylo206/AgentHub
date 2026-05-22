@@ -3,6 +3,7 @@ import type { Artifact } from "../features/artifacts/artifactTypes";
 import type { Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
 import type { Conversation } from "../features/conversations/conversationTypes";
 import type { ContextSnapshot, HandoffSummary } from "../features/context/contextTypes";
+import type { DeploymentRecord } from "../features/deployments/deploymentTypes";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -176,4 +177,22 @@ export function createDemoArtifactRevision(
     method: "POST",
     body: JSON.stringify({ conversationId, revisionInstruction })
   });
+}
+
+export function createDemoDeployment(artifactId: string): Promise<DeploymentRecord> {
+  return request<DeploymentRecord>(`/api/artifacts/${artifactId}/demo-deploy`, {
+    method: "POST"
+  });
+}
+
+export function getDeploymentsByConversation(conversationId: string): Promise<DeploymentRecord[]> {
+  return request<DeploymentRecord[]>(`/api/conversations/${conversationId}/deployments`);
+}
+
+export function getDeploymentsByArtifact(artifactId: string): Promise<DeploymentRecord[]> {
+  return request<DeploymentRecord[]>(`/api/artifacts/${artifactId}/deployments`);
+}
+
+export function getDeployment(deploymentId: string): Promise<DeploymentRecord> {
+  return request<DeploymentRecord>(`/api/deployments/${deploymentId}`);
 }
