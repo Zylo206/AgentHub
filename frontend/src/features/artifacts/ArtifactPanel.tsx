@@ -5,7 +5,7 @@ import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import type { Artifact } from "./artifactTypes";
 import type { ArtifactSnapshot } from "./artifactSnapshotTypes";
 import type { DeploymentRecord } from "../deployments/deploymentTypes";
-import { getVersionHistoryEntries } from "./artifactLineage";
+import { buildDiffSummary, getVersionHistoryEntries } from "./artifactLineage";
 import { formatId, getIdValue } from "../../utils/id";
 import { displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
@@ -49,6 +49,7 @@ interface ApprovalRequest {
   targetId: string;
   title: string;
   summary: string;
+  affectedItems: string[];
   riskLevel: ApprovalRisk;
   confirmLabel: string;
   execute: () => Promise<void>;
@@ -121,6 +122,14 @@ function renderArtifactContent(artifact: Artifact) {
   );
 }
 
+function truncateText(value: string, maxLength = 96): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength - 1)}…`;
+}
+
 export function ArtifactPanel({
   artifacts,
   allArtifacts,
@@ -156,6 +165,47 @@ export function ArtifactPanel({
   const selectedVersionEntry =
     versionEntries.find((entry) => entry.artifactId === selectedArtifactId) ?? null;
 
+  function buildBaseArtifactAffectedItems(artifact: Artifact): string[] {
+    return [
+      `Artifact: ${artifact.title} v${artifact.version}`,
+      `Type: ${displayArtifactType(artifact.type)} / Status: ${displayStatus(artifact.status)}`,
+      `Language: ${artifact.language || "plain"} / Content length: ${(artifact.content || "").length} chars`
+    ];
+  }
+
+  function buildDiffAffectedItems(artifact: Artifact, force: boolean): string[] {
+    const diffSummary = buildDiffSummary(allArtifacts, artifact);
+    const changedItems = diffSummary.changedItems.slice(0, 3);
+    const changedLineSamples = diffSummary.lineDiffEntries
+      .filter((entry) => entry.operation === "added" || entry.operation === "removed")
+      .slice(0, 3)
+      .map((entry) => `${entry.operation === "added" ? "+" : "-"} ${truncateText(entry.content.trim() || "(blank line)")}`);
+
+    return [
+      ...buildBaseArtifactAffectedItems(artifact),
+      `Based on: ${diffSummary.basedOnLabel || "unknown parent artifact"}`,
+      `Line diff: +${diffSummary.lineDiffStats.added} / -${diffSummary.lineDiffStats.removed} / changed blocks ${diffSummary.lineDiffStats.changed}`,
+      `Mode: ${force ? "force apply, bypass conflict guard" : "normal apply, conflict guard enabled"}`,
+      `Risk: ${diffSummary.risk}`,
+      ...changedItems,
+      ...changedLineSamples
+    ].filter(Boolean);
+  }
+
+  function buildSnapshotAffectedItems(snapshot: ArtifactSnapshot | undefined): string[] {
+    if (!snapshot) {
+      return ["Snapshot metadata is unavailable. Restore will still create a new Artifact version if the backend can resolve it."];
+    }
+
+    return [
+      `Snapshot: ${snapshot.snapshotId}`,
+      `Artifact: ${snapshot.title} v${snapshot.version}`,
+      `Operation source: ${snapshot.operationType}`,
+      `Type: ${displayArtifactType(snapshot.type)} / Status: ${displayStatus(snapshot.status)}`,
+      `Language: ${snapshot.language || "plain"} / Snapshot content length: ${(snapshot.content || "").length} chars`
+    ];
+  }
+
   useEffect(() => {
     setRevisionInstruction(selectedArtifact?.revisionInstruction || PRODUCT_REVISION_INSTRUCTION);
     setArtifactOperationMessage(null);
@@ -182,6 +232,14 @@ export function ArtifactPanel({
       targetId: selectedArtifactId,
       title: "Approve demo deployment",
       summary: `Deploy ${artifactTitle} to the static preview target. This is a local demo deployment, not an external release.`,
+      affectedItems: selectedArtifact
+        ? [
+            ...buildBaseArtifactAffectedItems(selectedArtifact),
+            "Target: STATIC_PREVIEW",
+            "Output: local preview URL and deploy status message",
+            "No external Vercel / Netlify / Docker deployment will be executed."
+          ]
+        : [`Artifact: ${selectedArtifactId}`],
       riskLevel: "MEDIUM",
       confirmLabel: "Approve Deploy",
       execute: async () => {
@@ -201,12 +259,15 @@ export function ArtifactPanel({
     }
 
     try {
+      const affectedSummary = request.affectedItems.length > 0
+        ? ` Affected: ${request.affectedItems.join(" | ")}`
+        : "";
       await onRecordApprovalAudit({
         actionType: request.actionType,
         targetType: request.targetType,
         targetId: request.targetId,
         status,
-        summary: `${status}: ${request.summary}`
+        summary: `${status}: ${request.summary}${affectedSummary}`
       });
     } catch (error) {
       console.warn("Failed to record approval audit.", error);
@@ -288,6 +349,7 @@ export function ArtifactPanel({
       targetId: snapshotId,
       title: "Approve snapshot restore",
       summary: `Restore ${snapshot?.title || "artifact snapshot"} from safety snapshot ${snapshotId}. This creates a new restored Artifact version.`,
+      affectedItems: buildSnapshotAffectedItems(snapshot),
       riskLevel: "HIGH",
       confirmLabel: "Approve Restore",
       execute: async () => {
@@ -336,6 +398,7 @@ export function ArtifactPanel({
       targetId: artifactId,
       title: "Approve diff apply",
       summary: `Apply the generated diff for ${artifact.title} v${artifact.version}. A safety snapshot is created before applying.`,
+      affectedItems: buildDiffAffectedItems(artifact, false),
       riskLevel: "MEDIUM",
       confirmLabel: "Approve Apply Diff",
       execute: async () => {
@@ -367,6 +430,7 @@ export function ArtifactPanel({
       targetId: artifactId,
       title: "Approve force apply diff",
       summary: `Force apply the generated diff for ${artifact.title} v${artifact.version}. This bypasses the conflict guard and creates a new Artifact version.`,
+      affectedItems: buildDiffAffectedItems(artifact, true),
       riskLevel: "HIGH",
       confirmLabel: "Approve Force Apply",
       execute: async () => {
@@ -485,6 +549,16 @@ export function ArtifactPanel({
                   <span>ID: {pendingApproval.targetId}</span>
                   <span>Approval result will be written to Action Audit.</span>
                 </div>
+                {pendingApproval.affectedItems.length > 0 ? (
+                  <div className="approval-gate__affected">
+                    <span className="approval-gate__affected-label">Affected summary</span>
+                    <ul>
+                      {pendingApproval.affectedItems.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <div className="approval-gate__actions">
                   <button
                     type="button"

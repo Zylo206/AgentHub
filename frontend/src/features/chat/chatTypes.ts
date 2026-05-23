@@ -76,6 +76,16 @@ export interface TaskGraph {
   summary: string;
 }
 
+export interface OrchestratorDecisionLog {
+  decisionMode: string;
+  plannerDecision: string;
+  routingDecision: string;
+  executionDecision: string;
+  aggregationDecision: string;
+  fallbackDecision: string;
+  summary: string;
+}
+
 export interface TaskRun {
   id: IdValue;
   conversationId: IdValue;
@@ -84,6 +94,7 @@ export interface TaskRun {
   taskPlan?: TaskPlan;
   steps: TaskStep[];
   taskGraph?: TaskGraph;
+  orchestratorDecisionLog?: OrchestratorDecisionLog;
   resultSummary: string;
   createdAt: string;
   updatedAt: string;

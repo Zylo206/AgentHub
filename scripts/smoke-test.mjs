@@ -292,6 +292,29 @@ async function runSmokeTest() {
   if (!String(steps[0]?.inputContext || "").includes("Retrieved context")) {
     throw new Error("first task step inputContext did not include Context Retrieval v2 results");
   }
+  const decisionLog = taskRun.orchestratorDecisionLog;
+  if (!decisionLog) {
+    throw new Error("demo task did not return orchestratorDecisionLog");
+  }
+  const requiredDecisionFields = [
+    "plannerDecision",
+    "routingDecision",
+    "executionDecision",
+    "aggregationDecision",
+    "fallbackDecision"
+  ];
+  const missingDecisionFields = requiredDecisionFields.filter(
+    (field) => !String(decisionLog[field] || "").trim()
+  );
+  if (missingDecisionFields.length > 0) {
+    throw new Error(`orchestratorDecisionLog missing fields: ${missingDecisionFields.join(", ")}`);
+  }
+  if (!String(decisionLog.plannerDecision).includes("Planner")) {
+    throw new Error("orchestratorDecisionLog plannerDecision did not include Planner evidence");
+  }
+  if (!String(decisionLog.routingDecision).includes("Step")) {
+    throw new Error("orchestratorDecisionLog routingDecision did not include step routing evidence");
+  }
   const taskGraph = taskRun.taskGraph;
   if (!taskGraph || !Array.isArray(taskGraph.executionBatches) || taskGraph.executionBatches.length < 1) {
     throw new Error("demo task did not return taskGraph execution batches");
@@ -311,6 +334,7 @@ async function runSmokeTest() {
     throw new Error("expected at least one task step to declare dependsOnStepOrders");
   }
   pass(`demo task completed: ${taskRunId}, steps=${steps.length}`);
+  pass(`orchestrator decision log loaded: ${decisionLog.decisionMode || "UNKNOWN"}`);
   pass(`planner mode visible: ${plannerMode}`);
   pass(`task graph loaded: ${taskGraph.executionBatches.length} batch(es)`);
   pass(`parallel execution group validated: ${parallelGroupEntry[0]} -> steps ${parallelGroupEntry[1].join(", ")}`);
@@ -401,7 +425,11 @@ async function runSmokeTest() {
   if (!revision?.taskRun && !revision?.revisedArtifact) {
     throw new Error("revision response did not include taskRun or revisedArtifact");
   }
+  if (!revision.taskRun?.orchestratorDecisionLog?.plannerDecision) {
+    throw new Error("revision taskRun missing orchestratorDecisionLog");
+  }
   pass("revision completed");
+  pass(`revision decision log loaded: ${revision.taskRun.orchestratorDecisionLog.decisionMode || "UNKNOWN"}`);
 
   const snapshotsAfterRevision = await request(`/api/conversations/${conversationId}/artifact-snapshots`);
   if (!Array.isArray(snapshotsAfterRevision) || !snapshotsAfterRevision.some((snapshot) => snapshot.operationType === "DEMO_REVISION")) {

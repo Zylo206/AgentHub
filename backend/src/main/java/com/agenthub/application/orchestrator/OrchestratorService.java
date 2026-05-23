@@ -36,6 +36,7 @@ import com.agenthub.domain.task.TaskRepository;
 import com.agenthub.domain.task.TaskRun;
 import com.agenthub.domain.task.TaskRunId;
 import com.agenthub.domain.task.TaskRunStatus;
+import com.agenthub.domain.task.OrchestratorDecisionLog;
 import com.agenthub.domain.task.TaskGraph;
 import com.agenthub.domain.task.TaskSpec;
 import com.agenthub.domain.task.TaskSpecId;
@@ -341,6 +342,15 @@ public class OrchestratorService {
                 demoArtifacts,
                 selectedAgentResolution.sourceDescription(),
                 selectedAgentSummary);
+        OrchestratorDecisionLog decisionLog = buildDemoDecisionLog(
+                orchestratorPlan,
+                demoSteps,
+                taskGraph,
+                demoArtifacts,
+                adapterOutputArtifacts,
+                selectedAgentResolution.sourceDescription(),
+                selectedAgentSummary,
+                retrievedContextItems);
 
         TaskRun taskRun = new TaskRun(
                 taskRunId,
@@ -350,6 +360,7 @@ public class OrchestratorService {
                 taskPlan,
                 demoSteps,
                 taskGraph,
+                decisionLog,
                 "静态 Demo 任务已完成，产出代码、文档、API 契约、评审报告和上下文交接记录。"
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary + " " + resultSummary,
@@ -609,6 +620,15 @@ public class OrchestratorService {
         TaskPlan revisionPlan = new TaskPlan(
                 "修改选中产物并评审新版本。",
                 List.of(frontendRevisionStep, reviewerStep));
+        List<TaskStep> revisionSteps = List.of(frontendRevisionStep, reviewerStep);
+        TaskGraph revisionTaskGraph = TaskGraph.fromSteps(revisionSteps);
+        OrchestratorDecisionLog revisionDecisionLog = buildRevisionDecisionLog(
+                revisionInstruction,
+                originalArtifact,
+                revisedArtifact,
+                reviewArtifact,
+                revisionSteps,
+                revisionTaskGraph);
 
         TaskRun taskRun = new TaskRun(
                 taskRunId,
@@ -616,7 +636,9 @@ public class OrchestratorService {
                 taskSpec.getId(),
                 TaskRunStatus.COMPLETED,
                 revisionPlan,
-                List.of(frontendRevisionStep, reviewerStep),
+                revisionSteps,
+                revisionTaskGraph,
+                revisionDecisionLog,
                 "Artifact-centered revision 已完成，产出新的代码版本和后续评审报告。",
                 now,
                 now);
@@ -934,6 +956,125 @@ public class OrchestratorService {
                 + "，dependsOn=" + step.getDependsOnStepOrders()
                 + (isFallbackStep(step) ? "，fallbackUsed=true" : "")
                 + "。";
+    }
+
+    private OrchestratorDecisionLog buildDemoDecisionLog(
+            OrchestratorPlan plan,
+            List<TaskStep> steps,
+            TaskGraph taskGraph,
+            List<Artifact> artifacts,
+            List<Artifact> adapterOutputArtifacts,
+            String selectedAgentSource,
+            String selectedAgentSummary,
+            List<RetrievedContextItem> retrievedContextItems) {
+        String plannerDecision = "Planner mode=" + plan.planningMode()
+                + "; goal=" + plan.goal()
+                + "; plannedSteps=" + plan.steps().size()
+                + "; parallelGroups=" + plan.parallelGroups()
+                + "; expectedArtifacts=" + plan.expectedArtifacts()
+                + formatOptional("; reasoning=", plan.plannerReasoningSummary())
+                + formatOptional("; fallbackReason=", plan.fallbackReason());
+        String routingDecision = "Router selected agents from message and plan. "
+                + selectedAgentSource + " "
+                + selectedAgentSummary + " "
+                + String.join(" | ", steps.stream().map(this::buildStepDecision).toList());
+        String executionDecision = "Executor used " + taskGraph.getGraphType()
+                + "; " + taskGraph.getSummary()
+                + "; batches=" + String.join(" | ", taskGraph.getExecutionBatches().stream()
+                        .map(batch -> batch.getBatchKey()
+                                + "=" + batch.getExecutionMode()
+                                + ", steps=" + batch.getStepOrders()
+                                + ", dependsOn=" + batch.getDependsOnBatchKeys())
+                        .toList())
+                + "; adapter status is recorded on each TaskStep.";
+        String aggregationDecision = "Aggregator persisted " + artifacts.size()
+                + " artifact(s), including " + adapterOutputArtifacts.size()
+                + " adapter output artifact(s). Retrieved context sources="
+                + retrievedContextItems.size()
+                + ". Summary and group chat messages were appended after step execution.";
+        String fallbackDecision = buildFallbackDecision(plan, steps);
+        String summary = "Backend structured decision log for Planner / Router / Executor / Aggregator / Fallback.";
+        return new OrchestratorDecisionLog(
+                plan.planningMode(),
+                plannerDecision,
+                routingDecision,
+                executionDecision,
+                aggregationDecision,
+                fallbackDecision,
+                summary);
+    }
+
+    private OrchestratorDecisionLog buildRevisionDecisionLog(
+            String revisionInstruction,
+            Artifact originalArtifact,
+            Artifact revisedArtifact,
+            Artifact reviewArtifact,
+            List<TaskStep> steps,
+            TaskGraph taskGraph) {
+        String plannerDecision = "Revision planner created two-step artifact iteration for instruction="
+                + revisionInstruction
+                + "; sourceArtifact=" + artifactTitle(originalArtifact)
+                + "; expectedArtifacts=[CODE, REVIEW_REPORT].";
+        String routingDecision = "Router assigned revision implementation to Frontend Builder and review to Reviewer. "
+                + String.join(" | ", steps.stream().map(this::buildStepDecision).toList());
+        String executionDecision = "Executor used " + taskGraph.getGraphType()
+                + "; " + taskGraph.getSummary()
+                + "; revision steps executed through AgentStepExecutor and adapter fallback.";
+        String aggregationDecision = "Aggregator linked revised artifact "
+                + artifactTitle(revisedArtifact)
+                + " and review artifact "
+                + artifactTitle(reviewArtifact)
+                + " back to the original artifact lineage.";
+        String fallbackDecision = buildFallbackDecision(null, steps);
+        return new OrchestratorDecisionLog(
+                "RULE_BASED_REVISION",
+                plannerDecision,
+                routingDecision,
+                executionDecision,
+                aggregationDecision,
+                fallbackDecision,
+                "Structured decision log for artifact revision.");
+    }
+
+    private String buildStepDecision(TaskStep step) {
+        return "Step " + step.getStepOrder()
+                + " agent=" + step.getAssignedAgentId().value()
+                + ", preferredAdapter=" + nullSafe(step.getPreferredAdapterType(), "MOCK")
+                + ", actualAdapter=" + nullSafe(step.getActualAdapterType(), "MOCK")
+                + ", adapterStatus=" + nullSafe(step.getAdapterStatus(), "UNKNOWN")
+                + ", parallelGroup=" + nullSafe(step.getParallelGroupKey(), "GROUP_" + step.getStepOrder())
+                + ", dependsOn=" + step.getDependsOnStepOrders()
+                + ", producedArtifacts=" + step.getProducedArtifactIds().stream()
+                        .map(ArtifactId::value)
+                        .toList()
+                + ", routingReason=" + nullSafe(step.getRoutingReason(), "Rule-based routing");
+    }
+
+    private String buildFallbackDecision(OrchestratorPlan plan, List<TaskStep> steps) {
+        List<String> fallbackSteps = steps.stream()
+                .filter(this::isFallbackStep)
+                .map(step -> "Step " + step.getStepOrder()
+                        + " preferred=" + nullSafe(step.getPreferredAdapterType(), "MOCK")
+                        + " actual=" + nullSafe(step.getActualAdapterType(), "MOCK")
+                        + " reason=" + nullSafe(step.getAdapterErrorMessage(), "preferred adapter unavailable"))
+                .toList();
+        List<String> reasons = new ArrayList<>();
+        if (plan != null && plan.fallbackReason() != null && !plan.fallbackReason().isBlank()) {
+            reasons.add("plannerFallback=" + plan.fallbackReason());
+        }
+        reasons.addAll(fallbackSteps);
+        if (reasons.isEmpty()) {
+            return "No planner fallback and no adapter fallback were recorded.";
+        }
+        return String.join(" | ", reasons);
+    }
+
+    private String formatOptional(String prefix, String value) {
+        return value == null || value.isBlank() ? "" : prefix + value;
+    }
+
+    private String nullSafe(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private String buildFallbackSummary(List<TaskStep> steps) {

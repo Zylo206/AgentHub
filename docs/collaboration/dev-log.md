@@ -2170,3 +2170,96 @@
 
 - 给 Approval Gate 增加 affected artifact / diff preview 摘要
 - 后续若接入真实部署或文件写入，再把审批从前端提示升级为后端强制校验
+
+## Phase 51：Approval Gate 影响范围与 Diff Preview 摘要
+
+### 目标
+
+- 在用户确认 Apply Diff、Force Apply Diff、Deploy、Restore 前展示受影响范围
+- 让 HITL 确认不只是二次点击，而能看到目标 Artifact、版本、Diff 统计、快照来源和风险说明
+- 将影响范围摘要写入 Action Audit，方便后续时间线追溯
+
+### 主要变更
+
+- `ArtifactPanel` 的 Approval Gate 增加 `affectedItems`
+  - Deploy 展示目标 Artifact、版本、类型、语言、静态预览目标和本地 Preview URL 产出说明
+  - Apply Diff / Force Apply Diff 复用 `buildDiffSummary`
+    - 展示父版本、增加 / 删除 / 修改块统计
+    - 展示普通应用或强制应用模式
+    - 展示最多 3 条 changed item 和最多 3 条行级 diff 样例
+  - Restore Snapshot 展示 snapshotId、来源操作、Artifact 标题、版本、类型、语言和快照内容长度
+- Approval Audit 写入时附带 affected summary
+- `workspace.css` 增加 Approval Gate 影响范围列表样式
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动检查 `/workspace`
+  - 点击 Apply Diff / Force Apply / Deploy / Restore
+  - 确认 Approval Gate 展示 affected summary
+  - 确认审批后 Action Audit 时间线能看到影响范围摘要
+
+### 静态 / Mock / Placeholder 部分
+
+- Diff preview 仍复用当前轻量行级 diff，不是 AST diff、三方 merge 或真实 IDE patch preview
+- Deploy 仍是 static demo simulation，不是真实外部部署
+- Restore 仍是生成新 Artifact 版本，不是 Git checkout 或文件系统回滚
+
+### 遗留问题
+
+- Approval Gate 还没有完整的 side-by-side diff 预览
+- affected summary 仍是文本摘要，不是结构化 ApprovalRequest 领域模型
+- 后端仍未强制要求审批 token 才能执行高风险操作
+
+### 下一步建议
+
+- 将 Action Audit / Approval Gate 的核心字段结构化为后端 ApprovalRequest
+- 或继续补 Adapter 测试面板，让真实 / 半真实 Agent 接入更容易验收
+
+## Phase 52：结构化 Orchestrator Decision Log
+
+### 目标
+
+- 将 Orchestrator 可解释面板从前端推断升级为后端事实输出
+- 让 TaskRun 直接携带 Planner / Router / Executor / Aggregator / Fallback 决策链
+- 提升答辩时解释 Orchestrator 工作方式的可信度
+
+### 主要变更
+
+- 新增 `OrchestratorDecisionLog`
+  - `decisionMode`
+  - `plannerDecision`
+  - `routingDecision`
+  - `executionDecision`
+  - `aggregationDecision`
+  - `fallbackDecision`
+  - `summary`
+- `TaskRun` 增加 `orchestratorDecisionLog`
+- `OrchestratorService` 在 demo-task 和 artifact revision 链路生成结构化决策日志
+- `TaskRunPanel` 的 Orchestrator explain panel 优先展示后端决策日志
+- `scripts/smoke-test.mjs` 增加结构化决策日志断言
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是结构化解释能力，不是新的真实 Agent 执行能力
+- Planner 仍可能是规则化或 LLM fallback
+- Adapter 仍可能 fallback 到 MOCK
+- Decision Log 不是企业级审计系统，也不替代 Action Audit
+
+### 遗留问题
+
+- Orchestrator Decision 仍随 `TaskRun` 内存保存，未独立持久化为可查询审计表
+- 前端 explain panel 仍是卡片展示，未做图形化 DAG / 决策图
+- 还没有按用户、任务、Agent 维度筛选或导出决策记录
+
+### 下一步建议
+
+- 将 Approval Gate 核心字段升级为后端 `ApprovalRequest`
+- 或继续做 Adapter 测试面板，补强半真实 Agent 接入验收能力

@@ -157,16 +157,17 @@ function OrchestratorExplainPanel({
   const parallelExecutionGroups = getParallelExecutionGroups(taskRun);
   const hasParallelExecution = parallelExecutionGroups.length > 0;
   const plannerDisplay = getPlannerDisplay(taskRun, hasParallelExecution);
+  const decisionLog = taskRun.orchestratorDecisionLog ?? null;
 
   return (
     <section className="orchestrator-explain-panel" aria-label="Orchestrator 决策链">
       <div className="orchestrator-explain-panel__header">
         <div>
           <strong>Orchestrator 决策链</strong>
-          <p>{plannerDisplay.description}</p>
+          <p>{decisionLog?.summary || plannerDisplay.description}</p>
         </div>
         <span className="orchestrator-mode-pill">
-          {plannerDisplay.label}
+          {decisionLog?.decisionMode || plannerDisplay.label}
         </span>
       </div>
 
@@ -174,11 +175,16 @@ function OrchestratorExplainPanel({
         <article className="orchestrator-stage-card">
           <span className="orchestrator-stage-card__label">Planner</span>
           <strong>拆解任务</strong>
-          <p>{taskRun.taskPlan?.goal || taskSpec?.userGoal || "基于用户消息生成 Demo Task 计划。"}</p>
-          {plannerDisplay.plannerReasoning ? (
+          <p>
+            {decisionLog?.plannerDecision ||
+              taskRun.taskPlan?.goal ||
+              taskSpec?.userGoal ||
+              "基于用户消息生成 Demo Task 计划。"}
+          </p>
+          {!decisionLog && plannerDisplay.plannerReasoning ? (
             <p className="orchestrator-stage-card__note">{plannerDisplay.plannerReasoning}</p>
           ) : null}
-          {plannerDisplay.fallbackReason ? (
+          {!decisionLog && plannerDisplay.fallbackReason ? (
             <p className="orchestrator-stage-card__note orchestrator-stage-card__note--warning">
               fallback 原因：{plannerDisplay.fallbackReason}
             </p>
@@ -199,6 +205,9 @@ function OrchestratorExplainPanel({
         <article className="orchestrator-stage-card">
           <span className="orchestrator-stage-card__label">Router</span>
           <strong>路由 Agent</strong>
+          {decisionLog?.routingDecision ? (
+            <p className="orchestrator-stage-card__note">{decisionLog.routingDecision}</p>
+          ) : null}
           <div className="orchestrator-route-list">
             {taskRun.steps.map((step) => {
               const adapterDisplay = getAdapterDisplay(step);
@@ -223,7 +232,12 @@ function OrchestratorExplainPanel({
         <article className="orchestrator-stage-card">
           <span className="orchestrator-stage-card__label">Executor</span>
           <strong>执行与 fallback</strong>
-          <p>记录每个 Step 的 preferred / actual Adapter、执行状态和错误信息。</p>
+          <p>{decisionLog?.executionDecision || "记录每个 Step 的 preferred / actual Adapter、执行状态和错误信息。"}</p>
+          {decisionLog?.fallbackDecision ? (
+            <p className="orchestrator-stage-card__note orchestrator-stage-card__note--warning">
+              {decisionLog.fallbackDecision}
+            </p>
+          ) : null}
           <div className="orchestrator-stage-card__meta">
             <span>{taskRun.steps.length} 个 Step 已执行</span>
             <span>{fallbackCount} 个 fallback</span>
@@ -269,7 +283,10 @@ function OrchestratorExplainPanel({
         <article className="orchestrator-stage-card">
           <span className="orchestrator-stage-card__label">Aggregator</span>
           <strong>聚合结果</strong>
-          <p>{taskRun.resultSummary}</p>
+          <p>{decisionLog?.aggregationDecision || taskRun.resultSummary}</p>
+          {decisionLog?.aggregationDecision ? (
+            <p className="orchestrator-stage-card__note">{taskRun.resultSummary}</p>
+          ) : null}
           <div className="orchestrator-stage-card__meta">
             <span>{producedArtifacts.length} 个产物</span>
             <span>{displayStatus(taskRun.status)}</span>
