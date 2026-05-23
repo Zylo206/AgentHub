@@ -6,12 +6,27 @@ import com.agenthub.infrastructure.adapter.AgentAdapterType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TaskPlanner {
 
+    private final String plannerType;
+    private final boolean fallbackToRuleBased;
+
+    public TaskPlanner(
+            @Value("${agenthub.orchestrator.planner.type:RULE_BASED}") String plannerType,
+            @Value("${agenthub.orchestrator.planner.fallback-to-rule-based:true}") boolean fallbackToRuleBased) {
+        this.plannerType = plannerType;
+        this.fallbackToRuleBased = fallbackToRuleBased;
+    }
+
     public OrchestratorPlan planDemoTask(String userInput, Agent selectedAgent) {
+        return planDemoTask(userInput, selectedAgent, List.of());
+    }
+
+    public OrchestratorPlan planDemoTask(String userInput, Agent selectedAgent, List<Agent> mentionedAgents) {
         String normalizedInput = userInput == null ? "" : userInput.toLowerCase(Locale.ROOT);
         boolean needsFrontend = containsAny(normalizedInput, "react", "页面", "登录", "ui", "前端", "frontend", "page");
         boolean needsBackend = containsAny(normalizedInput, "api", "接口", "后端", "数据结构", "backend", "contract");
@@ -49,6 +64,17 @@ public class TaskPlanner {
             steps.add(reviewStep(3));
         }
 
+        String normalizedPlannerType = plannerType == null ? "RULE_BASED" : plannerType.trim().toUpperCase(Locale.ROOT);
+        String planningMode = "LLM".equals(normalizedPlannerType) && fallbackToRuleBased
+                ? "RULE_BASED_FALLBACK"
+                : "RULE_BASED_DEMO";
+        String fallbackReason = "LLM".equals(normalizedPlannerType)
+                ? "LLM planner is configured but this MVP uses rule-based fallback unless a validated planner output is available."
+                : null;
+        List<String> parallelGroups = mentionedAgents == null || mentionedAgents.size() <= 1
+                ? List.of("GROUP_FRONTEND", "GROUP_BACKEND", "GROUP_REVIEW")
+                : List.of("MENTIONED_AGENT_GROUP", "GROUP_BACKEND", "GROUP_REVIEW");
+
         return new OrchestratorPlan(
                 "生成登录页、说明文档、API 契约和评审产物。",
                 steps,
@@ -58,7 +84,10 @@ public class TaskPlanner {
                         "提供 API 契约产物",
                         "评审报告包含问题、建议和风险等级"),
                 List.of("CODE", "MARKDOWN", "API_CONTRACT", "REVIEW_REPORT"),
-                "RULE_BASED_DEMO");
+                planningMode,
+                parallelGroups,
+                "Rule-based planner generated a stable demo plan from user input, selected agent, mentioned agents, and acceptance criteria.",
+                fallbackReason);
     }
 
     private OrchestratorStepPlan frontendStep(int stepOrder, Agent selectedAgent) {

@@ -21,6 +21,9 @@ public class TaskStep {
     private final String adapterStatus;
     private final String adapterResponseSummary;
     private final String adapterErrorMessage;
+    private final String parallelGroupKey;
+    private final List<Integer> dependsOnStepOrders;
+    private final String routingReason;
     private final List<ArtifactId> producedArtifactIds;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -42,6 +45,48 @@ public class TaskStep {
             List<ArtifactId> producedArtifactIds,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                id,
+                taskRunId,
+                stepOrder,
+                assignedAgentId,
+                taskDescription,
+                status,
+                inputContext,
+                outputContent,
+                preferredAdapterType,
+                actualAdapterType,
+                adapterStatus,
+                adapterResponseSummary,
+                adapterErrorMessage,
+                "GROUP_" + stepOrder,
+                List.of(),
+                "Rule-based routing",
+                producedArtifactIds,
+                createdAt,
+                updatedAt);
+    }
+
+    public TaskStep(
+            TaskStepId id,
+            TaskRunId taskRunId,
+            int stepOrder,
+            AgentId assignedAgentId,
+            String taskDescription,
+            TaskStepStatus status,
+            String inputContext,
+            String outputContent,
+            String preferredAdapterType,
+            String actualAdapterType,
+            String adapterStatus,
+            String adapterResponseSummary,
+            String adapterErrorMessage,
+            String parallelGroupKey,
+            List<Integer> dependsOnStepOrders,
+            String routingReason,
+            List<ArtifactId> producedArtifactIds,
+            Instant createdAt,
+            Instant updatedAt) {
         this.id = id;
         this.taskRunId = taskRunId;
         this.stepOrder = stepOrder;
@@ -56,6 +101,9 @@ public class TaskStep {
         this.adapterStatus = adapterStatus;
         this.adapterResponseSummary = adapterResponseSummary;
         this.adapterErrorMessage = adapterErrorMessage;
+        this.parallelGroupKey = parallelGroupKey;
+        this.dependsOnStepOrders = dependsOnStepOrders == null ? List.of() : List.copyOf(dependsOnStepOrders);
+        this.routingReason = routingReason;
         this.producedArtifactIds = List.copyOf(producedArtifactIds);
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -146,6 +194,18 @@ public class TaskStep {
 
     public String getAdapterErrorMessage() {
         return adapterErrorMessage;
+    }
+
+    public String getParallelGroupKey() {
+        return parallelGroupKey;
+    }
+
+    public List<Integer> getDependsOnStepOrders() {
+        return dependsOnStepOrders;
+    }
+
+    public String getRoutingReason() {
+        return routingReason;
     }
 
     public List<ArtifactId> getProducedArtifactIds() {

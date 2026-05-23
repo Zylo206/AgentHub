@@ -4,6 +4,7 @@ import type { Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
 import type { Conversation } from "../features/conversations/conversationTypes";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../features/context/contextTypes";
 import type { DeploymentRecord } from "../features/deployments/deploymentTypes";
+import type { MemoryItem } from "../features/memory/memoryTypes";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -108,11 +109,12 @@ export function getConversation(conversationId: string): Promise<Conversation> {
 export function sendMessage(
   conversationId: string,
   content: string,
-  targetAgentId?: string | null
+  targetAgentId?: string | null,
+  mentionedAgentIds?: string[] | null
 ): Promise<Message> {
   return request<Message>(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ content, targetAgentId: targetAgentId ?? null })
+    body: JSON.stringify({ content, targetAgentId: targetAgentId ?? null, mentionedAgentIds: mentionedAgentIds ?? [] })
   });
 }
 
@@ -211,4 +213,25 @@ export function getDeploymentsByArtifact(artifactId: string): Promise<Deployment
 
 export function getDeployment(deploymentId: string): Promise<DeploymentRecord> {
   return request<DeploymentRecord>(`/api/deployments/${deploymentId}`);
+}
+
+export function getMemoriesByConversation(conversationId: string): Promise<MemoryItem[]> {
+  return request<MemoryItem[]>(`/api/conversations/${conversationId}/memories`);
+}
+
+export function saveMessageAsMemory(
+  conversationId: string,
+  messageId: string,
+  category = "PROJECT_FACT"
+): Promise<MemoryItem> {
+  return request<MemoryItem>(`/api/conversations/${conversationId}/messages/${messageId}/memory`, {
+    method: "POST",
+    body: JSON.stringify({ category })
+  });
+}
+
+export function deleteMemory(memoryId: string): Promise<MemoryItem> {
+  return request<MemoryItem>(`/api/memories/${memoryId}`, {
+    method: "DELETE"
+  });
 }

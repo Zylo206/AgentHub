@@ -11,6 +11,7 @@ interface MessageBubbleProps {
   rerunning?: boolean;
   onSelectArtifact: (artifactId: string) => void;
   onTogglePin: (messageId: string, pinnedContextId?: string | null) => void;
+  onSaveAsMemory: (message: Message) => void;
   onCopyMessage: (message: Message) => void;
   onQuoteMessage: (message: Message) => void;
   onRerunFromMessage: (message: Message) => void;
@@ -54,6 +55,7 @@ export function MessageBubble({
   rerunning,
   onSelectArtifact,
   onTogglePin,
+  onSaveAsMemory,
   onCopyMessage,
   onQuoteMessage,
   onRerunFromMessage
@@ -110,8 +112,15 @@ export function MessageBubble({
           >
             {pinnedContextId ? "已固定 / 取消固定" : "固定到 Context"}
           </button>
+          <button
+            type="button"
+            className="message-action-button"
+            onClick={() => onSaveAsMemory(message)}
+          >
+            保存为记忆
+          </button>
         </div>
-        {message.senderType === "USER" && message.targetAgentId ? (
+        {message.senderType === "USER" && (message.targetAgentId || (message.mentionedAgentIds?.length ?? 0) > 0) ? (
           <div className="message-target-agent">
             <span>发送给：</span>
             <span className="message-target-agent-name">@{targetAgentLabel || message.targetAgentId}</span>

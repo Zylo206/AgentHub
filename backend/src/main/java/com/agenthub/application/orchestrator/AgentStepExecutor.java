@@ -81,6 +81,9 @@ public class AgentStepExecutor {
                 adapterResponse.status().name(),
                 adapterSummary,
                 adapterResponse.errorMessage(),
+                command.parallelGroupKey(),
+                command.dependsOnStepOrders(),
+                command.routingReason(),
                 producedArtifactIds,
                 command.now(),
                 command.now());
@@ -185,12 +188,55 @@ public class AgentStepExecutor {
             List<String> artifactSummaries,
             List<ArtifactId> producedArtifactIds,
             AgentAdapterType preferredAdapterType,
+            String parallelGroupKey,
+            List<Integer> dependsOnStepOrders,
+            String routingReason,
             Instant now) {
+
+        public StepExecutionCommand(
+                String conversationId,
+                TaskRunId taskRunId,
+                int stepOrder,
+                String agentId,
+                String agentName,
+                String userInput,
+                String systemPrompt,
+                String taskDescription,
+                String requiredSkill,
+                String inputContext,
+                String baseOutputContent,
+                List<String> contextItems,
+                List<String> artifactSummaries,
+                List<ArtifactId> producedArtifactIds,
+                AgentAdapterType preferredAdapterType,
+                Instant now) {
+            this(
+                    conversationId,
+                    taskRunId,
+                    stepOrder,
+                    agentId,
+                    agentName,
+                    userInput,
+                    systemPrompt,
+                    taskDescription,
+                    requiredSkill,
+                    inputContext,
+                    baseOutputContent,
+                    contextItems,
+                    artifactSummaries,
+                    producedArtifactIds,
+                    preferredAdapterType,
+                    "GROUP_" + stepOrder,
+                    List.of(),
+                    "Rule-based routing",
+                    now);
+        }
 
         public StepExecutionCommand {
             contextItems = List.copyOf(contextItems);
             artifactSummaries = List.copyOf(artifactSummaries);
             producedArtifactIds = List.copyOf(producedArtifactIds);
+            dependsOnStepOrders = dependsOnStepOrders == null ? List.of() : List.copyOf(dependsOnStepOrders);
         }
     }
 }

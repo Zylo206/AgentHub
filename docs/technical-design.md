@@ -139,16 +139,19 @@ User
 - `content`
 - `artifactIds`
 - `targetAgentId`
+- `mentionedAgentIds`
 
 关系：
 
 - 属于某个 `Conversation`
 - 可作为 `TaskSpec.sourceMessageId`
 - `targetAgentId` 可被 Orchestrator 用于推断 selectedAgent
+- `mentionedAgentIds` 支持消息开头连续多个 `@AgentName` 的最小群聊目标表达
 
 当前状态：
 
 - 已实现
+- 保留 `targetAgentId` 兼容旧流程，多个 @Agent 使用 `mentionedAgentIds`
 
 ### TaskSpec
 
@@ -228,6 +231,9 @@ User
 - `adapterStatus`
 - `adapterResponseSummary`
 - `adapterErrorMessage`
+- `parallelGroupKey`
+- `dependsOnStepOrders`
+- `routingReason`
 
 关系：
 
@@ -238,6 +244,7 @@ User
 
 - 已实现
 - 已能展示 preferred / actual / fallback
+- 已具备并行计划字段，但尚未做真实线程级并发执行
 
 ### Artifact
 
@@ -354,29 +361,35 @@ API 主要提供：
 
 - 读取 source message
 - 解析显式 `selectedAgentId`
-- 在需要时从 `Message.targetAgentId` 推断 selectedAgent
+- 在需要时从 `Message.mentionedAgentIds` / `Message.targetAgentId` 推断 selectedAgent
 - 创建 TaskSpec
-- 创建 TaskRun / TaskStep
-- 调用 AgentExecutorService
+- 通过 TaskPlanner / AgentRouter / AgentStepExecutor / ResultAggregator 组织 demo-task
+- 创建 TaskRun / TaskStep，并记录 parallel group、routing reason 和 adapter fallback
+- 调用 AgentExecutorService / AgentAdapterRegistry
 - 生成 Artifact
 - 生成 ContextSnapshot / HandoffSummary
+- 追加 Orchestrator / Frontend / Backend / Reviewer 群聊式 Agent 消息
+- 将 pinned context 和 MemoryItem 注入 TaskStep inputContext
 
 必须明确：
 
 - 当前 Orchestrator 仍偏规则化、静态 Demo
 - 不是复杂动态规划系统
 - 不是基于真实 LLM 的多轮拆解器
+- 当前 parallel group 仍是计划字段和展示基础，不是真实并发调度
 
-## 7. Message.targetAgentId 到 selectedAgent 推断链路
+## 7. Message target / mentioned agents 到 selectedAgent 推断链路
 
 当前链路已打通：
 
 1. 前端发送消息时可附带 `targetAgentId`
-2. `MessageApplicationService` 保存 `targetAgentId`
-3. `demo-task` 请求仍可显式传 `selectedAgentId`
-4. `OrchestratorService` 优先使用显式 `selectedAgentId`
-5. 若显式值为空，则读取 source message 的 `targetAgentId`
-6. 将推断出的 selectedAgent 注入第一个 specialist step
+2. 前端也可通过开头连续多个 `@AgentName` 发送 `mentionedAgentIds`
+3. `MessageApplicationService` 保存 `targetAgentId` 和 `mentionedAgentIds`
+4. `demo-task` 请求仍可显式传 `selectedAgentId`
+5. `OrchestratorService` 优先使用显式 `selectedAgentId`
+6. 若显式值为空，则优先读取 source message 的 `mentionedAgentIds`
+7. 若没有 `mentionedAgentIds`，再读取 `targetAgentId`
+8. 将推断出的 selectedAgent 注入第一个 specialist step，并把 mentioned agents 加入 conversation participants
 
 影响范围：
 
@@ -386,6 +399,7 @@ API 主要提供：
 - `TaskRun.resultSummary`
 - `ContextSnapshot`
 - `HandoffSummary`
+- MessageStream 中的群聊式 Agent 回复
 
 ## 8. Agent Adapter Layer 设计
 
@@ -401,12 +415,16 @@ API 主要提供：
 - `MockAgentAdapter`
 - `CodexAgentAdapter`
 - `ClaudeCodeAgentAdapter`
+- `OpenCodeAgentAdapter`
+- `OpenAICompatibleAgentAdapter`
+- CLI command runner / CLI adapter support
 
 作用：
 
 - 统一不同平台的执行接口
 - 让 TaskStep 显式记录 adapter 行为
 - 提供稳定 demo fallback
+- 支持 Adapter status descriptor，供前端 Agent Builder / Workspace 展示
 
 ## 9. Mock / Placeholder / Real integration 边界
 
@@ -417,17 +435,33 @@ API 主要提供：
 
 ### CodexAgentAdapter
 
-- 当前是 placeholder
-- 不做真实外部调用
+- 当前是 CLI 探测型半真实 Adapter
+- 默认 disabled，不要求本机安装 Codex CLI
+- 启用后通过 command / args-template 执行最小非交互调用
+- 命令不可用、args-template 缺失、超时或退出码非 0 时 fallback 到 MOCK
 
 ### ClaudeCodeAgentAdapter
 
-- 当前是 placeholder
-- 不做真实外部调用
+- 当前是 CLI 探测型半真实 Adapter
+- 默认 disabled，不要求本机安装 Claude Code CLI
+- 命令不可用、args-template 缺失、超时或退出码非 0 时 fallback 到 MOCK
+
+### OpenCodeAgentAdapter
+
+- 当前是 CLI 探测型半真实 Adapter
+- 默认 disabled，不要求本机安装 OpenCode CLI
+- 命令不可用、args-template 缺失、超时或退出码非 0 时 fallback 到 MOCK
+
+### OpenAICompatibleAgentAdapter
+
+- 当前是可配置真实模型调用入口
+- 需要 `AGENTHUB_OPENAI_BASE_URL`、`AGENTHUB_OPENAI_API_KEY`、`AGENTHUB_OPENAI_MODEL`
+- 未配置或调用失败时 fallback 到 MOCK
+- 当前非流式，且不代表 Codex / Claude Code / OpenCode 深度接入完成
 
 ### Real integration
 
-- 当前未完成
+- 深度真实平台接入当前未完成
 - 文档和演示中不得写成“已接入完成”
 
 ## 10. Agent Builder 设计
@@ -456,14 +490,21 @@ API 主要提供：
 
 - demo-task 生成 ContextSnapshot
 - demo-task 和 revision 生成 HandoffSummary
+- 支持 PinnedContext，用户可把 Message 固定为上下文
+- 支持 MemoryItem MVP，用户可把 Message 保存为长期记忆
+- Orchestrator demo-task 会把 pinned context 和 memory 注入第一个 TaskStep inputContext
 
 前端：
 
 - `ContextPanel` 展示 snapshot / handoff
+- `ContextPanel` 展示手动固定上下文和长期记忆
+- `MessageBubble` 支持固定到上下文和保存为记忆
 
 边界说明：
 
-- 当前是静态 demo 内容，不是生产级 memory system
+- 当前 MemoryItem 仍是内存 Repository，不是生产级长期记忆系统
+- 当前不使用 embedding / vector database
+- 当前没有跨设备同步或持久化记忆治理
 
 ## 12. Artifact Revision 设计
 
@@ -493,12 +534,12 @@ API 主要提供：
 
 ### Diff Summary
 
-当前是静态摘要，不是真实 diff 算法。
+当前已从纯静态摘要升级为轻量 line diff 展示，但仍不是完整代码编辑器或 patch apply 引擎。
 
 设计意图：
 
 - 先把版本演进关系可视化
-- 后续再考虑真实 diff
+- 后续再考虑一键应用 Diff、代码编辑器和冲突处理
 
 ## 14. 当前内存 Repository 设计
 
@@ -522,6 +563,13 @@ API 主要提供：
 
 后续可把当前内存 Repository 迁移到 MyBatis + MySQL，保持 API 和领域模型尽量稳定。
 
+优先迁移对象：
+
+- Conversation / Message
+- Artifact / TaskRun / TaskStep
+- PinnedContext / MemoryItem
+- DeploymentRecord
+
 ### SSE / WebSocket
 
 后续可用于：
@@ -534,22 +582,35 @@ API 主要提供：
 
 后续目标：
 
-- 至少接入两个主流平台
+- 至少深度接入两个主流平台
 - 让 preferredAdapterType 影响真实执行
 - 保留 Mock fallback 作为兜底
+- 让成功的真实 / 半真实 Adapter 输出稳定进入 Artifact 链路
+
+### LLM Planner
+
+后续目标：
+
+- 通过 `OPENAI_COMPATIBLE` 可选生成 OrchestratorPlan
+- 使用 JSON schema 校验模型输出
+- 校验失败、超时或模型不可用时回退 RuleBasedPlanner
+- 不让 LLM Planner 直接绕过现有 Artifact / Adapter / fallback 链路
 
 ## 16. 风险与扩展点
 
 当前主要风险：
 
 - static demo 容易被误解为真实执行
-- Adapter placeholder 不满足硬要求
+- CLI 探测型 Adapter 不能等同于深度平台接入
 - 文档可能滞后于代码
 - 演示链路依赖静态模板
+- MemoryItem 仍是内存态，刷新后丢失
+- parallelGroupKey 仍未进入真实并发执行
 
 当前最重要的扩展点：
 
-- 两个平台最小真实/半真实接入
-- 更规则化的 Orchestrator
-- Deploy Status Card
-- 更强的多 Agent 协作语义
+- 真实并行多 Agent 调度 v1
+- LLM Planner JSON schema MVP
+- MemoryItem 持久化与检索策略
+- Adapter 成功输出 Artifact 增强
+- Orchestrator Decision DTO

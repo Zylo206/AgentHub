@@ -1480,3 +1480,123 @@
 - 将 Orchestrator 决策链补充到 technical-design / demo-checklist
 - 或继续实现 Adapter 成功输出进入更真实的 Artifact 编辑链路
 - 后续可新增后端结构化 decision trace，替代前端派生展示
+
+## Phase 39：多 @Agent、并行计划字段、Planner fallback 与长期记忆 MVP
+
+### 目标
+
+- 将单目标 Agent 消息扩展为多个 `@Agent` 的最小闭环
+- 为后续并行多 Agent 调度增加计划字段和前端可解释展示基础
+- 增加可配置 LLM Planner 入口，同时保持规则化 Planner fallback
+- 从 pinned message 扩展出最小长期记忆 MemoryItem / Memory API / ContextPanel 展示
+
+### 主要变更
+
+- `Message` / `SendMessageRequest` 新增 `mentionedAgentIds`，保留 `targetAgentId` 兼容旧流程
+- `parseLeadingAgentMention` 支持消息开头连续多个 `@AgentName`
+- `MessageBubble` 支持多 Agent 目标展示，并增加“保存为记忆”操作
+- `OrchestratorService` 在无显式 selectedAgentId 时优先从 `mentionedAgentIds` 推断 selectedAgent，并把 mentioned agents 加入会话参与者
+- `OrchestratorPlan` / `OrchestratorStepPlan` 增加 parallel group、dependsOn 和 routing reason 等计划字段
+- `TaskPlanner` 增加 planner 配置读取：
+  - `agenthub.orchestrator.planner.type`
+  - `agenthub.orchestrator.planner.fallback-to-rule-based`
+  - 当前 LLM 配置会进入 `RULE_BASED_FALLBACK`，不破坏无 API key Demo
+- 新增 `MemoryItem`、`MemoryRepository`、`MemoryApplicationService`、`MemoryController`
+- `ContextPanel` 增加“长期记忆”区，Workspace 加载 conversation memories
+- smoke test 增加多 @Agent、memory save/list、memory 注入 TaskStep inputContext 的验证
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 并行多 Agent 当前是计划字段和可解释展示基础，不是真实线程级并发 DAG
+- LLM Planner 当前是可配置入口和规则 fallback，不会在无配置时调用真实模型
+- MemoryItem 使用内存 Repository，不是持久化长期记忆系统
+- 不使用 embedding / vector database
+- Adapter 仍可能 fallback 到 MOCK
+
+### 遗留问题
+
+- 还没有真正基于 `parallelGroupKey` 做线程级并行执行
+- 还没有严格 JSON schema 的真实 LLM Planner 输出校验
+- MemoryItem 还没有 MySQL 持久化、跨会话全局检索或向量召回
+- 多 `@Agent` 仍只支持消息开头连续 @，不解析消息中间自然语言 @
+
+### 下一步建议
+
+- 将真实并行执行限定在 AgentStepExecutor 层，用 `CompletableFuture` 执行同组 step，并保持 Mock fallback
+- 或先补 LLM Planner JSON schema validator，让 OPENAI_COMPATIBLE 可真正生成 OrchestratorPlan
+- 后续再把 MemoryItem 持久化到数据库并引入可控检索策略
+
+## Phase 40：课题对齐评估与下一阶段 P0/P1/P2 路线同步
+
+### 目标
+
+- 基于当前 AgentHub MVP 实际能力，重新对齐比赛课题要求
+- 明确已实现、部分满足、静态 Demo / 半真实、未完成能力
+- 将下一阶段 P0 / P1 / P2 开发计划同步到项目文档，避免后续开发方向发散
+
+### 主要变更
+
+- `docs/mvp-requirements-alignment.md` 更新为当前 MVP 功能扩展期评估：
+  - IM Workspace
+  - 多 @Agent
+  - 群聊式 Agent 消息
+  - Context / Memory
+  - Orchestrator 可解释面板
+  - Adapter fallback
+  - Artifact Revision / Deploy Preview
+  - smoke test
+- `docs/roadmap.md` 更新为下一阶段 P0 / P1 / P2 路线：
+  - P0：真实并行多 Agent 调度、LLM Planner JSON Schema、MemoryItem 持久化、Adapter 输出 Artifact 增强、文档同步、仓库卫生
+  - P1：消息操作深化、一键应用 Diff、Orchestrator Decision DTO、Adapter 测试面板、smoke test 扩展
+  - P2：MySQL、SSE / WebSocket、真实部署、附件、多端、动态 DAG
+- `docs/technical-design.md` 同步最新架构状态：
+  - `mentionedAgentIds`
+  - parallel group 字段
+  - CLI 探测型 Adapter
+  - OpenAI Compatible Adapter
+  - Pinned Context / MemoryItem
+  - LLM Planner 迁移设计
+- `docs/collaboration/demo-checklist.md` 增加多 @Agent、群聊消息、Memory、Orchestrator 可解释面板和 smoke test 验收项
+- `README.md` 补充当前能力、边界和下一阶段 Roadmap 指向
+
+### 验证方式
+
+- 文档路径检查：
+  - `README.md`
+  - `docs/mvp-requirements-alignment.md`
+  - `docs/roadmap.md`
+  - `docs/technical-design.md`
+  - `docs/collaboration/demo-checklist.md`
+- 建议继续执行：
+  - `cd backend && mvn -q -DskipTests package`
+  - `cd frontend && npm run build`
+  - `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是课题对齐和路线同步，不新增业务能力
+- 当前并行调度仍是计划字段和展示基础，不是真实线程级并发
+- LLM Planner 当前仍是配置入口和规则 fallback，不是真实模型规划主链路
+- MemoryItem 仍是内存 Repository，不是持久化长期记忆系统
+- Deploy Preview 仍是静态本地模拟，不是真实部署
+- CLI 探测型 Adapter 不等于 Codex / Claude Code / OpenCode 深度平台接入完成
+
+### 遗留问题
+
+- 真实并行多 Agent 调度未完成
+- LLM Planner JSON schema 校验未完成
+- MemoryItem 持久化与检索策略未完成
+- Adapter 成功输出 Artifact 质量仍需增强
+- README / 技术文档仍需在最终提交前继续整理为 V1.0
+
+### 下一步建议
+
+- 先完成仓库卫生与提交前检查，尤其清理被 Git 跟踪的 `frontend/tsconfig.app.tsbuildinfo`
+- 下一轮优先做真实并行多 Agent 调度 v1，将 `parallelGroupKey` 从展示字段推进到执行层
+- 随后推进 LLM Planner JSON Schema MVP，并保留 RuleBasedPlanner fallback

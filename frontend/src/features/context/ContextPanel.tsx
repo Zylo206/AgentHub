@@ -1,11 +1,13 @@
 import type { TaskSpec } from "../chat/chatTypes";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "./contextTypes";
+import type { MemoryItem } from "../memory/memoryTypes";
 import { formatId } from "../../utils/id";
 import { displayArtifactType, displayStatus } from "../../utils/displayLabels";
 
 interface ContextPanelProps {
   taskSpec: TaskSpec | null;
   pinnedContexts: PinnedContext[];
+  memories: MemoryItem[];
   contextSnapshots: ContextSnapshot[];
   handoffSummaries: HandoffSummary[];
   loading: boolean;
@@ -26,6 +28,7 @@ function formatPinnedSource(pinnedContext: PinnedContext): string {
 export function ContextPanel({
   taskSpec,
   pinnedContexts,
+  memories,
   contextSnapshots,
   handoffSummaries,
   loading
@@ -87,6 +90,28 @@ export function ContextPanel({
                   <span>{formatDateTime(pinnedContext.createdAt)}</span>
                 </div>
                 <p>{pinnedContext.content}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="context-card context-card--memory">
+        <div className="context-card__header">
+          <strong>长期记忆</strong>
+          <span>{memories.length} 条</span>
+        </div>
+        {memories.length === 0 ? (
+          <p className="context-card__summary">还没有长期记忆。可以在消息气泡中点击“保存为记忆”，让后续 TaskRun 自动引用。</p>
+        ) : (
+          <div className="pinned-context-list">
+            {memories.map((memory) => (
+              <article className="pinned-context-item" key={memory.memoryId}>
+                <div className="pinned-context-item__meta">
+                  <span>{memory.category} · {memory.sourceId}</span>
+                  <span>importance {memory.importance}</span>
+                </div>
+                <p>{memory.content}</p>
               </article>
             ))}
           </div>

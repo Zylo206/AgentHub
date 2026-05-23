@@ -159,6 +159,15 @@ async function runSmokeTest() {
   }
   pass(`adapters loaded: ${adapterSummary}`);
 
+  const agents = await request("/api/agents");
+  const frontendAgent = agents.find((agent) => agent.name === "Frontend Builder");
+  const reviewerAgent = agents.find((agent) => agent.name === "Reviewer");
+  const mentionedAgentIds = [getIdValue(frontendAgent?.id), getIdValue(reviewerAgent?.id)].filter(Boolean);
+  if (mentionedAgentIds.length < 2) {
+    throw new Error("expected built-in Frontend Builder and Reviewer agents for multi-mention smoke test");
+  }
+  pass(`agents loaded for multi-mention: ${mentionedAgentIds.join(", ")}`);
+
   const conversation = await request("/api/conversations", {
     method: "POST",
     body: JSON.stringify({
@@ -175,10 +184,15 @@ async function runSmokeTest() {
   const message = await request(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
     body: JSON.stringify({
-      content: DEMO_PROMPT
+      content: DEMO_PROMPT,
+      targetAgentId: mentionedAgentIds[0],
+      mentionedAgentIds
     })
   });
   const messageId = requireValue(getIdValue(message.id), "messageId missing");
+  if (!Array.isArray(message.mentionedAgentIds) || message.mentionedAgentIds.length < 2) {
+    throw new Error(`message did not persist mentionedAgentIds: ${JSON.stringify(message.mentionedAgentIds)}`);
+  }
   pass(`message sent: ${messageId}`);
 
   const pinnedContext = await request(`/api/conversations/${conversationId}/messages/${messageId}/pin`, {
@@ -192,6 +206,19 @@ async function runSmokeTest() {
     throw new Error("pinned message context not found");
   }
   pass(`pinned contexts loaded: ${pinnedContexts.length}`);
+
+  const memory = await request(`/api/conversations/${conversationId}/messages/${messageId}/memory`, {
+    method: "POST",
+    body: JSON.stringify({ category: "PROJECT_FACT" })
+  });
+  const memoryId = requireValue(memory.memoryId, "memoryId missing");
+  pass(`message saved as memory: ${memoryId}`);
+
+  const memories = await request(`/api/conversations/${conversationId}/memories`);
+  if (!Array.isArray(memories) || !memories.some((item) => item.memoryId === memoryId)) {
+    throw new Error("saved memory not found");
+  }
+  pass(`memories loaded: ${memories.length}`);
 
   const taskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
     method: "POST",
@@ -210,6 +237,9 @@ async function runSmokeTest() {
   }
   if (!String(steps[0]?.inputContext || "").includes("Pinned context")) {
     throw new Error("first task step inputContext did not reference pinned context");
+  }
+  if (!String(steps[0]?.inputContext || "").includes("Long-term memory")) {
+    throw new Error("first task step inputContext did not reference long-term memory");
   }
   pass(`demo task completed: ${taskRunId}, steps=${steps.length}`);
 

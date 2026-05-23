@@ -7,6 +7,7 @@ export interface Message {
   senderType: "USER" | "AGENT" | "SYSTEM" | string;
   senderId: string;
   targetAgentId?: string | null;
+  mentionedAgentIds?: string[] | null;
   messageType: "TEXT" | "TASK_SPEC" | "TASK_STATUS" | "DEPLOY_STATUS" | "ARTIFACT_CARD" | "ERROR" | string;
   content: string;
   artifactIds: IdValue[];
@@ -46,6 +47,9 @@ export interface TaskStep {
   adapterStatus?: string;
   adapterResponseSummary?: string;
   adapterErrorMessage?: string;
+  parallelGroupKey?: string | null;
+  dependsOnStepOrders?: number[];
+  routingReason?: string | null;
   producedArtifactIds: IdValue[];
   createdAt: string;
   updatedAt: string;

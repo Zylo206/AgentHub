@@ -142,6 +142,8 @@ function OrchestratorExplainPanel({
                   <span>Step {step.stepOrder}</span>
                   <strong>{getStepAgentName(step, agentNameMap)}</strong>
                   <em>{adapterDisplay.preferred || "MOCK"}</em>
+                  {step.parallelGroupKey ? <small>{step.parallelGroupKey}</small> : null}
+                  {step.routingReason ? <small>{step.routingReason}</small> : null}
                 </div>
               );
             })}
@@ -165,6 +167,7 @@ function OrchestratorExplainPanel({
                   key={formatId(step.id)}
                 >
                   Step {step.stepOrder}: {adapterDisplay.actual || "未记录"}
+                  {step.parallelGroupKey ? ` / ${step.parallelGroupKey}` : ""}
                 </span>
               );
             })}

@@ -90,7 +90,27 @@
 8. 确认后端能从 message targetAgentId 推断 selectedAgent。
 9. 确认第一个 TaskStep 仍由 `My Frontend Agent` 执行。
 
-## F. 错误路径
+## F. 多 @Agent 与群聊 Agent 消息
+
+1. 确认左侧 Agent List 中存在 `Frontend Builder` 和 `Reviewer`，或先创建两个自定义 Agent。
+2. 点击 `Clear Selection` / 清除选择。
+3. 在输入框输入：
+   `@Frontend Builder @Reviewer 帮我生成并评审一个登录页`
+4. 点击发送。
+5. 确认 MessageBubble 显示多个目标 Agent，例如：
+   `To: @Frontend Builder @Reviewer`
+6. 点击 `运行 Demo Task`。
+7. 确认 MessageStream 出现多条 Agent 回复：
+   - Orchestrator 任务理解 / 分派消息
+   - Frontend Builder 或 selected Agent 的 specialist 消息
+   - Backend Worker 消息
+   - Reviewer 消息
+   - Orchestrator 聚合总结消息
+8. 确认 Conversation participants 能包含 Orchestrator、Frontend / selected Agent、Backend、Reviewer 以及 mentioned agents。
+9. 确认 TaskRunPanel 能看到 parallel group / routing reason 等计划字段。
+10. 注意：当前仍是计划层并行和可解释顺序执行，不是真实线程级并发。
+
+## G. 错误路径
 
 1. 输入：
    `@UnknownAgent hello`
@@ -103,7 +123,7 @@
 7. 清除选择后发送普通消息。
 8. 预期：MessageBubble 不显示 `To: @Agent`，Demo Task 走默认内置 Agent。
 
-## G. Adapter 状态与 fallback
+## H. Adapter 状态与 fallback
 
 1. 打开 `/agents`。
 2. 查看 Preferred Adapter 下拉框。
@@ -127,8 +147,10 @@
    - Actual: MOCK
    - Status: FALLBACK_USED
 10. 确认页面没有把未配置 Adapter 伪装成真实成功。
+11. 如果本机配置了 CLI Adapter，确认 Codex / Claude Code / OpenCode 只在 enabled、command 可用且 args-template 完整时显示 AVAILABLE。
+12. 如果 CLI Adapter 执行失败，确认 TaskStep 仍 fallback 到 MOCK，不影响 Demo 主链路。
 
-## H. Context / Handoff
+## I. Context / Handoff / Memory
 
 1. Run Demo Task 后查看 ContextPanel。
 2. 确认能看到 ContextSnapshot。
@@ -145,9 +167,29 @@
    - passedArtifacts
    - keyDecisions
    - openIssues
-7. 执行 Artifact Revision 后，确认 ContextPanel 更新到 revision 对应 TaskRun。
+7. 在 MessageBubble 点击 `固定到上下文`。
+8. 确认 ContextPanel 的“手动固定上下文”区域出现该消息。
+9. 在 MessageBubble 点击 `保存为记忆`。
+10. 确认 ContextPanel 的“长期记忆”区域出现该消息。
+11. 再次运行 Demo Task。
+12. 确认第一个 TaskStep 的 inputContext 包含 pinned context 和 long-term memory。
+13. 执行 Artifact Revision 后，确认 ContextPanel 更新到 revision 对应 TaskRun。
 
-## I. AI 协作开发记录
+## J. Orchestrator 可解释面板
+
+1. Run Demo Task 后查看 TaskRunPanel。
+2. 确认能看到 Orchestrator 决策链：
+   - Planner
+   - Router
+   - Executor
+   - Aggregator
+3. Planner 区域应展示任务目标、step 数量、预期产物和 required skills。
+4. Router 区域应展示每个 step 的 assigned Agent、preferred adapter、parallel group 和 routing reason。
+5. Executor 区域应展示 actual adapter、fallback 数量和执行状态。
+6. Aggregator 区域应展示 resultSummary 和 artifact 数量。
+7. 注意：当前解释面板主要由现有 TaskRun 数据派生，不代表真实 LLM planner 或动态 DAG 已完成。
+
+## K. AI 协作开发记录
 
 1. 打开 `docs/collaboration/development-workflow.md`。
 2. 确认有项目开发工作流说明。
@@ -160,7 +202,7 @@
 9. 打开 `docs/spec`、`docs/skills`、`docs/rules`。
 10. 确认 Spec / Skill / Rules 能对应当前功能。
 
-## J. 构建与仓库卫生
+## L. 构建与仓库卫生
 
 1. 执行：
    `cd backend && mvn -q -DskipTests package`
@@ -177,13 +219,28 @@
    - dist
    - API key
    - 本地环境文件
+7. 执行：
+   `node scripts/smoke-test.mjs`
+8. 确认 smoke test 覆盖：
+   - health / adapters
+   - create conversation / send message
+   - multi-mention
+   - pin context / memory
+   - demo-task
+   - artifact revision
+   - demo deploy
+   - preview URL HTTP 200
+   - group chat agent messages
 
 ## 重点验收项
 
 - 页面不白屏。
 - 左侧 Agent / Conversation 能正常加载。
 - ChatInput、MessageBubble、TaskRunPanel、ArtifactPanel 均可交互。
-- selectedAgent 和文本 `@AgentName` 都能影响 TaskRun 第一个 step。
+- selectedAgent、文本 `@AgentName`、多个开头连续 `@AgentName` 都能影响 TaskRun 第一个 step 或 conversation participants。
+- MessageStream 能看到 Orchestrator / Frontend / Backend / Reviewer 群聊式 Agent 消息。
+- Pinned Context 和 MemoryItem 能进入 TaskStep inputContext / ContextPanel。
 - Artifact Revision 后 Version History / Diff Summary 正常。
+- Deploy Status Card 和 `/preview/{artifactId}` 正常。
 - Adapter fallback 显示清楚，不把 placeholder 伪装成真实接入。
 - AI 协作开发记录可以被仓库直接查看。

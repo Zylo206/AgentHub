@@ -12,6 +12,7 @@ public class Message {
     private final MessageSenderType senderType;
     private final String senderId;
     private final String targetAgentId;
+    private final List<String> mentionedAgentIds;
     private final MessageType messageType;
     private final String content;
     private final List<ArtifactId> artifactIds;
@@ -32,6 +33,7 @@ public class Message {
                 senderType,
                 senderId,
                 null,
+                List.of(),
                 messageType,
                 content,
                 artifactIds,
@@ -48,11 +50,36 @@ public class Message {
             String content,
             List<ArtifactId> artifactIds,
             Instant createdAt) {
+        this(
+                id,
+                conversationId,
+                senderType,
+                senderId,
+                targetAgentId,
+                targetAgentId == null || targetAgentId.isBlank() ? List.of() : List.of(targetAgentId),
+                messageType,
+                content,
+                artifactIds,
+                createdAt);
+    }
+
+    public Message(
+            MessageId id,
+            ConversationId conversationId,
+            MessageSenderType senderType,
+            String senderId,
+            String targetAgentId,
+            List<String> mentionedAgentIds,
+            MessageType messageType,
+            String content,
+            List<ArtifactId> artifactIds,
+            Instant createdAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.senderType = senderType;
         this.senderId = senderId;
         this.targetAgentId = targetAgentId;
+        this.mentionedAgentIds = mentionedAgentIds == null ? List.of() : List.copyOf(mentionedAgentIds);
         this.messageType = messageType;
         this.content = content;
         this.artifactIds = List.copyOf(artifactIds);
@@ -77,6 +104,10 @@ public class Message {
 
     public String getTargetAgentId() {
         return targetAgentId;
+    }
+
+    public List<String> getMentionedAgentIds() {
+        return mentionedAgentIds;
     }
 
     public MessageType getMessageType() {

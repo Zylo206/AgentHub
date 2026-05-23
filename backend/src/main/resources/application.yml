@@ -9,6 +9,10 @@ mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
 
 agenthub:
+  orchestrator:
+    planner:
+      type: ${AGENTHUB_PLANNER_TYPE:RULE_BASED}
+      fallback-to-rule-based: ${AGENTHUB_PLANNER_FALLBACK_TO_RULE_BASED:true}
   adapters:
     default-type: MOCK
     openai-compatible:

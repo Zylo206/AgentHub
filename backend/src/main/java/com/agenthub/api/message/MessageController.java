@@ -4,6 +4,7 @@ import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.common.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,7 +30,8 @@ public class MessageController {
                 messageApplicationService.sendUserMessage(
                         conversationId,
                         request.content(),
-                        request.targetAgentId()),
+                        request.targetAgentId(),
+                        request.mentionedAgentIds()),
                 "Message sent");
     }
 
@@ -39,4 +41,4 @@ public class MessageController {
     }
 }
 
-record SendMessageRequest(@NotBlank String content, String targetAgentId) {}
+record SendMessageRequest(@NotBlank String content, String targetAgentId, List<String> mentionedAgentIds) {}

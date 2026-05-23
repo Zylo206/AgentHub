@@ -4,6 +4,11 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 
 当前仓库已经不是早期骨架，而是一个**可运行的 MVP 演示闭环**。用户可以在 Web Workspace 中创建会话、选择或 `@Agent`、发送消息、运行静态 demo-task、查看 TaskRun / Context / Artifact，并对已有 Artifact 发起 revision，观察版本演进和 Diff Summary。
 
+当前最新课题对齐和下一阶段计划见：
+
+- [docs/mvp-requirements-alignment.md](E:/CodeProject2/AgentHub/docs/mvp-requirements-alignment.md)
+- [docs/roadmap.md](E:/CodeProject2/AgentHub/docs/roadmap.md)
+
 ## 当前阶段说明
 
 当前阶段可定义为：
@@ -12,6 +17,7 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - 已形成稳定 AI 协作开发工作流
 - 正处于收敛式开发阶段
 - 下一步重点是补齐硬要求，而不是继续扩散功能面
+- 当前仍处于 MVP 功能扩展期，不急于最终 Demo 视频收敛
 
 当前版本适合：
 
@@ -53,7 +59,13 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - AgentRoutingService
 - `selectedAgentId` 接入 demo-task
 - `Message.targetAgentId`
+- `Message.mentionedAgentIds`
 - Orchestrator 从 `Message.targetAgentId` 推断 selectedAgent
+- Orchestrator 从 `mentionedAgentIds` 推断参与 Agent
+- 群聊式 Agent 消息流
+- Pinned Context / MemoryItem MVP
+- Deploy Status Card / Preview URL
+- `/preview/:artifactId` 静态预览页
 - 用户自建 Agent 最小保存闭环
 
 ### 前端
@@ -67,16 +79,23 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - selectedAgent 可视化展示
 - ChatInput 显式 `@Agent` token
 - 文本开头最小 `@AgentName` 解析
+- 文本开头连续多个 `@AgentName` 解析
 - MessageBubble 显示 `To: @Agent`
+- MessageBubble 支持固定到上下文、保存为记忆、复制 / 引用 / 重新运行 Demo Task
 - TaskRunPanel 展示
   - assigned Agent
   - preferred adapter
   - actual adapter
   - fallback 状态
+  - Orchestrator Planner / Router / Executor / Aggregator 可解释链路
 - Artifact Preview
 - Artifact Revision
 - Version History
 - Diff Summary
+- line diff
+- Artifact 内容复制 / 文件下载
+- Deploy Status Card
+- Preview 页面版本切换
 - Revision 来源提示
 
 ### AI 协作开发记录
@@ -98,16 +117,17 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - demo-task 仍是静态编排，不是真实动态 Orchestrator
 - Artifact revision 仍是静态模板，不是真实代码修改
 - Diff Summary 是静态摘要，不是真实代码 diff
-- ContextSnapshot / HandoffSummary 是静态构造，不是真实长期 memory system
-- Codex / Claude Code / OpenCode 当前仍以 placeholder / Mock fallback 为主
+- ContextSnapshot / HandoffSummary 仍偏 Demo 构造，不是真实长期 memory system
+- MemoryItem 当前仍是内存 Repository，不是持久化长期记忆系统
+- Codex / Claude Code / OpenCode 当前是 CLI 探测型半真实 Adapter，不是深度平台接入
 - 当前没有真实 Codex / Claude Code / OpenCode 完整接入
 - 当前没有 MySQL 持久化
 - 当前没有 WebSocket / SSE 流式执行
 - 当前没有真实部署发布链路
-- 当前没有真实部署状态卡片
+- 当前 Deploy Status Card 是静态 Demo simulation
 - 当前没有多端同步
 - 当前没有真实多人协作
-- 当前没有完整群聊调度
+- 当前没有真实线程级并行调度
 
 ## 技术栈
 
@@ -214,15 +234,15 @@ $env:VITE_API_BASE_URL="http://localhost:8080"
 
 ```text
 User
-  -> ChatInput / selectedAgent / @Agent
-  -> Message(targetAgentId)
+  -> ChatInput / selectedAgent / @Agent / multi @Agent
+  -> Message(targetAgentId / mentionedAgentIds)
   -> OrchestratorService
-  -> AgentRoutingService
+  -> TaskPlanner / AgentRouter / AgentStepExecutor / ResultAggregator
   -> AgentExecutorService
   -> AgentAdapterRegistry
-  -> Mock / Placeholder Adapter
+  -> Mock / OpenAI Compatible / CLI Adapter
   -> TaskRun / TaskStep / Artifact
-  -> ContextSnapshot / HandoffSummary
+  -> ContextSnapshot / HandoffSummary / Pinned Context / Memory
   -> Frontend Workspace Render
 ```
 
@@ -238,6 +258,7 @@ User
 
 - IM 聊天主界面
 - 对话列表
+- 群聊式 Agent 消息流最小闭环
 - 用户自建 Agent
 - Agent 作为联系人展示
 - 统一 Agent Adapter Layer 骨架
@@ -246,42 +267,46 @@ User
 - Version History
 - AI 协作开发记录
 - 可运行 Web Demo
+- API 级 smoke test
 
 ### 部分满足
 
 - 单聊模式
 - `@Agent`
+- 多 `@Agent`
 - 上下文管理
 - 主 Agent Orchestrator
 - 对话式局部修改
+- 部署状态卡片
+- 长期记忆 MVP
 
 ### 当前仍是静态 Demo / Placeholder
 
 - 动态任务拆解
 - 真实 Agent 执行
-- 真实代码 diff
 - 真实长期 memory
 - 真实平台接入
+- 真实部署
 
 ### 当前未完成
 
-- 至少两个主流 Agent 平台的真实 / 半真实接入
-- 群聊模式
-- 并行调度
+- 至少两个主流 Agent 平台的深度真实接入
+- 真实线程级并行调度
+- 真实 LLM Planner JSON schema 主链路
+- MemoryItem 持久化和检索策略
 - 代码冲突处理
-- 部署状态卡片
 - 多端支持
 - 多人协作
 - WebSocket / SSE
 
 ## 下一阶段 Roadmap
 
-1. Agent Adapter 半真实接入 / 最小真实模型调用
-2. OrchestratorService 规则化增强
-3. 静态 Deploy Status Card
-4. Demo 视频脚本与录制
-5. 最终文档 V1.0
-6. 自动化启动 / smoke test 脚本
+1. 真实并行多 Agent 调度 v1
+2. LLM Planner JSON Schema MVP
+3. MemoryItem 持久化与检索策略
+4. Adapter 成功输出进入真实 Artifact 链路增强
+5. 文档 V1.0 和仓库卫生
+6. 消息操作深化 / 一键应用 Diff
 
 ## 注意事项
 

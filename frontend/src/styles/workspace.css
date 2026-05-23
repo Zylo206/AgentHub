@@ -1376,11 +1376,17 @@
 }
 
 .orchestrator-route-item span,
-.orchestrator-route-item em {
+.orchestrator-route-item em,
+.orchestrator-route-item small {
   color: var(--text-muted);
   font-size: 11px;
   font-style: normal;
   font-weight: 800;
+}
+
+.orchestrator-route-item small {
+  grid-column: 2 / 4;
+  font-weight: 700;
 }
 
 .orchestrator-route-item strong {
@@ -2063,6 +2069,11 @@
 .context-card--pinned {
   border-color: rgba(245, 158, 11, 0.28);
   box-shadow: inset 4px 0 0 var(--warning), var(--shadow-sm);
+}
+
+.context-card--memory {
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: inset 4px 0 0 var(--primary), var(--shadow-sm);
 }
 
 .pinned-context-list {

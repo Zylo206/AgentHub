@@ -13,11 +13,13 @@ import {
   getConversations,
   getDeploymentsByConversation,
   getHandoffSummariesByTaskRun,
+  getMemoriesByConversation,
   getMessages,
   getPinnedContextsByConversation,
   getTaskRunsByConversation,
   getTaskSpecsByConversation,
   pinMessageAsContext,
+  saveMessageAsMemory,
   sendMessage,
   unpinContext
 } from "../../api/agenthubApi";
@@ -35,6 +37,7 @@ import type { Conversation } from "../../features/conversations/conversationType
 import { ContextPanel } from "../../features/context/ContextPanel";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../../features/context/contextTypes";
 import type { DeploymentRecord } from "../../features/deployments/deploymentTypes";
+import type { MemoryItem } from "../../features/memory/memoryTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayConversationType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import "../../styles/workspace.css";
@@ -70,6 +73,7 @@ export function WorkspacePage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
   const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [contextSnapshots, setContextSnapshots] = useState<ContextSnapshot[]>([]);
   const [handoffSummaries, setHandoffSummaries] = useState<HandoffSummary[]>([]);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
@@ -190,13 +194,14 @@ export function WorkspacePage() {
     setLoadingArtifacts(true);
 
     try {
-      const [messageData, taskSpecData, taskRunData, artifactData, deploymentData, pinnedContextData] = await Promise.all([
+      const [messageData, taskSpecData, taskRunData, artifactData, deploymentData, pinnedContextData, memoryData] = await Promise.all([
         getMessages(conversationId),
         getTaskSpecsByConversation(conversationId),
         getTaskRunsByConversation(conversationId),
         getArtifactsByConversation(conversationId),
         getDeploymentsByConversation(conversationId),
-        getPinnedContextsByConversation(conversationId)
+        getPinnedContextsByConversation(conversationId),
+        getMemoriesByConversation(conversationId)
       ]);
 
       setMessages(messageData);
@@ -205,6 +210,7 @@ export function WorkspacePage() {
       setArtifacts(artifactData);
       setDeployments(deploymentData);
       setPinnedContexts(pinnedContextData);
+      setMemories(memoryData);
       setShowAllArtifacts(true);
       setSelectedTaskStepId(null);
       setSelectedTaskRunId((previousId) => {
@@ -252,6 +258,7 @@ export function WorkspacePage() {
       setArtifacts([]);
       setDeployments([]);
       setPinnedContexts([]);
+      setMemories([]);
       setContextSnapshots([]);
       setHandoffSummaries([]);
       setSelectedArtifactId(null);
@@ -361,8 +368,9 @@ export function WorkspacePage() {
       return;
     }
 
-    const targetAgent = parsedMention.matchedAgent ?? selectedAgent;
-    const contentToSend = parsedMention.matchedAgent ? parsedMention.cleanedContent.trim() : draftMessage.trim();
+    const mentionedAgents = parsedMention.matchedAgents;
+    const targetAgent = mentionedAgents[0] ?? selectedAgent;
+    const contentToSend = mentionedAgents.length > 0 ? parsedMention.cleanedContent.trim() : draftMessage.trim();
 
     if (!contentToSend) {
       setErrorMessage(parsedMention.rawMention ? `请在 ${parsedMention.rawMention} 后补充消息内容。` : "请先输入消息内容。");
@@ -378,7 +386,12 @@ export function WorkspacePage() {
     setOperationMessage(null);
 
     try {
-      await sendMessage(currentConversationId, finalContentToSend, targetAgent ? getIdValue(targetAgent.id) : null);
+      await sendMessage(
+        currentConversationId,
+        finalContentToSend,
+        targetAgent ? getIdValue(targetAgent.id) : null,
+        mentionedAgents.map((agent) => getIdValue(agent.id)).filter(Boolean)
+      );
       if (parsedMention.matchedAgent) {
         setSelectedAgent(parsedMention.matchedAgent);
       }
@@ -409,6 +422,30 @@ export function WorkspacePage() {
 
       const refreshedPinnedContexts = await getPinnedContextsByConversation(currentConversationId);
       setPinnedContexts(refreshedPinnedContexts);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleSaveMessageAsMemory(message: Message) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    const messageId = getIdValue(message.id);
+    if (!messageId) {
+      setErrorMessage("无法识别消息 ID，不能保存为长期记忆。");
+      return;
+    }
+
+    setErrorMessage(null);
+    setOperationMessage(null);
+
+    try {
+      await saveMessageAsMemory(currentConversationId, messageId, "PROJECT_FACT");
+      const refreshedMemories = await getMemoriesByConversation(currentConversationId);
+      setMemories(refreshedMemories);
+      setOperationMessage("消息已保存为长期记忆。");
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     }
@@ -714,6 +751,7 @@ export function WorkspacePage() {
             rerunningMessageId={rerunningMessageId}
             onSelectArtifact={setSelectedArtifactId}
             onToggleMessagePin={handleToggleMessagePin}
+            onSaveMessageAsMemory={handleSaveMessageAsMemory}
             onCopyMessage={handleCopyMessage}
             onQuoteMessage={handleQuoteMessage}
             onRerunFromMessage={handleRerunFromMessage}
@@ -731,6 +769,7 @@ export function WorkspacePage() {
           <ContextPanel
             taskSpec={activeTaskSpec}
             pinnedContexts={pinnedContexts}
+            memories={memories}
             contextSnapshots={contextSnapshots}
             handoffSummaries={handoffSummaries}
             loading={loadingContext}

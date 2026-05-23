@@ -13,6 +13,7 @@ interface MessageStreamProps {
   rerunningMessageId?: string | null;
   onSelectArtifact: (artifactId: string) => void;
   onToggleMessagePin: (messageId: string, pinnedContextId?: string | null) => void;
+  onSaveMessageAsMemory: (message: Message) => void;
   onCopyMessage: (message: Message) => void;
   onQuoteMessage: (message: Message) => void;
   onRerunFromMessage: (message: Message) => void;
@@ -79,6 +80,19 @@ function resolveAgentStepLabel(message: Message): string | null {
   return `TaskStep ${match[1]}`;
 }
 
+function resolveTargetAgentLabel(message: Message, agents: Agent[]): string | null {
+  const mentionedAgentIds = message.mentionedAgentIds ?? [];
+  if (mentionedAgentIds.length > 0) {
+    return mentionedAgentIds
+      .map((agentId) => agents.find((agent) => getIdValue(agent.id) === agentId)?.name || agentId)
+      .join(" @");
+  }
+
+  return message.targetAgentId
+    ? agents.find((agent) => getIdValue(agent.id) === message.targetAgentId)?.name || message.targetAgentId
+    : null;
+}
+
 export function MessageStream({
   messages,
   agents,
@@ -87,6 +101,7 @@ export function MessageStream({
   rerunningMessageId,
   onSelectArtifact,
   onToggleMessagePin,
+  onSaveMessageAsMemory,
   onCopyMessage,
   onQuoteMessage,
   onRerunFromMessage
@@ -113,9 +128,7 @@ export function MessageStream({
           senderRoleLabel={resolveSenderRoleLabel(message, agents)}
           agentStepLabel={resolveAgentStepLabel(message)}
           targetAgentLabel={
-            message.targetAgentId
-              ? agents.find((agent) => getIdValue(agent.id) === message.targetAgentId)?.name || message.targetAgentId
-              : null
+            resolveTargetAgentLabel(message, agents)
           }
           pinnedContextId={
             pinnedContexts.find(
@@ -127,6 +140,7 @@ export function MessageStream({
           rerunning={rerunningMessageId === getIdValue(message.id)}
           onSelectArtifact={onSelectArtifact}
           onTogglePin={onToggleMessagePin}
+          onSaveAsMemory={onSaveMessageAsMemory}
           onCopyMessage={onCopyMessage}
           onQuoteMessage={onQuoteMessage}
           onRerunFromMessage={onRerunFromMessage}

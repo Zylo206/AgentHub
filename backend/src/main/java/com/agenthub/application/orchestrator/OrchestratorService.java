@@ -24,6 +24,8 @@ import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.message.Message;
 import com.agenthub.domain.message.MessageId;
 import com.agenthub.domain.message.MessageType;
+import com.agenthub.domain.memory.MemoryItem;
+import com.agenthub.domain.memory.MemoryRepository;
 import com.agenthub.domain.task.TaskPlan;
 import com.agenthub.domain.task.TaskRepository;
 import com.agenthub.domain.task.TaskRun;
@@ -51,6 +53,7 @@ public class OrchestratorService {
     private final TaskRepository taskRepository;
     private final ArtifactRepository artifactRepository;
     private final ContextRepository contextRepository;
+    private final MemoryRepository memoryRepository;
     private final MessageApplicationService messageApplicationService;
     private final ConversationApplicationService conversationApplicationService;
     private final AgentApplicationService agentApplicationService;
@@ -67,6 +70,7 @@ public class OrchestratorService {
             TaskRepository taskRepository,
             ArtifactRepository artifactRepository,
             ContextRepository contextRepository,
+            MemoryRepository memoryRepository,
             MessageApplicationService messageApplicationService,
             ConversationApplicationService conversationApplicationService,
             AgentApplicationService agentApplicationService,
@@ -81,6 +85,7 @@ public class OrchestratorService {
         this.taskRepository = taskRepository;
         this.artifactRepository = artifactRepository;
         this.contextRepository = contextRepository;
+        this.memoryRepository = memoryRepository;
         this.messageApplicationService = messageApplicationService;
         this.conversationApplicationService = conversationApplicationService;
         this.agentApplicationService = agentApplicationService;
@@ -111,13 +116,16 @@ public class OrchestratorService {
             throw new IllegalArgumentException("Source message does not belong to the provided conversation.");
         }
         List<PinnedContext> pinnedContexts = contextRepository.findPinnedContextsByConversationId(conversationRef);
+        List<MemoryItem> memoryItems = memoryRepository.findByConversationId(conversationRef);
         List<String> pinnedContextItems = buildPinnedContextItems(pinnedContexts);
-        String pinnedInputContext = buildPinnedInputContext(pinnedContextItems);
+        List<String> memoryContextItems = buildMemoryContextItems(memoryItems);
+        String pinnedInputContext = buildPinnedInputContext(pinnedContextItems, memoryContextItems);
 
-        SelectedAgentResolution selectedAgentResolution = resolveSelectedAgent(selectedAgentId, sourceMessage);
+        List<Agent> mentionedAgents = resolveMentionedAgents(sourceMessage);
+        SelectedAgentResolution selectedAgentResolution = resolveSelectedAgent(selectedAgentId, sourceMessage, mentionedAgents);
         Agent selectedAgent = selectedAgentResolution.agent();
         String selectedAgentSummary = buildSelectedAgentSummary(selectedAgentResolution);
-        OrchestratorPlan orchestratorPlan = taskPlanner.planDemoTask(userInput, selectedAgent);
+        OrchestratorPlan orchestratorPlan = taskPlanner.planDemoTask(userInput, selectedAgent, mentionedAgents);
         OrchestratorStepPlan frontendStepPlan = findStepPlan(orchestratorPlan, 1);
         OrchestratorStepPlan backendStepPlan = findStepPlan(orchestratorPlan, 2);
         OrchestratorStepPlan reviewStepPlan = findStepPlan(orchestratorPlan, 3);
@@ -126,11 +134,12 @@ public class OrchestratorService {
         AgentRouter.RoutedAgent reviewRoute = agentRouter.route(reviewStepPlan, selectedAgent);
         conversationApplicationService.addParticipantAgents(
                 conversationId,
-                List.of(
+                mergeParticipantAgents(
                         BuiltInAgentIds.ORCHESTRATOR,
                         frontendRoute.agentId(),
                         backendRoute.agentId(),
-                        reviewRoute.agentId()));
+                        reviewRoute.agentId(),
+                        mentionedAgents));
         AgentAdapterType selectedAgentPreferredAdapter = selectedAgent == null
                 ? agentRoutingService.resolvePreferredAdapterForStep(
                         BuiltInAgentIds.FRONTEND_BUILDER,
@@ -321,7 +330,7 @@ public class OrchestratorService {
                         "已启用以 Artifact 为中心的迭代",
                         "Reviewer 必须基于验收标准完成闭环检查",
                         selectedAgentResolution.sourceDescription(),
-                        selectedAgentSummary), pinnedContextItems),
+                        selectedAgentSummary), mergePinnedContextItems(pinnedContextItems, memoryContextItems)),
                 "该快照包含原始用户请求、生成的 Task Spec、三个 TaskStep，以及 LoginPage.tsx、README.md、login-api-contract.json 和评审报告产物。"
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary,
@@ -830,12 +839,24 @@ public class OrchestratorService {
         return includedMessageIds;
     }
 
-    private String buildPinnedInputContext(List<String> pinnedContextItems) {
-        if (pinnedContextItems.isEmpty()) {
+    private List<String> buildMemoryContextItems(List<MemoryItem> memoryItems) {
+        return memoryItems.stream()
+                .map(memoryItem -> "Long-term memory "
+                        + memoryItem.getMemoryId()
+                        + " ["
+                        + memoryItem.getCategory()
+                        + "]: "
+                        + memoryItem.getContent())
+                .toList();
+    }
+
+    private String buildPinnedInputContext(List<String> pinnedContextItems, List<String> memoryContextItems) {
+        List<String> contextItems = mergePinnedContextItems(pinnedContextItems, memoryContextItems);
+        if (contextItems.isEmpty()) {
             return "";
         }
 
-        return " User pinned context for this run: " + String.join(" | ", pinnedContextItems);
+        return " User pinned context and long-term memory for this run: " + String.join(" | ", contextItems);
     }
 
     private List<String> mergePinnedContextItems(List<String> baseItems, List<String> pinnedContextItems) {
@@ -865,12 +886,22 @@ public class OrchestratorService {
         return artifactIds.stream().anyMatch(artifactId -> artifactId.equals(targetArtifactId));
     }
 
-    private SelectedAgentResolution resolveSelectedAgent(String explicitSelectedAgentId, Message sourceMessage) {
+    private SelectedAgentResolution resolveSelectedAgent(
+            String explicitSelectedAgentId,
+            Message sourceMessage,
+            List<Agent> mentionedAgents) {
         String normalizedExplicitSelectedAgentId = normalizeAgentId(explicitSelectedAgentId);
         if (normalizedExplicitSelectedAgentId != null) {
             return new SelectedAgentResolution(
                     agentApplicationService.getAgent(normalizedExplicitSelectedAgentId),
                     "Selected Agent 来源：demo-task 请求显式传入。");
+        }
+
+        if (mentionedAgents != null && !mentionedAgents.isEmpty()) {
+            Agent firstMentionedAgent = mentionedAgents.get(0);
+            return new SelectedAgentResolution(
+                    firstMentionedAgent,
+                    "Selected Agent 来源：从源消息 mentionedAgentIds 推断；多 @Agent 将进入并行协作组。");
         }
 
         String inferredSelectedAgentId = normalizeAgentId(sourceMessage.getTargetAgentId());
@@ -928,6 +959,34 @@ public class OrchestratorService {
 
         String normalized = agentId.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private List<Agent> resolveMentionedAgents(Message sourceMessage) {
+        return sourceMessage.getMentionedAgentIds().stream()
+                .map(this::normalizeAgentId)
+                .filter(agentId -> agentId != null)
+                .map(agentApplicationService::getAgent)
+                .toList();
+    }
+
+    private List<String> mergeParticipantAgents(
+            String orchestratorAgentId,
+            String frontendAgentId,
+            String backendAgentId,
+            String reviewerAgentId,
+            List<Agent> mentionedAgents) {
+        List<String> participantAgentIds = new ArrayList<>();
+        participantAgentIds.add(orchestratorAgentId);
+        participantAgentIds.add(frontendAgentId);
+        participantAgentIds.add(backendAgentId);
+        participantAgentIds.add(reviewerAgentId);
+        if (mentionedAgents != null) {
+            mentionedAgents.stream()
+                    .map(agent -> agent.getId().value())
+                    .forEach(participantAgentIds::add);
+        }
+
+        return participantAgentIds.stream().distinct().toList();
     }
 
     private record SelectedAgentResolution(Agent agent, String sourceDescription) {

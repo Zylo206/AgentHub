@@ -2,8 +2,10 @@ import type { Agent } from "../agents/agentTypes";
 
 export interface ParsedAgentMention {
   matchedAgent: Agent | null;
+  matchedAgents: Agent[];
   cleanedContent: string;
   rawMention: string | null;
+  rawMentions: string[];
   error?: string;
 }
 
@@ -23,42 +25,59 @@ export function parseLeadingAgentMention(input: string, agents: Agent[]): Parsed
   if (!trimmedStart.startsWith("@")) {
     return {
       matchedAgent: null,
+      matchedAgents: [],
       cleanedContent: input,
-      rawMention: null
+      rawMention: null,
+      rawMentions: []
     };
   }
 
-  const withoutAt = trimmedStart.slice(1);
   const sortedAgents = [...agents]
     .filter((agent) => agent.name.trim())
     .sort((left, right) => right.name.trim().length - left.name.trim().length);
 
-  for (const agent of sortedAgents) {
-    const candidateName = agent.name.trim();
-    const normalizedCandidate = normalize(candidateName);
-    const normalizedInput = withoutAt.toLowerCase();
+  let remaining = trimmedStart;
+  const matchedAgents: Agent[] = [];
+  const rawMentions: string[] = [];
 
-    if (!normalizedInput.startsWith(normalizedCandidate)) {
-      continue;
+  while (remaining.startsWith("@")) {
+    const withoutAt = remaining.slice(1);
+    const matchedAgent = sortedAgents.find((agent) => {
+      const candidateName = agent.name.trim();
+      const normalizedCandidate = normalize(candidateName);
+      const normalizedInput = withoutAt.toLowerCase();
+
+      if (!normalizedInput.startsWith(normalizedCandidate)) {
+        return false;
+      }
+
+      const nextCharacter = withoutAt.charAt(candidateName.length);
+      return !nextCharacter || /\s/.test(nextCharacter);
+    });
+
+    if (!matchedAgent) {
+      const rawMention = extractUnknownMention(remaining);
+      return {
+        matchedAgent: null,
+        matchedAgents,
+        cleanedContent: input,
+        rawMention,
+        rawMentions,
+        error: `未找到这个 Agent：${rawMention}`
+      };
     }
 
-    const nextCharacter = withoutAt.charAt(candidateName.length);
-    if (nextCharacter && !/\s/.test(nextCharacter)) {
-      continue;
-    }
-
-    return {
-      matchedAgent: agent,
-      cleanedContent: withoutAt.slice(candidateName.length).trimStart(),
-      rawMention: `@${candidateName}`
-    };
+    const matchedName = matchedAgent.name.trim();
+    matchedAgents.push(matchedAgent);
+    rawMentions.push(`@${matchedName}`);
+    remaining = withoutAt.slice(matchedName.length).trimStart();
   }
 
-  const rawMention = extractUnknownMention(trimmedStart);
   return {
-    matchedAgent: null,
-    cleanedContent: input,
-    rawMention,
-    error: `未找到这个 Agent：${rawMention}`
+    matchedAgent: matchedAgents[0] ?? null,
+    matchedAgents,
+    cleanedContent: remaining,
+    rawMention: rawMentions[0] ?? null,
+    rawMentions
   };
 }

@@ -12,6 +12,7 @@ import com.agenthub.domain.message.MessageSenderType;
 import com.agenthub.domain.message.MessageType;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -38,10 +39,28 @@ public class MessageApplicationService {
     }
 
     public Message sendUserMessage(String conversationId, String content, String targetAgentId) {
+        return sendUserMessage(conversationId, content, targetAgentId, List.of());
+    }
+
+    public Message sendUserMessage(
+            String conversationId,
+            String content,
+            String targetAgentId,
+            List<String> mentionedAgentIds) {
         String normalizedTargetAgentId = normalizeTargetAgentId(targetAgentId);
-        if (normalizedTargetAgentId != null) {
-            agentApplicationService.getAgent(normalizedTargetAgentId);
+        List<String> normalizedMentionedAgentIds = normalizeMentionedAgentIds(mentionedAgentIds);
+        if (normalizedMentionedAgentIds.isEmpty() && normalizedTargetAgentId != null) {
+            normalizedMentionedAgentIds = List.of(normalizedTargetAgentId);
         }
+        if (normalizedTargetAgentId == null && normalizedMentionedAgentIds.size() == 1) {
+            normalizedTargetAgentId = normalizedMentionedAgentIds.get(0);
+        }
+        if (normalizedTargetAgentId != null && !normalizedMentionedAgentIds.contains(normalizedTargetAgentId)) {
+            normalizedMentionedAgentIds = new java.util.ArrayList<>(normalizedMentionedAgentIds);
+            normalizedMentionedAgentIds.add(0, normalizedTargetAgentId);
+            normalizedMentionedAgentIds = List.copyOf(normalizedMentionedAgentIds);
+        }
+        normalizedMentionedAgentIds.forEach(agentApplicationService::getAgent);
 
         Message message = new Message(
                 new MessageId(idGenerator.nextId("msg")),
@@ -49,6 +68,7 @@ public class MessageApplicationService {
                 MessageSenderType.USER,
                 "user",
                 normalizedTargetAgentId,
+                normalizedMentionedAgentIds,
                 MessageType.TEXT,
                 content,
                 List.of(),
@@ -110,5 +130,18 @@ public class MessageApplicationService {
 
         String normalized = targetAgentId.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private List<String> normalizeMentionedAgentIds(List<String> mentionedAgentIds) {
+        if (mentionedAgentIds == null) {
+            return List.of();
+        }
+
+        return mentionedAgentIds.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(agentId -> !agentId.isBlank())
+                .distinct()
+                .toList();
     }
 }
