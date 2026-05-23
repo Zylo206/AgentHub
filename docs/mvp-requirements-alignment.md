@@ -6,7 +6,7 @@
 
 一句话结论：
 
-> AgentHub 已经形成 IM Workspace、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、群聊式 Agent 消息、Context / Memory、Artifact Revision、Deploy Preview、Adapter fallback、smoke test 的 MVP 闭环；下一阶段应优先补真实并行调度、真实 LLM Planner、长期记忆持久化、真实 Adapter 产物质量和消息操作深化。
+> AgentHub 已经形成 IM Workspace、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、可配置 LLM Planner、群聊式 Agent 消息、Context / Memory、Artifact Revision、Deploy Preview、Adapter fallback、Adapter Output Artifact、smoke test 的 MVP 闭环；当前已推进 demo-task 执行层并发、LLM Planner JSON Schema MVP、MemoryItem 本地持久化检索和 Adapter 成功输出 Artifact 链路，下一阶段应优先补消息操作深化和最终文档同步。
 
 | 项目阶段 | 判断 |
 |---|---|
@@ -26,7 +26,7 @@
 | 群聊模式 | 多 Agent 参与者、群聊式 Agent 消息、多个 @Agent、TaskStep 分工 | 部分满足 | 65% | 真实并行执行、动态群聊回复仍未完成 |
 | 多 @Agent | 消息开头连续多个 @AgentName，mentionedAgentIds 保存 | 部分满足 | 70% | 不解析消息中间 @，不支持自然语言复杂 @ |
 | 多会话并行 | 内存多 Conversation，可切换 | 部分满足 | 55% | 非多窗口，刷新丢数据 |
-| 聊天历史上下文 | Message 保存，Pinned Context，MemoryItem MVP | 部分满足 | 65% | 未持久化，未做检索策略和长期记忆治理 |
+| 聊天历史上下文 | Message 保存，Pinned Context，MemoryItem 本地持久化和规则检索 | 部分满足 | 72% | 仍不是生产级长期记忆治理或向量检索 |
 | 手动 pin 上下文 | Message pin、ContextPanel 展示、TaskStep inputContext 引用 | 部分满足 | 75% | pin 仍是内存态，引用关系可更结构化 |
 | 消息类型：文本 | 已支持普通文本消息 | 已满足 | 85% | 消息操作还可增强 |
 | 消息类型：代码块 | Artifact 代码预览、复制、下载 | 部分满足 | 70% | 聊天流内代码块操作仍弱 |
@@ -35,15 +35,15 @@
 | Diff 视图 | line diff / Diff Summary / Version History | 部分满足 | 70% | 仍不是完整代码编辑器和真实 patch apply |
 | 部署状态卡片 | Demo Deploy、Deploy Status Card、Preview URL、/preview 页面 | 静态 Demo | 75% | 不是真实 Vercel / Netlify / Docker |
 | 消息操作 | pin、保存为记忆、复制、引用、重新运行 Demo Task | 部分满足 | 65% | 回复、重新生成单条 Agent 回复、一键应用 Diff 待补 |
-| Orchestrator 拆解 | Planner / Router / Executor / Aggregator 拆分和可解释面板 | 部分满足 | 75% | Planner 仍是规则化，不是真实 LLM planning |
+| Orchestrator 拆解 | Planner / Router / Executor / Aggregator 拆分、可解释面板、可配置 LLM Planner JSON schema | 部分满足 | 80% | LLM Planner 仍依赖 OPENAI_COMPATIBLE 配置，默认保留规则 fallback |
 | Orchestrator 分派 | selectedAgent、mentionedAgentIds、内置 Agent 路由 | 部分满足 | 75% | 多 Agent 动态路由策略仍浅 |
 | Orchestrator 聚合 | ResultAggregator、群聊总结消息、TaskRun summary | 部分满足 | 70% | 聚合仍偏模板 |
-| 并行调度 | parallelGroupKey / dependsOn 字段和展示基础 | 静态 / 计划层 | 35% | 未做真实线程级并发执行 |
+| 并行调度 | demo-task 使用 parallelGroupKey / dependsOnStepOrders 和 CompletableFuture 执行并发组 | 部分满足 | 55% | 仍不是完整动态 DAG 或生产级并行调度 |
 | 失败降级 | Adapter fallback 到 MOCK，状态可见 | 部分满足 | 70% | 任务级失败恢复树未完成 |
 | 代码冲突处理 | 未实现 | 未完成 | 0% | 需要冲突检测和 merge / resolution UI |
 | 统一 Adapter 层 | Mock、OpenAI Compatible、Codex / Claude Code / OpenCode CLI 探测 | 部分满足 | 75% | 主流平台深度接入不足 |
 | 至少 2 个主流 Agent 平台 | Codex / Claude Code / OpenCode 为 CLI 探测型半真实接入 | 半真实 | 55% | 不是深度真实平台能力 |
-| OpenAI Compatible | 可配置真实模型调用，失败 fallback | 部分满足 | 65% | 非流式，输出只部分进入 Artifact |
+| OpenAI Compatible | 可配置真实模型调用，失败 fallback；成功且非 MOCK 时输出进入 Adapter Output Artifact | 部分满足 | 70% | 非流式，仍不是深度平台接入 |
 | 用户自建 Agent | Agent Builder，prompt、tags、adapter 配置 | 部分满足 | 75% | 不是对话式创建，工具集较轻 |
 | Agent 联系人 | Agent List 展示头像、名称、能力标签、Adapter 状态 | 已满足 | 85% | 分组、搜索、在线状态可增强 |
 | Artifact 预览 | Artifact Studio、PreviewPage、版本切换 | 部分满足 | 80% | 富 Markdown / 文件附件 / PPT 未做 |
@@ -62,7 +62,7 @@
 | 评分维度 | 权重 | 当前预估 | 理由 | 下一步提升点 |
 |---|---:|---:|---|---|
 | AI 协作能力 | 30% | 85 / 100 | Spec / Skills / Rules / dev-log / workflow 已沉淀，且每轮开发有记录 | 继续保持 dev-log，补 AI 协作链路说明图 |
-| 功能完整度 | 25% | 68 / 100 | MVP 主链路完整，多 @Agent、群聊消息、Memory、Deploy Preview 已具备，但真实并行和真实平台深度不足 | 优先补真实并行调度、LLM Planner、Memory 持久化 |
+| 功能完整度 | 25% | 72 / 100 | MVP 主链路完整，多 @Agent、群聊消息、Memory 本地持久化、Deploy Preview 和 demo-task 并发组已具备，但真实平台深度不足 | 优先补 Adapter output 质量、消息操作深化 |
 | 生成效果质量 | 20% | 74 / 100 | UI 已打磨，Artifact Studio、Preview、Deploy Card、Version History 有产品感 | 补真实 Adapter 产物质量、Markdown 富渲染、Diff 应用 |
 | 代码理解度 | 15% | 78 / 100 | 后端分层、Orchestrator 拆分、Adapter fallback、smoke test 可解释 | 技术文档需同步最新架构和边界 |
 | 创新与产品感 | 10% | 76 / 100 | IM + Artifact-centered iteration + Agent Builder + Memory + Deploy Preview 有辨识度 | 增强 Orchestrator 决策链和 Agent 协作可视化 |
@@ -95,10 +95,10 @@
 
 | 优先级 | 任务 | 目标 | 验收标准 |
 |---:|---|---|---|
-| P0-1 | 真实并行多 Agent 调度 v1 | 把当前 parallelGroupKey 从展示字段推进到执行层并发 | 同一 parallel group 的 step 使用 `CompletableFuture` 并发执行；失败仍 fallback；TaskRunPanel 显示真实并发结果 |
-| P0-2 | LLM Planner JSON Schema MVP | 让 OPENAI_COMPATIBLE 可选生成 OrchestratorPlan | 配置 `LLM` planner 后调用模型产出 JSON plan；schema 校验失败回退 RuleBasedPlanner；可解释面板展示 fallback reason |
-| P0-3 | MemoryItem 持久化与检索策略 | 把长期记忆从内存 MVP 推进到可复用上下文能力 | Memory API 支持稳定查询、更新、删除；Orchestrator 按 conversation / scope / importance 选取 memory |
-| P0-4 | Adapter 成功输出进入真实 Artifact 链路增强 | 降低“Adapter 只是状态展示”的风险 | 非 MOCK 成功响应能生成 Review Report / Markdown / Text Artifact，并进入 ContextSnapshot / MessageStream |
+| P0-1 | 真实并行多 Agent 调度 v1 | 已推进：parallelGroupKey 从展示字段进入执行层 | 同一 parallel group 的 step 使用 `CompletableFuture` 并发执行；失败仍 fallback；TaskRunPanel 显示真实并发结果 |
+| P0-2 | LLM Planner JSON Schema MVP | 已推进：让 OPENAI_COMPATIBLE 可选生成 OrchestratorPlan | 配置 `LLM` planner 后调用模型产出 JSON plan；schema 校验失败、Adapter fallback 或模型不可用时回退 RuleBasedPlanner；可解释面板展示 planner mode / fallback reason |
+| P0-3 | MemoryItem 持久化与检索策略 | 已推进：把长期记忆从内存 MVP 推进到本地文件持久化和可复用上下文能力 | Memory API 支持稳定查询、更新、删除；Orchestrator 按 conversation / scope / category / importance / lastUsedAt 选取 memory |
+| P0-4 | Adapter 成功输出进入真实 Artifact 链路增强 | 已推进：降低“Adapter 只是状态展示”的风险 | 非 MOCK 成功响应能生成 Review Report / Markdown Artifact，并进入 TaskStep producedArtifactIds / MessageStream / ContextSnapshot / TaskRun summary |
 | P0-5 | 文档修复与架构同步 | 防止代码能力和文档脱节 | README、technical-design、roadmap、demo-checklist 同步最新能力 |
 | P0-6 | 仓库卫生与提交前检查 | 保证 MVP 可稳定交接 | 清理 `frontend/tsconfig.app.tsbuildinfo` 等构建缓存；smoke test、backend build、frontend build 全通过 |
 
@@ -126,11 +126,10 @@
 ## 6. 推荐立即执行顺序
 
 1. **P0-6 仓库卫生与文档修复**：先修复文档同步和构建缓存问题，避免后续协作混乱。
-2. **P0-1 真实并行多 Agent 调度 v1**：这是课题“并行调度”和“群聊协作”的硬缺口，且当前已有 parallelGroupKey 基础。
-3. **P0-2 LLM Planner JSON Schema MVP**：让 Orchestrator 从规则化 Demo 迈向可配置真实 planning，但必须保持 fallback。
-4. **P0-3 MemoryItem 持久化 / 检索策略**：把当前 Memory MVP 从展示能力推进到真正上下文能力。
-5. **P0-4 Adapter 输出 Artifact 增强**：让真实 / 半真实 Agent 输出影响产物，而不是只出现在状态栏。
-6. **P1 消息操作和 Diff 操作**：在核心平台能力稳定后再补体验细节。
+2. **P1 消息操作深化 / Diff 应用**：继续补 IM 操作和 Artifact 编辑可信度。
+3. **文档 V1.0 / Demo Checklist 同步**：让评审能看懂当前半真实边界。
+4. **提交前仓库卫生与 smoke test 固化**：保证当前 MVP 能稳定交付。
+5. **生产级长期记忆治理 / 深度真实平台接入评估**：作为后续增强方向。
 
 ## 7. 当前项目状态标签
 
@@ -145,4 +144,4 @@
 
 最准确表述：
 
-> AgentHub 当前是一个可运行的 MVP 原型：完成 IM 工作台、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、群聊式 Agent 消息、Context / Memory、Adapter fallback、Artifact 迭代、静态部署预览和 smoke test；但真实并行调度、真实 LLM Planner、长期记忆持久化、真实部署、文件附件、多端和代码冲突处理仍处于未完成或半真实阶段。
+> AgentHub 当前是一个可运行的 MVP 原型：完成 IM 工作台、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、可配置 LLM Planner、群聊式 Agent 消息、demo-task 并发组、Context / Memory 本地持久化、Adapter fallback、Artifact 迭代、静态部署预览和 smoke test；但真实部署、文件附件、多端、生产级长期记忆治理和代码冲突处理仍处于未完成或半真实阶段。

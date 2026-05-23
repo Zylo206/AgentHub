@@ -244,7 +244,8 @@ User
 
 - 已实现
 - 已能展示 preferred / actual / fallback
-- 已具备并行计划字段，但尚未做真实线程级并发执行
+- demo-task 已在执行层使用 `CompletableFuture` 按 parallel group / dependencies 调度 Agent Step
+- 当前仍不是完整动态 DAG 引擎
 
 ### Artifact
 
@@ -375,8 +376,8 @@ API 主要提供：
 
 - 当前 Orchestrator 仍偏规则化、静态 Demo
 - 不是复杂动态规划系统
-- 不是基于真实 LLM 的多轮拆解器
-- 当前 parallel group 仍是计划字段和展示基础，不是真实并发调度
+- LLM Planner 当前是可配置 MVP：仅生成 `OrchestratorPlan`，不直接生成真实产物
+- 当前 parallel group 已进入 demo-task 执行层并发，但不是完整动态 DAG 引擎
 
 ## 7. Message target / mentioned agents 到 selectedAgent 推断链路
 
@@ -459,6 +460,23 @@ API 主要提供：
 - 未配置或调用失败时 fallback 到 MOCK
 - 当前非流式，且不代表 Codex / Claude Code / OpenCode 深度接入完成
 
+### Adapter Output Artifact
+
+- `AgentStepExecutor` 会检查 `AgentResponse`
+- 只有满足以下条件才会创建 `Adapter Output - ...` Artifact：
+  - `status = COMPLETED`
+  - `fallbackUsed = false`
+  - `actualAdapterType != MOCK`
+  - `content` 非空
+- fallback 到 MOCK 时不会伪造真实 Adapter Output Artifact
+- Adapter Output Artifact 会进入：
+  - `TaskStep.producedArtifactIds`
+  - Artifact Studio
+  - MessageStream 的 Artifact Card
+  - ContextSnapshot artifactIds / pinned context items
+  - TaskRun resultSummary
+- 该能力是半真实输出承接，不代表 Codex / Claude Code / OpenCode 深度集成完成
+
 ### Real integration
 
 - 深度真实平台接入当前未完成
@@ -492,7 +510,10 @@ API 主要提供：
 - demo-task 和 revision 生成 HandoffSummary
 - 支持 PinnedContext，用户可把 Message 固定为上下文
 - 支持 MemoryItem MVP，用户可把 Message 保存为长期记忆
-- Orchestrator demo-task 会把 pinned context 和 memory 注入第一个 TaskStep inputContext
+- MemoryItem 使用本地 JSON 文件持久化，默认路径为 `backend/.agenthub/memories.json`
+- MemoryRepository 支持按 conversation / scope / category / importance / lastUsedAt 的规则检索
+- Orchestrator demo-task 会检索 relevant memories，并把 pinned context 和 memory 注入第一个 TaskStep inputContext
+- Orchestrator 使用过的 memory 会更新 `lastUsedAt`
 
 前端：
 
@@ -503,8 +524,9 @@ API 主要提供：
 边界说明：
 
 - 当前 MemoryItem 仍是内存 Repository，不是生产级长期记忆系统
+- 当前持久化是本地文件，不是 MySQL / 多端同步 / 生产级记忆存储
 - 当前不使用 embedding / vector database
-- 当前没有跨设备同步或持久化记忆治理
+- 当前没有跨设备同步、隐私治理或复杂长期记忆策略
 
 ## 12. Artifact Revision 设计
 
@@ -589,12 +611,20 @@ API 主要提供：
 
 ### LLM Planner
 
-后续目标：
+当前 MVP：
 
-- 通过 `OPENAI_COMPATIBLE` 可选生成 OrchestratorPlan
-- 使用 JSON schema 校验模型输出
-- 校验失败、超时或模型不可用时回退 RuleBasedPlanner
-- 不让 LLM Planner 直接绕过现有 Artifact / Adapter / fallback 链路
+- 通过 `agenthub.orchestrator.planner.type=LLM` 可切换到 LLM Planner
+- LLM Planner 使用 `OPENAI_COMPATIBLE` Adapter 发起非流式规划调用
+- 模型输出必须是 JSON object，并通过最小 schema 校验：
+  - 必须包含 `goal`
+  - 必须包含 `steps`
+  - 必须且只能包含 `FRONTEND`、`BACKEND`、`REVIEWER` 三类 specialist role
+  - 每个 step 必须包含 `stepOrder`、`taskDescription`、`requiredSkill`
+  - 可包含 `parallelGroupKey`、`dependsOnStepOrders`、`routingReason`
+- 校验失败、Adapter 不可用、调用 fallback 或模型输出不合规时，默认回退 RuleBasedPlanner
+- `agenthub.orchestrator.planner.fallback-to-rule-based=false` 时，LLM Planner 失败会显式报错
+- TaskRun resultSummary 和 Orchestrator 可解释面板会展示 `LLM_PLANNER`、`RULE_BASED_FALLBACK` 和 fallback reason
+- LLM Planner 只负责计划生成，不直接绕过现有 Artifact / Adapter / fallback 链路
 
 ## 16. 风险与扩展点
 
@@ -605,11 +635,10 @@ API 主要提供：
 - 文档可能滞后于代码
 - 演示链路依赖静态模板
 - MemoryItem 仍是内存态，刷新后丢失
-- parallelGroupKey 仍未进入真实并发执行
+- 并发执行仍限定在 demo-task Agent Step 层，不是完整动态 DAG 调度
 
 当前最重要的扩展点：
 
-- 真实并行多 Agent 调度 v1
 - LLM Planner JSON schema MVP
 - MemoryItem 持久化与检索策略
 - Adapter 成功输出 Artifact 增强

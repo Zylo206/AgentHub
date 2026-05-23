@@ -108,8 +108,8 @@ export function ContextPanel({
             {memories.map((memory) => (
               <article className="pinned-context-item" key={memory.memoryId}>
                 <div className="pinned-context-item__meta">
-                  <span>{memory.category} · {memory.sourceId}</span>
-                  <span>importance {memory.importance}</span>
+                  <span>{memory.category} · {memory.scope} · {memory.sourceId}</span>
+                  <span>importance {memory.importance} · last used {new Date(memory.lastUsedAt).toLocaleString()}</span>
                 </div>
                 <p>{memory.content}</p>
               </article>

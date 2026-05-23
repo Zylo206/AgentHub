@@ -219,6 +219,10 @@ export function getMemoriesByConversation(conversationId: string): Promise<Memor
   return request<MemoryItem[]>(`/api/conversations/${conversationId}/memories`);
 }
 
+export function getRelevantMemoriesByConversation(conversationId: string, limit = 6): Promise<MemoryItem[]> {
+  return request<MemoryItem[]>(`/api/conversations/${conversationId}/memories/relevant?limit=${limit}`);
+}
+
 export function saveMessageAsMemory(
   conversationId: string,
   messageId: string,
@@ -227,6 +231,16 @@ export function saveMessageAsMemory(
   return request<MemoryItem>(`/api/conversations/${conversationId}/messages/${messageId}/memory`, {
     method: "POST",
     body: JSON.stringify({ category })
+  });
+}
+
+export function updateMemory(
+  memoryId: string,
+  payload: Partial<Pick<MemoryItem, "category" | "scope" | "content" | "importance">>
+): Promise<MemoryItem> {
+  return request<MemoryItem>(`/api/memories/${memoryId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
   });
 }
 

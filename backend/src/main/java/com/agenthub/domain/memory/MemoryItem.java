@@ -85,4 +85,39 @@ public class MemoryItem {
     public Instant getLastUsedAt() {
         return lastUsedAt;
     }
+
+    public MemoryItem withUpdatedFields(
+            String scope,
+            String category,
+            String content,
+            int importance,
+            Instant updatedAt) {
+        return new MemoryItem(
+                memoryId,
+                conversationId,
+                sourceType,
+                sourceId,
+                scope,
+                category,
+                content,
+                importance,
+                createdAt,
+                updatedAt,
+                lastUsedAt);
+    }
+
+    public MemoryItem withLastUsedAt(Instant lastUsedAt) {
+        return new MemoryItem(
+                memoryId,
+                conversationId,
+                sourceType,
+                sourceId,
+                scope,
+                category,
+                content,
+                importance,
+                createdAt,
+                updatedAt,
+                lastUsedAt);
+    }
 }

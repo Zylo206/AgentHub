@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -26,6 +27,13 @@ public class MemoryController {
         return ApiResponse.success(memoryApplicationService.listMemoriesByConversation(conversationId));
     }
 
+    @GetMapping("/conversations/{conversationId}/memories/relevant")
+    public ApiResponse<?> listRelevantMemories(
+            @PathVariable("conversationId") String conversationId,
+            @RequestParam(value = "limit", defaultValue = "6") int limit) {
+        return ApiResponse.success(memoryApplicationService.listRelevantMemories(conversationId, limit));
+    }
+
     @PostMapping("/conversations/{conversationId}/messages/{messageId}/memory")
     public ApiResponse<?> saveMessageAsMemory(
             @PathVariable("conversationId") String conversationId,
@@ -35,7 +43,10 @@ public class MemoryController {
                 memoryApplicationService.saveMessageAsMemory(
                         conversationId,
                         messageId,
-                        request == null ? null : request.category()),
+                        request == null ? null : request.category(),
+                        request == null ? null : request.scope(),
+                        request == null ? null : request.importance(),
+                        request == null ? null : request.content()),
                 "Message saved as memory");
     }
 
@@ -47,6 +58,7 @@ public class MemoryController {
                 memoryApplicationService.updateMemory(
                         memoryId,
                         request.category(),
+                        request.scope(),
                         request.content(),
                         request.importance()),
                 "Memory updated");
@@ -58,6 +70,6 @@ public class MemoryController {
     }
 }
 
-record SaveMemoryRequest(String category) {}
+record SaveMemoryRequest(String category, String scope, Integer importance, String content) {}
 
-record UpdateMemoryRequest(String category, String content, Integer importance) {}
+record UpdateMemoryRequest(String category, String scope, String content, Integer importance) {}

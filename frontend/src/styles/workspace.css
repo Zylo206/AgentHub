@@ -1336,6 +1336,17 @@
   line-height: 1.5;
 }
 
+.orchestrator-stage-card__note {
+  border-left: 3px solid #bfdbfe;
+  padding-left: 9px;
+  color: #1e40af;
+}
+
+.orchestrator-stage-card__note--warning {
+  border-left-color: #f59e0b;
+  color: #92400e;
+}
+
 .orchestrator-stage-card__meta,
 .orchestrator-chip-row {
   display: flex;
@@ -1357,6 +1368,23 @@
 .orchestrator-chip--warning {
   background: var(--warning-soft);
   color: #b45309;
+}
+
+.parallel-group-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.parallel-group-pill {
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 9px;
 }
 
 .orchestrator-route-list {

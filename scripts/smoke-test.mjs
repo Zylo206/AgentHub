@@ -214,11 +214,31 @@ async function runSmokeTest() {
   const memoryId = requireValue(memory.memoryId, "memoryId missing");
   pass(`message saved as memory: ${memoryId}`);
 
+  const updatedMemory = await request(`/api/memories/${memoryId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      category: "DECISION",
+      scope: "CONVERSATION",
+      importance: 9,
+      content: "Smoke test memory: prefer blue login buttons and keep verification code login visible."
+    })
+  });
+  if (updatedMemory.category !== "DECISION" || updatedMemory.importance !== 9) {
+    throw new Error("memory update did not persist category and importance");
+  }
+  pass(`memory updated: ${updatedMemory.category}, importance=${updatedMemory.importance}`);
+
   const memories = await request(`/api/conversations/${conversationId}/memories`);
   if (!Array.isArray(memories) || !memories.some((item) => item.memoryId === memoryId)) {
     throw new Error("saved memory not found");
   }
   pass(`memories loaded: ${memories.length}`);
+
+  const relevantMemories = await request(`/api/conversations/${conversationId}/memories/relevant?limit=3`);
+  if (!Array.isArray(relevantMemories) || relevantMemories[0]?.memoryId !== memoryId) {
+    throw new Error("relevant memory retrieval did not prioritize the updated memory");
+  }
+  pass(`relevant memories loaded: ${relevantMemories.length}, top=${relevantMemories[0].memoryId}`);
 
   const taskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
     method: "POST",
@@ -235,13 +255,41 @@ async function runSmokeTest() {
   if (steps.length < 3) {
     throw new Error(`demo task expected at least 3 steps, got ${steps.length}`);
   }
+  const resultSummary = String(taskRun.resultSummary || "");
+  if (!resultSummary.includes("规划模式：")) {
+    throw new Error("demo task resultSummary did not expose planner mode");
+  }
+  const plannerModeMatch = resultSummary.match(/规划模式：([^，。]+)/);
+  const plannerMode = plannerModeMatch?.[1] || "unknown";
+  if (!["RULE_BASED_DEMO", "RULE_BASED_FALLBACK", "LLM_PLANNER"].includes(plannerMode)) {
+    throw new Error(`unexpected planner mode in resultSummary: ${plannerMode}`);
+  }
   if (!String(steps[0]?.inputContext || "").includes("Pinned context")) {
     throw new Error("first task step inputContext did not reference pinned context");
   }
   if (!String(steps[0]?.inputContext || "").includes("Long-term memory")) {
     throw new Error("first task step inputContext did not reference long-term memory");
   }
+  if (!String(steps[0]?.inputContext || "").includes("Smoke test memory")) {
+    throw new Error("first task step inputContext did not include retrieved memory content");
+  }
+  const parallelGroups = steps.reduce((groups, step) => {
+    const groupKey = step.parallelGroupKey || `GROUP_${step.stepOrder}`;
+    groups.set(groupKey, [...(groups.get(groupKey) || []), step.stepOrder]);
+    return groups;
+  }, new Map());
+  const parallelGroupEntry = Array.from(parallelGroups.entries()).find(([, stepOrders]) => stepOrders.length >= 2);
+  if (!parallelGroupEntry) {
+    throw new Error(
+      `expected at least one parallel execution group for multi-mention task, got ${JSON.stringify(Array.from(parallelGroups.entries()))}`
+    );
+  }
+  if (!steps.some((step) => Array.isArray(step.dependsOnStepOrders) && step.dependsOnStepOrders.length > 0)) {
+    throw new Error("expected at least one task step to declare dependsOnStepOrders");
+  }
   pass(`demo task completed: ${taskRunId}, steps=${steps.length}`);
+  pass(`planner mode visible: ${plannerMode}`);
+  pass(`parallel execution group validated: ${parallelGroupEntry[0]} -> steps ${parallelGroupEntry[1].join(", ")}`);
 
   const rerunTaskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
     method: "POST",
@@ -303,6 +351,12 @@ async function runSmokeTest() {
     );
   }
   if (adapterOutputArtifacts.length > 0) {
+    const invalidAdapterOutputArtifact = adapterOutputArtifacts.find((item) =>
+      !String(item.content || "").includes("Persisted Because: actual adapter completed without MOCK fallback")
+    );
+    if (invalidAdapterOutputArtifact) {
+      throw new Error(`adapter output artifact missing persistence explanation: ${invalidAdapterOutputArtifact.title}`);
+    }
     pass(`adapter output artifacts loaded: ${adapterOutputArtifacts.length}`);
   }
 
@@ -354,6 +408,14 @@ async function runSmokeTest() {
   }
   if (!hasDeployMessage) {
     throw new Error("deployment status message not found in message list");
+  }
+  if (adapterOutputArtifacts.length > 0) {
+    const hasAdapterOutputMessage = messages.some((item) =>
+      String(item.content || "").includes("真实 / 半真实 Adapter 输出产物")
+    );
+    if (!hasAdapterOutputMessage) {
+      throw new Error("adapter output artifact message not found in message list");
+    }
   }
   const agentMessages = messages.filter((item) => item.senderType === "AGENT");
   const requiredAgentSenders = [

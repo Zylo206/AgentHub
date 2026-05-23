@@ -36,7 +36,24 @@ public class MemoryApplicationService {
         return memoryRepository.findByConversationId(new ConversationId(conversationId));
     }
 
-    public MemoryItem saveMessageAsMemory(String conversationId, String messageId, String category) {
+    public List<MemoryItem> listRelevantMemories(String conversationId, int limit) {
+        return memoryRepository.findRelevantForConversation(new ConversationId(conversationId), limit);
+    }
+
+    public List<MemoryItem> markMemoriesUsed(List<MemoryItem> memoryItems) {
+        Instant now = timeProvider.now();
+        return memoryItems.stream()
+                .map(memoryItem -> memoryRepository.markUsed(memoryItem.getMemoryId(), now).orElse(memoryItem))
+                .toList();
+    }
+
+    public MemoryItem saveMessageAsMemory(
+            String conversationId,
+            String messageId,
+            String category,
+            String scope,
+            Integer importance,
+            String content) {
         ConversationId conversationRef = new ConversationId(conversationId);
         Message message = messageRepository.findById(new MessageId(messageId))
                 .orElseThrow(() -> new NoSuchElementException("Message not found: " + messageId));
@@ -52,31 +69,25 @@ public class MemoryApplicationService {
                             conversationRef,
                             "MESSAGE",
                             messageId,
-                            "CONVERSATION",
+                            normalizeScope(scope),
                             normalizeCategory(category),
-                            buildMemoryContent(message),
-                            5,
+                            content == null || content.isBlank() ? buildMemoryContent(message) : content.trim(),
+                            normalizeImportance(importance),
                             now,
                             now,
                             now));
                 });
     }
 
-    public MemoryItem updateMemory(String memoryId, String category, String content, Integer importance) {
+    public MemoryItem updateMemory(String memoryId, String category, String scope, String content, Integer importance) {
         MemoryItem current = memoryRepository.findById(memoryId)
                 .orElseThrow(() -> new NoSuchElementException("MemoryItem not found: " + memoryId));
         Instant now = timeProvider.now();
-        return memoryRepository.save(new MemoryItem(
-                current.getMemoryId(),
-                current.getConversationId(),
-                current.getSourceType(),
-                current.getSourceId(),
-                current.getScope(),
+        return memoryRepository.save(current.withUpdatedFields(
+                scope == null || scope.isBlank() ? current.getScope() : normalizeScope(scope),
                 category == null || category.isBlank() ? current.getCategory() : normalizeCategory(category),
                 content == null || content.isBlank() ? current.getContent() : content.trim(),
-                importance == null ? current.getImportance() : Math.max(1, Math.min(10, importance)),
-                current.getCreatedAt(),
-                now,
+                importance == null ? current.getImportance() : normalizeImportance(importance),
                 now));
     }
 
@@ -91,7 +102,26 @@ public class MemoryApplicationService {
         if (category == null || category.isBlank()) {
             return "PROJECT_FACT";
         }
-        return category.trim().toUpperCase().replace('-', '_');
+        String normalized = category.trim().toUpperCase().replace('-', '_');
+        return switch (normalized) {
+            case "USER_PREFERENCE", "PROJECT_FACT", "DECISION", "CONSTRAINT", "ARTIFACT_NOTE" -> normalized;
+            default -> "PROJECT_FACT";
+        };
+    }
+
+    private String normalizeScope(String scope) {
+        if (scope == null || scope.isBlank()) {
+            return "CONVERSATION";
+        }
+        String normalized = scope.trim().toUpperCase().replace('-', '_');
+        return switch (normalized) {
+            case "CONVERSATION", "AGENT", "GLOBAL" -> normalized;
+            default -> "CONVERSATION";
+        };
+    }
+
+    private int normalizeImportance(Integer importance) {
+        return importance == null ? 5 : Math.max(1, Math.min(10, importance));
     }
 
     private String buildMemoryContent(Message message) {

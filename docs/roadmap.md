@@ -21,9 +21,9 @@
 
 当前阶段还不应表述为完整多 Agent 平台。关键边界是：
 
-- 并行调度仍是计划字段和展示基础，不是真实线程级并发
-- LLM Planner 仍是配置入口和规则 fallback，不是真实 planning 主链路
-- MemoryItem 仍是内存 Repository，不是持久化长期记忆系统
+- 并行调度已在 demo-task Agent Step 层使用 `CompletableFuture` 执行并发组，但仍不是完整动态 DAG
+- LLM Planner 已支持 `OPENAI_COMPATIBLE` 可配置 JSON plan，但默认仍关闭并保留规则 fallback
+- MemoryItem 已有本地 JSON 文件持久化和规则检索，但不是生产级长期记忆系统
 - Deploy Preview 仍是本地静态模拟，不是真实部署
 - Codex / Claude Code / OpenCode 仍是 CLI 探测型半真实接入，不是深度平台集成
 
@@ -74,6 +74,8 @@
 - 群聊式 Agent 消息流
 - selectedAgent / mentionedAgentIds 路由
 - parallelGroupKey / dependsOnStepOrders 计划字段
+- demo-task Agent Step 并发组执行 v1
+- LLM Planner JSON Schema MVP
 - Adapter fallback 记录
 
 ### Context / Memory
@@ -85,6 +87,8 @@
 - MemoryItem MVP
 - Message 保存为长期记忆
 - Pinned context / memory 注入 TaskStep inputContext
+- MemoryItem 本地文件持久化
+- MemoryItem 规则检索和 lastUsedAt 更新
 
 ### Artifact / Deploy
 
@@ -106,16 +110,16 @@
 - OpenAICompatibleAgentAdapter
 - Codex / Claude Code / OpenCode CLI 探测型 Adapter
 - Adapter fallback 到 MOCK
-- Adapter 成功输出进入 Artifact 的基础链路
+- Adapter 成功输出进入 Artifact / MessageStream / ContextSnapshot 的半真实链路
 
 ## 3. 下一阶段 P0
 
 | 优先级 | 任务 | 为什么排这里 | 验收标准 |
 |---:|---|---|---|
-| P0-1 | 真实并行多 Agent 调度 v1 | 课题明确要求并行调度；当前只有 parallelGroupKey 展示基础 | 同一 parallel group 的 step 使用 `CompletableFuture` 并发执行；失败不影响主 Demo；TaskRunPanel 能展示真实并发执行结果 |
-| P0-2 | LLM Planner JSON Schema MVP | Orchestrator 仍是规则化，答辩时需要真实 planning 可选能力 | 配置 `LLM` planner 后调用 OPENAI_COMPATIBLE 生成 JSON plan；schema 校验失败或超时回退 RuleBasedPlanner |
-| P0-3 | MemoryItem 持久化与检索策略 | 当前长期记忆仍是内存态，刷新后丢失 | Memory API 支持稳定查询、更新、删除；Orchestrator 按 scope / category / importance 检索 memory |
-| P0-4 | Adapter 成功输出 Artifact 增强 | 降低“Adapter 只是状态展示”的风险 | 非 MOCK 成功响应能生成 Review Report / Markdown / Text Artifact，并进入 MessageStream / ContextSnapshot |
+| P0-1 | 真实并行多 Agent 调度 v1 | 已推进：课题明确要求并行调度，当前已把 parallelGroupKey 接入执行层 | 同一 parallel group 的 step 使用 `CompletableFuture` 并发执行；失败不影响主 Demo；TaskRunPanel 能展示真实并发执行结果 |
+| P0-2 | LLM Planner JSON Schema MVP | 已推进：Orchestrator 可选用 OPENAI_COMPATIBLE 生成 plan，并保留规则 fallback | 配置 `LLM` planner 后调用 OPENAI_COMPATIBLE 生成 JSON plan；schema 校验失败、fallback 或模型不可用时回退 RuleBasedPlanner；TaskRunPanel 可展示 planner mode / fallback reason |
+| P0-3 | MemoryItem 持久化与检索策略 | 已推进：长期记忆从内存态升级到本地文件持久化和规则检索 | Memory API 支持稳定查询、更新、删除；Orchestrator 按 scope / category / importance / lastUsedAt 检索 memory |
+| P0-4 | Adapter 成功输出 Artifact 增强 | 已推进：降低“Adapter 只是状态展示”的风险 | 非 MOCK 成功响应能生成 Review Report / Markdown Artifact，并进入 TaskStep producedArtifactIds / MessageStream / ContextSnapshot / TaskRun summary |
 | P0-5 | 文档 V1.0 同步 | 代码能力变化快，文档必须跟上 | README、technical-design、demo-checklist、roadmap 与当前代码一致 |
 | P0-6 | 仓库卫生与提交前检查 | 保证 MVP 可稳定交接 | 清理构建缓存；backend build、frontend build、smoke test 全通过 |
 
@@ -143,14 +147,13 @@
 ## 6. 推荐立即执行顺序
 
 1. 完成仓库卫生与文档同步。
-2. 推进真实并行多 Agent 调度 v1。
-3. 实现 LLM Planner JSON Schema MVP。
-4. 推进 MemoryItem 持久化与规则检索。
-5. 增强 Adapter 成功输出进入 Artifact 的质量。
-6. 补消息操作深化和一键应用 Diff。
+2. 补消息操作深化和一键应用 Diff。
+3. 同步 technical-design / demo-checklist 到最新能力。
+4. 准备最终提交前 smoke test 和仓库卫生检查。
+5. 评估是否需要 MySQL 持久化或更真实 Adapter 测试面板。
 
 ## 7. 当前阶段结论
 
 当前 AgentHub 是一个 **半真实 AgentHub MVP 原型**。
 
-它已经能证明 IM 式多 Agent 协作、Artifact-centered iteration、Adapter fallback、Context / Memory 和 Deploy Preview 的产品方向；但仍需要补真实并行调度、真实 LLM Planner、持久化长期记忆和更可信的真实 Agent 产物，才能更接近课题完整要求。
+它已经能证明 IM 式多 Agent 协作、demo-task 并发组、可配置 LLM Planner、Artifact-centered iteration、Adapter fallback、Adapter Output Artifact、本地持久化 Context / Memory 和 Deploy Preview 的产品方向；但仍需要补更完整的消息操作、生产级记忆治理和深度真实平台接入，才能更接近课题完整要求。

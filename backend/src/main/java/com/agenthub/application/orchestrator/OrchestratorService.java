@@ -42,9 +42,14 @@ import com.agenthub.infrastructure.adapter.AgentRequest;
 import com.agenthub.infrastructure.adapter.AgentResponse;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -65,6 +70,7 @@ public class OrchestratorService {
     private final ResultAggregator resultAggregator;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
+    private final int memoryRetrievalLimit;
 
     public OrchestratorService(
             TaskRepository taskRepository,
@@ -81,7 +87,8 @@ public class OrchestratorService {
             AgentStepExecutor agentStepExecutor,
             ResultAggregator resultAggregator,
             IdGenerator idGenerator,
-            TimeProvider timeProvider) {
+            TimeProvider timeProvider,
+            @Value("${agenthub.memory.retrieval.limit:6}") int memoryRetrievalLimit) {
         this.taskRepository = taskRepository;
         this.artifactRepository = artifactRepository;
         this.contextRepository = contextRepository;
@@ -97,6 +104,7 @@ public class OrchestratorService {
         this.resultAggregator = resultAggregator;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
+        this.memoryRetrievalLimit = memoryRetrievalLimit;
     }
 
     public TaskRun createDemoTaskFromMessage(String conversationId, String messageId, String userInput) {
@@ -116,7 +124,9 @@ public class OrchestratorService {
             throw new IllegalArgumentException("Source message does not belong to the provided conversation.");
         }
         List<PinnedContext> pinnedContexts = contextRepository.findPinnedContextsByConversationId(conversationRef);
-        List<MemoryItem> memoryItems = memoryRepository.findByConversationId(conversationRef);
+        List<MemoryItem> memoryItems = memoryRepository.findRelevantForConversation(conversationRef, memoryRetrievalLimit).stream()
+                .map(memoryItem -> memoryRepository.markUsed(memoryItem.getMemoryId(), now).orElse(memoryItem))
+                .toList();
         List<String> pinnedContextItems = buildPinnedContextItems(pinnedContexts);
         List<String> memoryContextItems = buildMemoryContextItems(memoryItems);
         String pinnedInputContext = buildPinnedInputContext(pinnedContextItems, memoryContextItems);
@@ -140,12 +150,6 @@ public class OrchestratorService {
                         backendRoute.agentId(),
                         reviewRoute.agentId(),
                         mentionedAgents));
-        AgentAdapterType selectedAgentPreferredAdapter = selectedAgent == null
-                ? agentRoutingService.resolvePreferredAdapterForStep(
-                        BuiltInAgentIds.FRONTEND_BUILDER,
-                        "生成 React 登录页面和初始 README 草案。")
-                : agentRoutingService.resolvePreferredAdapterForAgent(selectedAgent);
-
         TaskSpec taskSpec = new TaskSpec(
                 new TaskSpecId(idGenerator.nextId("spec")),
                 conversationRef,
@@ -218,85 +222,93 @@ public class OrchestratorService {
         artifactRepository.save(apiContractArtifact);
         artifactRepository.save(reviewArtifact);
 
-        TaskStep frontendStep = createAgentExecutedStep(
-                conversationId,
-                taskRunId,
-                1,
-                selectedAgent == null ? BuiltInAgentIds.FRONTEND_BUILDER : selectedAgent.getId().value(),
-                selectedAgent == null ? "前端构建 Agent" : selectedAgent.getName(),
-                userInput,
-                selectedAgent == null
-                        ? "你负责 AgentHub Demo 中的前端实现。"
-                        : selectedAgent.getSystemPrompt(),
-                selectedAgent == null
-                        ? "生成 React 登录页面和初始 README 草案。"
-                        : "由用户选择的 Agent 执行前端产物生成。",
-                (selectedAgent == null
-                        ? "Task Spec 要求生成双模式登录页，并支持以 Artifact 为中心的迭代。"
-                        : "Task Spec 要求生成双模式登录页，并支持以 Artifact 为中心的迭代。"
-                                + buildSelectedAgentInputContext(selectedAgent, selectedAgentResolution))
-                        + pinnedInputContext,
-                "已为工作台生成 LoginPage.tsx 和 README.md。",
-                List.of(
-                        "TaskSpec：React 登录页 Demo",
-                        "需要支持邮箱登录和验证码登录",
-                        "已启用以 Artifact 为中心的迭代",
-                        selectedAgentResolution.sourceDescription(),
-                        selectedAgentSummary),
-                List.of("LoginPage.tsx", "README.md"),
-                List.of(codeArtifact.getId(), readmeArtifact.getId()),
-                frontendRoute.preferredAdapterType(),
-                now);
-
-        TaskStep backendStep = createAgentExecutedStep(
-                conversationId,
-                taskRunId,
-                2,
-                BuiltInAgentIds.BACKEND_WORKER,
-                "后端协作 Agent",
-                userInput,
-                "你负责 AgentHub Demo 中的 API 契约和后端结构说明。",
-                "根据页面字段和任务范围生成登录 API 契约。",
-                "使用登录页输入作为契约输入，并保持 API 便于后续迭代。",
-                "已生成 login-api-contract.json，供后续评审使用。",
-                List.of(
-                        "TaskSpec：React 登录页 Demo",
-                        "前端产物可作为字段参考",
-                        "API 契约需要为后续集成预留空间"),
-                List.of("LoginPage.tsx", "README.md"),
-                List.of(apiContractArtifact.getId()),
-                agentRoutingService.resolvePreferredAdapterForStep(
+        List<AgentStepExecutor.StepExecutionCommand> stepCommands = List.of(
+                buildStepExecutionCommand(
+                        conversationId,
+                        taskRunId,
+                        frontendStepPlan,
+                        selectedAgent == null ? BuiltInAgentIds.FRONTEND_BUILDER : selectedAgent.getId().value(),
+                        selectedAgent == null ? "前端构建 Agent" : selectedAgent.getName(),
+                        userInput,
+                        selectedAgent == null
+                                ? "你负责 AgentHub Demo 中的前端实现。"
+                                : selectedAgent.getSystemPrompt(),
+                        selectedAgent == null
+                                ? "生成 React 登录页面和初始 README 草案。"
+                                : "由用户选择的 Agent 执行前端产物生成。",
+                        selectedAgent == null ? "FRONTEND_ARTIFACT_GENERATION" : frontendStepPlan.requiredSkill(),
+                        (selectedAgent == null
+                                ? "Task Spec 要求生成双模式登录页，并支持以 Artifact 为中心的迭代。"
+                                : "Task Spec 要求生成双模式登录页，并支持以 Artifact 为中心的迭代。"
+                                        + buildSelectedAgentInputContext(selectedAgent, selectedAgentResolution))
+                                + pinnedInputContext,
+                        "已为工作台生成 LoginPage.tsx 和 README.md。",
+                        List.of(
+                                "TaskSpec：React 登录页 Demo",
+                                "需要支持邮箱登录和验证码登录",
+                                "已启用以 Artifact 为中心的迭代",
+                                selectedAgentResolution.sourceDescription(),
+                                selectedAgentSummary),
+                        List.of("LoginPage.tsx", "README.md"),
+                        List.of(codeArtifact.getId(), readmeArtifact.getId()),
+                        frontendRoute.preferredAdapterType(),
+                        now),
+                buildStepExecutionCommand(
+                        conversationId,
+                        taskRunId,
+                        backendStepPlan,
                         BuiltInAgentIds.BACKEND_WORKER,
-                        "根据页面字段和任务范围生成登录 API 契约。"),
-                now);
-
-        TaskStep reviewStep = createAgentExecutedStep(
-                conversationId,
-                taskRunId,
-                3,
-                BuiltInAgentIds.REVIEWER,
-                "评审 Agent",
-                userInput,
-                "你负责 AgentHub Demo 中的评审和验收检查。",
-                "检查生成的页面、README、API 契约和验收标准。",
-                "结合 Task Spec、代码产物、README 产物和 API 契约产物一起评审。",
-                "已生成结构化评审报告，包含通过依据和风险等级。",
-                List.of(
-                        "TaskSpec 验收标准是评审基线",
-                        "需要同时检查代码、README 和 API 契约",
-                        "记录问题、建议和风险等级"),
-                List.of("LoginPage.tsx", "README.md", "login-api-contract.json"),
-                List.of(reviewArtifact.getId()),
-                agentRoutingService.resolvePreferredAdapterForStep(
+                        "后端协作 Agent",
+                        userInput,
+                        "你负责 AgentHub Demo 中的 API 契约和后端结构说明。",
+                        "根据页面字段和任务范围生成登录 API 契约。",
+                        backendStepPlan.requiredSkill(),
+                        "使用登录页输入作为契约输入，并保持 API 便于后续迭代。",
+                        "已生成 login-api-contract.json，供后续评审使用。",
+                        List.of(
+                                "TaskSpec：React 登录页 Demo",
+                                "前端产物可作为字段参考",
+                                "API 契约需要为后续集成预留空间"),
+                        List.of("LoginPage.tsx", "README.md"),
+                        List.of(apiContractArtifact.getId()),
+                        backendRoute.preferredAdapterType(),
+                        now),
+                buildStepExecutionCommand(
+                        conversationId,
+                        taskRunId,
+                        reviewStepPlan,
                         BuiltInAgentIds.REVIEWER,
-                        "检查生成的页面、README、API 契约和验收标准。"),
-                now);
+                        "评审 Agent",
+                        userInput,
+                        "你负责 AgentHub Demo 中的评审和验收检查。",
+                        "检查生成的页面、README、API 契约和验收标准。",
+                        reviewStepPlan.requiredSkill(),
+                        "结合 Task Spec、代码产物、README 产物和 API 契约产物一起评审。",
+                        "已生成结构化评审报告，包含通过依据和风险等级。",
+                        List.of(
+                                "TaskSpec 验收标准是评审基线",
+                                "需要同时检查代码、README 和 API 契约",
+                                "记录问题、建议和风险等级"),
+                        List.of("LoginPage.tsx", "README.md", "login-api-contract.json"),
+                        List.of(reviewArtifact.getId()),
+                        reviewRoute.preferredAdapterType(),
+                        now));
+        List<TaskStep> executedSteps = executeStepCommandsWithParallelGroups(stepCommands);
+        TaskStep frontendStep = findExecutedStep(executedSteps, 1);
+        TaskStep backendStep = findExecutedStep(executedSteps, 2);
+        TaskStep reviewStep = findExecutedStep(executedSteps, 3);
 
         TaskPlan taskPlan = new TaskPlan(
                 "生成登录页、说明文档、API 契约和评审产物。",
                 List.of(frontendStep, backendStep, reviewStep));
         List<TaskStep> demoSteps = List.of(frontendStep, backendStep, reviewStep);
         List<Artifact> demoArtifacts = artifactRepository.findByTaskRunId(taskRunId);
+        List<ArtifactId> staticArtifactIds = List.of(
+                codeArtifact.getId(),
+                readmeArtifact.getId(),
+                apiContractArtifact.getId(),
+                reviewArtifact.getId());
+        List<Artifact> adapterOutputArtifacts = findAdapterOutputArtifacts(demoArtifacts, staticArtifactIds);
         String resultSummary = resultAggregator.summarizeDemoTask(
                 taskSpec,
                 orchestratorPlan,
@@ -330,8 +342,11 @@ public class OrchestratorService {
                         "已启用以 Artifact 为中心的迭代",
                         "Reviewer 必须基于验收标准完成闭环检查",
                         selectedAgentResolution.sourceDescription(),
-                        selectedAgentSummary), mergePinnedContextItems(pinnedContextItems, memoryContextItems)),
+                        selectedAgentSummary), mergePinnedContextItems(
+                        mergePinnedContextItems(pinnedContextItems, memoryContextItems),
+                        buildAdapterOutputContextItems(adapterOutputArtifacts))),
                 "该快照包含原始用户请求、生成的 Task Spec、三个 TaskStep，以及 LoginPage.tsx、README.md、login-api-contract.json 和评审报告产物。"
+                        + buildAdapterOutputSnapshotSummary(adapterOutputArtifacts)
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary,
                 now);
@@ -403,7 +418,8 @@ public class OrchestratorService {
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.TASK_STATUS,
-                "TaskRun 已完成：3 个 TaskStep，" + demoArtifacts.size() + " 个产物。",
+                "TaskRun 已完成：3 个 TaskStep，" + demoArtifacts.size() + " 个产物。"
+                        + buildAdapterOutputSnapshotSummary(adapterOutputArtifacts),
                 List.of());
         messageApplicationService.appendSystemMessage(
                 conversationId,
@@ -428,7 +444,7 @@ public class OrchestratorService {
         appendAdapterOutputArtifactMessages(
                 conversationId,
                 demoArtifacts,
-                List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId()));
+                staticArtifactIds);
 
         return taskRun;
     }
@@ -642,6 +658,94 @@ public class OrchestratorService {
         return new TaskApplicationService.ArtifactRevisionResult(taskRun, revisedArtifact, reviewArtifact);
     }
 
+    private AgentStepExecutor.StepExecutionCommand buildStepExecutionCommand(
+            String conversationId,
+            TaskRunId taskRunId,
+            OrchestratorStepPlan stepPlan,
+            String agentId,
+            String agentName,
+            String userInput,
+            String systemPrompt,
+            String taskDescription,
+            String requiredSkill,
+            String inputContext,
+            String baseOutputContent,
+            List<String> contextItems,
+            List<String> artifactSummaries,
+            List<ArtifactId> producedArtifactIds,
+            AgentAdapterType preferredAdapterType,
+            Instant now) {
+        return new AgentStepExecutor.StepExecutionCommand(
+                conversationId,
+                taskRunId,
+                stepPlan.stepOrder(),
+                agentId,
+                agentName,
+                userInput,
+                systemPrompt,
+                taskDescription,
+                requiredSkill,
+                inputContext,
+                baseOutputContent,
+                contextItems,
+                artifactSummaries,
+                producedArtifactIds,
+                preferredAdapterType,
+                stepPlan.parallelGroupKey(),
+                stepPlan.dependsOnStepOrders(),
+                stepPlan.routingReason(),
+                now);
+    }
+
+    private List<TaskStep> executeStepCommandsWithParallelGroups(
+            List<AgentStepExecutor.StepExecutionCommand> commands) {
+        Map<Integer, CompletableFuture<TaskStep>> futureByStepOrder = new HashMap<>();
+        commands.stream()
+                .sorted(Comparator.comparingInt(AgentStepExecutor.StepExecutionCommand::stepOrder))
+                .forEach(command -> futureByStepOrder.put(
+                        command.stepOrder(),
+                        scheduleStepCommand(command, futureByStepOrder)));
+
+        try {
+            CompletableFuture.allOf(futureByStepOrder.values().toArray(new CompletableFuture[0])).join();
+            return futureByStepOrder.values().stream()
+                    .map(CompletableFuture::join)
+                    .sorted(Comparator.comparingInt(TaskStep::getStepOrder))
+                    .toList();
+        } catch (CompletionException error) {
+            Throwable cause = error.getCause() == null ? error : error.getCause();
+            throw new IllegalStateException("Parallel Agent step execution failed: " + cause.getMessage(), cause);
+        }
+    }
+
+    private CompletableFuture<TaskStep> scheduleStepCommand(
+            AgentStepExecutor.StepExecutionCommand command,
+            Map<Integer, CompletableFuture<TaskStep>> futureByStepOrder) {
+        List<CompletableFuture<TaskStep>> dependencyFutures = command.dependsOnStepOrders().stream()
+                .map(futureByStepOrder::get)
+                .filter(future -> future != null)
+                .toList();
+
+        if (dependencyFutures.isEmpty()) {
+            return CompletableFuture.supplyAsync(() -> executeStepCommand(command));
+        }
+
+        return CompletableFuture
+                .allOf(dependencyFutures.toArray(new CompletableFuture[0]))
+                .thenApplyAsync(ignored -> executeStepCommand(command));
+    }
+
+    private TaskStep executeStepCommand(AgentStepExecutor.StepExecutionCommand command) {
+        return agentStepExecutor.execute(command);
+    }
+
+    private TaskStep findExecutedStep(List<TaskStep> steps, int stepOrder) {
+        return steps.stream()
+                .filter(step -> step.getStepOrder() == stepOrder)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Executed TaskStep not found: " + stepOrder));
+    }
+
     private TaskStep createAgentExecutedStep(
             String conversationId,
             TaskRunId taskRunId,
@@ -744,7 +848,7 @@ public class OrchestratorService {
         messageApplicationService.appendAgentMessage(
                 conversationId,
                 BuiltInAgentIds.ORCHESTRATOR,
-                "群聊协作已启动：Orchestrator 已将用户目标拆成 3 个 Agent Step，并按 Frontend -> Backend -> Reviewer 顺序协调执行。"
+                "群聊协作已启动：Orchestrator 已将用户目标拆成 3 个 Agent Step，并按 parallelGroupKey / dependsOnStepOrders 调度执行。"
                         + " 关联 TaskStep：步骤 1 / 2 / 3。"
                         + " " + selectedAgentSource);
         messageApplicationService.appendAgentMessage(
@@ -796,6 +900,8 @@ public class OrchestratorService {
         return " Adapter：preferred=" + step.getPreferredAdapterType()
                 + "，actual=" + step.getActualAdapterType()
                 + "，status=" + step.getAdapterStatus()
+                + "，parallelGroup=" + step.getParallelGroupKey()
+                + "，dependsOn=" + step.getDependsOnStepOrders()
                 + (isFallbackStep(step) ? "，fallbackUsed=true" : "")
                 + "。";
     }
@@ -878,12 +984,38 @@ public class OrchestratorService {
                 .forEach(artifact -> messageApplicationService.appendSystemMessage(
                         conversationId,
                         MessageType.ARTIFACT_CARD,
-                        "已创建 Adapter 输出产物：" + artifact.getTitle(),
+                        "已创建真实 / 半真实 Adapter 输出产物：" + artifact.getTitle()
+                                + "。该产物来自非 MOCK Adapter 的成功响应；若 Adapter fallback 到 MOCK，则不会生成此类产物。",
                         List.of(artifact.getId())));
     }
 
     private boolean containsArtifactId(List<ArtifactId> artifactIds, ArtifactId targetArtifactId) {
         return artifactIds.stream().anyMatch(artifactId -> artifactId.equals(targetArtifactId));
+    }
+
+    private List<Artifact> findAdapterOutputArtifacts(List<Artifact> artifacts, List<ArtifactId> staticArtifactIds) {
+        return artifacts.stream()
+                .filter(artifact -> !containsArtifactId(staticArtifactIds, artifact.getId()))
+                .filter(artifact -> artifact.getTitle() != null && artifact.getTitle().startsWith("Adapter Output -"))
+                .toList();
+    }
+
+    private List<String> buildAdapterOutputContextItems(List<Artifact> adapterOutputArtifacts) {
+        return adapterOutputArtifacts.stream()
+                .map(artifact -> "Adapter output artifact "
+                        + artifact.getId().value()
+                        + ": "
+                        + artifact.getTitle()
+                        + "，type="
+                        + artifact.getType())
+                .toList();
+    }
+
+    private String buildAdapterOutputSnapshotSummary(List<Artifact> adapterOutputArtifacts) {
+        if (adapterOutputArtifacts.isEmpty()) {
+            return " 未生成真实 / 半真实 Adapter 输出产物。";
+        }
+        return " 已捕获 " + adapterOutputArtifacts.size() + " 个真实 / 半真实 Adapter 输出产物并纳入 ContextSnapshot。";
     }
 
     private SelectedAgentResolution resolveSelectedAgent(

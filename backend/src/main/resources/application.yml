@@ -9,6 +9,12 @@ mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
 
 agenthub:
+  memory:
+    persistence:
+      enabled: ${AGENTHUB_MEMORY_PERSISTENCE_ENABLED:true}
+      path: ${AGENTHUB_MEMORY_PERSISTENCE_PATH:./.agenthub/memories.json}
+    retrieval:
+      limit: ${AGENTHUB_MEMORY_RETRIEVAL_LIMIT:6}
   orchestrator:
     planner:
       type: ${AGENTHUB_PLANNER_TYPE:RULE_BASED}

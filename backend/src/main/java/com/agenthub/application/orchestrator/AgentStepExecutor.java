@@ -58,10 +58,18 @@ public class AgentStepExecutor {
                         Map.of(
                                 "stepOrder", command.stepOrder(),
                                 "requiredSkill", command.requiredSkill(),
+                                "parallelGroupKey", command.parallelGroupKey(),
+                                "dependsOnStepOrders", command.dependsOnStepOrders(),
                                 "demoMode", true)));
 
         String adapterSummary = summarizeAdapterResponse(adapterResponse.content());
         String outputContent = command.baseOutputContent()
+                + "\n\n并行调度信息：parallelGroupKey="
+                + command.parallelGroupKey()
+                + "，dependsOnStepOrders="
+                + command.dependsOnStepOrders()
+                + "，routingReason="
+                + command.routingReason()
                 + "\n\nAdapter 执行信息：\n"
                 + (adapterSummary == null ? "未记录 Adapter 响应。" : adapterSummary);
 
@@ -159,6 +167,7 @@ public class AgentStepExecutor {
                 - Preferred Adapter: %s
                 - Actual Adapter: %s
                 - Status: %s
+                - Persisted Because: actual adapter completed without MOCK fallback
 
                 ## Response
 

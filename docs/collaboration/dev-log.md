@@ -1510,6 +1510,7 @@
 - `cd backend && mvn -q -DskipTests package`
 - `cd frontend && npm run build`
 - `node scripts/smoke-test.mjs`
+- 启动后端时设置 `AGENTHUB_PLANNER_TYPE=LLM` 且不配置 OpenAI，执行 `node scripts/smoke-test.mjs` 验证 `RULE_BASED_FALLBACK`
 
 ### 静态 / Mock / Placeholder 部分
 
@@ -1600,3 +1601,228 @@
 - 先完成仓库卫生与提交前检查，尤其清理被 Git 跟踪的 `frontend/tsconfig.app.tsbuildinfo`
 - 下一轮优先做真实并行多 Agent 调度 v1，将 `parallelGroupKey` 从展示字段推进到执行层
 - 随后推进 LLM Planner JSON Schema MVP，并保留 RuleBasedPlanner fallback
+
+## Phase 41：真实并行多 Agent 调度 v1
+
+### 目标
+
+- 将 `parallelGroupKey` / `dependsOnStepOrders` 从展示字段推进到 demo-task Agent Step 执行层
+- 让同一 parallel group 的 Step 使用 `CompletableFuture` 并发执行，同时保留依赖顺序和 Adapter fallback
+
+### 主要变更
+
+- `TaskPlanner` 增强并行计划：
+  - 默认 Demo 仍保留 Frontend -> Backend -> Reviewer 的依赖语义
+  - 多 `@Agent` 场景下将 Frontend / Reviewer 放入 `MENTIONED_AGENT_GROUP`
+  - Backend Step 继续依赖 Frontend Step
+- `OrchestratorService` 新增 Agent Step 并发调度：
+  - 将 Step 构造成 `StepExecutionCommand`
+  - 按 `dependsOnStepOrders` 等待依赖
+  - 无依赖或同组 Step 使用 `CompletableFuture` 并发执行
+  - 执行完成后按 `stepOrder` 还原 TaskRun 展示顺序
+- `AgentStepExecutor` 将 parallel group、dependsOn 和 routing reason 写入 Adapter metadata 和 TaskStep output
+- `TaskRunPanel` 增加并行执行组展示：
+  - 显示 `后端 CompletableFuture 并发执行`
+  - 展示 parallel group 中包含哪些 Step
+  - Router 区域展示 dependsOn 信息
+- `scripts/smoke-test.mjs` 增加并行组断言：
+  - 多 @Agent demo-task 至少存在一个包含多个 Step 的 parallel group
+  - 至少一个 Step 声明 `dependsOnStepOrders`
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是真实执行层并发，但范围限定在 demo-task Agent Step
+- 不是完整动态 DAG 引擎
+- 不实现 WebSocket / SSE 流式状态
+- Adapter 仍可能 fallback 到 MOCK
+- Artifact 内容仍以现有静态 Demo 产物为主
+
+### 遗留问题
+
+- 还没有任务级失败恢复树
+- 还没有并发执行耗时、开始时间、结束时间等结构化指标
+- 还没有动态 DAG UI
+- 还没有 LLM Planner 生成并行计划
+
+### 下一步建议
+
+- 推进 P0-2：LLM Planner JSON Schema MVP
+- 让 OPENAI_COMPATIBLE 在配置可用时生成 OrchestratorPlan，并在 schema 校验失败时回退 RuleBasedPlanner
+
+## Phase 42：LLM Planner JSON Schema MVP
+
+### 目标
+
+- 让 Orchestrator 可以通过 `OPENAI_COMPATIBLE` 可选生成 `OrchestratorPlan`
+- 对 LLM Planner 输出做最小 JSON schema 校验，并在不可用、fallback、超时或输出不合规时回退 RuleBasedPlanner
+- 在 TaskRun summary 和 Orchestrator 可解释面板中展示 planner mode 与 fallback reason
+
+### 主要变更
+
+- `TaskPlanner` 增加 LLM planner 分支：
+  - 读取 `agenthub.orchestrator.planner.type`
+  - `LLM` 模式下调用 `OPENAI_COMPATIBLE`
+  - 要求返回 JSON object
+  - 校验 `goal`、`steps`、`FRONTEND / BACKEND / REVIEWER` 三类 role、`stepOrder`、`taskDescription`、`requiredSkill`
+  - 支持 `parallelGroupKey`、`dependsOnStepOrders`、`routingReason`
+- `TaskPlanner` 保留 RuleBasedPlanner 作为稳定默认路径
+- `ResultAggregator` 将 `plannerReasoningSummary` 和 `fallbackReason` 写入 resultSummary
+- `TaskRunPanel` 识别 `LLM_PLANNER`、`RULE_BASED_FALLBACK` 和规则化 Planner，并展示 fallback reason
+- `.env.example` 增加：
+  - `AGENTHUB_PLANNER_TYPE`
+  - `AGENTHUB_PLANNER_FALLBACK_TO_RULE_BASED`
+- `scripts/smoke-test.mjs` 增加 planner mode 可见性断言
+- `README.md`、`docs/technical-design.md`、`docs/roadmap.md`、`docs/mvp-requirements-alignment.md` 同步 P0-2 状态
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 启动后端时设置 `AGENTHUB_PLANNER_TYPE=LLM` 且不配置 OpenAI，执行 `node scripts/smoke-test.mjs` 验证 `RULE_BASED_FALLBACK`
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 planner 仍是 `RULE_BASED`
+- LLM Planner 需要显式配置 `AGENTHUB_PLANNER_TYPE=LLM`
+- LLM Planner 依赖 `OPENAI_COMPATIBLE` Adapter 可用，不提交任何 API key
+- LLM Planner 只生成计划，不直接生成最终代码 / 文档 Artifact
+- 模型不可用、Adapter fallback 或 JSON schema 不合规时默认回退规则 Planner
+- 这不是完整动态 DAG 引擎，也不是生产级真实多 Agent planning
+
+### 遗留问题
+
+- 还没有更完整的 JSON Schema 库级校验
+- 还没有后端结构化 Orchestrator Decision DTO
+- 还没有将 LLM Planner 产物质量接入真实 Artifact 生成
+- 还没有真实多轮计划修正和任务级失败恢复树
+
+### 下一步建议
+
+- 推进 P0-3：MemoryItem 持久化与检索策略
+- 推进 P0-4：Adapter 成功输出进入真实 Artifact 链路增强
+- 后续可补 Orchestrator Decision DTO，让前端解释面板不再依赖 resultSummary 文本解析
+
+## Phase 43：MemoryItem 本地持久化与规则检索策略
+
+### 目标
+
+- 将 MemoryItem 从纯内存 MVP 推进到可重启保留的本地持久化能力
+- 增加按 scope / category / importance / lastUsedAt 的规则检索，让长期记忆更稳定地进入 Orchestrator inputContext
+
+### 主要变更
+
+- `MemoryItem` 增加不可变更新方法：
+  - `withUpdatedFields`
+  - `withLastUsedAt`
+- `MemoryRepository` 增加：
+  - `findRelevantForConversation`
+  - `markUsed`
+- `InMemoryMemoryRepository` 增加本地 JSON 文件持久化：
+  - 默认路径 `backend/.agenthub/memories.json`
+  - 启动时加载已有 memory
+  - save / update / delete / markUsed 后写回文件
+- `MemoryApplicationService` 增强：
+  - 支持 scope / category / importance / content 更新
+  - 支持 relevant memories 检索
+  - 支持 used memory 的 `lastUsedAt` 更新
+- `MemoryController` 增加：
+  - `GET /api/conversations/{conversationId}/memories/relevant?limit=`
+  - `SaveMemoryRequest` / `UpdateMemoryRequest` 支持 scope、importance、content
+- `OrchestratorService` 改为使用 relevant memories，并将使用过的 memory 标记为 used
+- `ContextPanel` 展示 memory scope 和 lastUsedAt
+- `scripts/smoke-test.mjs` 增加 memory update、relevant retrieval、inputContext 内容断言
+- `.env.example` 增加 Memory 持久化和检索配置
+- `.gitignore` 忽略 `backend/.agenthub/`
+- README、technical-design、roadmap、mvp-requirements-alignment 同步当前状态
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 重启 backend 后查询 smoke test 创建的 conversation memories，确认 memory 从本地文件重新加载
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮持久化是本地 JSON 文件，不是 MySQL
+- 本轮检索是规则排序，不是 embedding / vector database
+- MemoryItem 仍不是完整长期记忆治理系统
+- 没有跨设备同步、权限治理、隐私脱敏或自动摘要压缩
+
+### 遗留问题
+
+- 仍需生产级持久化方案，例如 MySQL 或其他数据库
+- 仍需更完整的 MemoryPolicy 和自动摘要 / 去重策略
+- 仍需按 Agent scope 和 global scope 做更完整 UI 管理
+- 仍需 smoke test 覆盖 delete 后重启不恢复的场景
+
+### 下一步建议
+
+- 推进 P0-4：Adapter 成功输出进入真实 Artifact 链路增强
+- 后续补 Memory 管理 UI，支持编辑 category / scope / importance 和删除
+
+## Phase 44：Adapter 成功输出进入 Artifact 链路增强
+
+### 目标
+
+- 降低“Adapter 只是状态展示”的风险
+- 让非 MOCK Adapter 的成功输出稳定进入 Artifact、MessageStream、ContextSnapshot 和 TaskRun summary
+- 保持 Mock fallback 稳定，不伪造真实平台输出
+
+### 主要变更
+
+- `AgentStepExecutor` 保留 Adapter Output Artifact 创建条件：
+  - `status = COMPLETED`
+  - `fallbackUsed = false`
+  - `actualAdapterType != MOCK`
+  - `content` 非空
+- `AgentStepExecutor` 增强 Adapter Output Artifact 内容，明确说明：
+  - artifact 因 actual adapter completed without MOCK fallback 才持久化
+  - preferred / actual adapter
+  - TaskStep 和原始 response
+- `ResultAggregator` 在 TaskRun summary 中统计真实 / 半真实 Adapter 输出产物数量
+- `OrchestratorService` 增强 demo-task 汇总链路：
+  - Adapter Output Artifact 进入 ContextSnapshot artifactIds
+  - Adapter Output Artifact 进入 pinned context items
+  - ContextSnapshot summary 说明 Adapter 输出产物数量
+  - MessageStream 增加更清晰的 Adapter Output Artifact card 文案
+- `scripts/smoke-test.mjs` 增强断言：
+  - 如果出现真实 Adapter Step，则必须有对应 Adapter Output Artifact
+  - Adapter Output Artifact 内容必须说明非 MOCK fallback
+  - 如果存在 Adapter Output Artifact，MessageStream 必须出现对应内容
+- README、technical-design、roadmap、mvp-requirements-alignment 同步 P0-4 状态
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- 默认 Adapter 配置下执行 `node scripts/smoke-test.mjs`
+- 临时启用本地 echo 型 CODEX CLI Adapter，执行 `node scripts/smoke-test.mjs`，验证生成 Adapter Output Artifact
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认未配置真实 Adapter 时不会生成 Adapter Output Artifact
+- 本轮不代表 Codex / Claude Code / OpenCode 深度真实接入完成
+- 本轮没有接真实外部网络服务
+- 本轮没有让 Adapter 输出替代全部静态 Demo Artifact
+- demo-task 仍保留静态核心产物用于稳定演示
+
+### 遗留问题
+
+- 真实 Adapter 输出质量仍取决于用户配置的 CLI / OpenAI Compatible 服务
+- 还没有针对 Adapter Output Artifact 的专门 UI badge
+- 还没有把 Adapter Output Artifact 纳入更完整的版本 lineage
+- 还没有真实平台深度 API / CLI 参数适配
+
+### 下一步建议
+
+- 进入文档 V1.0 与 Demo Checklist 同步
+- 补消息操作深化和一键应用 Diff
+- 后续可增加 Adapter 测试面板，让半真实输出更容易手动验收

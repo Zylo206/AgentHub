@@ -11,6 +11,7 @@ frontend/.vite/
 # Backend
 backend/target/
 backend/.mvn/
+backend/.agenthub/
 
 # IDE
 .idea/

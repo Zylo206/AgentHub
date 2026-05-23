@@ -64,6 +64,9 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - Orchestrator 从 `mentionedAgentIds` 推断参与 Agent
 - 群聊式 Agent 消息流
 - Pinned Context / MemoryItem MVP
+- MemoryItem 本地文件持久化 / 规则检索
+- 可配置 LLM Planner JSON Schema MVP
+- Adapter Output Artifact 半真实链路
 - Deploy Status Card / Preview URL
 - `/preview/:artifactId` 静态预览页
 - 用户自建 Agent 最小保存闭环
@@ -114,12 +117,14 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 
 以下能力必须明确区分，不应写成真实完成：
 
-- demo-task 仍是静态编排，不是真实动态 Orchestrator
+- demo-task 仍以规则化 / 可 fallback 编排为主，不是真实动态 Orchestrator
+- LLM Planner 需要显式配置 `AGENTHUB_PLANNER_TYPE=LLM` 和可用 `OPENAI_COMPATIBLE` Adapter，失败时默认回退规则 Planner
 - Artifact revision 仍是静态模板，不是真实代码修改
 - Diff Summary 是静态摘要，不是真实代码 diff
 - ContextSnapshot / HandoffSummary 仍偏 Demo 构造，不是真实长期 memory system
-- MemoryItem 当前仍是内存 Repository，不是持久化长期记忆系统
+- MemoryItem 当前是本地 JSON 文件持久化和规则检索，不是 MySQL / 向量数据库 / 生产级长期记忆系统
 - Codex / Claude Code / OpenCode 当前是 CLI 探测型半真实 Adapter，不是深度平台接入
+- Adapter Output Artifact 只在非 MOCK Adapter 成功且未 fallback 时生成；默认未配置真实 Adapter 时不会伪造输出产物
 - 当前没有真实 Codex / Claude Code / OpenCode 完整接入
 - 当前没有 MySQL 持久化
 - 当前没有 WebSocket / SSE 流式执行
@@ -127,7 +132,7 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - 当前 Deploy Status Card 是静态 Demo simulation
 - 当前没有多端同步
 - 当前没有真实多人协作
-- 当前没有真实线程级并行调度
+- 当前 demo-task 已有执行层并发组，但还没有完整动态 DAG 调度
 
 ## 技术栈
 
@@ -278,22 +283,21 @@ User
 - 主 Agent Orchestrator
 - 对话式局部修改
 - 部署状态卡片
-- 长期记忆 MVP
+- 长期记忆 MVP 和本地文件持久化
 
 ### 当前仍是静态 Demo / Placeholder
 
 - 动态任务拆解
 - 真实 Agent 执行
-- 真实长期 memory
+- 生产级长期 memory
 - 真实平台接入
 - 真实部署
 
 ### 当前未完成
 
 - 至少两个主流 Agent 平台的深度真实接入
-- 真实线程级并行调度
-- 真实 LLM Planner JSON schema 主链路
-- MemoryItem 持久化和检索策略
+- 生产级真实 LLM Planner 主链路
+- 生产级长期记忆治理
 - 代码冲突处理
 - 多端支持
 - 多人协作
@@ -301,12 +305,12 @@ User
 
 ## 下一阶段 Roadmap
 
-1. 真实并行多 Agent 调度 v1
-2. LLM Planner JSON Schema MVP
-3. MemoryItem 持久化与检索策略
-4. Adapter 成功输出进入真实 Artifact 链路增强
-5. 文档 V1.0 和仓库卫生
-6. 消息操作深化 / 一键应用 Diff
+1. 文档 V1.0 与最终 Demo Checklist 同步
+2. 提交前仓库卫生与 smoke test 固化
+3. 消息操作深化 / 一键应用 Diff
+4. 生产级长期记忆治理
+5. 深度真实平台接入
+6. 完整动态 DAG / 任务级失败恢复
 
 ## 注意事项
 

@@ -83,9 +83,61 @@ function countFallbackSteps(taskRun: TaskRun): number {
   }).length;
 }
 
+function getParallelExecutionGroups(taskRun: TaskRun): Array<[string, TaskStep[]]> {
+  const groups = new Map<string, TaskStep[]>();
+  taskRun.steps.forEach((step) => {
+    const groupKey = step.parallelGroupKey || `GROUP_${step.stepOrder}`;
+    groups.set(groupKey, [...(groups.get(groupKey) || []), step]);
+  });
+
+  return Array.from(groups.entries()).filter(([, steps]) => steps.length > 1);
+}
+
 function getStepAgentName(step: TaskStep, agentNameMap: Map<string | null, string>): string {
   const assignedAgentId = getIdValue(step.assignedAgentId);
   return agentNameMap.get(assignedAgentId) || step.assignedAgentName || assignedAgentId || "Agent";
+}
+
+function extractSummaryField(summary: string, label: string): string | null {
+  const start = summary.indexOf(label);
+  if (start < 0) {
+    return null;
+  }
+
+  const valueStart = start + label.length;
+  const rest = summary.slice(valueStart);
+  const end = rest.search(/(?:Planner fallback 原因：|从|Selected Agent|Adapter fallback|Adapter 未发生|$)/);
+  const value = (end >= 0 ? rest.slice(0, end) : rest).trim();
+  return value || null;
+}
+
+function getPlannerDisplay(taskRun: TaskRun, hasParallelExecution: boolean) {
+  const summary = taskRun.resultSummary || "";
+  const isLlmPlanner = summary.includes("LLM_PLANNER");
+  const isRuleFallback = summary.includes("RULE_BASED_FALLBACK");
+  const plannerReasoning = extractSummaryField(summary, "Planner 说明：");
+  const fallbackReason = extractSummaryField(summary, "Planner fallback 原因：");
+
+  return {
+    label: isLlmPlanner
+      ? hasParallelExecution
+        ? "LLM Planner · 并发执行组"
+        : "LLM Planner"
+      : isRuleFallback
+        ? hasParallelExecution
+          ? "规则化 fallback · 并发执行组"
+          : "规则化 fallback"
+        : hasParallelExecution
+          ? "规则化 Planner · 并发执行组"
+          : "规则化 Planner",
+    description: isLlmPlanner
+      ? "OPENAI_COMPATIBLE 生成 OrchestratorPlan，并通过后端 JSON schema 校验。"
+      : isRuleFallback
+        ? "LLM Planner 不可用或输出未通过校验，已安全回退到规则化 Planner。"
+        : "Planner / Router / Executor / Aggregator 的规则化执行说明",
+    plannerReasoning,
+    fallbackReason
+  };
 }
 
 function OrchestratorExplainPanel({
@@ -102,15 +154,20 @@ function OrchestratorExplainPanel({
   const fallbackCount = countFallbackSteps(taskRun);
   const expectedArtifacts = taskSpec?.expectedArtifacts ?? [];
   const requiredSkills = taskSpec?.requiredSkills ?? [];
+  const parallelExecutionGroups = getParallelExecutionGroups(taskRun);
+  const hasParallelExecution = parallelExecutionGroups.length > 0;
+  const plannerDisplay = getPlannerDisplay(taskRun, hasParallelExecution);
 
   return (
     <section className="orchestrator-explain-panel" aria-label="Orchestrator 决策链">
       <div className="orchestrator-explain-panel__header">
         <div>
           <strong>Orchestrator 决策链</strong>
-          <p>Planner / Router / Executor / Aggregator 的规则化执行说明</p>
+          <p>{plannerDisplay.description}</p>
         </div>
-        <span className="orchestrator-mode-pill">规则化 Planner</span>
+        <span className="orchestrator-mode-pill">
+          {plannerDisplay.label}
+        </span>
       </div>
 
       <div className="orchestrator-stage-grid">
@@ -118,6 +175,14 @@ function OrchestratorExplainPanel({
           <span className="orchestrator-stage-card__label">Planner</span>
           <strong>拆解任务</strong>
           <p>{taskRun.taskPlan?.goal || taskSpec?.userGoal || "基于用户消息生成 Demo Task 计划。"}</p>
+          {plannerDisplay.plannerReasoning ? (
+            <p className="orchestrator-stage-card__note">{plannerDisplay.plannerReasoning}</p>
+          ) : null}
+          {plannerDisplay.fallbackReason ? (
+            <p className="orchestrator-stage-card__note orchestrator-stage-card__note--warning">
+              fallback 原因：{plannerDisplay.fallbackReason}
+            </p>
+          ) : null}
           <div className="orchestrator-stage-card__meta">
             <span>{taskRun.steps.length} 个 TaskStep</span>
             <span>{expectedArtifacts.length || producedArtifacts.length} 类预期产物</span>
@@ -143,6 +208,11 @@ function OrchestratorExplainPanel({
                   <strong>{getStepAgentName(step, agentNameMap)}</strong>
                   <em>{adapterDisplay.preferred || "MOCK"}</em>
                   {step.parallelGroupKey ? <small>{step.parallelGroupKey}</small> : null}
+                  {step.dependsOnStepOrders?.length ? (
+                    <small>dependsOn: {step.dependsOnStepOrders.join(", ")}</small>
+                  ) : (
+                    <small>dependsOn: none</small>
+                  )}
                   {step.routingReason ? <small>{step.routingReason}</small> : null}
                 </div>
               );
@@ -157,7 +227,17 @@ function OrchestratorExplainPanel({
           <div className="orchestrator-stage-card__meta">
             <span>{taskRun.steps.length} 个 Step 已执行</span>
             <span>{fallbackCount} 个 fallback</span>
+            <span>{hasParallelExecution ? "后端 CompletableFuture 并发执行" : "按依赖顺序执行"}</span>
           </div>
+          {hasParallelExecution ? (
+            <div className="parallel-group-list">
+              {parallelExecutionGroups.map(([groupKey, steps]) => (
+                <span className="parallel-group-pill" key={groupKey}>
+                  {groupKey}: Step {steps.map((step) => step.stepOrder).join(" / ")}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="orchestrator-chip-row">
             {taskRun.steps.map((step) => {
               const adapterDisplay = getAdapterDisplay(step);
