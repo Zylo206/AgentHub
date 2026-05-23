@@ -260,6 +260,9 @@ function OrchestratorExplainPanel({
                 <span className="parallel-group-pill" key={batch.batchKey}>
                   {batch.batchKey}: {batch.executionMode} / steps {batch.stepOrders.join(", ")}
                   {batch.dependsOnBatchKeys.length ? ` / depends ${batch.dependsOnBatchKeys.join(", ")}` : ""}
+                  {batch.batchStatus ? ` / ${displayStatus(batch.batchStatus)}` : ""}
+                  {typeof batch.durationMs === "number" ? ` / ${batch.durationMs}ms` : ""}
+                  {batch.failurePolicy ? ` / ${batch.failurePolicy}` : ""}
                 </span>
               ))}
             </div>

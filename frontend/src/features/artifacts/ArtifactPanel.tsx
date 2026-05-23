@@ -28,22 +28,26 @@ interface ArtifactPanelProps {
   onSelectArtifact: (artifactId: string) => void;
   onShowAllArtifacts: () => void;
   onCreateRevision: (artifactId: string, revisionInstruction: string) => Promise<void>;
-  onCreateDeployment: (artifactId: string) => Promise<void>;
-  onRestoreSnapshot: (snapshotId: string) => Promise<Artifact | null>;
-  onApplyDiff: (artifactId: string) => Promise<Artifact | null>;
-  onForceApplyDiff: (artifactId: string) => Promise<Artifact | null>;
-  onRecordApprovalAudit: (request: {
+  onCreateDeployment: (artifactId: string, approvalId: string) => Promise<void>;
+  onRestoreSnapshot: (snapshotId: string, approvalId: string) => Promise<Artifact | null>;
+  onApplyDiff: (artifactId: string, approvalId: string) => Promise<Artifact | null>;
+  onForceApplyDiff: (artifactId: string, approvalId: string) => Promise<Artifact | null>;
+  onCreateApprovalRequest: (request: {
     actionType: string;
     targetType: string;
     targetId: string;
-    status: string;
+    riskLevel: string;
     summary: string;
-  }) => Promise<void>;
+    affectedItems: string[];
+  }) => Promise<string | null>;
+  onApproveApprovalRequest: (approvalId: string) => Promise<void>;
+  onCancelApprovalRequest: (approvalId: string) => Promise<void>;
 }
 
 type ApprovalRisk = "LOW" | "MEDIUM" | "HIGH";
 
 interface ApprovalRequest {
+  approvalId: string;
   actionType: string;
   targetType: string;
   targetId: string;
@@ -52,7 +56,7 @@ interface ApprovalRequest {
   affectedItems: string[];
   riskLevel: ApprovalRisk;
   confirmLabel: string;
-  execute: () => Promise<void>;
+  execute: (approvalId: string) => Promise<void>;
 }
 
 const PRODUCT_REVISION_INSTRUCTION = "把主按钮改成蓝色，并增加 loading 状态。";
@@ -153,7 +157,9 @@ export function ArtifactPanel({
   onRestoreSnapshot,
   onApplyDiff,
   onForceApplyDiff,
-  onRecordApprovalAudit
+  onCreateApprovalRequest,
+  onApproveApprovalRequest,
+  onCancelApprovalRequest
 }: ArtifactPanelProps) {
   const [revisionInstruction, setRevisionInstruction] = useState(PRODUCT_REVISION_INSTRUCTION);
   const [artifactOperationMessage, setArtifactOperationMessage] = useState<string | null>(null);
@@ -226,8 +232,9 @@ export function ArtifactPanel({
     }
 
     const artifactTitle = selectedArtifact?.title || selectedArtifactId;
-    requestApproval({
-      actionType: "APPROVE_DEMO_DEPLOY",
+    await requestApproval({
+      approvalId: "",
+      actionType: "DEMO_DEPLOY",
       targetType: "ARTIFACT",
       targetId: selectedArtifactId,
       title: "Approve demo deployment",
@@ -242,35 +249,36 @@ export function ArtifactPanel({
         : [`Artifact: ${selectedArtifactId}`],
       riskLevel: "MEDIUM",
       confirmLabel: "Approve Deploy",
-      execute: async () => {
-        await onCreateDeployment(selectedArtifactId);
+      execute: async (approvalId) => {
+        await onCreateDeployment(selectedArtifactId, approvalId);
       }
     });
   }
 
-  function requestApproval(request: ApprovalRequest) {
-    setPendingApproval(request);
-    setArtifactOperationMessage(`Approval required: ${request.title}`);
-  }
-
-  async function recordApproval(request: ApprovalRequest, status: "APPROVED" | "CANCELLED") {
+  async function requestApproval(request: Omit<ApprovalRequest, "approvalId"> & { approvalId?: string }) {
     if (!conversationId) {
+      setArtifactOperationMessage("Approval requires an active conversation.");
       return;
     }
 
     try {
-      const affectedSummary = request.affectedItems.length > 0
-        ? ` Affected: ${request.affectedItems.join(" | ")}`
-        : "";
-      await onRecordApprovalAudit({
+      const approvalId = await onCreateApprovalRequest({
         actionType: request.actionType,
         targetType: request.targetType,
         targetId: request.targetId,
-        status,
-        summary: `${status}: ${request.summary}${affectedSummary}`
+        riskLevel: request.riskLevel,
+        summary: request.summary,
+        affectedItems: request.affectedItems
       });
+      if (!approvalId) {
+        setArtifactOperationMessage("Failed to create backend approval request.");
+        return;
+      }
+      setPendingApproval({ ...request, approvalId });
+      setArtifactOperationMessage(`Approval required: ${request.title}`);
     } catch (error) {
-      console.warn("Failed to record approval audit.", error);
+      console.warn("Failed to create approval request.", error);
+      setArtifactOperationMessage("Approval request creation failed.");
     }
   }
 
@@ -281,8 +289,8 @@ export function ArtifactPanel({
 
     const approval = pendingApproval;
     setPendingApproval(null);
-    await recordApproval(approval, "APPROVED");
-    await approval.execute();
+    await onApproveApprovalRequest(approval.approvalId);
+    await approval.execute(approval.approvalId);
   }
 
   async function handleCancelApproval() {
@@ -292,7 +300,7 @@ export function ArtifactPanel({
 
     const approval = pendingApproval;
     setPendingApproval(null);
-    await recordApproval(approval, "CANCELLED");
+    await onCancelApprovalRequest(approval.approvalId);
     setArtifactOperationMessage(`Cancelled: ${approval.title}`);
   }
 
@@ -333,8 +341,8 @@ export function ArtifactPanel({
     }
   }
 
-  async function executeRestoreSnapshot(snapshotId: string) {
-    const restoredArtifact = await onRestoreSnapshot(snapshotId);
+  async function executeRestoreSnapshot(snapshotId: string, approvalId: string) {
+    const restoredArtifact = await onRestoreSnapshot(snapshotId, approvalId);
     if (restoredArtifact) {
       onSelectArtifact(getIdValue(restoredArtifact.id));
       setArtifactOperationMessage(`Restored snapshot as ${restoredArtifact.title} v${restoredArtifact.version}.`);
@@ -343,8 +351,8 @@ export function ArtifactPanel({
 
   async function handleRestoreSnapshot(snapshotId: string) {
     const snapshot = snapshots.find((item) => item.snapshotId === snapshotId);
-    requestApproval({
-      actionType: "APPROVE_RESTORE_SNAPSHOT",
+    await requestApproval({
+      actionType: "RESTORE_SNAPSHOT",
       targetType: "ARTIFACT_SNAPSHOT",
       targetId: snapshotId,
       title: "Approve snapshot restore",
@@ -352,8 +360,8 @@ export function ArtifactPanel({
       affectedItems: buildSnapshotAffectedItems(snapshot),
       riskLevel: "HIGH",
       confirmLabel: "Approve Restore",
-      execute: async () => {
-        await executeRestoreSnapshot(snapshotId);
+      execute: async (approvalId) => {
+        await executeRestoreSnapshot(snapshotId, approvalId);
       }
     });
   }
@@ -372,9 +380,9 @@ export function ArtifactPanel({
     setArtifactOperationMessage(`已生成下载文件：${anchor.download}`);
   }
 
-  async function executeApplyDiffArtifact(artifact: Artifact) {
+  async function executeApplyDiffArtifact(artifact: Artifact, approvalId: string) {
     const artifactId = getIdValue(artifact.id);
-    const appliedArtifact = await onApplyDiff(artifactId);
+    const appliedArtifact = await onApplyDiff(artifactId, approvalId);
 
     if (appliedArtifact) {
       setAppliedDiffArtifactId(getIdValue(appliedArtifact.id));
@@ -392,8 +400,8 @@ export function ArtifactPanel({
 
   async function handleApplyDiffArtifact(artifact: Artifact) {
     const artifactId = getIdValue(artifact.id);
-    requestApproval({
-      actionType: "APPROVE_APPLY_DIFF",
+    await requestApproval({
+      actionType: "APPLY_DIFF",
       targetType: "ARTIFACT",
       targetId: artifactId,
       title: "Approve diff apply",
@@ -401,15 +409,15 @@ export function ArtifactPanel({
       affectedItems: buildDiffAffectedItems(artifact, false),
       riskLevel: "MEDIUM",
       confirmLabel: "Approve Apply Diff",
-      execute: async () => {
-        await executeApplyDiffArtifact(artifact);
+      execute: async (approvalId) => {
+        await executeApplyDiffArtifact(artifact, approvalId);
       }
     });
   }
 
-  async function executeForceApplyDiffArtifact(artifact: Artifact) {
+  async function executeForceApplyDiffArtifact(artifact: Artifact, approvalId: string) {
     const artifactId = getIdValue(artifact.id);
-    const appliedArtifact = await onForceApplyDiff(artifactId);
+    const appliedArtifact = await onForceApplyDiff(artifactId, approvalId);
 
     if (appliedArtifact) {
       setAppliedDiffArtifactId(getIdValue(appliedArtifact.id));
@@ -424,8 +432,8 @@ export function ArtifactPanel({
 
   async function handleForceApplyDiffArtifact(artifact: Artifact) {
     const artifactId = getIdValue(artifact.id);
-    requestApproval({
-      actionType: "APPROVE_FORCE_APPLY_DIFF",
+    await requestApproval({
+      actionType: "FORCE_APPLY_DIFF",
       targetType: "ARTIFACT",
       targetId: artifactId,
       title: "Approve force apply diff",
@@ -433,8 +441,8 @@ export function ArtifactPanel({
       affectedItems: buildDiffAffectedItems(artifact, true),
       riskLevel: "HIGH",
       confirmLabel: "Approve Force Apply",
-      execute: async () => {
-        await executeForceApplyDiffArtifact(artifact);
+      execute: async (approvalId) => {
+        await executeForceApplyDiffArtifact(artifact, approvalId);
       }
     });
   }

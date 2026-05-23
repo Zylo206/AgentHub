@@ -1,10 +1,14 @@
 package com.agenthub.api.deployment;
 
+import com.agenthub.application.approval.ApprovalApplicationService;
+import com.agenthub.application.artifact.ArtifactApplicationService;
 import com.agenthub.application.deployment.DeploymentApplicationService;
 import com.agenthub.common.ApiResponse;
+import com.agenthub.domain.artifact.Artifact;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -13,16 +17,33 @@ import org.springframework.web.bind.annotation.RestController;
 public class DeploymentController {
 
     private final DeploymentApplicationService deploymentApplicationService;
+    private final ArtifactApplicationService artifactApplicationService;
+    private final ApprovalApplicationService approvalApplicationService;
 
-    public DeploymentController(DeploymentApplicationService deploymentApplicationService) {
+    public DeploymentController(
+            DeploymentApplicationService deploymentApplicationService,
+            ArtifactApplicationService artifactApplicationService,
+            ApprovalApplicationService approvalApplicationService) {
         this.deploymentApplicationService = deploymentApplicationService;
+        this.artifactApplicationService = artifactApplicationService;
+        this.approvalApplicationService = approvalApplicationService;
     }
 
     @PostMapping("/artifacts/{artifactId}/demo-deploy")
-    public ApiResponse<?> createDemoDeployment(@PathVariable("artifactId") String artifactId) {
-        return ApiResponse.success(
-                deploymentApplicationService.createDemoDeployment(artifactId),
-                "Demo deployment created");
+    public ApiResponse<?> createDemoDeployment(
+            @PathVariable("artifactId") String artifactId,
+            @RequestBody(required = false) CreateDemoDeploymentRequest request) {
+        Artifact artifact = artifactApplicationService.getArtifact(artifactId);
+        String approvalId = request == null ? null : request.approvalId();
+        approvalApplicationService.validateApproved(
+                approvalId,
+                artifact.getConversationId(),
+                "DEMO_DEPLOY",
+                "ARTIFACT",
+                artifactId);
+        Object deployment = deploymentApplicationService.createDemoDeployment(artifactId);
+        approvalApplicationService.consume(approvalId);
+        return ApiResponse.success(deployment, "Demo deployment created");
     }
 
     @GetMapping("/conversations/{conversationId}/deployments")
@@ -38,5 +59,8 @@ public class DeploymentController {
     @GetMapping("/deployments/{deploymentId}")
     public ApiResponse<?> getDeployment(@PathVariable("deploymentId") String deploymentId) {
         return ApiResponse.success(deploymentApplicationService.getDeployment(deploymentId));
+    }
+
+    public record CreateDemoDeploymentRequest(String approvalId) {
     }
 }

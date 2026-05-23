@@ -13,11 +13,11 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 
 当前阶段可定义为：
 
-- 已形成 MVP 演示闭环
+- 已形成可运行的 V1.0 MVP 演示闭环
 - 已形成稳定 AI 协作开发工作流
-- 正处于收敛式开发阶段
-- 下一步重点是补齐硬要求，而不是继续扩散功能面
-- 当前仍处于 MVP 功能扩展期，不急于最终 Demo 视频收敛
+- 当前定位为半真实 AgentHub 原型，不是完整生产平台
+- 下一步重点是稳定验收、文档收口和少量硬缺口补强
+- 当前仍可继续功能扩展，但应避免继续堆静态卡片
 
 当前版本适合：
 
@@ -66,9 +66,15 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - Pinned Context / MemoryItem MVP
 - MemoryItem 本地文件持久化 / 规则检索
 - 可配置 LLM Planner JSON Schema MVP
+- Prompt Layering / RuleBased Planner fallback
+- TaskGraph / ExecutionBatch / `CompletableFuture` 并行执行语义
+- OrchestratorDecisionLog 结构化解释链路
 - Adapter Output Artifact 半真实链路
 - Deploy Status Card / Preview URL
 - `/preview/:artifactId` 静态预览页
+- Artifact Snapshot / Restore
+- ApprovalRequest 后端强制审批
+- Action Audit 时间线
 - 用户自建 Agent 最小保存闭环
 
 ### 前端
@@ -100,6 +106,8 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - Deploy Status Card
 - Preview 页面版本切换
 - Revision 来源提示
+- Approval Gate 影响范围摘要
+- Action Audit 时间线
 
 ### AI 协作开发记录
 
@@ -119,8 +127,8 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 
 - demo-task 仍以规则化 / 可 fallback 编排为主，不是真实动态 Orchestrator
 - LLM Planner 需要显式配置 `AGENTHUB_PLANNER_TYPE=LLM` 和可用 `OPENAI_COMPATIBLE` Adapter，失败时默认回退规则 Planner
-- Artifact revision 仍是静态模板，不是真实代码修改
-- Diff Summary 是静态摘要，不是真实代码 diff
+- Artifact revision 仍以 Demo 模板为主，不是真实 Agent 代码生成
+- Diff / Apply Diff 已有轻量行级 patch 和冲突 guard，但不是 AST diff、Git merge 或 IDE 级代码编辑
 - ContextSnapshot / HandoffSummary 仍偏 Demo 构造，不是真实长期 memory system
 - MemoryItem 当前是本地 JSON 文件持久化和规则检索，不是 MySQL / 向量数据库 / 生产级长期记忆系统
 - Codex / Claude Code / OpenCode 当前是 CLI 探测型半真实 Adapter，不是深度平台接入
@@ -132,7 +140,8 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台原
 - 当前 Deploy Status Card 是静态 Demo simulation
 - 当前没有多端同步
 - 当前没有真实多人协作
-- 当前 demo-task 已有执行层并发组，但还没有完整动态 DAG 调度
+- 当前 demo-task 已有 TaskGraph / ExecutionBatch / 执行层并发组，但还没有完整动态 DAG 调度
+- ApprovalRequest / Action Audit 当前仍是 MVP 能力，不是企业级多人审批或权限审计系统
 
 ## 技术栈
 
@@ -284,6 +293,8 @@ User
 - 对话式局部修改
 - 部署状态卡片
 - 长期记忆 MVP 和本地文件持久化
+- 后端强制审批 / 操作审计
+- 轻量代码冲突 guard
 
 ### 当前仍是静态 Demo / Placeholder
 
@@ -298,25 +309,25 @@ User
 - 至少两个主流 Agent 平台的深度真实接入
 - 生产级真实 LLM Planner 主链路
 - 生产级长期记忆治理
-- 代码冲突处理
+- 完整代码冲突处理 / merge UI
 - 多端支持
 - 多人协作
 - WebSocket / SSE
 
 ## 下一阶段 Roadmap
 
-1. 文档 V1.0 与最终 Demo Checklist 同步
-2. 提交前仓库卫生与 smoke test 固化
-3. 消息操作深化 / 一键应用 Diff
-4. 生产级长期记忆治理
+1. 提交前仓库卫生与 smoke test 固化
+2. Adapter 测试面板，提升半真实接入可验收性
+3. ApprovalRequest 与 Action Audit 统一展示
+4. Context Retrieval 排序解释增强
 5. 深度真实平台接入
-6. 完整动态 DAG / 任务级失败恢复
+6. 生产级长期记忆治理、SSE / WebSocket、MySQL 和真实部署
 
 ## 注意事项
 
-- 当前 Adapter 仍以 Mock fallback / placeholder 为主
-- 当前没有真实 Codex / Claude Code / OpenCode 完整接入
-- 当前没有 MySQL、SSE、真实部署、多端同步
+- 当前 Adapter 仍以 Mock fallback / CLI 探测 / OpenAI-compatible 半真实接入为主
+- 当前没有真实 Codex / Claude Code / OpenCode 深度接入
+- 当前没有 MySQL、SSE、真实部署、多端同步和真实多人协作
 - 当前文档与代码应始终以“已完成 / 静态 Demo / Placeholder / 未完成”明确区分
 - 若用于答辩或视频演示，建议严格遵循 `docs/demo-scenario.md` 中的主线，避免现场演示未完成功能
 

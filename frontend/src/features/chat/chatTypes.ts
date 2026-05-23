@@ -68,6 +68,11 @@ export interface ExecutionBatch {
   stepOrders: number[];
   dependsOnBatchKeys: string[];
   executionMode: string;
+  batchStatus?: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  durationMs?: number | null;
+  failurePolicy?: string | null;
 }
 
 export interface TaskGraph {

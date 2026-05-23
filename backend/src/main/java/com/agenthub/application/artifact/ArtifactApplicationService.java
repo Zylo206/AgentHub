@@ -56,13 +56,17 @@ public class ArtifactApplicationService {
         return artifactSnapshotRepository.findByArtifactId(new ArtifactId(artifactId));
     }
 
+    public ArtifactSnapshot getSnapshot(String snapshotId) {
+        return artifactSnapshotRepository.findById(snapshotId)
+                .orElseThrow(() -> new NoSuchElementException("Artifact snapshot not found: " + snapshotId));
+    }
+
     public List<ArtifactSnapshot> listSnapshotsByConversation(String conversationId) {
         return artifactSnapshotRepository.findByConversationId(new ConversationId(conversationId));
     }
 
     public Artifact restoreSnapshot(String snapshotId) {
-        ArtifactSnapshot snapshot = artifactSnapshotRepository.findById(snapshotId)
-                .orElseThrow(() -> new NoSuchElementException("Artifact snapshot not found: " + snapshotId));
+        ArtifactSnapshot snapshot = getSnapshot(snapshotId);
         Artifact currentArtifact = getArtifact(snapshot.getArtifactId().value());
         createSnapshot(currentArtifact, "RESTORE_BEFORE");
         Instant now = timeProvider.now();

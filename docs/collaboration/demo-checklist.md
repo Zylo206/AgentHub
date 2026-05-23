@@ -193,7 +193,7 @@
 4. Router 区域应展示每个 step 的 assigned Agent、preferred adapter、parallel group 和 routing reason。
 5. Executor 区域应展示 actual adapter、fallback 数量和执行状态。
 6. Aggregator 区域应展示 resultSummary 和 artifact 数量。
-7. 注意：当前解释面板主要由现有 TaskRun 数据派生，不代表真实 LLM planner 或动态 DAG 已完成。
+7. 确认 TaskRun 返回 `orchestratorDecisionLog`，解释面板优先展示后端结构化决策日志，而不是只由前端推断。
 8. 默认配置下 Planner 应显示规则化规划模式。
 9. 如果设置 `AGENTHUB_PLANNER_TYPE=LLM` 且 OPENAI_COMPATIBLE 配置可用，确认 Planner 可尝试生成 JSON plan。
 10. 如果 LLM Planner 配置缺失、返回非法 JSON 或 schema 校验失败，确认自动 fallback 到 RuleBasedPlanner，并在解释面板显示 fallback reason。
@@ -216,7 +216,27 @@
 14. 点击 `仍然强制应用`，确认可以强制生成新的 `ACCEPTED` Artifact。
 15. 注意：当前 patch apply 是轻量行级 patch，冲突检测是版本链规则，不是 AST 级代码编辑器、语义合并或完整 Git merge。
 
-## L. AI 协作开发记录
+## L. Approval Gate / Action Audit / Snapshot Restore
+
+1. 在 Artifact Studio 选择一个可操作 Artifact。
+2. 点击 `应用 Diff 结果` 或 `仍然强制应用`。
+3. 确认页面先展示 Approval Gate，而不是直接执行。
+4. 确认 Approval Gate 中展示：
+   - action type
+   - affected artifact
+   - risk level
+   - diff preview / changed item 摘要
+5. 点击 approve 后，确认后端创建并批准 ApprovalRequest，然后执行操作。
+6. 再次使用同一个 approvalId 调用同一高风险接口应失败，确认 approval 已被 consumed。
+7. 点击 `Deploy Selected Artifact`。
+8. 确认 Deploy 同样需要 ApprovalRequest，并在通过后生成 Deploy Status Card。
+9. 在 Snapshot 区域点击 Restore。
+10. 确认 Restore 同样需要 ApprovalRequest，并在通过后生成恢复版本 Artifact。
+11. 展开 Action Audit 时间线。
+12. 确认能看到 approval created / approved / consumed / apply / deploy / restore 等记录。
+13. 注意：当前 Approval / Audit 是 MVP 审批审计，不是企业级多人审批、权限系统或持久审计后台。
+
+## M. AI 协作开发记录
 
 1. 打开 `docs/collaboration/development-workflow.md`。
 2. 确认有项目开发工作流说明。
@@ -229,7 +249,7 @@
 9. 打开 `docs/spec`、`docs/skills`、`docs/rules`。
 10. 确认 Spec / Skill / Rules 能对应当前功能。
 
-## M. 构建与仓库卫生
+## N. 构建与仓库卫生
 
 1. 执行：
    `cd backend && mvn -q -DskipTests package`
@@ -280,6 +300,7 @@
 - Artifact Revision 后 Version History / Diff Summary 正常。
 - 消息复制、引用、回复、回复线程、原消息定位、基于消息重跑 Demo Task、单条 Agent 回复重新生成正常。
 - 一键应用 Diff 能通过后端轻量 patch apply 生成新的 ACCEPTED Artifact，并能提示旧 revision 冲突。
+- Apply Diff / Force Apply / Deploy / Restore 必须经过 ApprovalRequest，Action Audit 时间线可追溯。
 - Deploy Status Card 和 `/preview/{artifactId}` 正常。
 - Adapter fallback 显示清楚，不把 placeholder 伪装成真实接入。
 - AI 协作开发记录可以被仓库直接查看。

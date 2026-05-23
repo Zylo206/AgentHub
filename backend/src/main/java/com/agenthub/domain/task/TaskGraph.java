@@ -5,6 +5,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Duration;
+import java.time.Instant;
 
 public class TaskGraph {
 
@@ -42,7 +44,31 @@ public class TaskGraph {
                             .distinct()
                             .toList();
                     String executionMode = entry.getValue().size() > 1 ? "PARALLEL_COMPLETABLE_FUTURE" : "SEQUENTIAL";
-                    return new ExecutionBatch(entry.getKey(), stepOrders, dependsOnBatchKeys, executionMode);
+                    Instant startedAt = entry.getValue().stream()
+                            .map(TaskStep::getCreatedAt)
+                            .min(Instant::compareTo)
+                            .orElse(null);
+                    Instant completedAt = entry.getValue().stream()
+                            .map(TaskStep::getUpdatedAt)
+                            .max(Instant::compareTo)
+                            .orElse(null);
+                    Long durationMs = startedAt == null || completedAt == null
+                            ? null
+                            : Math.max(0, Duration.between(startedAt, completedAt).toMillis());
+                    String batchStatus = entry.getValue().stream()
+                            .allMatch(step -> step.getStatus() == TaskStepStatus.COMPLETED)
+                            ? "COMPLETED"
+                            : "FAILED";
+                    return new ExecutionBatch(
+                            entry.getKey(),
+                            stepOrders,
+                            dependsOnBatchKeys,
+                            executionMode,
+                            batchStatus,
+                            startedAt,
+                            completedAt,
+                            durationMs,
+                            "STEP_FALLBACK_TO_MOCK");
                 })
                 .toList();
 

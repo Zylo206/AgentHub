@@ -6,7 +6,7 @@
 
 一句话结论：
 
-> AgentHub 已经形成 IM Workspace、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、可配置 LLM Planner、群聊式 Agent 消息、Context / Memory、Artifact Revision、Deploy Preview、Adapter fallback、Adapter Output Artifact、结构化消息引用 / 回复、Diff 轻量 patch apply 和 smoke test 的 MVP 闭环；当前已推进 demo-task 执行层并发、LLM Planner JSON Schema MVP、MemoryItem 本地持久化检索、Adapter 成功输出 Artifact 链路和 Demo Checklist V1.0 同步，下一阶段应优先补完整回复线程、冲突处理和最终仓库卫生。
+> AgentHub 已经形成 IM Workspace、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、可配置 LLM Planner、群聊式 Agent 消息、Context / Memory、Artifact Revision、Deploy Preview、Adapter fallback、Adapter Output Artifact、结构化消息引用 / 回复、Diff 轻量 patch apply、Approval / Audit 和 smoke test 的 MVP 闭环；当前已推进 demo-task 执行层并发、Prompt Layering、后端强制 ApprovalRequest、MemoryItem 本地持久化检索、Adapter 成功输出 Artifact 链路和 Demo Checklist V1.0 同步，下一阶段应优先做 Adapter 测试面板、Approval / Audit 展示合并和提交前仓库卫生。
 
 | 项目阶段 | 判断 |
 |---|---|
@@ -34,13 +34,13 @@
 | 网页预览卡片 | WEB_PREVIEW、PreviewPage、iframe srcDoc | 部分满足 | 70% | 真实网页生成和沙箱策略仍可增强 |
 | Diff 视图 | line diff / Diff Summary / Version History | 部分满足 | 70% | 仍不是完整代码编辑器和真实 patch apply |
 | 部署状态卡片 | Demo Deploy、Deploy Status Card、Preview URL、/preview 页面 | 静态 Demo | 75% | 不是真实 Vercel / Netlify / Docker |
-| 消息操作 | pin、保存为记忆、复制、引用、回复、结构化 replyTo / quotedMessage、重新运行 Demo Task | 部分满足 | 78% | 完整回复线程、重新生成单条 Agent 回复仍待补 |
+| 消息操作 | pin、保存为记忆、复制、引用、回复、结构化 replyTo / quotedMessage、回复线程、原消息定位、重新运行 Demo Task、单条 Agent 回复重新生成 | 部分满足 | 82% | 仍不是完整 IM thread，多层消息树和跨会话 thread 未做 |
 | Orchestrator 拆解 | Planner / Router / Executor / Aggregator 拆分、可解释面板、可配置 LLM Planner JSON schema | 部分满足 | 80% | LLM Planner 仍依赖 OPENAI_COMPATIBLE 配置，默认保留规则 fallback |
 | Orchestrator 分派 | selectedAgent、mentionedAgentIds、内置 Agent 路由 | 部分满足 | 75% | 多 Agent 动态路由策略仍浅 |
 | Orchestrator 聚合 | ResultAggregator、群聊总结消息、TaskRun summary | 部分满足 | 70% | 聚合仍偏模板 |
 | 并行调度 | demo-task 使用 parallelGroupKey / dependsOnStepOrders 和 CompletableFuture 执行并发组 | 部分满足 | 55% | 仍不是完整动态 DAG 或生产级并行调度 |
 | 失败降级 | Adapter fallback 到 MOCK，状态可见 | 部分满足 | 70% | 任务级失败恢复树未完成 |
-| 代码冲突处理 | 未实现 | 未完成 | 0% | 需要冲突检测和 merge / resolution UI |
+| 代码冲突处理 | Apply Diff 已有轻量版本链冲突 guard 和 Force Apply | 部分满足 | 45% | 仍不是 AST diff、Git merge 或完整 conflict resolution UI |
 | 统一 Adapter 层 | Mock、OpenAI Compatible、Codex / Claude Code / OpenCode CLI 探测 | 部分满足 | 75% | 主流平台深度接入不足 |
 | 至少 2 个主流 Agent 平台 | Codex / Claude Code / OpenCode 为 CLI 探测型半真实接入 | 半真实 | 55% | 不是深度真实平台能力 |
 | OpenAI Compatible | 可配置真实模型调用，失败 fallback；成功且非 MOCK 时输出进入 Adapter Output Artifact | 部分满足 | 70% | 非流式，仍不是深度平台接入 |
@@ -53,7 +53,7 @@
 | Web 端 | React + Vite 可运行 | 已满足 | 85% | 可继续做稳定性和响应式 |
 | 桌面端 / 移动端 | 未实现 | 未完成 | 0% | P2 后置 |
 | AI 协作记录 | docs/collaboration、dev-log、workflow、prompt-template、decision-log | 已满足 | 90% | 继续保持每轮同步 |
-| 产品 / 技术文档 | 已有，但需要同步 Phase 37-39 最新能力 | 部分满足 | 70% | 文档 V1.0 需要继续修复和更新 |
+| 产品 / 技术文档 | README、product-design、technical-design、roadmap、demo-scenario、demo-checklist 已按 V1.0 同步 | 部分满足 | 80% | 提交前仍需最终人工校对和 smoke test 结果记录 |
 | 可运行 Demo | 前后端 + smoke test 主链路 | 已满足 | 85% | 需要稳定启动说明和缓存文件清理 |
 | 3 分钟 Demo 视频 | 未完成 | 未完成 | 0% | 当前不急，可后置 |
 
@@ -99,18 +99,18 @@
 | P0-2 | LLM Planner JSON Schema MVP | 已推进：让 OPENAI_COMPATIBLE 可选生成 OrchestratorPlan | 配置 `LLM` planner 后调用模型产出 JSON plan；schema 校验失败、Adapter fallback 或模型不可用时回退 RuleBasedPlanner；可解释面板展示 planner mode / fallback reason |
 | P0-3 | MemoryItem 持久化与检索策略 | 已推进：把长期记忆从内存 MVP 推进到本地文件持久化和可复用上下文能力 | Memory API 支持稳定查询、更新、删除；Orchestrator 按 conversation / scope / category / importance / lastUsedAt 选取 memory |
 | P0-4 | Adapter 成功输出进入真实 Artifact 链路增强 | 已推进：降低“Adapter 只是状态展示”的风险 | 非 MOCK 成功响应能生成 Review Report / Markdown Artifact，并进入 TaskStep producedArtifactIds / MessageStream / ContextSnapshot / TaskRun summary |
-| P0-5 | 文档修复与架构同步 | 防止代码能力和文档脱节 | README、technical-design、roadmap、demo-checklist 同步最新能力 |
+| P0-5 | 文档 V1.0 同步 | 已推进：防止代码能力和文档脱节 | README、product-design、technical-design、roadmap、demo-scenario、demo-checklist 同步当前 V1.0 MVP 能力 |
 | P0-6 | 仓库卫生与提交前检查 | 保证 MVP 可稳定交接 | 清理 `frontend/tsconfig.app.tsbuildinfo` 等构建缓存；smoke test、backend build、frontend build 全通过 |
 
 ### P1：增强可信度和产品感
 
 | 优先级 | 任务 | 目标 | 验收标准 |
 |---:|---|---|---|
-| P1-1 | 消息操作深化 | 已推进：复制、引用、回复、结构化 replyTo / quotedMessage、基于消息重跑可用 | 后续补完整回复线程和单条 Agent 回复重新生成 |
+| P1-1 | 消息操作深化 | 已推进：复制、引用、回复、结构化 replyTo / quotedMessage、回复线程、原消息定位、基于消息重跑和单条 Agent 回复重新生成可用 | 后续补完整多层 thread 和跨会话消息关系 |
 | P1-2 | 一键应用 Diff | 已推进：Diff Summary 可调用后端轻量 patch apply 生成 ACCEPTED Artifact | 后续补 AST patch / 代码编辑器 / 冲突处理 |
-| P1-3 | Orchestrator Decision DTO | 后端输出结构化决策链 | 不再只由前端派生 Planner / Router / Executor / Aggregator 面板 |
+| P1-3 | Orchestrator Decision DTO | 已推进：后端输出结构化决策链 | TaskRun 携带 OrchestratorDecisionLog，前端优先展示后端事实输出 |
 | P1-4 | Adapter 测试面板 | 让半真实接入更可验收 | `/agents` 可测试 Adapter execute，明确 AVAILABLE / MISCONFIGURED / FALLBACK |
-| P1-5 | Smoke test 扩展 | 降低回归风险 | 覆盖真实并行 group、LLM planner fallback、Memory retrieval、Adapter output Artifact |
+| P1-5 | Smoke test 扩展 | 已推进：降低回归风险 | 覆盖并行 group、LLM planner fallback、Memory retrieval、Adapter output Artifact、approval enforcement 和 preview URL |
 
 ### P2：后置或加分项
 
@@ -125,10 +125,10 @@
 
 ## 6. 推荐立即执行顺序
 
-1. **P0-6 仓库卫生与文档修复**：先修复文档同步和构建缓存问题，避免后续协作混乱。
-2. **完整回复线程 / 冲突处理**：在当前结构化消息关系和轻量 patch apply 基础上继续深化。
-3. **文档 V1.0 / Demo Checklist 同步**：让评审能看懂当前半真实边界。
-4. **提交前仓库卫生与 smoke test 固化**：保证当前 MVP 能稳定交付。
+1. **提交前仓库卫生与 smoke test 固化**：保证当前 MVP 能稳定交付。
+2. **Adapter 测试面板**：让 OPENAI_COMPATIBLE / CLI Adapter 的状态和执行结果更容易验收。
+3. **ApprovalRequest / ActionAudit 合并展示**：减少审批记录和审计记录割裂。
+4. **Context Retrieval 排序解释**：让评审能看到上下文为什么被选中。
 5. **生产级长期记忆治理 / 深度真实平台接入评估**：作为后续增强方向。
 
 ## 7. 当前项目状态标签
@@ -144,4 +144,4 @@
 
 最准确表述：
 
-> AgentHub 当前是一个可运行的 MVP 原型：完成 IM 工作台、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、可配置 LLM Planner、群聊式 Agent 消息、demo-task 并发组、Context / Memory 本地持久化、Adapter fallback、Artifact 迭代、静态部署预览和 smoke test；但真实部署、文件附件、多端、生产级长期记忆治理和代码冲突处理仍处于未完成或半真实阶段。
+> AgentHub 当前是一个可运行的 V1.0 MVP 原型：完成 IM 工作台、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、可配置 LLM Planner、Prompt Layering、群聊式 Agent 消息、demo-task 并发组、Context / Memory 本地持久化、Adapter fallback、Adapter Output Artifact、Artifact 迭代、轻量 Diff Apply、Approval / Audit、静态部署预览和 smoke test；但真实部署、文件附件、多端、生产级长期记忆治理和深度真实 Agent 平台接入仍处于未完成或半真实阶段。

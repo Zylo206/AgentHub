@@ -2,7 +2,7 @@
 
 ## 1. Demo 目标
 
-本次 Demo 的目标不是证明“模型很强”，而是证明以下闭环已经成立：
+本次 Demo 的目标不是证明“模型很强”，而是证明 AgentHub V1.0 MVP 的以下闭环已经成立：
 
 - IM Workspace 是主入口
 - 用户可以选择或 `@Agent`
@@ -10,6 +10,9 @@
 - Adapter fallback 是显式可见的
 - ContextSnapshot / HandoffSummary 是可见的
 - Artifact 可以进入 revision 和版本演进
+- Diff 可以被轻量应用，并有冲突 guard
+- Deploy Status Card 可以生成本地 Preview URL
+- 高风险操作有 Approval Gate / Action Audit
 - 仓库中存在完整 AI 协作开发记录
 
 ## 2. Demo 前置条件
@@ -69,14 +72,20 @@ npm run dev
 - 展示 TaskRun / TaskStep / assigned Agent / adapter fallback
 - 展示 ContextSnapshot / HandoffSummary
 
-### 2:05 - 2:40
+### 2:05 - 2:35
 
 - 展示 Artifact
 - 执行 revision
 - 展示 `v1 -> v2`
-- 展示 Diff Summary
+- 展示 Diff Summary / Apply Diff Approval Gate
 
-### 2:40 - 3:00
+### 2:35 - 2:50
+
+- 执行 Demo Deploy
+- 展示 Deploy Status Card 和 `/preview/{artifactId}`
+- 展示 Action Audit 时间线
+
+### 2:50 - 3:00
 
 - 展示 `docs/collaboration`
 - 强调 AI 协作开发记录
@@ -184,7 +193,7 @@ npm run dev
 
 讲解词：
 
-> 这里的 demo-task 仍是静态 Demo，但它已经把 Orchestrator、TaskRun、TaskStep、Artifact、Context 和 Handoff 这条协作链路完整展示出来。
+> 这里的 demo-task 仍是半真实 MVP，但它已经把 Orchestrator、TaskGraph、TaskRun、TaskStep、Artifact、Context、Handoff 和 Adapter fallback 这条协作链路完整展示出来。
 
 评分点：
 
@@ -200,7 +209,7 @@ npm run dev
 
 讲解词：
 
-> 这里可以看到，selectedAgent 和 `@Agent` 已经进入执行链路。第一个 specialist step 会优先使用这个 Agent 的 preferred adapter，但当前真实平台还没接通，所以会 fallback 到 Mock。
+> 这里可以看到，selectedAgent、单个 `@Agent` 和多个开头连续 `@Agent` 已经进入执行链路。TaskRunPanel 会显示 assigned Agent、parallel group、preferred / actual adapter 和 fallback 状态。
 
 评分点：
 
@@ -320,11 +329,12 @@ npm run dev
 
 建议统一口径：
 
-- 当前是 MVP 演示闭环
+- 当前是 V1.0 MVP 演示闭环，不是完整生产平台
 - 当前有可见 Orchestrator / TaskRun / Artifact 结构
-- 当前有可见 selectedAgent / `@Agent`
-- 当前 Adapter 仍以 Mock fallback / placeholder 为主
-- 当前 Revision / Diff Summary / Context 仍有静态 Demo 成分
+- 当前有可见 selectedAgent / 单 `@Agent` / 多 `@Agent`
+- 当前 Adapter 仍以 Mock fallback / OpenAI Compatible / CLI 探测型半真实接入为主
+- 当前 Revision / Diff / Context / Deploy 仍有静态 Demo 成分
+- Approval Gate / Action Audit 是 MVP 审批审计，不是企业级多人审批系统
 
 ## 7. 每一步展示的评分点
 
@@ -365,7 +375,7 @@ npm run dev
 - 多端同步
 - WebSocket / SSE
 - 复杂群聊调度
-- 多个 `@Agent`
+- 企业级审批、权限或审计后台
 
 原因：
 

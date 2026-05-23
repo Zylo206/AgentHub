@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createConversation,
+  approveApprovalRequest,
+  cancelApprovalRequest,
+  createApprovalRequest,
   createDemoArtifactRevision,
   createDemoDeployment,
   applyArtifactDiff,
@@ -22,9 +25,8 @@ import {
   getTaskRunsByConversation,
   getTaskSpecsByConversation,
   pinMessageAsContext,
-  recordActionAudit,
   regenerateAgentReply,
-  restoreArtifactSnapshot,
+  restoreArtifactSnapshotWithApproval,
   saveMessageAsMemory,
   sendMessage,
   unpinContext
@@ -636,7 +638,7 @@ export function WorkspacePage() {
     }
   }
 
-  async function handleApplyArtifactDiff(artifactId: string) {
+  async function handleApplyArtifactDiff(artifactId: string, approvalId: string) {
     if (!currentConversationId) {
       setErrorMessage("请先创建或选择一个会话，再应用 Diff。");
       return null;
@@ -646,7 +648,7 @@ export function WorkspacePage() {
     setOperationMessage(null);
 
     try {
-      const applyResult = await applyArtifactDiff(artifactId);
+      const applyResult = await applyArtifactDiff(artifactId, false, approvalId);
       if (applyResult.conflict) {
         setOperationMessage(applyResult.conflictReason || "检测到 Diff 应用冲突，请查看最新已应用产物。");
         return null;
@@ -670,7 +672,7 @@ export function WorkspacePage() {
     }
   }
 
-  async function handleForceApplyArtifactDiff(artifactId: string) {
+  async function handleForceApplyArtifactDiff(artifactId: string, approvalId: string) {
     if (!currentConversationId) {
       setErrorMessage("请先创建或选择一个会话，再强制应用 Diff。");
       return null;
@@ -680,7 +682,7 @@ export function WorkspacePage() {
     setOperationMessage(null);
 
     try {
-      const applyResult = await applyArtifactDiff(artifactId, true);
+      const applyResult = await applyArtifactDiff(artifactId, true, approvalId);
       if (!applyResult.appliedArtifact) {
         setOperationMessage("强制应用 Diff 未生成新产物。");
         return null;
@@ -700,7 +702,7 @@ export function WorkspacePage() {
     }
   }
 
-  async function handleCreateDeployment(artifactId: string) {
+  async function handleCreateDeployment(artifactId: string, approvalId: string) {
     if (!currentConversationId) {
       setErrorMessage("请先创建或选择一个会话，再部署产物。");
       return;
@@ -710,7 +712,7 @@ export function WorkspacePage() {
     setErrorMessage(null);
 
     try {
-      const deployment = await createDemoDeployment(artifactId);
+      const deployment = await createDemoDeployment(artifactId, approvalId);
       const [refreshedMessages, refreshedDeployments, refreshedSnapshots, refreshedAudits] = await Promise.all([
         getMessages(currentConversationId),
         getDeploymentsByConversation(currentConversationId),
@@ -729,7 +731,7 @@ export function WorkspacePage() {
     }
   }
 
-  async function handleRestoreArtifactSnapshot(snapshotId: string): Promise<Artifact | null> {
+  async function handleRestoreArtifactSnapshot(snapshotId: string, approvalId: string): Promise<Artifact | null> {
     if (!currentConversationId) {
       setErrorMessage("Please select a conversation before restoring a snapshot.");
       return null;
@@ -739,7 +741,7 @@ export function WorkspacePage() {
     setErrorMessage(null);
 
     try {
-      const restoredArtifact = await restoreArtifactSnapshot(snapshotId);
+      const restoredArtifact = await restoreArtifactSnapshotWithApproval(snapshotId, approvalId);
       await loadConversationData(currentConversationId);
       setShowAllArtifacts(true);
       setSelectedArtifactId(getIdValue(restoredArtifact.id));
@@ -753,19 +755,46 @@ export function WorkspacePage() {
     }
   }
 
-  async function handleRecordApprovalAudit(request: {
+  async function handleCreateApprovalRequest(request: {
     actionType: string;
     targetType: string;
     targetId: string;
-    status: string;
+    riskLevel: string;
     summary: string;
-  }) {
+    affectedItems: string[];
+  }): Promise<string | null> {
+    if (!currentConversationId) {
+      setErrorMessage("请先创建或选择一个会话，再创建审批请求。");
+      return null;
+    }
+
+    try {
+      const approvalRequest = await createApprovalRequest(currentConversationId, request);
+      const refreshedAudits = await getActionAuditsByConversation(currentConversationId);
+      setActionAudits(refreshedAudits);
+      return approvalRequest.approvalId;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      return null;
+    }
+  }
+
+  async function handleApproveApprovalRequest(approvalId: string) {
     if (!currentConversationId) {
       return;
     }
 
-    const auditLog = await recordActionAudit(currentConversationId, request);
-    setActionAudits((previous) => [auditLog, ...previous]);
+    await approveApprovalRequest(approvalId);
+    setActionAudits(await getActionAuditsByConversation(currentConversationId));
+  }
+
+  async function handleCancelApprovalRequest(approvalId: string) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    await cancelApprovalRequest(approvalId);
+    setActionAudits(await getActionAuditsByConversation(currentConversationId));
   }
 
   function handleSelectTaskStep(taskRunId: string, step: TaskStep) {
@@ -1001,7 +1030,9 @@ export function WorkspacePage() {
           onRestoreSnapshot={handleRestoreArtifactSnapshot}
           onApplyDiff={handleApplyArtifactDiff}
           onForceApplyDiff={handleForceApplyArtifactDiff}
-          onRecordApprovalAudit={handleRecordApprovalAudit}
+          onCreateApprovalRequest={handleCreateApprovalRequest}
+          onApproveApprovalRequest={handleApproveApprovalRequest}
+          onCancelApprovalRequest={handleCancelApprovalRequest}
         />
       </aside>
     </section>

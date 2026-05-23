@@ -112,28 +112,39 @@
 - Adapter fallback 到 MOCK
 - Adapter 成功输出进入 Artifact / MessageStream / ContextSnapshot 的半真实链路
 
-## 3. 下一阶段 P0
+## 3. V1.0 已完成的 P0 / P1 增强
+
+| 优先级 | 任务 | 当前状态 | 边界 |
+|---:|---|---|---|
+| P0-1 | 真实并行多 Agent 调度 v1 | 已完成 MVP：同一 parallel group 使用 `CompletableFuture` 并发执行，并在 ExecutionBatch 中记录 runtime 字段 | 不是完整动态 DAG 引擎 |
+| P0-2 | LLM Planner JSON Schema MVP | 已完成 MVP：可配置 LLM planner，失败回退 RuleBasedPlanner，并展示 fallback reason | 默认仍关闭，不代表生产级 LLM planning |
+| P0-3 | MemoryItem 持久化与检索策略 | 已完成 MVP：本地 JSON 持久化、规则检索、lastUsedAt 更新 | 非 MySQL / vector DB / 生产级记忆治理 |
+| P0-4 | Adapter 成功输出 Artifact 增强 | 已完成 MVP：非 MOCK 成功响应可进入 Artifact / MessageStream / ContextSnapshot | 默认未配置真实 Adapter 时不会伪造 |
+| P1-1 | 消息操作深化 | 已完成 MVP：复制、引用、回复、回复线程、原消息定位、基于消息重跑、单条 Agent 回复重新生成 | 非完整 IM thread |
+| P1-2 | 一键应用 Diff | 已完成 MVP：轻量行级 patch apply、force apply、冲突 guard | 非 AST diff / Git merge |
+| P1-3 | Orchestrator Decision DTO | 已完成 MVP：TaskRun 携带 OrchestratorDecisionLog，前端优先展示后端事实输出 | 未独立持久化为审计表 |
+| P1-4 | HITL / Approval Gate | 已完成 MVP：ApprovalRequest 后端强制审批，Action Audit 时间线 | 非企业级多人审批 |
+
+## 4. 下一阶段 P0
 
 | 优先级 | 任务 | 为什么排这里 | 验收标准 |
 |---:|---|---|---|
-| P0-1 | 真实并行多 Agent 调度 v1 | 已推进：课题明确要求并行调度，当前已把 parallelGroupKey 接入执行层 | 同一 parallel group 的 step 使用 `CompletableFuture` 并发执行；失败不影响主 Demo；TaskRunPanel 能展示真实并发执行结果 |
-| P0-2 | LLM Planner JSON Schema MVP | 已推进：Orchestrator 可选用 OPENAI_COMPATIBLE 生成 plan，并保留规则 fallback | 配置 `LLM` planner 后调用 OPENAI_COMPATIBLE 生成 JSON plan；schema 校验失败、fallback 或模型不可用时回退 RuleBasedPlanner；TaskRunPanel 可展示 planner mode / fallback reason |
-| P0-3 | MemoryItem 持久化与检索策略 | 已推进：长期记忆从内存态升级到本地文件持久化和规则检索 | Memory API 支持稳定查询、更新、删除；Orchestrator 按 scope / category / importance / lastUsedAt 检索 memory |
-| P0-4 | Adapter 成功输出 Artifact 增强 | 已推进：降低“Adapter 只是状态展示”的风险 | 非 MOCK 成功响应能生成 Review Report / Markdown Artifact，并进入 TaskStep producedArtifactIds / MessageStream / ContextSnapshot / TaskRun summary |
-| P0-5 | 文档 V1.0 同步 | 代码能力变化快，文档必须跟上 | README、technical-design、demo-checklist、roadmap 与当前代码一致 |
-| P0-6 | 仓库卫生与提交前检查 | 保证 MVP 可稳定交接 | 清理构建缓存；backend build、frontend build、smoke test 全通过 |
+| P0-1 | 文档 V1.0 与提交前仓库卫生 | 当前代码能力变化快，文档和状态需要收口 | README、technical-design、product-design、roadmap、demo-checklist 与当前代码一致；无误提交缓存 |
+| P0-2 | Adapter 测试面板 | 半真实接入需要更容易演示和验收 | `/agents` 或 Workspace 可测试 Adapter availability / execute，并明确 fallback |
+| P0-3 | ApprovalRequest / ActionAudit 合并展示 | 当前审批和审计是两套记录，展示有割裂 | Workspace 能统一查看 approval lifecycle 和 action audit timeline |
+| P0-4 | Context Retrieval 排序解释 | 课题强调上下文连续，需要说明为什么选中上下文 | ContextPanel 展示 source、score、reason、recency / importance |
+| P0-5 | Smoke test 固化 | 防止后续回归 | 覆盖 approval enforcement、parallel batch、planner fallback、memory retrieval、preview URL |
 
-## 4. 下一阶段 P1
+## 5. 下一阶段 P1
 
 | 优先级 | 任务 | 为什么排这里 | 验收标准 |
 |---:|---|---|---|
-| P1-1 | 消息操作深化 | 已推进：复制、引用、回复、结构化引用字段、基于消息重新运行 Demo Task 已可见 | 后续继续补完整 reply thread 和单条 Agent 回复重新生成 |
-| P1-2 | 一键应用 Diff | 已推进：Diff Summary 可调用后端轻量行级 patch apply 生成 ACCEPTED Artifact | 后续继续补 AST patch / 代码编辑器 / 冲突处理 |
-| P1-3 | Orchestrator Decision DTO | 当前解释面板由前端派生，后端缺结构化决策输出 | 后端返回 planner / router / executor / aggregator decision trace |
-| P1-4 | Adapter 测试面板 | 半真实接入需要更容易演示和验收 | `/agents` 或 Workspace 可测试 Adapter availability / execute |
-| P1-5 | Smoke test 扩展 | 防止后续回归 | 覆盖并行 group、LLM planner fallback、Memory retrieval、Adapter output Artifact |
+| P1-1 | 附件 / 文件消息 MVP | 补 IM 消息类型硬缺口 | 支持上传或静态附件记录，MessageBubble 和 ArtifactPanel 可展示 |
+| P1-2 | Adapter 输出质量增强 | 降低“半真实只展示状态”的风险 | OPENAI_COMPATIBLE 或 CLI 成功时产出更可读的 Markdown / Review Report |
+| P1-3 | Demo 数据重置 / 稳定启动脚本 | 提升录制和评审稳定性 | 一键启动说明和 smoke test 顺序稳定 |
+| P1-4 | 技术文档图示 | 提升答辩解释力 | 增加 Orchestrator / Adapter / Context / Approval 的结构图 |
 
-## 5. P2 后置
+## 6. P2 后置
 
 | 优先级 | 任务 | 当前建议 |
 |---:|---|---|
@@ -144,15 +155,15 @@
 | P2-5 | 桌面端 / 移动端 | 只做设计说明，真实实现后置 |
 | P2-6 | 动态 DAG 引擎 | 当前不做，先保 MVP 可解释性 |
 
-## 6. 推荐立即执行顺序
+## 7. 推荐立即执行顺序
 
 1. 完成仓库卫生与文档同步。
-2. 继续补完整回复线程、单条 Agent 回复重新生成和冲突处理。
-3. 同步 technical-design / demo-checklist 到最新能力。
-4. 准备最终提交前 smoke test 和仓库卫生检查。
-5. 评估是否需要 MySQL 持久化或更真实 Adapter 测试面板。
+2. 重启前后端并跑 `node scripts/smoke-test.mjs`。
+3. 做 Adapter 测试面板。
+4. 合并展示 ApprovalRequest / ActionAudit。
+5. 根据时间评估附件消息、MySQL、SSE 或真实部署。
 
-## 7. 当前阶段结论
+## 8. 当前阶段结论
 
 当前 AgentHub 是一个 **半真实 AgentHub MVP 原型**。
 

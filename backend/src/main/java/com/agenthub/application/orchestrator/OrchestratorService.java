@@ -968,6 +968,7 @@ public class OrchestratorService {
             String selectedAgentSummary,
             List<RetrievedContextItem> retrievedContextItems) {
         String plannerDecision = "Planner mode=" + plan.planningMode()
+                + "; promptLayering=baseCapability,roleInstruction,availableAgents,conversationContext,retrievedContext,artifactHistory,outputSchema,fallbackPolicy"
                 + "; goal=" + plan.goal()
                 + "; plannedSteps=" + plan.steps().size()
                 + "; parallelGroups=" + plan.parallelGroups()
@@ -984,7 +985,10 @@ public class OrchestratorService {
                         .map(batch -> batch.getBatchKey()
                                 + "=" + batch.getExecutionMode()
                                 + ", steps=" + batch.getStepOrders()
-                                + ", dependsOn=" + batch.getDependsOnBatchKeys())
+                                + ", dependsOn=" + batch.getDependsOnBatchKeys()
+                                + ", status=" + batch.getBatchStatus()
+                                + ", durationMs=" + batch.getDurationMs()
+                                + ", failurePolicy=" + batch.getFailurePolicy())
                         .toList())
                 + "; adapter status is recorded on each TaskStep.";
         String aggregationDecision = "Aggregator persisted " + artifacts.size()

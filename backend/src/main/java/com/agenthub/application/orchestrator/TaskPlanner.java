@@ -27,18 +27,21 @@ public class TaskPlanner {
     private final AgentExecutorService agentExecutorService;
     private final ObjectMapper objectMapper;
     private final IdGenerator idGenerator;
+    private final PlannerPromptBuilder plannerPromptBuilder;
 
     public TaskPlanner(
             @Value("${agenthub.orchestrator.planner.type:RULE_BASED}") String plannerType,
             @Value("${agenthub.orchestrator.planner.fallback-to-rule-based:true}") boolean fallbackToRuleBased,
             AgentExecutorService agentExecutorService,
             ObjectMapper objectMapper,
-            IdGenerator idGenerator) {
+            IdGenerator idGenerator,
+            PlannerPromptBuilder plannerPromptBuilder) {
         this.plannerType = plannerType;
         this.fallbackToRuleBased = fallbackToRuleBased;
         this.agentExecutorService = agentExecutorService;
         this.objectMapper = objectMapper;
         this.idGenerator = idGenerator;
+        this.plannerPromptBuilder = plannerPromptBuilder;
     }
 
     public OrchestratorPlan planDemoTask(String userInput, Agent selectedAgent) {
@@ -127,6 +130,8 @@ public class TaskPlanner {
     }
 
     private PlannerAttempt tryCreateLlmPlan(String userInput, Agent selectedAgent, List<Agent> mentionedAgents) {
+        PlannerPromptBuilder.LayeredPlannerPrompt plannerPrompt =
+                plannerPromptBuilder.build(userInput, selectedAgent, mentionedAgents);
         AgentResponse response = agentExecutorService.execute(
                 AgentAdapterType.OPENAI_COMPATIBLE,
                 new AgentRequest(
@@ -136,14 +141,12 @@ public class TaskPlanner {
                         "planner",
                         BuiltInAgentIds.ORCHESTRATOR,
                         "Orchestrator Planner",
-                        buildPlannerUserPrompt(userInput, selectedAgent, mentionedAgents),
-                        buildPlannerSystemPrompt(),
+                        plannerPrompt.userPrompt(),
+                        plannerPrompt.systemPrompt(),
                         "Generate an AgentHub OrchestratorPlan JSON object only.",
-                        buildPlannerContextItems(selectedAgent, mentionedAgents),
-                        List.of("Expected demo artifacts: CODE, MARKDOWN, API_CONTRACT, REVIEW_REPORT"),
-                        Map.of(
-                                "plannerType", "LLM",
-                                "schema", "OrchestratorPlan.v1")));
+                        plannerPrompt.contextItems(),
+                        plannerPrompt.artifactSummaries(),
+                        plannerPrompt.metadata()));
 
         if (response.status() != AgentExecutionStatus.COMPLETED
                 || response.fallbackUsed()
@@ -161,73 +164,6 @@ public class TaskPlanner {
                     : exception.getMessage();
             return new PlannerAttempt(null, "LLM planner output failed schema validation: " + message);
         }
-    }
-
-    private String buildPlannerSystemPrompt() {
-        return """
-                You are AgentHub's Orchestrator planner.
-                Return only valid JSON. Do not include Markdown fences.
-                The JSON schema is:
-                {
-                  "goal": "string",
-                  "planningMode": "LLM_PLANNER",
-                  "plannerReasoningSummary": "short string",
-                  "acceptanceCriteria": ["string"],
-                  "expectedArtifacts": ["CODE", "MARKDOWN", "API_CONTRACT", "REVIEW_REPORT"],
-                  "parallelGroups": ["string"],
-                  "steps": [
-                    {
-                      "stepOrder": 1,
-                      "role": "FRONTEND",
-                      "taskDescription": "string",
-                      "requiredSkill": "string",
-                      "parallelGroupKey": "string",
-                      "dependsOnStepOrders": [1],
-                      "routingReason": "string"
-                    }
-                  ]
-                }
-                Required roles: FRONTEND, BACKEND, REVIEWER.
-                Keep this as a plan only; do not generate code artifacts.
-                """;
-    }
-
-    private String buildPlannerUserPrompt(String userInput, Agent selectedAgent, List<Agent> mentionedAgents) {
-        return """
-                User input:
-                %s
-
-                Selected agent:
-                %s
-
-                Mentioned agents:
-                %s
-
-                Build a safe AgentHub demo plan with exactly three specialist roles:
-                FRONTEND, BACKEND, REVIEWER.
-                If multiple agents are mentioned, place FRONTEND and REVIEWER in MENTIONED_AGENT_GROUP.
-                Backend should depend on frontend unless the plan has a clear reason otherwise.
-                """.formatted(
-                userInput == null ? "" : userInput,
-                selectedAgent == null ? "none" : selectedAgent.getName() + " / " + selectedAgent.getId().value(),
-                mentionedAgents == null || mentionedAgents.isEmpty()
-                        ? "none"
-                        : mentionedAgents.stream()
-                                .map(agent -> agent.getName() + " / " + agent.getId().value())
-                                .toList());
-    }
-
-    private List<String> buildPlannerContextItems(Agent selectedAgent, List<Agent> mentionedAgents) {
-        List<String> contextItems = new ArrayList<>();
-        contextItems.add("Available built-in roles: FRONTEND, BACKEND, REVIEWER.");
-        contextItems.add("Default adapters: FRONTEND=CODEX, BACKEND=MOCK, REVIEWER=CLAUDE_CODE.");
-        if (selectedAgent != null) {
-            contextItems.add("Selected agent should replace the frontend specialist: " + selectedAgent.getName());
-        }
-        if (mentionedAgents != null && !mentionedAgents.isEmpty()) {
-            contextItems.add("Mentioned agents count: " + mentionedAgents.size());
-        }
-        return contextItems;
     }
 
     private OrchestratorPlan parseAndValidateLlmPlan(

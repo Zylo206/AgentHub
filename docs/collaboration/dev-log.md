@@ -2263,3 +2263,104 @@
 
 - 将 Approval Gate 核心字段升级为后端 `ApprovalRequest`
 - 或继续做 Adapter 测试面板，补强半真实 Agent 接入验收能力
+
+## Phase 53：Prompt Layering、后端强制审批与并行执行语义固化
+
+### 目标
+
+- 将 LLM Planner prompt 从内联拼接升级为分层 Prompt Layering
+- 将前端 Approval Gate 升级为后端可校验的 `ApprovalRequest`
+- 将现有 `CompletableFuture` 并行执行语义固化到 `TaskGraph / ExecutionBatch`
+
+### 主要变更
+
+- 新增 `PlannerPromptBuilder`
+  - 固定 `baseCapability / roleInstruction / availableAgents / conversationContext / retrievedContext / artifactHistory / outputSchema / fallbackPolicy` 分层
+  - `TaskPlanner` 调用分层 prompt，并继续保持 LLM Planner 失败回退规则化 Planner
+- 新增后端 `ApprovalRequest`
+  - `PENDING / APPROVED / CANCELLED / CONSUMED / EXPIRED`
+  - 新增 Approval API：创建、批准、取消、按会话查询
+  - Apply Diff / Force Apply Diff / Demo Deploy / Restore Snapshot 必须携带匹配且已批准的 `approvalId`
+  - 成功执行后 approval 会被标记为 `CONSUMED`
+- `ExecutionBatch` 增加运行时字段
+  - `batchStatus`
+  - `startedAt`
+  - `completedAt`
+  - `durationMs`
+  - `failurePolicy`
+- 前端 Approval Gate 改为先创建后端 approval，再 approve，再执行高风险操作
+- `TaskRunPanel` 展示 batch runtime / failure policy
+- `scripts/smoke-test.mjs` 增加后端强制审批、prompt layering 证据、parallel batch runtime 断言
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- Prompt Layering 只是增强 LLM Planner 输入结构，不代表真实 LLM Planner 一定启用
+- ApprovalRequest 仍是内存态，不是企业级多用户审批系统
+- 并行执行语义仍是 TaskRun 内部 batch 级别，不是完整动态 DAG 引擎
+- Adapter 仍可能 fallback 到 MOCK，Deploy 仍是 static demo simulation
+
+### 遗留问题
+
+- ApprovalRequest 未持久化到数据库，刷新后会丢失
+- 审批仍缺用户身份、审批人、权限、过期队列和批量处理
+- 并行执行未提供流式状态更新
+- LLM Planner prompt 仍可继续引入更完整的 adapter health、artifact history 和 conversation summary
+
+### 下一步建议
+
+- 做 Adapter 测试面板，让 OPENAI_COMPATIBLE / CLI Adapter 的可用性和执行结果可手动验证
+- 或推进 ApprovalRequest 的 UI 时间线合并展示，减少 Action Audit 与 Approval 两套记录割裂
+
+## Phase 54：V1.0 文档同步与课题对齐收口
+
+### 目标
+
+- 将 README、产品设计、技术设计、Demo 场景、Roadmap、Demo Checklist 和课题对齐文档同步到当前 V1.0 MVP 状态
+- 修正过期表述，避免把静态 Demo、Mock、CLI 探测、半真实能力写成生产级完成
+- 为后续提交前仓库卫生、smoke test 和 Demo 脚本收敛提供文档基线
+
+### 主要变更
+
+- README 同步 V1.0 当前阶段、已实现能力、静态 / Mock / 半真实边界和下一阶段 Roadmap
+- `product-design.md` 同步多 `@Agent`、TaskGraph / ExecutionBatch、Approval / Audit、line diff / Apply Diff、Snapshot / Restore 设计
+- `technical-design.md` 补充 ApprovalRequest、ActionAudit、ArtifactSnapshot、TaskGraph / ExecutionBatch、OrchestratorDecisionLog 和本地 Memory 持久化说明
+- `demo-scenario.md` 更新 3 分钟 Demo 口径，加入 Apply Diff Approval Gate、Deploy Status Card、Preview URL 和 Action Audit
+- `roadmap.md` 将已完成的 P0 / P1 增强从“待做”调整为 V1.0 已完成 MVP，并重排下一阶段优先级
+- `demo-checklist.md` 增加 Approval Gate / Action Audit / Snapshot Restore 验收段落，并修正 Orchestrator explain panel 为后端结构化决策日志
+- `mvp-requirements-alignment.md` 同步当前完成度和仍未完成边界
+
+### 验证方式
+
+- 本轮只修改文档，未修改业务代码
+- 手动检查 Markdown 路径和章节命名
+- 未执行 `cd backend && mvn -q -DskipTests package`
+- 未执行 `cd frontend && npm run build`
+- 未执行 `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 文档明确保留以下边界：
+  - Codex / Claude Code / OpenCode 仍是 CLI 探测型半真实 Adapter，不是深度平台接入
+  - Deploy Status Card 仍是 static demo simulation，不是真实 Vercel / Netlify / Docker 部署
+  - LLM Planner 需要配置 OPENAI_COMPATIBLE，失败仍 fallback 到 RuleBasedPlanner
+  - ApprovalRequest / ActionAudit 仍是 MVP 能力，不是企业级多人审批系统
+  - TaskGraph / ExecutionBatch 不是完整动态 DAG 引擎
+
+### 遗留问题
+
+- 提交前仍需重新跑 backend build、frontend build 和 smoke test
+- 部分文档仍需最终人工通读，确保视频脚本和实际 UI 文案完全一致
+- README 中英文术语较多，后续可在最终提交前做一次语言风格统一
+- Adapter 测试面板、Approval / Audit 合并展示、Context Retrieval 排序解释仍未完成
+
+### 下一步建议
+
+- 做仓库卫生和三项验证：backend build、frontend build、smoke test
+- 启动前后端后按 `docs/collaboration/demo-checklist.md` 人工跑一遍 V1.0 主链路
+- 下一轮优先做 Adapter 测试面板，提升半真实 Adapter 接入的可验收性

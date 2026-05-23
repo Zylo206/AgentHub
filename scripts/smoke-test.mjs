@@ -66,6 +66,35 @@ async function request(path, init = {}) {
   return payload.data;
 }
 
+async function expectRequestFailure(path, init = {}, expectedText = "") {
+  try {
+    await request(path, init);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (expectedText && !message.includes(expectedText)) {
+      throw new Error(`Expected failure to include "${expectedText}", got "${message}"`);
+    }
+    return message;
+  }
+
+  throw new Error(`Expected request to fail: ${path}`);
+}
+
+async function createAndApproveApproval(conversationId, requestBody) {
+  const approval = await request(`/api/conversations/${conversationId}/approval-requests`, {
+    method: "POST",
+    body: JSON.stringify(requestBody)
+  });
+  const approvalId = requireValue(approval.approvalId, "approvalId missing");
+  const approved = await request(`/api/approval-requests/${approvalId}/approve`, {
+    method: "POST"
+  });
+  if (approved.status !== "APPROVED") {
+    throw new Error(`approval expected APPROVED, got ${approved.status}`);
+  }
+  return approvalId;
+}
+
 function requireValue(value, message) {
   if (value === null || value === undefined || value === "") {
     throw new Error(message);
@@ -312,12 +341,27 @@ async function runSmokeTest() {
   if (!String(decisionLog.plannerDecision).includes("Planner")) {
     throw new Error("orchestratorDecisionLog plannerDecision did not include Planner evidence");
   }
+  if (!String(decisionLog.plannerDecision).includes("promptLayering=")) {
+    throw new Error("orchestratorDecisionLog plannerDecision did not include prompt layering evidence");
+  }
   if (!String(decisionLog.routingDecision).includes("Step")) {
     throw new Error("orchestratorDecisionLog routingDecision did not include step routing evidence");
   }
   const taskGraph = taskRun.taskGraph;
   if (!taskGraph || !Array.isArray(taskGraph.executionBatches) || taskGraph.executionBatches.length < 1) {
     throw new Error("demo task did not return taskGraph execution batches");
+  }
+  const runtimeBatch = taskGraph.executionBatches.find((batch) =>
+    Array.isArray(batch.stepOrders) && batch.stepOrders.length >= 2
+  );
+  if (!runtimeBatch) {
+    throw new Error("expected at least one runtime execution batch with multiple steps");
+  }
+  if (!runtimeBatch.startedAt || !runtimeBatch.completedAt || typeof runtimeBatch.durationMs !== "number") {
+    throw new Error(`parallel execution batch missing runtime fields: ${JSON.stringify(runtimeBatch)}`);
+  }
+  if (runtimeBatch.failurePolicy !== "STEP_FALLBACK_TO_MOCK") {
+    throw new Error(`unexpected batch failurePolicy: ${runtimeBatch.failurePolicy}`);
   }
   const parallelGroups = steps.reduce((groups, step) => {
     const groupKey = step.parallelGroupKey || `GROUP_${step.stepOrder}`;
@@ -337,6 +381,7 @@ async function runSmokeTest() {
   pass(`orchestrator decision log loaded: ${decisionLog.decisionMode || "UNKNOWN"}`);
   pass(`planner mode visible: ${plannerMode}`);
   pass(`task graph loaded: ${taskGraph.executionBatches.length} batch(es)`);
+  pass(`parallel batch runtime validated: ${runtimeBatch.batchKey}, durationMs=${runtimeBatch.durationMs}`);
   pass(`parallel execution group validated: ${parallelGroupEntry[0]} -> steps ${parallelGroupEntry[1].join(", ")}`);
 
   const rerunTaskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
@@ -438,8 +483,21 @@ async function runSmokeTest() {
   pass(`artifact snapshots loaded after revision: ${snapshotsAfterRevision.length}`);
 
   const revisedArtifactId = requireValue(getIdValue(revision.revisedArtifact?.id), "revisedArtifactId missing");
-  const applyDiffResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
+  await expectRequestFailure(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
     method: "POST"
+  }, "approvalId is required");
+  pass("backend approval enforced for apply diff without approvalId");
+  const applyApprovalId = await createAndApproveApproval(conversationId, {
+    actionType: "APPLY_DIFF",
+    targetType: "ARTIFACT",
+    targetId: revisedArtifactId,
+    riskLevel: "MEDIUM",
+    summary: "Smoke test approves applying generated diff.",
+    affectedItems: [`Artifact: ${revisedArtifactId}`]
+  });
+  const applyDiffResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
+    method: "POST",
+    body: JSON.stringify({ approvalId: applyApprovalId })
   });
   const appliedArtifactId = requireValue(getIdValue(applyDiffResult.appliedArtifact?.id), "appliedArtifactId missing");
   if (applyDiffResult.appliedArtifact.status !== "ACCEPTED") {
@@ -450,6 +508,12 @@ async function runSmokeTest() {
   }
   pass(`diff applied: ${appliedArtifactId}, added=${applyDiffResult.addedLines}, removed=${applyDiffResult.removedLines}`);
 
+  await expectRequestFailure(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
+    method: "POST",
+    body: JSON.stringify({ approvalId: applyApprovalId })
+  }, "APPROVED");
+  pass("consumed approval cannot be reused");
+
   const snapshotsAfterApply = await request(`/api/conversations/${conversationId}/artifact-snapshots`);
   if (!snapshotsAfterApply.some((snapshot) => snapshot.operationType === "APPLY_DIFF")) {
     throw new Error("expected APPLY_DIFF artifact snapshot after apply diff");
@@ -457,7 +521,17 @@ async function runSmokeTest() {
   pass(`artifact snapshots loaded after apply diff: ${snapshotsAfterApply.length}`);
 
   const conflictResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
-    method: "POST"
+    method: "POST",
+    body: JSON.stringify({
+      approvalId: await createAndApproveApproval(conversationId, {
+        actionType: "APPLY_DIFF",
+        targetType: "ARTIFACT",
+        targetId: revisedArtifactId,
+        riskLevel: "MEDIUM",
+        summary: "Smoke test approves conflict-path diff apply.",
+        affectedItems: [`Artifact: ${revisedArtifactId}`]
+      })
+    })
   });
   if (conflictResult.conflict !== true || conflictResult.appliedArtifact) {
     throw new Error("expected repeated diff apply to return a conflict without creating another artifact");
@@ -469,7 +543,17 @@ async function runSmokeTest() {
 
   const forceApplyResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
     method: "POST",
-    body: JSON.stringify({ force: true })
+    body: JSON.stringify({
+      force: true,
+      approvalId: await createAndApproveApproval(conversationId, {
+        actionType: "FORCE_APPLY_DIFF",
+        targetType: "ARTIFACT",
+        targetId: revisedArtifactId,
+        riskLevel: "HIGH",
+        summary: "Smoke test approves force applying generated diff.",
+        affectedItems: [`Artifact: ${revisedArtifactId}`]
+      })
+    })
   });
   const forcedAppliedArtifactId = requireValue(
     getIdValue(forceApplyResult.appliedArtifact?.id),
@@ -480,8 +564,22 @@ async function runSmokeTest() {
   }
   pass(`diff force applied: ${forcedAppliedArtifactId}`);
 
-  const deployment = await request(`/api/artifacts/${appliedArtifactId}/demo-deploy`, {
+  await expectRequestFailure(`/api/artifacts/${appliedArtifactId}/demo-deploy`, {
     method: "POST"
+  }, "approvalId is required");
+  pass("backend approval enforced for demo deploy without approvalId");
+  const deployment = await request(`/api/artifacts/${appliedArtifactId}/demo-deploy`, {
+    method: "POST",
+    body: JSON.stringify({
+      approvalId: await createAndApproveApproval(conversationId, {
+        actionType: "DEMO_DEPLOY",
+        targetType: "ARTIFACT",
+        targetId: appliedArtifactId,
+        riskLevel: "MEDIUM",
+        summary: "Smoke test approves static demo deployment.",
+        affectedItems: [`Artifact: ${appliedArtifactId}`]
+      })
+    })
   });
   const deploymentId = requireValue(deployment.deploymentId, "deploymentId missing");
   if (deployment.status !== "SUCCESS") {
@@ -498,8 +596,22 @@ async function runSmokeTest() {
 
   const restoreCandidate = snapshotsAfterDeploy.find((snapshot) => snapshot.operationType === "APPLY_DIFF")
     || snapshotsAfterDeploy[0];
-  const restoredArtifact = await request(`/api/artifact-snapshots/${restoreCandidate.snapshotId}/restore`, {
+  await expectRequestFailure(`/api/artifact-snapshots/${restoreCandidate.snapshotId}/restore`, {
     method: "POST"
+  }, "approvalId is required");
+  pass("backend approval enforced for snapshot restore without approvalId");
+  const restoredArtifact = await request(`/api/artifact-snapshots/${restoreCandidate.snapshotId}/restore`, {
+    method: "POST",
+    body: JSON.stringify({
+      approvalId: await createAndApproveApproval(conversationId, {
+        actionType: "RESTORE_SNAPSHOT",
+        targetType: "ARTIFACT_SNAPSHOT",
+        targetId: restoreCandidate.snapshotId,
+        riskLevel: "HIGH",
+        summary: "Smoke test approves restoring artifact snapshot.",
+        affectedItems: [`Snapshot: ${restoreCandidate.snapshotId}`]
+      })
+    })
   });
   const restoredArtifactId = requireValue(getIdValue(restoredArtifact.id), "restoredArtifactId missing");
   if (restoredArtifact.status !== "ACCEPTED") {
@@ -523,10 +635,22 @@ async function runSmokeTest() {
   pass(`approval audit recorded: ${approvalAudit.auditId}`);
 
   const actionAudits = await request(`/api/conversations/${conversationId}/action-audits`);
-  if (!Array.isArray(actionAudits) || actionAudits.length < 3) {
+  if (!Array.isArray(actionAudits) || actionAudits.length < 6) {
     throw new Error("expected action audit records for revision/apply/deploy/restore");
   }
-  const requiredAuditActions = ["APPLY_DIFF", "DEMO_DEPLOY", "RESTORE_SNAPSHOT", "SMOKE_APPROVAL_GATE"];
+  const approvalRequests = await request(`/api/conversations/${conversationId}/approval-requests`);
+  if (!Array.isArray(approvalRequests) || !approvalRequests.some((approval) => approval.status === "CONSUMED")) {
+    throw new Error("expected consumed backend approval request records");
+  }
+  const requiredAuditActions = [
+    "APPLY_DIFF",
+    "DEMO_DEPLOY",
+    "RESTORE_SNAPSHOT",
+    "SMOKE_APPROVAL_GATE",
+    "APPROVAL_REQUEST_CREATED",
+    "APPROVAL_REQUEST_APPROVED",
+    "APPROVAL_REQUEST_CONSUMED"
+  ];
   const missingAuditActions = requiredAuditActions.filter((actionType) =>
     !actionAudits.some((auditLog) => auditLog.actionType === actionType)
   );
@@ -534,6 +658,7 @@ async function runSmokeTest() {
     throw new Error(`missing action audit records: ${missingAuditActions.join(", ")}`);
   }
   pass(`action audits loaded: ${actionAudits.length}`);
+  pass(`approval requests loaded: ${approvalRequests.length}`);
 
   const resolvedPreviewUrl = await verifyPreviewUrl(deploymentPreviewUrl);
   pass(`preview page reachable: ${resolvedPreviewUrl}`);

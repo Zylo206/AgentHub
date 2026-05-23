@@ -142,26 +142,30 @@ Agent 以联系人形式展示，包含：
 
 当前规则：
 
-- 只解析消息开头
-- 只支持一个 Agent
+- 解析消息开头的 `@AgentName`
+- 支持消息开头连续多个 `@AgentName`，用于表达最小群聊目标
+- 单个目标时写入 `targetAgentId`，多个目标时写入 `mentionedAgentIds`
 - 文本 `@Agent` 优先级高于左侧 selectedAgent
 - 匹配失败时阻止消息发送并显示错误
+- 当前不解析消息中间自然语言 `@Agent`，也不代表完整群聊调度系统
 
 ## 10. Orchestrator 协作设计
 
 当前 Orchestrator 的定位是：
 
 - 读取 source message
-- 推断 selectedAgent
+- 推断 selectedAgent / mentioned agents / participants
 - 创建 TaskSpec
 - 创建 TaskRun / TaskStep
 - 调用 Agent Adapter 执行 step
 - 生成 Context / Handoff / Artifact
+- 输出 OrchestratorDecisionLog
+- 基于 TaskGraph / ExecutionBatch 展示并行执行语义
 
 需要明确：
 
-- 当前仍是规则化、静态 Demo 编排
-- 还不是真实复杂动态规划系统
+- 当前默认仍是规则化 Planner，LLM Planner 需要显式配置
+- 当前已有执行层并发 batch，但还不是完整动态 DAG 引擎
 - 但已经可以把“任务拆解 -> 执行 -> 交接 -> 产物”完整展示出来
 
 ## 11. Context / Handoff 展示设计
@@ -225,19 +229,44 @@ Artifact 是产品的第二核心对象，仅次于聊天流。
 
 ### Diff Summary
 
-当前不是实际代码 diff，而是静态摘要，展示：
+当前已经从纯静态摘要升级为轻量行级 diff，展示：
 
 - Revision Instruction
-- Changed Items
-- Not Changed
-- Risk
+- added / removed / unchanged 统计
+- changed items
+- risk
+- 一键 Apply Diff / Force Apply Diff 的入口
 
 设计目标是：
 
 - 先让“版本演进”清晰可见
-- 后续再考虑真实 diff
+- 用轻量 patch apply 证明 Artifact 可以被操作
+- 后续再考虑 AST diff、代码编辑器、Git merge 或三方冲突解决
 
-## 14. P0 / P1 / P2 范围
+## 14. Approval / Audit / Snapshot 设计
+
+当前高风险 Artifact 操作已经加入最小 HITL 能力：
+
+- Apply Diff
+- Force Apply Diff
+- Demo Deploy
+- Restore Snapshot
+
+设计原则：
+
+- 操作前展示 affected artifact / diff preview 摘要
+- 前端先创建 ApprovalRequest，再 approve，再执行高风险操作
+- 后端强制校验 `approvalId`，执行成功后标记为 `CONSUMED`
+- Action Audit 时间线展示 created / approved / cancelled / consumed / apply / deploy / restore 等记录
+- Artifact Snapshot 在 revision / apply / deploy / restore 等关键节点提供安全回退基础
+
+边界：
+
+- 当前 ApprovalRequest / Action Audit 仍是 MVP 能力，不是企业级多人审批系统
+- 当前没有用户身份、权限、审批队列或导出能力
+- Snapshot restore 是生成新 Artifact 版本，不是真实 Git checkout
+
+## 15. P0 / P1 / P2 范围
 
 ### P0
 
@@ -250,6 +279,11 @@ Artifact 是产品的第二核心对象，仅次于聊天流。
 - Version History / Diff Summary
 - Agent Builder 最小闭环
 - selectedAgent / `@Agent`
+- 多 `@Agent`
+- 群聊式 Agent 消息流
+- Context Retrieval / MemoryItem MVP
+- TaskGraph / ExecutionBatch
+- ApprovalRequest / Action Audit MVP
 
 ### P1
 
@@ -257,6 +291,9 @@ Artifact 是产品的第二核心对象，仅次于聊天流。
 - 更清晰的 Orchestrator 规则化规划
 - Deploy Status Card 静态版
 - 更强的多 Agent 显式协作语义
+- Adapter Output Artifact
+- Prompt Layering / LLM Planner fallback
+- line diff / Apply Diff / Snapshot Restore
 
 ### P2
 
@@ -267,7 +304,7 @@ Artifact 是产品的第二核心对象，仅次于聊天流。
 - MySQL 持久化
 - 复杂群聊调度
 
-## 15. 当前已实现 / 未实现对照表
+## 16. 当前已实现 / 未实现对照表
 
 ### 已实现
 
@@ -279,10 +316,16 @@ Artifact 是产品的第二核心对象，仅次于聊天流。
 - 最小 `@Agent`
 - TaskRun / TaskStep
 - ContextSnapshot / HandoffSummary
+- Pinned Context / MemoryItem / Context Retrieval
 - Artifact Preview
 - Artifact Revision
 - Version History
 - Diff Summary
+- line diff / Apply Diff / Force Apply
+- Artifact Snapshot / Restore
+- Deploy Status Card / Preview Page
+- Approval Gate / Action Audit
+- TaskGraph / ExecutionBatch / OrchestratorDecisionLog
 - AI 协作开发记录
 
 ### 静态 Demo / Mock / Placeholder
@@ -290,19 +333,20 @@ Artifact 是产品的第二核心对象，仅次于聊天流。
 - demo-task 编排
 - Artifact revision 内容生成
 - Context / Handoff 内容生成
-- Diff Summary
-- Codex / Claude Code Adapter
+- CLI 探测型 Codex / Claude Code / OpenCode Adapter
+- Deploy simulation
 
 ### 未实现
 
-- 真正群聊模式
-- 多个 `@Agent`
-- 真实平台接入
-- 真实部署状态卡片
+- 真实平台深度接入
+- 真实部署发布
 - 多端同步
 - 多人协作
+- 文件附件 / 图片
+- SSE / WebSocket
+- 企业级审批 / 权限 / 审计
 
-## 16. 评分点对齐说明
+## 17. 评分点对齐说明
 
 ### AI 协作能力
 

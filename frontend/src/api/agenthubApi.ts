@@ -2,6 +2,7 @@ import type { AdapterDescriptor, Agent } from "../features/agents/agentTypes";
 import type { Artifact } from "../features/artifacts/artifactTypes";
 import type { ArtifactSnapshot } from "../features/artifacts/artifactSnapshotTypes";
 import type { ActionAuditLog } from "../features/audit/auditTypes";
+import type { ApprovalRequest } from "../features/approval/approvalTypes";
 import type { Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
 import type { Conversation } from "../features/conversations/conversationTypes";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../features/context/contextTypes";
@@ -224,9 +225,52 @@ export function getArtifactSnapshotsByArtifact(artifactId: string): Promise<Arti
 }
 
 export function restoreArtifactSnapshot(snapshotId: string): Promise<Artifact> {
+  return restoreArtifactSnapshotWithApproval(snapshotId, null);
+}
+
+export function restoreArtifactSnapshotWithApproval(
+  snapshotId: string,
+  approvalId?: string | null
+): Promise<Artifact> {
   return request<Artifact>(`/api/artifact-snapshots/${snapshotId}/restore`, {
+    method: "POST",
+    body: JSON.stringify({ approvalId: approvalId ?? null })
+  });
+}
+
+export interface CreateApprovalRequest {
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  riskLevel: string;
+  summary: string;
+  affectedItems: string[];
+}
+
+export function createApprovalRequest(
+  conversationId: string,
+  requestBody: CreateApprovalRequest
+): Promise<ApprovalRequest> {
+  return request<ApprovalRequest>(`/api/conversations/${conversationId}/approval-requests`, {
+    method: "POST",
+    body: JSON.stringify(requestBody)
+  });
+}
+
+export function approveApprovalRequest(approvalId: string): Promise<ApprovalRequest> {
+  return request<ApprovalRequest>(`/api/approval-requests/${approvalId}/approve`, {
     method: "POST"
   });
+}
+
+export function cancelApprovalRequest(approvalId: string): Promise<ApprovalRequest> {
+  return request<ApprovalRequest>(`/api/approval-requests/${approvalId}/cancel`, {
+    method: "POST"
+  });
+}
+
+export function getApprovalRequestsByConversation(conversationId: string): Promise<ApprovalRequest[]> {
+  return request<ApprovalRequest[]>(`/api/conversations/${conversationId}/approval-requests`);
 }
 
 export function getActionAuditsByConversation(conversationId: string): Promise<ActionAuditLog[]> {
@@ -262,16 +306,21 @@ export function createDemoArtifactRevision(
   });
 }
 
-export function applyArtifactDiff(artifactId: string, force = false): Promise<ApplyDiffResponse> {
+export function applyArtifactDiff(
+  artifactId: string,
+  force = false,
+  approvalId?: string | null
+): Promise<ApplyDiffResponse> {
   return request<ApplyDiffResponse>(`/api/artifacts/${artifactId}/apply-diff`, {
     method: "POST",
-    body: JSON.stringify({ force })
+    body: JSON.stringify({ force, approvalId: approvalId ?? null })
   });
 }
 
-export function createDemoDeployment(artifactId: string): Promise<DeploymentRecord> {
+export function createDemoDeployment(artifactId: string, approvalId?: string | null): Promise<DeploymentRecord> {
   return request<DeploymentRecord>(`/api/artifacts/${artifactId}/demo-deploy`, {
-    method: "POST"
+    method: "POST",
+    body: JSON.stringify({ approvalId: approvalId ?? null })
   });
 }
 

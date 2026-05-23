@@ -8,13 +8,13 @@
 User
   -> React IM Workspace
   -> Spring Boot REST API
-  -> TaskApplicationService
   -> OrchestratorService
-  -> AgentRoutingService
+  -> TaskPlanner / AgentRouter / AgentStepExecutor / ResultAggregator
+  -> TaskGraph / ExecutionBatch
   -> AgentExecutorService
   -> AgentAdapterRegistry
-  -> Mock / Placeholder Adapter
-  -> InMemory Repository
+  -> Mock / OpenAI Compatible / CLI Adapter
+  -> InMemory Repository / local Memory file
   -> Frontend render of Message / TaskRun / Context / Artifact
 ```
 
@@ -342,6 +342,10 @@ User
 - `api/artifact`
 - `api/context`
 - `api/adapter`
+- `api/approval`
+- `api/audit`
+- `api/deployment`
+- `api/memory`
 
 API 主要提供：
 
@@ -351,6 +355,10 @@ API 主要提供：
 - revision 触发
 - Context / Handoff 查询
 - Adapter 测试调用
+- ApprovalRequest 创建 / approve / cancel / 查询
+- ActionAudit 查询与记录
+- Deploy simulation 与 Preview URL 查询
+- MemoryItem 查询 / 更新 / 删除
 
 ## 6. Orchestrator 当前实现
 
@@ -367,8 +375,10 @@ API 主要提供：
 - 通过 TaskPlanner / AgentRouter / AgentStepExecutor / ResultAggregator 组织 demo-task
 - 创建 TaskRun / TaskStep，并记录 parallel group、routing reason 和 adapter fallback
 - 调用 AgentExecutorService / AgentAdapterRegistry
+- 构造 TaskGraph / ExecutionBatch
 - 生成 Artifact
 - 生成 ContextSnapshot / HandoffSummary
+- 写入 OrchestratorDecisionLog
 - 追加 Orchestrator / Frontend / Backend / Reviewer 群聊式 Agent 消息
 - 将 pinned context 和 MemoryItem 注入 TaskStep inputContext
 
@@ -571,9 +581,35 @@ API 主要提供：
 - `quotedMessageId`
 - `quotedMessageContent`
 
-前端发送引用 / 回复消息时会传入结构化字段，后端校验引用消息属于同一 conversation，并保存引用内容快照。当前仍不是完整 IM thread 模型，没有消息树、折叠回复线程或单条 Agent 回复重新生成。
+前端发送引用 / 回复消息时会传入结构化字段，后端校验引用消息属于同一 conversation，并保存引用内容快照。当前已经支持引用 / 回复关系、回复线程展开、原消息定位和单条 Agent 回复重新生成的 MVP。它仍不是完整 IM thread 模型，没有多层消息树、跨会话 thread 或多人协同编辑语义。
 
-## 14. 当前内存 Repository 设计
+## 14. ApprovalRequest / ActionAudit / Snapshot
+
+当前高风险操作由后端强制审批保护：
+
+- `POST /api/conversations/{conversationId}/approval-requests`
+- `POST /api/approval-requests/{approvalId}/approve`
+- `POST /api/approval-requests/{approvalId}/cancel`
+- `GET /api/conversations/{conversationId}/approval-requests`
+
+受保护操作：
+
+- `/api/artifacts/{artifactId}/apply-diff`
+- `/api/artifacts/{artifactId}/force-apply-diff`
+- `/api/artifacts/{artifactId}/demo-deploy`
+- `/api/artifact-snapshots/{snapshotId}/restore`
+
+校验规则：
+
+- 请求必须携带匹配的 `approvalId`
+- ApprovalRequest 状态必须为 `APPROVED`
+- `conversationId / actionType / targetType / targetId` 必须匹配
+- 操作成功后 ApprovalRequest 标记为 `CONSUMED`
+- ActionAudit 记录 approval created / approved / cancelled / consumed 以及 apply / deploy / restore 结果
+
+ArtifactSnapshot 用于在 revision、apply diff、deploy、restore 前后保留安全快照。当前 Snapshot 是内存态领域对象，不是 Git side repository 或真实文件系统回滚。
+
+## 15. 当前内存 Repository 设计
 
 当前所有核心模型都使用内存 Repository。
 
@@ -589,7 +625,9 @@ API 主要提供：
 - 无并发控制
 - 无跨进程状态保持
 
-## 15. 后续 MySQL / SSE / 真实 Adapter 迁移设计
+MemoryItem 例外：当前已通过本地 JSON 文件实现 MVP 持久化，默认路径为 `backend/.agenthub/memories.json`。这仍不是生产数据库，也不支持多实例同步。
+
+## 16. 后续 MySQL / SSE / 真实 Adapter 迁移设计
 
 ### MySQL
 
@@ -636,7 +674,7 @@ API 主要提供：
 - TaskRun resultSummary 和 Orchestrator 可解释面板会展示 `LLM_PLANNER`、`RULE_BASED_FALLBACK` 和 fallback reason
 - LLM Planner 只负责计划生成，不直接绕过现有 Artifact / Adapter / fallback 链路
 
-## 16. 风险与扩展点
+## 17. 风险与扩展点
 
 当前主要风险：
 
@@ -653,3 +691,6 @@ API 主要提供：
 - MemoryItem 持久化与检索策略
 - Adapter 成功输出 Artifact 增强
 - Orchestrator Decision DTO
+- ApprovalRequest / ActionAudit 持久化
+- Adapter 测试面板
+- Context Retrieval 排序解释

@@ -1,9 +1,11 @@
 package com.agenthub.api.artifact;
 
+import com.agenthub.application.approval.ApprovalApplicationService;
 import com.agenthub.application.artifact.ArtifactApplicationService;
 import com.agenthub.application.task.TaskApplicationService;
 import com.agenthub.common.ApiResponse;
 import com.agenthub.domain.artifact.Artifact;
+import com.agenthub.domain.artifact.ArtifactSnapshot;
 import com.agenthub.domain.task.TaskRun;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -19,12 +21,15 @@ public class ArtifactController {
 
     private final ArtifactApplicationService artifactApplicationService;
     private final TaskApplicationService taskApplicationService;
+    private final ApprovalApplicationService approvalApplicationService;
 
     public ArtifactController(
             ArtifactApplicationService artifactApplicationService,
-            TaskApplicationService taskApplicationService) {
+            TaskApplicationService taskApplicationService,
+            ApprovalApplicationService approvalApplicationService) {
         this.artifactApplicationService = artifactApplicationService;
         this.taskApplicationService = taskApplicationService;
+        this.approvalApplicationService = approvalApplicationService;
     }
 
     @GetMapping("/api/conversations/{conversationId}/artifacts")
@@ -53,10 +58,20 @@ public class ArtifactController {
     }
 
     @PostMapping("/api/artifact-snapshots/{snapshotId}/restore")
-    public ApiResponse<?> restoreSnapshot(@PathVariable("snapshotId") String snapshotId) {
-        return ApiResponse.success(
-                artifactApplicationService.restoreSnapshot(snapshotId),
-                "Artifact snapshot restored");
+    public ApiResponse<?> restoreSnapshot(
+            @PathVariable("snapshotId") String snapshotId,
+            @RequestBody(required = false) RestoreSnapshotRequest request) {
+        ArtifactSnapshot snapshot = artifactApplicationService.getSnapshot(snapshotId);
+        String approvalId = request == null ? null : request.approvalId();
+        approvalApplicationService.validateApproved(
+                approvalId,
+                snapshot.getConversationId(),
+                "RESTORE_SNAPSHOT",
+                "ARTIFACT_SNAPSHOT",
+                snapshotId);
+        Artifact restoredArtifact = artifactApplicationService.restoreSnapshot(snapshotId);
+        approvalApplicationService.consume(approvalId);
+        return ApiResponse.success(restoredArtifact, "Artifact snapshot restored");
     }
 
     @PostMapping("/api/artifacts/{artifactId}/apply-diff")
@@ -64,7 +79,17 @@ public class ArtifactController {
             @PathVariable("artifactId") String artifactId,
             @RequestBody(required = false) ApplyDiffRequest request) {
         boolean force = request != null && Boolean.TRUE.equals(request.force());
+        Artifact artifact = artifactApplicationService.getArtifact(artifactId);
+        String actionType = force ? "FORCE_APPLY_DIFF" : "APPLY_DIFF";
+        String approvalId = request == null ? null : request.approvalId();
+        approvalApplicationService.validateApproved(
+                approvalId,
+                artifact.getConversationId(),
+                actionType,
+                "ARTIFACT",
+                artifactId);
         ArtifactApplicationService.ApplyDiffResult result = artifactApplicationService.applyDiff(artifactId, force);
+        approvalApplicationService.consume(approvalId);
         return ApiResponse.success(
                 new ApplyDiffResponse(
                         result.appliedArtifact(),
@@ -118,4 +143,6 @@ record ApplyDiffResponse(
         String conflictReason,
         String latestAppliedArtifactId) {}
 
-record ApplyDiffRequest(Boolean force) {}
+record ApplyDiffRequest(Boolean force, String approvalId) {}
+
+record RestoreSnapshotRequest(String approvalId) {}
