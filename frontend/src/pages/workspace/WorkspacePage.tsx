@@ -3,10 +3,13 @@ import {
   createConversation,
   createDemoArtifactRevision,
   createDemoDeployment,
+  applyArtifactDiff,
   createDemoTask,
+  getActionAuditsByConversation,
   getAdapters,
   getAgents,
   getArtifact,
+  getArtifactSnapshotsByConversation,
   getArtifactsByConversation,
   getContextSnapshotsByTaskRun,
   getConversation,
@@ -19,6 +22,9 @@ import {
   getTaskRunsByConversation,
   getTaskSpecsByConversation,
   pinMessageAsContext,
+  recordActionAudit,
+  regenerateAgentReply,
+  restoreArtifactSnapshot,
   saveMessageAsMemory,
   sendMessage,
   unpinContext
@@ -27,6 +33,9 @@ import { AgentList } from "../../features/agents/AgentList";
 import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
+import type { ArtifactSnapshot } from "../../features/artifacts/artifactSnapshotTypes";
+import { ActionAuditTimelinePanel } from "../../features/audit/ActionAuditTimelinePanel";
+import type { ActionAuditLog } from "../../features/audit/auditTypes";
 import { ChatInput } from "../../features/chat/ChatInput";
 import { parseLeadingAgentMention } from "../../features/chat/agentMention";
 import { MessageStream } from "../../features/chat/MessageStream";
@@ -72,6 +81,8 @@ export function WorkspacePage() {
   const [taskRuns, setTaskRuns] = useState<TaskRun[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
+  const [artifactSnapshots, setArtifactSnapshots] = useState<ArtifactSnapshot[]>([]);
+  const [actionAudits, setActionAudits] = useState<ActionAuditLog[]>([]);
   const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [contextSnapshots, setContextSnapshots] = useState<ContextSnapshot[]>([]);
@@ -86,6 +97,7 @@ export function WorkspacePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
   const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
+  const [quoteMode, setQuoteMode] = useState<"quote" | "reply">("quote");
 
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(false);
@@ -98,8 +110,10 @@ export function WorkspacePage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [runningDemoTask, setRunningDemoTask] = useState(false);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [revisingArtifact, setRevisingArtifact] = useState(false);
   const [deployingArtifact, setDeployingArtifact] = useState(false);
+  const [restoringSnapshot, setRestoringSnapshot] = useState(false);
 
   const currentConversation =
     conversations.find((conversation) => getIdValue(conversation.id) === currentConversationId) ?? null;
@@ -130,6 +144,10 @@ export function WorkspacePage() {
   const selectedArtifactDeployments = useMemo(
     () => deployments.filter((deployment) => getIdValue(deployment.artifactId) === selectedArtifactId),
     [deployments, selectedArtifactId]
+  );
+  const selectedArtifactSnapshots = useMemo(
+    () => artifactSnapshots.filter((snapshot) => getIdValue(snapshot.artifactId) === selectedArtifactId),
+    [artifactSnapshots, selectedArtifactId]
   );
 
   const highlightedArtifactIds = useMemo(
@@ -194,12 +212,24 @@ export function WorkspacePage() {
     setLoadingArtifacts(true);
 
     try {
-      const [messageData, taskSpecData, taskRunData, artifactData, deploymentData, pinnedContextData, memoryData] = await Promise.all([
+      const [
+        messageData,
+        taskSpecData,
+        taskRunData,
+        artifactData,
+        deploymentData,
+        artifactSnapshotData,
+        actionAuditData,
+        pinnedContextData,
+        memoryData
+      ] = await Promise.all([
         getMessages(conversationId),
         getTaskSpecsByConversation(conversationId),
         getTaskRunsByConversation(conversationId),
         getArtifactsByConversation(conversationId),
         getDeploymentsByConversation(conversationId),
+        getArtifactSnapshotsByConversation(conversationId),
+        getActionAuditsByConversation(conversationId),
         getPinnedContextsByConversation(conversationId),
         getMemoriesByConversation(conversationId)
       ]);
@@ -209,6 +239,8 @@ export function WorkspacePage() {
       setTaskRuns(taskRunData);
       setArtifacts(artifactData);
       setDeployments(deploymentData);
+      setArtifactSnapshots(artifactSnapshotData);
+      setActionAudits(actionAuditData);
       setPinnedContexts(pinnedContextData);
       setMemories(memoryData);
       setShowAllArtifacts(true);
@@ -257,6 +289,8 @@ export function WorkspacePage() {
       setTaskRuns([]);
       setArtifacts([]);
       setDeployments([]);
+      setArtifactSnapshots([]);
+      setActionAudits([]);
       setPinnedContexts([]);
       setMemories([]);
       setContextSnapshots([]);
@@ -377,9 +411,7 @@ export function WorkspacePage() {
       return;
     }
 
-    const finalContentToSend = quotedMessage
-      ? `引用消息（${quotedMessage.senderType} · ${getIdValue(quotedMessage.id)}）：\n${quotedMessage.content}\n\n${contentToSend}`
-      : contentToSend;
+    const referencedMessageId = quotedMessage ? getIdValue(quotedMessage.id) : null;
 
     setSendingMessage(true);
     setErrorMessage(null);
@@ -388,9 +420,11 @@ export function WorkspacePage() {
     try {
       await sendMessage(
         currentConversationId,
-        finalContentToSend,
+        contentToSend,
         targetAgent ? getIdValue(targetAgent.id) : null,
-        mentionedAgents.map((agent) => getIdValue(agent.id)).filter(Boolean)
+        mentionedAgents.map((agent) => getIdValue(agent.id)).filter(Boolean),
+        quoteMode === "reply" ? referencedMessageId : null,
+        referencedMessageId
       );
       if (parsedMention.matchedAgent) {
         setSelectedAgent(parsedMention.matchedAgent);
@@ -399,6 +433,7 @@ export function WorkspacePage() {
       setMessages(refreshedMessages);
       setDraftMessage("");
       setQuotedMessage(null);
+      setQuoteMode("quote");
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -481,7 +516,14 @@ export function WorkspacePage() {
 
   function handleQuoteMessage(message: Message) {
     setQuotedMessage(message);
+    setQuoteMode("quote");
     setOperationMessage("已引用消息，发送时会带入引用内容。");
+  }
+
+  function handleReplyMessage(message: Message) {
+    setQuotedMessage(message);
+    setQuoteMode("reply");
+    setOperationMessage("已选择回复消息，发送时会带入被回复内容。");
   }
 
   async function runDemoTaskFromMessage(message: Message) {
@@ -546,6 +588,28 @@ export function WorkspacePage() {
     await runDemoTaskFromMessage(message);
   }
 
+  async function handleRegenerateAgentReply(message: Message) {
+    if (!currentConversationId || message.senderType !== "AGENT") {
+      return;
+    }
+
+    const messageId = getIdValue(message.id);
+    setRegeneratingMessageId(messageId);
+    setErrorMessage(null);
+    setOperationMessage(null);
+
+    try {
+      const regeneratedMessage = await regenerateAgentReply(currentConversationId, messageId);
+      const refreshedMessages = await getMessages(currentConversationId);
+      setMessages(refreshedMessages);
+      setOperationMessage(`已重新生成单条 Agent 回复：${getIdValue(regeneratedMessage.id)}`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setRegeneratingMessageId(null);
+    }
+  }
+
   async function handleCreateArtifactRevision(artifactId: string, revisionInstruction: string) {
     if (!currentConversationId) {
       setErrorMessage("请先创建或选择一个会话，再修改产物。");
@@ -572,6 +636,70 @@ export function WorkspacePage() {
     }
   }
 
+  async function handleApplyArtifactDiff(artifactId: string) {
+    if (!currentConversationId) {
+      setErrorMessage("请先创建或选择一个会话，再应用 Diff。");
+      return null;
+    }
+
+    setErrorMessage(null);
+    setOperationMessage(null);
+
+    try {
+      const applyResult = await applyArtifactDiff(artifactId);
+      if (applyResult.conflict) {
+        setOperationMessage(applyResult.conflictReason || "检测到 Diff 应用冲突，请查看最新已应用产物。");
+        return null;
+      }
+      if (!applyResult.appliedArtifact) {
+        setOperationMessage("Diff 应用未生成新产物。");
+        return null;
+      }
+      const appliedArtifactId = getIdValue(applyResult.appliedArtifact.id);
+
+      await loadConversationData(currentConversationId);
+      setShowAllArtifacts(true);
+      setSelectedArtifactId(appliedArtifactId);
+      setOperationMessage(
+        `Diff 已应用为 ${applyResult.appliedArtifact.title} v${applyResult.appliedArtifact.version}，新增 ${applyResult.addedLines} 行，删除 ${applyResult.removedLines} 行。`
+      );
+      return applyResult.appliedArtifact;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      return null;
+    }
+  }
+
+  async function handleForceApplyArtifactDiff(artifactId: string) {
+    if (!currentConversationId) {
+      setErrorMessage("请先创建或选择一个会话，再强制应用 Diff。");
+      return null;
+    }
+
+    setErrorMessage(null);
+    setOperationMessage(null);
+
+    try {
+      const applyResult = await applyArtifactDiff(artifactId, true);
+      if (!applyResult.appliedArtifact) {
+        setOperationMessage("强制应用 Diff 未生成新产物。");
+        return null;
+      }
+
+      const appliedArtifactId = getIdValue(applyResult.appliedArtifact.id);
+      await loadConversationData(currentConversationId);
+      setShowAllArtifacts(true);
+      setSelectedArtifactId(appliedArtifactId);
+      setOperationMessage(
+        `已强制应用 Diff 为 ${applyResult.appliedArtifact.title} v${applyResult.appliedArtifact.version}。`
+      );
+      return applyResult.appliedArtifact;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      return null;
+    }
+  }
+
   async function handleCreateDeployment(artifactId: string) {
     if (!currentConversationId) {
       setErrorMessage("请先创建或选择一个会话，再部署产物。");
@@ -583,18 +711,61 @@ export function WorkspacePage() {
 
     try {
       const deployment = await createDemoDeployment(artifactId);
-      const [refreshedMessages, refreshedDeployments] = await Promise.all([
+      const [refreshedMessages, refreshedDeployments, refreshedSnapshots, refreshedAudits] = await Promise.all([
         getMessages(currentConversationId),
-        getDeploymentsByConversation(currentConversationId)
+        getDeploymentsByConversation(currentConversationId),
+        getArtifactSnapshotsByConversation(currentConversationId),
+        getActionAuditsByConversation(currentConversationId)
       ]);
       setMessages(refreshedMessages);
       setDeployments(refreshedDeployments);
+      setArtifactSnapshots(refreshedSnapshots);
+      setActionAudits(refreshedAudits);
       setSelectedArtifactId(getIdValue(deployment.artifactId) || artifactId);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setDeployingArtifact(false);
     }
+  }
+
+  async function handleRestoreArtifactSnapshot(snapshotId: string): Promise<Artifact | null> {
+    if (!currentConversationId) {
+      setErrorMessage("Please select a conversation before restoring a snapshot.");
+      return null;
+    }
+
+    setRestoringSnapshot(true);
+    setErrorMessage(null);
+
+    try {
+      const restoredArtifact = await restoreArtifactSnapshot(snapshotId);
+      await loadConversationData(currentConversationId);
+      setShowAllArtifacts(true);
+      setSelectedArtifactId(getIdValue(restoredArtifact.id));
+      setOperationMessage(`Restored snapshot as ${restoredArtifact.title} v${restoredArtifact.version}.`);
+      return restoredArtifact;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      return null;
+    } finally {
+      setRestoringSnapshot(false);
+    }
+  }
+
+  async function handleRecordApprovalAudit(request: {
+    actionType: string;
+    targetType: string;
+    targetId: string;
+    status: string;
+    summary: string;
+  }) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    const auditLog = await recordActionAudit(currentConversationId, request);
+    setActionAudits((previous) => [auditLog, ...previous]);
   }
 
   function handleSelectTaskStep(taskRunId: string, step: TaskStep) {
@@ -677,6 +848,17 @@ export function WorkspacePage() {
               </div>
             </div>
           ) : null}
+          {currentConversation ? (
+            <div className="conversation-participants">
+              <span className="conversation-participants__label">Action Audit</span>
+              <div className="conversation-participants__list">
+                <span className="conversation-participant-pill">
+                  {actionAudits.length} record(s)
+                  <small>apply / deploy / restore</small>
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {errorMessage ? (
@@ -749,12 +931,15 @@ export function WorkspacePage() {
             pinnedContexts={pinnedContexts}
             loading={loadingMessages}
             rerunningMessageId={rerunningMessageId}
+            regeneratingMessageId={regeneratingMessageId}
             onSelectArtifact={setSelectedArtifactId}
             onToggleMessagePin={handleToggleMessagePin}
             onSaveMessageAsMemory={handleSaveMessageAsMemory}
             onCopyMessage={handleCopyMessage}
             onQuoteMessage={handleQuoteMessage}
+            onReplyMessage={handleReplyMessage}
             onRerunFromMessage={handleRerunFromMessage}
+            onRegenerateAgentReply={handleRegenerateAgentReply}
           />
           <TaskRunPanel
             agents={agents}
@@ -774,14 +959,19 @@ export function WorkspacePage() {
             handoffSummaries={handoffSummaries}
             loading={loadingContext}
           />
+          <ActionAuditTimelinePanel audits={actionAudits} />
           <ChatInput
             value={draftMessage}
             disabled={!currentConversationId}
             sending={sendingMessage}
             selectedAgent={selectedAgent}
             quotedMessage={quotedMessage}
+            quoteMode={quoteMode}
             onChange={setDraftMessage}
-            onClearQuote={() => setQuotedMessage(null)}
+            onClearQuote={() => {
+              setQuotedMessage(null);
+              setQuoteMode("quote");
+            }}
             onSend={handleSendMessage}
           />
         </div>
@@ -800,11 +990,18 @@ export function WorkspacePage() {
           filteredByTaskStep={Boolean(selectedTaskStep) && !showAllArtifacts}
           revisingArtifact={revisingArtifact}
           deployments={selectedArtifactDeployments}
+          snapshots={selectedArtifactSnapshots}
           deployingArtifact={deployingArtifact}
+          restoringSnapshot={restoringSnapshot}
+          conversationId={currentConversationId}
           onSelectArtifact={setSelectedArtifactId}
           onShowAllArtifacts={handleShowAllArtifacts}
           onCreateRevision={handleCreateArtifactRevision}
           onCreateDeployment={handleCreateDeployment}
+          onRestoreSnapshot={handleRestoreArtifactSnapshot}
+          onApplyDiff={handleApplyArtifactDiff}
+          onForceApplyDiff={handleForceApplyArtifactDiff}
+          onRecordApprovalAudit={handleRecordApprovalAudit}
         />
       </aside>
     </section>

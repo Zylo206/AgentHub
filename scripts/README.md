@@ -11,19 +11,27 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - conversation creation
 - conversation participants
 - message creation
+- structured reply / quote message relation
 - manual message pin as context
 - demo task run
-- task input context / ContextSnapshot pinned context
+- task input context / ContextSnapshot pinned context and retrieved context
+- TaskGraph execution batches
 - message-based demo task rerun
 - group chat Agent messages
 - task run query
 - artifact query
 - conditional Adapter Output artifact check when a non-MOCK adapter succeeds
 - artifact revision
+- artifact safety snapshots
+- lightweight apply-diff generated artifact
+- apply-diff conflict detection and force apply
 - demo deployment
 - preview URL reachability
+- artifact snapshot restore
+- action audit log records
 - deployment query
 - message stream deployment status
+- single Agent reply regeneration
 
 Start the backend and frontend first, then run:
 

@@ -1826,3 +1826,347 @@
 - 进入文档 V1.0 与 Demo Checklist 同步
 - 补消息操作深化和一键应用 Diff
 - 后续可增加 Adapter 测试面板，让半真实输出更容易手动验收
+
+## Phase 45：文档 V1.0 同步与消息操作 / Diff 应用深化
+
+### 目标
+
+- 将 Demo Checklist 和阶段性文档同步到当前 MVP V1.0 能力边界
+- 补强 IM 消息操作，让复制、引用、回复、基于消息重跑 Demo Task 更清晰可验收
+- 让 Diff Summary 从纯展示推进到可操作，支持将 revision 产物标记为工作台已应用版本
+
+### 主要变更
+
+- `demo-checklist.md` 补充 V1.0 验收项：
+  - 执行层并发组
+  - LLM Planner fallback
+  - MemoryItem 本地持久化和规则检索
+  - Adapter Output Artifact
+  - 消息复制 / 引用 / 回复 / 重跑
+  - 一键应用 Diff
+- `MessageBubble` 增加 `回复` 操作，并保留复制、引用、固定、保存为记忆、重新运行 Demo Task
+- `ChatInput` 增加引用 / 回复模式展示，发送时把被引用或回复的消息快照带入正文
+- `DiffSummaryPanel` 增加 `应用 Diff 结果` 操作
+- `ArtifactPanel` 记录当前已应用的 revision artifact，并提示后续可部署或预览
+- `technical-design.md`、`roadmap.md`、`mvp-requirements-alignment.md` 同步当前能力和边界
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动检查 `/workspace`：
+  - MessageBubble 复制 / 引用 / 回复 / 基于消息重跑
+  - ChatInput 引用 / 回复预览
+  - Artifact Revision 后 Diff Summary 的 `应用 Diff 结果`
+- 手动检查 `docs/collaboration/demo-checklist.md`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮不改变后端业务逻辑，不接真实 LLM 或真实外部 Agent
+- 回复 / 引用当前以消息正文快照形式保存，不是完整结构化 `replyToMessageId` 模型
+- 一键应用 Diff 当前是把 revision 产物标记为工作台已应用版本，不是真实 patch apply、代码编辑器或冲突解决
+- Adapter、Planner、Deploy 的 mock / fallback / static demo 边界没有变化
+
+### 遗留问题
+
+- 仍需补结构化消息关系字段，例如 `replyToMessageId` / `quotedMessageId`
+- 仍需支持单条 Agent 回复重新生成
+- 仍需真实 patch apply 和冲突处理
+- 仍需浏览器级 E2E 覆盖消息操作和 Diff 应用
+
+### 下一步建议
+
+- 进入仓库卫生与提交前检查
+- 扩展 smoke test 覆盖消息操作相关 API 能力或补轻量浏览器 E2E
+- 后续再推进 Orchestrator Decision DTO 或 Adapter 测试面板
+
+## Phase 46：结构化消息关系与轻量 Patch Apply
+
+### 目标
+
+- 将引用 / 回复从纯文本前缀推进为结构化消息关系字段
+- 将一键应用 Diff 从前端标记升级为后端轻量行级 patch apply，并生成可持久化 Artifact
+- 保持现有 demo-task、revision、deploy、preview 和 fallback 链路不受影响
+
+### 主要变更
+
+- `Message` 新增结构化字段：
+  - `replyToMessageId`
+  - `quotedMessageId`
+  - `quotedMessageContent`
+- `SendMessageRequest` 支持 `replyToMessageId` / `quotedMessageId`
+- `MessageApplicationService` 校验引用消息属于同一 conversation，并保存引用内容快照
+- `MessageBubble` 展示结构化引用 / 回复卡片
+- `ChatInput` 保留引用 / 回复预览，发送时传结构化字段而不是把引用内容硬塞进正文
+- `ArtifactApplicationService` 新增 `applyDiff`
+  - 基于父 Artifact 和 revision Artifact 计算行级 patch
+  - 将 patch 应用到父版本
+  - 校验应用结果等于 revision 内容
+  - 生成新的 `ACCEPTED` Artifact 版本
+- `ArtifactController` 新增：
+  - `POST /api/artifacts/{artifactId}/apply-diff`
+- `ArtifactPanel` 的 `应用 Diff 结果` 改为调用后端 apply-diff，并选中新生成的 Artifact
+- `scripts/smoke-test.mjs` 增加：
+  - structured reply / quote 字段断言
+  - `apply-diff` 生成 ACCEPTED Artifact 断言
+- `scripts/README.md` 同步 smoke test 覆盖范围
+- `demo-checklist.md`、`technical-design.md`、`roadmap.md`、`mvp-requirements-alignment.md` 同步当前能力和边界
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动检查 `/workspace`：
+  - 引用 / 回复消息卡片
+  - Revision 后点击 `应用 Diff 结果`
+  - 新生成的 ACCEPTED Artifact 可继续 Deploy / Preview
+
+### 静态 / Mock / Placeholder 部分
+
+- 结构化消息关系仍是最小字段模型，不是完整 IM thread / message tree
+- 轻量 patch apply 是行级 LCS patch，不是 AST diff、语义合并或冲突解决
+- 不接真实 LLM，不接真实外部 Agent，不改变 Adapter fallback
+- Deploy Preview 仍是本地静态模拟
+
+### 遗留问题
+
+- 仍需完整 reply thread UI 和消息折叠 / 跳转
+- 仍需单条 Agent 回复重新生成
+- 仍需代码冲突检测和 resolution UI
+- 仍需浏览器级 E2E 覆盖引用 / 回复 / apply-diff
+
+### 下一步建议
+
+- 进入仓库卫生与提交前检查
+- 补 Orchestrator Decision DTO 或 Adapter 测试面板
+- 后续再评估真实代码编辑器和冲突处理
+
+## Phase 47：回复线程 UI、单条 Agent 回复重新生成与 Diff 冲突处理
+
+### 目标
+
+- 在结构化消息关系字段基础上补完整回复线程展示
+- 支持对单条 Agent 回复做最小重新生成
+- 为后端轻量 patch apply 增加冲突检测和强制应用入口
+- 保持 demo-task、Artifact Revision、Deploy Preview、Context / Memory 和 smoke test 主链路稳定
+
+### 主要变更
+
+- `MessageStream` 基于 `replyToMessageId` 构建本地回复线程：
+  - 父消息显示回复数量
+  - 支持展开 / 隐藏回复线程
+  - 支持从引用卡片定位原消息
+  - 被定位消息有短暂高亮
+- `MessageBubble` 增加：
+  - 回复线程列表
+  - 定位原消息按钮
+  - 单条 Agent 回复重新生成按钮
+- `MessageApplicationService` 增加 `regenerateAgentReply`
+  - 仅允许重新生成 `AGENT` 消息
+  - 新消息保留原 Agent sender
+  - 新消息以 `replyToMessageId` / `quotedMessageId` 指向原消息
+  - 本轮仍是静态 Demo 再生成，不调用真实外部 Agent
+- `MessageController` 新增：
+  - `POST /api/conversations/{conversationId}/messages/{messageId}/regenerate-agent-reply`
+- `ArtifactApplicationService.applyDiff` 增加冲突检测：
+  - 如果同一标题 / 同一会话下已有更新的 `ACCEPTED` Artifact，默认返回 conflict
+  - 支持 `{ "force": true }` 强制应用
+- `ArtifactController` 的 apply-diff 响应补充：
+  - `conflict`
+  - `conflictReason`
+  - `latestAppliedArtifactId`
+- `ArtifactPanel` / `DiffSummaryPanel` 增加 Diff 冲突提示和强制应用入口
+- `scripts/smoke-test.mjs` 增加：
+  - 重复 apply-diff 冲突断言
+  - force apply 断言
+  - 单条 Agent 回复重新生成断言
+- `scripts/README.md` 同步 smoke test 覆盖范围
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动检查 `/workspace`：
+  - 回复线程展开 / 折叠
+  - 引用卡片定位原消息
+  - Agent 回复重新生成
+  - Revision 后重复 apply-diff 触发冲突提示
+  - 强制应用 Diff 后生成新 Artifact
+
+### 静态 / Mock / Placeholder 部分
+
+- 单条 Agent 回复重新生成仍是静态 Demo，不重新调用真实 LLM 或真实 Agent
+- Diff 冲突检测是轻量版本链规则，不是完整 Git merge / AST merge / CRDT
+- 强制应用 Diff 会生成新 Artifact，但不代表真实代码合并已完成
+- Adapter、Planner、Deploy 仍保留 mock / fallback / static demo 边界
+
+### 遗留问题
+
+- 回复线程 UI 仍是单层 thread，不是完整多级 threaded conversation
+- 单条 Agent 回复重新生成未重新执行真实 Adapter
+- 冲突处理未提供可视化三方合并视图
+- 仍缺浏览器级 E2E 覆盖回复线程和冲突 UI
+
+### 下一步建议
+
+- 做仓库卫生和提交前检查
+- 后续进入结构化 Orchestrator Decision DTO 或 Adapter 测试面板
+- 若继续深化编辑能力，再补三方 diff / conflict resolution UI
+
+## Phase 48：Context Retrieval v2、TaskGraph、Artifact Snapshot 与 Action Audit
+
+### 目标
+
+- 借鉴 KnowFlow 的轻量上下文检索、PaiCLI 的执行快照 / 审计思路、AgentWeave 的 TaskGraph / ExecutionBatch 模型
+- 将 pinned context / MemoryItem 从展示推进到可检索、可注入、可解释
+- 将 TaskRun 的并行调度信息结构化为 TaskGraph
+- 为 revision / apply-diff / deploy / restore 增加 Artifact safety snapshot 和 Action Audit
+
+### 主要变更
+
+- 新增 `RetrievedContextItem` 和 `ContextRetrievalService`
+  - 检索来源包括 pinned message、MemoryItem、recent message、Artifact、previous TaskRun summary
+  - 使用轻量规则评分：source priority、keyword match、importance、recency
+  - Orchestrator 在 Run Demo Task 时将 retrieved context 注入 TaskStep inputContext 和 ContextSnapshot
+- 新增 `TaskGraph` / `ExecutionBatch`
+  - TaskRun 返回 execution batches
+  - TaskRunPanel 展示后端结构化 TaskGraph summary 和 batch 信息
+- 新增 `ArtifactSnapshot` / `ArtifactSnapshotRepository`
+  - revision、apply-diff、deploy、restore 前后创建安全快照
+  - Artifact Studio 展示 selected Artifact 的 snapshots，并支持 Restore Snapshot
+- 新增 `ActionAuditLog` / `ActionAuditService`
+  - 记录 apply diff、deploy、restore 等关键操作
+  - Workspace header 显示当前会话 action audit 计数
+- 扩展 API client 和 smoke test
+  - snapshot 查询 / restore
+  - action audit 查询
+  - retrieved context、TaskGraph、snapshot、restore、audit 断言
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动检查 `/workspace`
+  - Run Demo Task 后 ContextPanel 显示 Retrieved Context
+  - TaskRunPanel 显示 TaskGraph execution batches
+  - Revision / Apply Diff / Deploy 后 Artifact Studio 显示 Safety Snapshots
+  - Restore Snapshot 能生成恢复后的 Artifact
+
+### 静态 / Mock / Placeholder 部分
+
+- Context Retrieval v2 仍是轻量规则检索，不接 Elasticsearch、vector database、embedding、Kafka 或 MinIO
+- TaskGraph 是 MVP 执行结构，不是完整 Workflow Canvas 或动态 DAG 引擎
+- Artifact Snapshot 是内存快照，不是 Git side repository 或真实文件系统 checkout
+- Action Audit 是最小操作记录，不是企业级审计后台或完整 HITL 审批系统
+
+### 遗留问题
+
+- Retrieved Context 仍缺更精细的 token budget / compression
+- TaskGraph 尚未做可视化 DAG 编辑
+- Snapshot restore 仍是生成新 Artifact，不是三方 merge
+- Action Audit 还未形成完整审批流
+
+### 下一步建议
+
+- 继续补 HITL / Approval Gate，用于 Apply Diff、Force Apply、Deploy、Restore
+- 将 LLM Planner prompt layering 进一步产品化
+- 后续再评估真实 RAG infra、SSE、MySQL 和 Workflow Canvas
+
+## Phase 49：HITL Approval Gate 与操作确认审计
+
+### 目标
+
+- 为 Apply Diff、Force Apply Diff、Demo Deploy、Restore Snapshot 增加最小人工确认流
+- 将确认 / 取消结果写入 Action Audit，避免高风险产物操作只有结果记录、没有用户确认记录
+- 保持现有 Artifact Revision、Deploy Preview、Snapshot Restore 和 smoke test 主链路不变
+
+### 主要变更
+
+- 后端 `ActionAuditController` 增加 `POST /api/conversations/{conversationId}/action-audits`
+  - 用于记录 approval gate 的 `APPROVED` / `CANCELLED` 结果
+  - 复用现有 `ActionAuditService` 和内存 `ActionAuditRepository`
+- 前端 `agenthubApi.ts` 增加 `recordActionAudit`
+- `WorkspacePage` 增加 approval audit 写入回调，并继续刷新 / 展示 Action Audit 计数
+- `ArtifactPanel` 增加 HITL Approval Gate
+  - Deploy Selected Artifact：中风险确认
+  - Apply Diff：中风险确认
+  - Force Apply Diff：高风险确认
+  - Restore Snapshot：高风险确认
+- `workspace.css` 增加 approval gate 卡片、风险 badge 和操作按钮样式
+- `scripts/smoke-test.mjs` 增加 approval audit 写入断言
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动检查 `/workspace`
+  - 点击 Apply Diff / Force Apply / Deploy / Restore 时先出现确认卡片
+  - 确认后继续执行原操作
+  - 取消后不执行原操作，并写入取消审计记录
+
+### 静态 / Mock / Placeholder 部分
+
+- Approval Gate 是最小 HITL 确认流，不是完整审批工作流
+- Action Audit 仍是内存记录，不是企业级审计后台
+- Deploy 仍是 static demo simulation，不是真实外部部署
+- Diff Apply / Force Apply 仍基于当前轻量 patch 规则，不是完整 Git merge
+
+### 遗留问题
+
+- 还没有独立 ApprovalRequest 领域模型
+- 审计记录没有用户身份、审批人和权限控制
+- 没有审批队列、过期策略和多人确认
+- 浏览器级 E2E 尚未覆盖确认流 UI
+
+### 下一步建议
+
+- 将 Action Audit 展示从计数升级为可展开审计时间线
+- 为 Approval Gate 增加 operation diff preview / affected files summary
+- 后续如接入真实部署或真实文件写入，再升级为后端强制审批校验
+
+## Phase 50：Action Audit 时间线面板
+
+### 目标
+
+- 将 Workspace 中的 Action Audit 从计数提示升级为可展开时间线
+- 让确认、取消、Apply Diff、Deploy、Restore 等关键操作可以在界面中直接追溯
+- 保持现有 HITL Approval Gate、Artifact、Deploy、Snapshot、Context、smoke test 主链路不变
+
+### 主要变更
+
+- 新增 `ActionAuditTimelinePanel`
+  - 默认折叠展示最近一条审计记录
+  - 展开后按时间倒序展示完整 Action Audit timeline
+  - 显示 actionType、status、targetType、targetId、summary、createdAt 和 auditId
+- `WorkspacePage` 接入 Action Audit 时间线面板
+- `workspace.css` 增加审计面板、时间线、状态 badge 和最新记录卡片样式
+- 调整 Workspace 内容区 grid rows，容纳新增 Action Audit 面板
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 手动检查 `/workspace`
+  - 执行 Apply Diff / Force Apply / Deploy / Restore
+  - 检查 Action Audit 面板计数和最近记录
+  - 展开时间线查看确认、取消和执行结果记录
+
+### 静态 / Mock / Placeholder 部分
+
+- Action Audit 仍是内存记录，不是企业级审计后台
+- Timeline 是前端展示增强，不改变后端审批强制策略
+- Approval Gate 仍是最小 HITL 确认流，不是多用户审批系统
+
+### 遗留问题
+
+- 审计记录仍缺用户身份、审批人、权限和审批队列
+- 时间线未支持筛选 / 搜索 / 导出
+- 浏览器级 E2E 尚未覆盖审计面板展开和取消流
+
+### 下一步建议
+
+- 给 Approval Gate 增加 affected artifact / diff preview 摘要
+- 后续若接入真实部署或文件写入，再把审批从前端提示升级为后端强制校验

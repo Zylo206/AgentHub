@@ -108,7 +108,8 @@
    - Orchestrator 聚合总结消息
 8. 确认 Conversation participants 能包含 Orchestrator、Frontend / selected Agent、Backend、Reviewer 以及 mentioned agents。
 9. 确认 TaskRunPanel 能看到 parallel group / routing reason 等计划字段。
-10. 注意：当前仍是计划层并行和可解释顺序执行，不是真实线程级并发。
+10. 确认同一 parallel group 的 Step 已进入执行层并发调度，TaskRunPanel 能展示并行组和执行结果。
+11. 注意：当前仍不是完整动态 DAG 引擎，也不代表真实复杂群聊调度已完成。
 
 ## G. 错误路径
 
@@ -149,6 +150,9 @@
 10. 确认页面没有把未配置 Adapter 伪装成真实成功。
 11. 如果本机配置了 CLI Adapter，确认 Codex / Claude Code / OpenCode 只在 enabled、command 可用且 args-template 完整时显示 AVAILABLE。
 12. 如果 CLI Adapter 执行失败，确认 TaskStep 仍 fallback 到 MOCK，不影响 Demo 主链路。
+13. 如果本机配置了可成功执行的非 MOCK Adapter，确认 Artifact Studio 出现 `Adapter Output - ...` 产物。
+14. 确认 Adapter Output Artifact 内容包含 preferred / actual adapter、TaskStep 和原始 response。
+15. 确认 MessageStream 出现 Adapter Output Artifact card；默认未配置真实 Adapter 时不要伪造该产物。
 
 ## I. Context / Handoff / Memory
 
@@ -173,7 +177,9 @@
 10. 确认 ContextPanel 的“长期记忆”区域出现该消息。
 11. 再次运行 Demo Task。
 12. 确认第一个 TaskStep 的 inputContext 包含 pinned context 和 long-term memory。
-13. 执行 Artifact Revision 后，确认 ContextPanel 更新到 revision 对应 TaskRun。
+13. 通过 Memory API 或页面确认 MemoryItem 支持 category / scope / importance 更新。
+14. 重启 backend 后确认 `backend/.agenthub/memories.json` 中的 MemoryItem 能被重新加载。
+15. 执行 Artifact Revision 后，确认 ContextPanel 更新到 revision 对应 TaskRun。
 
 ## J. Orchestrator 可解释面板
 
@@ -188,8 +194,29 @@
 5. Executor 区域应展示 actual adapter、fallback 数量和执行状态。
 6. Aggregator 区域应展示 resultSummary 和 artifact 数量。
 7. 注意：当前解释面板主要由现有 TaskRun 数据派生，不代表真实 LLM planner 或动态 DAG 已完成。
+8. 默认配置下 Planner 应显示规则化规划模式。
+9. 如果设置 `AGENTHUB_PLANNER_TYPE=LLM` 且 OPENAI_COMPATIBLE 配置可用，确认 Planner 可尝试生成 JSON plan。
+10. 如果 LLM Planner 配置缺失、返回非法 JSON 或 schema 校验失败，确认自动 fallback 到 RuleBasedPlanner，并在解释面板显示 fallback reason。
 
-## K. AI 协作开发记录
+## K. 消息操作与一键应用 Diff
+
+1. 在任意 MessageBubble 点击 `复制`，确认消息内容写入剪贴板或出现成功提示。
+2. 点击 `引用`，确认 ChatInput 显示引用预览，发送后新消息保留 `quotedMessageId` 和内容快照。
+3. 点击 `回复`，确认 ChatInput 显示回复预览，发送后新消息保留 `replyToMessageId` 和内容快照。
+4. 确认新消息中显示结构化引用 / 回复卡片，包含被引用消息 ID 和内容快照。
+5. 在被回复消息上点击 `查看 N 条回复`，确认回复线程可展开 / 折叠。
+6. 在引用卡片点击 `定位原消息`，确认原消息被滚动定位并短暂高亮。
+7. 对用户消息点击 `重新运行 Demo Task`，确认可以基于该消息重新生成 TaskRun。
+8. 对 Agent 消息点击 `重新生成回复`，确认追加一条同 sender Agent 的新回复，并引用原 Agent 消息。
+9. 在 Artifact Studio 选择 revision 产物，例如 `LoginPage.tsx v2`。
+10. 确认 Diff Summary 显示行级 added / removed / unchanged 统计。
+11. 点击 `应用 Diff 结果`。
+12. 确认后端调用 `/api/artifacts/{artifactId}/apply-diff` 并生成新的 `ACCEPTED` Artifact 版本。
+13. 对同一个 revision 再次点击 `应用 Diff 结果`，确认页面提示 Diff 冲突。
+14. 点击 `仍然强制应用`，确认可以强制生成新的 `ACCEPTED` Artifact。
+15. 注意：当前 patch apply 是轻量行级 patch，冲突检测是版本链规则，不是 AST 级代码编辑器、语义合并或完整 Git merge。
+
+## L. AI 协作开发记录
 
 1. 打开 `docs/collaboration/development-workflow.md`。
 2. 确认有项目开发工作流说明。
@@ -202,7 +229,7 @@
 9. 打开 `docs/spec`、`docs/skills`、`docs/rules`。
 10. 确认 Spec / Skill / Rules 能对应当前功能。
 
-## L. 构建与仓库卫生
+## M. 构建与仓库卫生
 
 1. 执行：
    `cd backend && mvn -q -DskipTests package`
@@ -210,18 +237,21 @@
    `cd frontend && npm run build`
 3. 确认 `.gitignore` 包含：
    `*.tsbuildinfo`
-4. 确认 `frontend/tsconfig.app.tsbuildinfo` 没有被提交。
-5. 执行：
+4. 确认 `.gitignore` 包含：
+   `backend/.agenthub/`
+5. 确认 `frontend/tsconfig.app.tsbuildinfo` 没有被提交。
+6. 确认 `backend/.agenthub/memories.json` 没有被提交。
+7. 执行：
    `git status`
-6. 确认没有误提交：
+8. 确认没有误提交：
    - build cache
    - node_modules
    - dist
    - API key
    - 本地环境文件
-7. 执行：
+9. 执行：
    `node scripts/smoke-test.mjs`
-8. 确认 smoke test 覆盖：
+10. 确认 smoke test 覆盖：
    - health / adapters
    - create conversation / send message
    - multi-mention
@@ -231,6 +261,13 @@
    - demo deploy
    - preview URL HTTP 200
    - group chat agent messages
+   - LLM Planner fallback
+   - Memory persistence / retrieval
+   - Adapter Output Artifact optional positive path
+   - structured reply / quote message fields
+   - apply-diff generated Artifact
+   - apply-diff conflict detection / force apply
+   - single Agent reply regeneration
 
 ## 重点验收项
 
@@ -241,6 +278,8 @@
 - MessageStream 能看到 Orchestrator / Frontend / Backend / Reviewer 群聊式 Agent 消息。
 - Pinned Context 和 MemoryItem 能进入 TaskStep inputContext / ContextPanel。
 - Artifact Revision 后 Version History / Diff Summary 正常。
+- 消息复制、引用、回复、回复线程、原消息定位、基于消息重跑 Demo Task、单条 Agent 回复重新生成正常。
+- 一键应用 Diff 能通过后端轻量 patch apply 生成新的 ACCEPTED Artifact，并能提示旧 revision 冲突。
 - Deploy Status Card 和 `/preview/{artifactId}` 正常。
 - Adapter fallback 显示清楚，不把 placeholder 伪装成真实接入。
 - AI 协作开发记录可以被仓库直接查看。

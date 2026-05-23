@@ -6,7 +6,7 @@
 
 一句话结论：
 
-> AgentHub 已经形成 IM Workspace、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、可配置 LLM Planner、群聊式 Agent 消息、Context / Memory、Artifact Revision、Deploy Preview、Adapter fallback、Adapter Output Artifact、smoke test 的 MVP 闭环；当前已推进 demo-task 执行层并发、LLM Planner JSON Schema MVP、MemoryItem 本地持久化检索和 Adapter 成功输出 Artifact 链路，下一阶段应优先补消息操作深化和最终文档同步。
+> AgentHub 已经形成 IM Workspace、Agent 联系人、自建 Agent、多 @Agent、规则化 Orchestrator、可配置 LLM Planner、群聊式 Agent 消息、Context / Memory、Artifact Revision、Deploy Preview、Adapter fallback、Adapter Output Artifact、结构化消息引用 / 回复、Diff 轻量 patch apply 和 smoke test 的 MVP 闭环；当前已推进 demo-task 执行层并发、LLM Planner JSON Schema MVP、MemoryItem 本地持久化检索、Adapter 成功输出 Artifact 链路和 Demo Checklist V1.0 同步，下一阶段应优先补完整回复线程、冲突处理和最终仓库卫生。
 
 | 项目阶段 | 判断 |
 |---|---|
@@ -34,7 +34,7 @@
 | 网页预览卡片 | WEB_PREVIEW、PreviewPage、iframe srcDoc | 部分满足 | 70% | 真实网页生成和沙箱策略仍可增强 |
 | Diff 视图 | line diff / Diff Summary / Version History | 部分满足 | 70% | 仍不是完整代码编辑器和真实 patch apply |
 | 部署状态卡片 | Demo Deploy、Deploy Status Card、Preview URL、/preview 页面 | 静态 Demo | 75% | 不是真实 Vercel / Netlify / Docker |
-| 消息操作 | pin、保存为记忆、复制、引用、重新运行 Demo Task | 部分满足 | 65% | 回复、重新生成单条 Agent 回复、一键应用 Diff 待补 |
+| 消息操作 | pin、保存为记忆、复制、引用、回复、结构化 replyTo / quotedMessage、重新运行 Demo Task | 部分满足 | 78% | 完整回复线程、重新生成单条 Agent 回复仍待补 |
 | Orchestrator 拆解 | Planner / Router / Executor / Aggregator 拆分、可解释面板、可配置 LLM Planner JSON schema | 部分满足 | 80% | LLM Planner 仍依赖 OPENAI_COMPATIBLE 配置，默认保留规则 fallback |
 | Orchestrator 分派 | selectedAgent、mentionedAgentIds、内置 Agent 路由 | 部分满足 | 75% | 多 Agent 动态路由策略仍浅 |
 | Orchestrator 聚合 | ResultAggregator、群聊总结消息、TaskRun summary | 部分满足 | 70% | 聚合仍偏模板 |
@@ -47,7 +47,7 @@
 | 用户自建 Agent | Agent Builder，prompt、tags、adapter 配置 | 部分满足 | 75% | 不是对话式创建，工具集较轻 |
 | Agent 联系人 | Agent List 展示头像、名称、能力标签、Adapter 状态 | 已满足 | 85% | 分组、搜索、在线状态可增强 |
 | Artifact 预览 | Artifact Studio、PreviewPage、版本切换 | 部分满足 | 80% | 富 Markdown / 文件附件 / PPT 未做 |
-| Artifact 编辑 / 二次修改 | Revision、v1 -> v2、line diff | 部分满足 | 75% | 不是真实代码编辑器 |
+| Artifact 编辑 / 二次修改 | Revision、v1 -> v2、line diff、一键 apply-diff 生成 ACCEPTED Artifact | 部分满足 | 82% | 不是 AST 级 patch、代码编辑器或冲突处理 |
 | Version History | Artifact lineage 和版本切换 | 部分满足 | 80% | 版本关系仍轻量 |
 | 一键部署发布 | 静态 demo deploy + Preview URL | 静态 Demo | 70% | 真实构建日志和公网部署未做 |
 | Web 端 | React + Vite 可运行 | 已满足 | 85% | 可继续做稳定性和响应式 |
@@ -82,7 +82,7 @@
 9. TaskRunPanel 展示 TaskStep、assigned Agent、Adapter fallback 和 Planner / Router / Executor / Aggregator 可解释链路。
 10. ContextPanel 展示 pinned context、MemoryItem、ContextSnapshot / HandoffSummary。
 11. Artifact Studio 展示 LoginPage、README、API Contract、Review Report。
-12. 对 Artifact 执行 Revision，生成 v2 和 line diff。
+12. 对 Artifact 执行 Revision，生成 v2 和 line diff，并可一键 apply-diff 生成 ACCEPTED Artifact。
 13. 执行 Demo Deploy，生成 Deploy Status Card。
 14. 打开 `/preview/{artifactId}`，查看静态 Artifact 预览和版本切换。
 15. 运行 `node scripts/smoke-test.mjs` 验证 API + Deploy Preview URL 主链路。
@@ -106,8 +106,8 @@
 
 | 优先级 | 任务 | 目标 | 验收标准 |
 |---:|---|---|---|
-| P1-1 | 消息操作深化 | 补 IM 核心体验 | 支持回复、引用关系结构化、基于引用消息执行局部修改 |
-| P1-2 | 一键应用 Diff | 让 Diff 从展示变成操作 | Diff Summary 可触发 Artifact Revision 或 patch preview |
+| P1-1 | 消息操作深化 | 已推进：复制、引用、回复、结构化 replyTo / quotedMessage、基于消息重跑可用 | 后续补完整回复线程和单条 Agent 回复重新生成 |
+| P1-2 | 一键应用 Diff | 已推进：Diff Summary 可调用后端轻量 patch apply 生成 ACCEPTED Artifact | 后续补 AST patch / 代码编辑器 / 冲突处理 |
 | P1-3 | Orchestrator Decision DTO | 后端输出结构化决策链 | 不再只由前端派生 Planner / Router / Executor / Aggregator 面板 |
 | P1-4 | Adapter 测试面板 | 让半真实接入更可验收 | `/agents` 可测试 Adapter execute，明确 AVAILABLE / MISCONFIGURED / FALLBACK |
 | P1-5 | Smoke test 扩展 | 降低回归风险 | 覆盖真实并行 group、LLM planner fallback、Memory retrieval、Adapter output Artifact |
@@ -126,7 +126,7 @@
 ## 6. 推荐立即执行顺序
 
 1. **P0-6 仓库卫生与文档修复**：先修复文档同步和构建缓存问题，避免后续协作混乱。
-2. **P1 消息操作深化 / Diff 应用**：继续补 IM 操作和 Artifact 编辑可信度。
+2. **完整回复线程 / 冲突处理**：在当前结构化消息关系和轻量 patch apply 基础上继续深化。
 3. **文档 V1.0 / Demo Checklist 同步**：让评审能看懂当前半真实边界。
 4. **提交前仓库卫生与 smoke test 固化**：保证当前 MVP 能稳定交付。
 5. **生产级长期记忆治理 / 深度真实平台接入评估**：作为后续增强方向。

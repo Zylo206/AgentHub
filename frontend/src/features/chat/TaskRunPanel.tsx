@@ -238,6 +238,18 @@ function OrchestratorExplainPanel({
               ))}
             </div>
           ) : null}
+          {taskRun.taskGraph ? (
+            <div className="parallel-group-list">
+              <span className="parallel-group-pill">{taskRun.taskGraph.graphType}</span>
+              <span className="parallel-group-pill">{taskRun.taskGraph.summary}</span>
+              {taskRun.taskGraph.executionBatches.map((batch) => (
+                <span className="parallel-group-pill" key={batch.batchKey}>
+                  {batch.batchKey}: {batch.executionMode} / steps {batch.stepOrders.join(", ")}
+                  {batch.dependsOnBatchKeys.length ? ` / depends ${batch.dependsOnBatchKeys.join(", ")}` : ""}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="orchestrator-chip-row">
             {taskRun.steps.map((step) => {
               const adapterDisplay = getAdapterDisplay(step);

@@ -127,8 +127,8 @@
 
 | 优先级 | 任务 | 为什么排这里 | 验收标准 |
 |---:|---|---|---|
-| P1-1 | 消息操作深化 | IM 核心体验还不完整 | 支持回复、结构化引用、基于引用消息执行局部修改 |
-| P1-2 | 一键应用 Diff | 让 Diff 从展示走向操作 | Diff Summary 可触发 patch preview 或 Artifact Revision |
+| P1-1 | 消息操作深化 | 已推进：复制、引用、回复、结构化引用字段、基于消息重新运行 Demo Task 已可见 | 后续继续补完整 reply thread 和单条 Agent 回复重新生成 |
+| P1-2 | 一键应用 Diff | 已推进：Diff Summary 可调用后端轻量行级 patch apply 生成 ACCEPTED Artifact | 后续继续补 AST patch / 代码编辑器 / 冲突处理 |
 | P1-3 | Orchestrator Decision DTO | 当前解释面板由前端派生，后端缺结构化决策输出 | 后端返回 planner / router / executor / aggregator decision trace |
 | P1-4 | Adapter 测试面板 | 半真实接入需要更容易演示和验收 | `/agents` 或 Workspace 可测试 Adapter availability / execute |
 | P1-5 | Smoke test 扩展 | 防止后续回归 | 覆盖并行 group、LLM planner fallback、Memory retrieval、Adapter output Artifact |
@@ -147,7 +147,7 @@
 ## 6. 推荐立即执行顺序
 
 1. 完成仓库卫生与文档同步。
-2. 补消息操作深化和一键应用 Diff。
+2. 继续补完整回复线程、单条 Agent 回复重新生成和冲突处理。
 3. 同步 technical-design / demo-checklist 到最新能力。
 4. 准备最终提交前 smoke test 和仓库卫生检查。
 5. 评估是否需要 MySQL 持久化或更真实 Adapter 测试面板。
@@ -156,4 +156,4 @@
 
 当前 AgentHub 是一个 **半真实 AgentHub MVP 原型**。
 
-它已经能证明 IM 式多 Agent 协作、demo-task 并发组、可配置 LLM Planner、Artifact-centered iteration、Adapter fallback、Adapter Output Artifact、本地持久化 Context / Memory 和 Deploy Preview 的产品方向；但仍需要补更完整的消息操作、生产级记忆治理和深度真实平台接入，才能更接近课题完整要求。
+它已经能证明 IM 式多 Agent 协作、demo-task 并发组、可配置 LLM Planner、Artifact-centered iteration、Adapter fallback、Adapter Output Artifact、本地持久化 Context / Memory、结构化消息引用 / 回复、Diff 轻量 patch apply 和 Deploy Preview 的产品方向；但仍需要补完整回复线程、生产级记忆治理、冲突处理和深度真实平台接入，才能更接近课题完整要求。

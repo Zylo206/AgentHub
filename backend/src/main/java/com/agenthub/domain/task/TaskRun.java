@@ -12,6 +12,7 @@ public class TaskRun {
     private final TaskRunStatus status;
     private final TaskPlan taskPlan;
     private final List<TaskStep> steps;
+    private final TaskGraph taskGraph;
     private final String resultSummary;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -26,12 +27,37 @@ public class TaskRun {
             String resultSummary,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                id,
+                conversationId,
+                taskSpecId,
+                status,
+                taskPlan,
+                steps,
+                TaskGraph.fromSteps(steps),
+                resultSummary,
+                createdAt,
+                updatedAt);
+    }
+
+    public TaskRun(
+            TaskRunId id,
+            ConversationId conversationId,
+            TaskSpecId taskSpecId,
+            TaskRunStatus status,
+            TaskPlan taskPlan,
+            List<TaskStep> steps,
+            TaskGraph taskGraph,
+            String resultSummary,
+            Instant createdAt,
+            Instant updatedAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.taskSpecId = taskSpecId;
         this.status = status;
         this.taskPlan = taskPlan;
         this.steps = List.copyOf(steps);
+        this.taskGraph = taskGraph == null ? TaskGraph.fromSteps(steps) : taskGraph;
         this.resultSummary = resultSummary;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -59,6 +85,10 @@ public class TaskRun {
 
     public List<TaskStep> getSteps() {
         return steps;
+    }
+
+    public TaskGraph getTaskGraph() {
+        return taskGraph;
     }
 
     public String getResultSummary() {

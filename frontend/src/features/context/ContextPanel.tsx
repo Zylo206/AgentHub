@@ -150,6 +150,22 @@ export function ContextPanel({
                     </ul>
                   )}
                 </div>
+                {snapshot.retrievedContextItems?.length ? (
+                  <div className="context-list-block">
+                    <span className="context-list-block__label">Retrieved Context</span>
+                    <ul>
+                      {snapshot.retrievedContextItems.map((item) => (
+                        <li key={`${item.sourceType}-${item.sourceId}`}>
+                          <strong>{item.sourceType}</strong> / {item.title} / score {item.score.toFixed(1)}
+                          <br />
+                          <span>{item.reason}</span>
+                          <br />
+                          <span>{item.content}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </section>
             ))}
           </div>

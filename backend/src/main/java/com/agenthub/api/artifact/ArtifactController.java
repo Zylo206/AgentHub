@@ -42,6 +42,44 @@ public class ArtifactController {
         return ApiResponse.success(artifactApplicationService.getArtifact(artifactId));
     }
 
+    @GetMapping("/api/artifacts/{artifactId}/snapshots")
+    public ApiResponse<?> listSnapshotsByArtifact(@PathVariable("artifactId") String artifactId) {
+        return ApiResponse.success(artifactApplicationService.listSnapshotsByArtifact(artifactId));
+    }
+
+    @GetMapping("/api/conversations/{conversationId}/artifact-snapshots")
+    public ApiResponse<?> listSnapshotsByConversation(@PathVariable("conversationId") String conversationId) {
+        return ApiResponse.success(artifactApplicationService.listSnapshotsByConversation(conversationId));
+    }
+
+    @PostMapping("/api/artifact-snapshots/{snapshotId}/restore")
+    public ApiResponse<?> restoreSnapshot(@PathVariable("snapshotId") String snapshotId) {
+        return ApiResponse.success(
+                artifactApplicationService.restoreSnapshot(snapshotId),
+                "Artifact snapshot restored");
+    }
+
+    @PostMapping("/api/artifacts/{artifactId}/apply-diff")
+    public ApiResponse<?> applyDiff(
+            @PathVariable("artifactId") String artifactId,
+            @RequestBody(required = false) ApplyDiffRequest request) {
+        boolean force = request != null && Boolean.TRUE.equals(request.force());
+        ArtifactApplicationService.ApplyDiffResult result = artifactApplicationService.applyDiff(artifactId, force);
+        return ApiResponse.success(
+                new ApplyDiffResponse(
+                        result.appliedArtifact(),
+                        result.baseArtifactId(),
+                        result.revisionArtifactId(),
+                        result.addedLines(),
+                        result.removedLines(),
+                        result.unchangedLines(),
+                        result.changedLines(),
+                        result.conflict(),
+                        result.conflictReason(),
+                        result.latestAppliedArtifactId()),
+                "Artifact diff applied");
+    }
+
     @PostMapping("/api/artifacts/{artifactId}/demo-revision")
     public ApiResponse<?> createDemoRevision(
             @PathVariable("artifactId") String artifactId,
@@ -67,3 +105,17 @@ record ArtifactRevisionResponse(
         TaskRun taskRun,
         Artifact revisedArtifact,
         Artifact reviewArtifact) {}
+
+record ApplyDiffResponse(
+        Artifact appliedArtifact,
+        String baseArtifactId,
+        String revisionArtifactId,
+        int addedLines,
+        int removedLines,
+        int unchangedLines,
+        int changedLines,
+        boolean conflict,
+        String conflictReason,
+        String latestAppliedArtifactId) {}
+
+record ApplyDiffRequest(Boolean force) {}

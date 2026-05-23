@@ -7,8 +7,18 @@ export interface ContextSnapshot {
   includedMessageIds: IdValue[];
   includedArtifactIds: IdValue[];
   pinnedContextItems: string[];
+  retrievedContextItems?: RetrievedContextItem[];
   summary: string;
   createdAt: string;
+}
+
+export interface RetrievedContextItem {
+  sourceType: string;
+  sourceId: string;
+  title: string;
+  content: string;
+  score: number;
+  reason: string;
 }
 
 export interface PinnedContext {

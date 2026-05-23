@@ -47,8 +47,24 @@ public class MessageApplicationService {
             String content,
             String targetAgentId,
             List<String> mentionedAgentIds) {
+        return sendUserMessage(conversationId, content, targetAgentId, mentionedAgentIds, null, null);
+    }
+
+    public Message sendUserMessage(
+            String conversationId,
+            String content,
+            String targetAgentId,
+            List<String> mentionedAgentIds,
+            String replyToMessageId,
+            String quotedMessageId) {
         String normalizedTargetAgentId = normalizeTargetAgentId(targetAgentId);
         List<String> normalizedMentionedAgentIds = normalizeMentionedAgentIds(mentionedAgentIds);
+        ConversationId conversationRef = new ConversationId(conversationId);
+        String normalizedReplyToMessageId = normalizeMessageReferenceId(replyToMessageId);
+        String normalizedQuotedMessageId = normalizeMessageReferenceId(quotedMessageId);
+        String quotedMessageContent = resolveQuotedMessageContent(
+                conversationRef,
+                normalizedQuotedMessageId != null ? normalizedQuotedMessageId : normalizedReplyToMessageId);
         if (normalizedMentionedAgentIds.isEmpty() && normalizedTargetAgentId != null) {
             normalizedMentionedAgentIds = List.of(normalizedTargetAgentId);
         }
@@ -64,11 +80,14 @@ public class MessageApplicationService {
 
         Message message = new Message(
                 new MessageId(idGenerator.nextId("msg")),
-                new ConversationId(conversationId),
+                conversationRef,
                 MessageSenderType.USER,
                 "user",
                 normalizedTargetAgentId,
                 normalizedMentionedAgentIds,
+                normalizedReplyToMessageId,
+                normalizedQuotedMessageId,
+                quotedMessageContent,
                 MessageType.TEXT,
                 content,
                 List.of(),
@@ -123,6 +142,43 @@ public class MessageApplicationService {
         return messageRepository.save(message);
     }
 
+    public Message regenerateAgentReply(String conversationId, String messageId) {
+        ConversationId conversationRef = new ConversationId(conversationId);
+        Message originalMessage = messageRepository.findById(new MessageId(messageId))
+                .orElseThrow(() -> new NoSuchElementException("Message not found: " + messageId));
+        if (!originalMessage.getConversationId().equals(conversationRef)) {
+            throw new IllegalArgumentException("Message does not belong to conversation: " + messageId);
+        }
+        if (originalMessage.getSenderType() != MessageSenderType.AGENT) {
+            throw new IllegalArgumentException("Only agent replies can be regenerated.");
+        }
+
+        String regeneratedContent = """
+                Regenerated agent reply (static demo)
+
+                Source message: %s
+                This is a single-message regeneration demo. No real external Agent call was executed.
+
+                %s
+                """.formatted(messageId, originalMessage.getContent());
+
+        Message regeneratedMessage = new Message(
+                new MessageId(idGenerator.nextId("msg")),
+                conversationRef,
+                MessageSenderType.AGENT,
+                originalMessage.getSenderId(),
+                null,
+                List.of(),
+                messageId,
+                messageId,
+                originalMessage.getContent(),
+                MessageType.TEXT,
+                regeneratedContent,
+                originalMessage.getArtifactIds(),
+                timeProvider.now());
+        return messageRepository.save(regeneratedMessage);
+    }
+
     private String normalizeTargetAgentId(String targetAgentId) {
         if (targetAgentId == null) {
             return null;
@@ -143,5 +199,28 @@ public class MessageApplicationService {
                 .filter(agentId -> !agentId.isBlank())
                 .distinct()
                 .toList();
+    }
+
+    private String normalizeMessageReferenceId(String messageId) {
+        if (messageId == null) {
+            return null;
+        }
+
+        String normalized = messageId.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String resolveQuotedMessageContent(ConversationId conversationId, String messageId) {
+        if (messageId == null) {
+            return null;
+        }
+
+        Message referencedMessage = messageRepository.findById(new MessageId(messageId))
+                .orElseThrow(() -> new NoSuchElementException("Referenced message not found: " + messageId));
+        if (!referencedMessage.getConversationId().equals(conversationId)) {
+            throw new IllegalArgumentException("Referenced message does not belong to conversation: " + messageId);
+        }
+
+        return referencedMessage.getContent();
     }
 }

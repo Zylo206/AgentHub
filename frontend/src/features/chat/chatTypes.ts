@@ -8,6 +8,9 @@ export interface Message {
   senderId: string;
   targetAgentId?: string | null;
   mentionedAgentIds?: string[] | null;
+  replyToMessageId?: string | null;
+  quotedMessageId?: string | null;
+  quotedMessageContent?: string | null;
   messageType: "TEXT" | "TASK_SPEC" | "TASK_STATUS" | "DEPLOY_STATUS" | "ARTIFACT_CARD" | "ERROR" | string;
   content: string;
   artifactIds: IdValue[];
@@ -60,6 +63,19 @@ export interface TaskPlan {
   steps: TaskStep[];
 }
 
+export interface ExecutionBatch {
+  batchKey: string;
+  stepOrders: number[];
+  dependsOnBatchKeys: string[];
+  executionMode: string;
+}
+
+export interface TaskGraph {
+  graphType: string;
+  executionBatches: ExecutionBatch[];
+  summary: string;
+}
+
 export interface TaskRun {
   id: IdValue;
   conversationId: IdValue;
@@ -67,6 +83,7 @@ export interface TaskRun {
   status: string;
   taskPlan?: TaskPlan;
   steps: TaskStep[];
+  taskGraph?: TaskGraph;
   resultSummary: string;
   createdAt: string;
   updatedAt: string;

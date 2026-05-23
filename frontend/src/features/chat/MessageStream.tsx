@@ -1,3 +1,4 @@
+import { useMemo, useRef, useState } from "react";
 import type { Agent } from "../agents/agentTypes";
 import type { PinnedContext } from "../context/contextTypes";
 import { MessageBubble } from "./MessageBubble";
@@ -11,12 +12,15 @@ interface MessageStreamProps {
   pinnedContexts: PinnedContext[];
   loading: boolean;
   rerunningMessageId?: string | null;
+  regeneratingMessageId?: string | null;
   onSelectArtifact: (artifactId: string) => void;
   onToggleMessagePin: (messageId: string, pinnedContextId?: string | null) => void;
   onSaveMessageAsMemory: (message: Message) => void;
   onCopyMessage: (message: Message) => void;
   onQuoteMessage: (message: Message) => void;
+  onReplyMessage: (message: Message) => void;
   onRerunFromMessage: (message: Message) => void;
+  onRegenerateAgentReply: (message: Message) => void;
 }
 
 function resolveSenderLabel(message: Message, agents: Agent[]): string {
@@ -99,13 +103,59 @@ export function MessageStream({
   pinnedContexts,
   loading,
   rerunningMessageId,
+  regeneratingMessageId,
   onSelectArtifact,
   onToggleMessagePin,
   onSaveMessageAsMemory,
   onCopyMessage,
   onQuoteMessage,
-  onRerunFromMessage
+  onReplyMessage,
+  onRerunFromMessage,
+  onRegenerateAgentReply
 }: MessageStreamProps) {
+  const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(() => new Set());
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const repliesByMessageId = useMemo(() => {
+    const grouped = new Map<string, Message[]>();
+
+    messages.forEach((message) => {
+      if (!message.replyToMessageId) {
+        return;
+      }
+
+      const existing = grouped.get(message.replyToMessageId) ?? [];
+      existing.push(message);
+      grouped.set(message.replyToMessageId, existing);
+    });
+
+    return grouped;
+  }, [messages]);
+
+  function toggleThread(messageId: string) {
+    setExpandedThreadIds((current) => {
+      const next = new Set(current);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  }
+
+  function jumpToMessage(messageId: string) {
+    const target = messageRefs.current.get(messageId);
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedMessageId(messageId);
+    window.setTimeout(() => setHighlightedMessageId(null), 1800);
+  }
+
   if (loading) {
     return <div className="panel-empty">正在加载消息...</div>;
   }
@@ -120,32 +170,53 @@ export function MessageStream({
 
   return (
     <div className="message-stream">
-      {messages.map((message) => (
-        <MessageBubble
-          key={getIdValue(message.id)}
-          message={message}
-          senderLabel={resolveSenderLabel(message, agents)}
-          senderRoleLabel={resolveSenderRoleLabel(message, agents)}
-          agentStepLabel={resolveAgentStepLabel(message)}
-          targetAgentLabel={
-            resolveTargetAgentLabel(message, agents)
-          }
-          pinnedContextId={
-            pinnedContexts.find(
-              (pinnedContext) =>
-                pinnedContext.sourceType === "MESSAGE" &&
-                pinnedContext.sourceId === getIdValue(message.id)
-            )?.id ?? null
-          }
-          rerunning={rerunningMessageId === getIdValue(message.id)}
-          onSelectArtifact={onSelectArtifact}
-          onTogglePin={onToggleMessagePin}
-          onSaveAsMemory={onSaveMessageAsMemory}
-          onCopyMessage={onCopyMessage}
-          onQuoteMessage={onQuoteMessage}
-          onRerunFromMessage={onRerunFromMessage}
-        />
-      ))}
+      {messages.map((message) => {
+        const messageId = getIdValue(message.id);
+        const replyMessages = repliesByMessageId.get(messageId) ?? [];
+
+        return (
+          <div
+            key={messageId}
+            ref={(node) => {
+              if (node) {
+                messageRefs.current.set(messageId, node);
+              } else {
+                messageRefs.current.delete(messageId);
+              }
+            }}
+          >
+            <MessageBubble
+              message={message}
+              senderLabel={resolveSenderLabel(message, agents)}
+              senderRoleLabel={resolveSenderRoleLabel(message, agents)}
+              agentStepLabel={resolveAgentStepLabel(message)}
+              targetAgentLabel={resolveTargetAgentLabel(message, agents)}
+              pinnedContextId={
+                pinnedContexts.find(
+                  (pinnedContext) =>
+                    pinnedContext.sourceType === "MESSAGE" &&
+                    pinnedContext.sourceId === messageId
+                )?.id ?? null
+              }
+              rerunning={rerunningMessageId === messageId}
+              regenerating={regeneratingMessageId === messageId}
+              replyMessages={replyMessages}
+              threadExpanded={expandedThreadIds.has(messageId)}
+              highlighted={highlightedMessageId === messageId}
+              onSelectArtifact={onSelectArtifact}
+              onTogglePin={onToggleMessagePin}
+              onSaveAsMemory={onSaveMessageAsMemory}
+              onCopyMessage={onCopyMessage}
+              onQuoteMessage={onQuoteMessage}
+              onReplyMessage={onReplyMessage}
+              onRerunFromMessage={onRerunFromMessage}
+              onRegenerateAgentReply={onRegenerateAgentReply}
+              onToggleThread={() => toggleThread(messageId)}
+              onJumpToMessage={jumpToMessage}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

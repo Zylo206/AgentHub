@@ -9,6 +9,7 @@ interface ChatInputProps {
   sending: boolean;
   selectedAgent?: Agent | null;
   quotedMessage?: Message | null;
+  quoteMode?: "quote" | "reply";
   onChange: (value: string) => void;
   onClearQuote?: () => void;
   onSend: () => void;
@@ -20,6 +21,7 @@ export function ChatInput({
   sending,
   selectedAgent,
   quotedMessage,
+  quoteMode = "quote",
   onChange,
   onClearQuote,
   onSend
@@ -46,7 +48,7 @@ export function ChatInput({
       {quotedMessage ? (
         <div className="chat-quote-preview">
           <div>
-            <strong>引用消息</strong>
+            <strong>{quoteMode === "reply" ? "回复消息" : "引用消息"}</strong>
             <p>{quotedMessage.content}</p>
             <span>{formatId(quotedMessage.id)}</span>
           </div>

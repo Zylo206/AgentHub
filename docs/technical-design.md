@@ -556,12 +556,22 @@ API 主要提供：
 
 ### Diff Summary
 
-当前已从纯静态摘要升级为轻量 line diff 展示，但仍不是完整代码编辑器或 patch apply 引擎。
+当前已从纯静态摘要升级为轻量 line diff 展示，并支持通过 `/api/artifacts/{artifactId}/apply-diff` 将 revision 产物的行级 Diff 应用到父版本，生成新的 `ACCEPTED` Artifact。这仍不是完整代码编辑器、AST diff 或冲突解决引擎。
 
 设计意图：
 
 - 先把版本演进关系可视化
-- 后续再考虑一键应用 Diff、代码编辑器和冲突处理
+- 一键应用 Diff 当前是轻量行级 patch apply，后续再考虑语义级 patch、代码编辑器和冲突处理
+
+### Message Relation
+
+消息关系已经从纯文本引用补充为结构化字段：
+
+- `replyToMessageId`
+- `quotedMessageId`
+- `quotedMessageContent`
+
+前端发送引用 / 回复消息时会传入结构化字段，后端校验引用消息属于同一 conversation，并保存引用内容快照。当前仍不是完整 IM thread 模型，没有消息树、折叠回复线程或单条 Agent 回复重新生成。
 
 ## 14. 当前内存 Repository 设计
 

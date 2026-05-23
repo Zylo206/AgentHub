@@ -31,7 +31,9 @@ public class MessageController {
                         conversationId,
                         request.content(),
                         request.targetAgentId(),
-                        request.mentionedAgentIds()),
+                        request.mentionedAgentIds(),
+                        request.replyToMessageId(),
+                        request.quotedMessageId()),
                 "Message sent");
     }
 
@@ -39,6 +41,20 @@ public class MessageController {
     public ApiResponse<?> listMessages(@PathVariable("conversationId") String conversationId) {
         return ApiResponse.success(messageApplicationService.listMessages(conversationId));
     }
+
+    @PostMapping("/{messageId}/regenerate-agent-reply")
+    public ApiResponse<?> regenerateAgentReply(
+            @PathVariable("conversationId") String conversationId,
+            @PathVariable("messageId") String messageId) {
+        return ApiResponse.success(
+                messageApplicationService.regenerateAgentReply(conversationId, messageId),
+                "Agent reply regenerated");
+    }
 }
 
-record SendMessageRequest(@NotBlank String content, String targetAgentId, List<String> mentionedAgentIds) {}
+record SendMessageRequest(
+        @NotBlank String content,
+        String targetAgentId,
+        List<String> mentionedAgentIds,
+        String replyToMessageId,
+        String quotedMessageId) {}

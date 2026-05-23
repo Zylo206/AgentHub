@@ -195,6 +195,22 @@ async function runSmokeTest() {
   }
   pass(`message sent: ${messageId}`);
 
+  const replyMessage = await request(`/api/conversations/${conversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      content: "补充约束：移动端首屏也要保持清晰。",
+      replyToMessageId: messageId,
+      quotedMessageId: messageId
+    })
+  });
+  if (getIdValue(replyMessage.replyToMessageId) !== messageId || getIdValue(replyMessage.quotedMessageId) !== messageId) {
+    throw new Error("structured reply / quote fields were not persisted");
+  }
+  if (!String(replyMessage.quotedMessageContent || "").includes("React 登录页面")) {
+    throw new Error("quotedMessageContent snapshot missing expected source message content");
+  }
+  pass(`structured message relation saved: replyTo=${replyMessage.replyToMessageId}, quoted=${replyMessage.quotedMessageId}`);
+
   const pinnedContext = await request(`/api/conversations/${conversationId}/messages/${messageId}/pin`, {
     method: "POST"
   });
@@ -273,6 +289,13 @@ async function runSmokeTest() {
   if (!String(steps[0]?.inputContext || "").includes("Smoke test memory")) {
     throw new Error("first task step inputContext did not include retrieved memory content");
   }
+  if (!String(steps[0]?.inputContext || "").includes("Retrieved context")) {
+    throw new Error("first task step inputContext did not include Context Retrieval v2 results");
+  }
+  const taskGraph = taskRun.taskGraph;
+  if (!taskGraph || !Array.isArray(taskGraph.executionBatches) || taskGraph.executionBatches.length < 1) {
+    throw new Error("demo task did not return taskGraph execution batches");
+  }
   const parallelGroups = steps.reduce((groups, step) => {
     const groupKey = step.parallelGroupKey || `GROUP_${step.stepOrder}`;
     groups.set(groupKey, [...(groups.get(groupKey) || []), step.stepOrder]);
@@ -289,6 +312,7 @@ async function runSmokeTest() {
   }
   pass(`demo task completed: ${taskRunId}, steps=${steps.length}`);
   pass(`planner mode visible: ${plannerMode}`);
+  pass(`task graph loaded: ${taskGraph.executionBatches.length} batch(es)`);
   pass(`parallel execution group validated: ${parallelGroupEntry[0]} -> steps ${parallelGroupEntry[1].join(", ")}`);
 
   const rerunTaskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
@@ -322,7 +346,14 @@ async function runSmokeTest() {
   if (!hasPinnedSnapshotItem) {
     throw new Error("context snapshot did not include pinned message context");
   }
+  const hasRetrievedContextItem = Array.isArray(contextSnapshots) && contextSnapshots.some((snapshot) =>
+    Array.isArray(snapshot.retrievedContextItems) && snapshot.retrievedContextItems.length > 0
+  );
+  if (!hasRetrievedContextItem) {
+    throw new Error("context snapshot did not include retrievedContextItems");
+  }
   pass(`context snapshots include pinned context: ${contextSnapshots.length}`);
+  pass("context snapshots include retrieved context items");
 
   const taskRuns = await request(`/api/conversations/${conversationId}/task-runs`);
   if (!Array.isArray(taskRuns) || taskRuns.length < 1) {
@@ -372,7 +403,56 @@ async function runSmokeTest() {
   }
   pass("revision completed");
 
-  const deployment = await request(`/api/artifacts/${artifactId}/demo-deploy`, {
+  const snapshotsAfterRevision = await request(`/api/conversations/${conversationId}/artifact-snapshots`);
+  if (!Array.isArray(snapshotsAfterRevision) || !snapshotsAfterRevision.some((snapshot) => snapshot.operationType === "DEMO_REVISION")) {
+    throw new Error("expected DEMO_REVISION artifact snapshot after revision");
+  }
+  pass(`artifact snapshots loaded after revision: ${snapshotsAfterRevision.length}`);
+
+  const revisedArtifactId = requireValue(getIdValue(revision.revisedArtifact?.id), "revisedArtifactId missing");
+  const applyDiffResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
+    method: "POST"
+  });
+  const appliedArtifactId = requireValue(getIdValue(applyDiffResult.appliedArtifact?.id), "appliedArtifactId missing");
+  if (applyDiffResult.appliedArtifact.status !== "ACCEPTED") {
+    throw new Error(`expected applied artifact status ACCEPTED, got ${applyDiffResult.appliedArtifact.status}`);
+  }
+  if (applyDiffResult.revisionArtifactId !== revisedArtifactId) {
+    throw new Error("apply diff response did not reference the revised artifact");
+  }
+  pass(`diff applied: ${appliedArtifactId}, added=${applyDiffResult.addedLines}, removed=${applyDiffResult.removedLines}`);
+
+  const snapshotsAfterApply = await request(`/api/conversations/${conversationId}/artifact-snapshots`);
+  if (!snapshotsAfterApply.some((snapshot) => snapshot.operationType === "APPLY_DIFF")) {
+    throw new Error("expected APPLY_DIFF artifact snapshot after apply diff");
+  }
+  pass(`artifact snapshots loaded after apply diff: ${snapshotsAfterApply.length}`);
+
+  const conflictResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
+    method: "POST"
+  });
+  if (conflictResult.conflict !== true || conflictResult.appliedArtifact) {
+    throw new Error("expected repeated diff apply to return a conflict without creating another artifact");
+  }
+  if (!conflictResult.latestAppliedArtifactId) {
+    throw new Error("diff conflict response missing latestAppliedArtifactId");
+  }
+  pass(`diff conflict detected: latest=${conflictResult.latestAppliedArtifactId}`);
+
+  const forceApplyResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
+    method: "POST",
+    body: JSON.stringify({ force: true })
+  });
+  const forcedAppliedArtifactId = requireValue(
+    getIdValue(forceApplyResult.appliedArtifact?.id),
+    "forced appliedArtifactId missing"
+  );
+  if (forceApplyResult.appliedArtifact.status !== "ACCEPTED") {
+    throw new Error(`expected forced applied artifact status ACCEPTED, got ${forceApplyResult.appliedArtifact.status}`);
+  }
+  pass(`diff force applied: ${forcedAppliedArtifactId}`);
+
+  const deployment = await request(`/api/artifacts/${appliedArtifactId}/demo-deploy`, {
     method: "POST"
   });
   const deploymentId = requireValue(deployment.deploymentId, "deploymentId missing");
@@ -381,6 +461,51 @@ async function runSmokeTest() {
   }
   const deploymentPreviewUrl = requireValue(deployment.previewUrl, "deployment previewUrl missing");
   pass(`deployment created: ${deploymentId}`);
+
+  const snapshotsAfterDeploy = await request(`/api/conversations/${conversationId}/artifact-snapshots`);
+  if (!snapshotsAfterDeploy.some((snapshot) => snapshot.operationType === "DEMO_DEPLOY")) {
+    throw new Error("expected DEMO_DEPLOY artifact snapshot after deploy");
+  }
+  pass(`artifact snapshots loaded after deploy: ${snapshotsAfterDeploy.length}`);
+
+  const restoreCandidate = snapshotsAfterDeploy.find((snapshot) => snapshot.operationType === "APPLY_DIFF")
+    || snapshotsAfterDeploy[0];
+  const restoredArtifact = await request(`/api/artifact-snapshots/${restoreCandidate.snapshotId}/restore`, {
+    method: "POST"
+  });
+  const restoredArtifactId = requireValue(getIdValue(restoredArtifact.id), "restoredArtifactId missing");
+  if (restoredArtifact.status !== "ACCEPTED") {
+    throw new Error(`restored artifact status expected ACCEPTED, got ${restoredArtifact.status}`);
+  }
+  pass(`artifact snapshot restored: ${restoredArtifactId}`);
+
+  const approvalAudit = await request(`/api/conversations/${conversationId}/action-audits`, {
+    method: "POST",
+    body: JSON.stringify({
+      actionType: "SMOKE_APPROVAL_GATE",
+      targetType: "ARTIFACT",
+      targetId: restoredArtifactId,
+      status: "APPROVED",
+      summary: "Smoke test approval gate record."
+    })
+  });
+  if (approvalAudit.actionType !== "SMOKE_APPROVAL_GATE" || approvalAudit.status !== "APPROVED") {
+    throw new Error("approval gate audit record was not persisted");
+  }
+  pass(`approval audit recorded: ${approvalAudit.auditId}`);
+
+  const actionAudits = await request(`/api/conversations/${conversationId}/action-audits`);
+  if (!Array.isArray(actionAudits) || actionAudits.length < 3) {
+    throw new Error("expected action audit records for revision/apply/deploy/restore");
+  }
+  const requiredAuditActions = ["APPLY_DIFF", "DEMO_DEPLOY", "RESTORE_SNAPSHOT", "SMOKE_APPROVAL_GATE"];
+  const missingAuditActions = requiredAuditActions.filter((actionType) =>
+    !actionAudits.some((auditLog) => auditLog.actionType === actionType)
+  );
+  if (missingAuditActions.length > 0) {
+    throw new Error(`missing action audit records: ${missingAuditActions.join(", ")}`);
+  }
+  pass(`action audits loaded: ${actionAudits.length}`);
 
   const resolvedPreviewUrl = await verifyPreviewUrl(deploymentPreviewUrl);
   pass(`preview page reachable: ${resolvedPreviewUrl}`);
@@ -396,6 +521,9 @@ async function runSmokeTest() {
     throw new Error("expected messages to be returned");
   }
   const hasUserMessage = messages.some((item) => item.senderType === "USER" && item.content === DEMO_PROMPT);
+  const hasStructuredReplyMessage = messages.some(
+    (item) => item.replyToMessageId === messageId && item.quotedMessageId === messageId
+  );
   const hasDeployMessage = messages.some((item) => {
     const content = String(item.content || "");
     return item.messageType === "DEPLOY_STATUS" ||
@@ -405,6 +533,9 @@ async function runSmokeTest() {
   });
   if (!hasUserMessage) {
     throw new Error("user message not found in message list");
+  }
+  if (!hasStructuredReplyMessage) {
+    throw new Error("structured reply / quote message not found in message list");
   }
   if (!hasDeployMessage) {
     throw new Error("deployment status message not found in message list");
@@ -445,6 +576,28 @@ async function runSmokeTest() {
   }
   pass(`messages loaded: ${messages.length}`);
   pass(`group chat agent messages loaded: ${agentMessages.length}, orchestrator=${orchestratorMessages.length}, taskStep=${taskStepAgentMessages.length}`);
+
+  const agentMessageToRegenerate = taskStepAgentMessages[0];
+  const agentMessageToRegenerateId = requireValue(
+    getIdValue(agentMessageToRegenerate?.id),
+    "agentMessageToRegenerateId missing"
+  );
+  const regeneratedAgentMessage = await request(
+    `/api/conversations/${conversationId}/messages/${agentMessageToRegenerateId}/regenerate-agent-reply`,
+    { method: "POST" }
+  );
+  if (
+    regeneratedAgentMessage.senderType !== "AGENT" ||
+    regeneratedAgentMessage.senderId !== agentMessageToRegenerate.senderId ||
+    regeneratedAgentMessage.replyToMessageId !== agentMessageToRegenerateId ||
+    regeneratedAgentMessage.quotedMessageId !== agentMessageToRegenerateId
+  ) {
+    throw new Error("regenerated agent reply did not preserve sender or structured reply reference");
+  }
+  if (!String(regeneratedAgentMessage.content || "").includes("Regenerated agent reply")) {
+    throw new Error("regenerated agent reply content missing regeneration marker");
+  }
+  pass(`single agent reply regenerated: ${getIdValue(regeneratedAgentMessage.id)}`);
 
   console.log("Smoke test completed successfully.");
 }

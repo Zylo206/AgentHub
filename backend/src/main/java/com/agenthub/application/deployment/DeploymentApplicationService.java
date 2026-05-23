@@ -1,11 +1,14 @@
 package com.agenthub.application.deployment;
 
+import com.agenthub.application.audit.ActionAuditService;
 import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
 import com.agenthub.domain.artifact.Artifact;
 import com.agenthub.domain.artifact.ArtifactId;
 import com.agenthub.domain.artifact.ArtifactRepository;
+import com.agenthub.domain.artifact.ArtifactSnapshot;
+import com.agenthub.domain.artifact.ArtifactSnapshotRepository;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.deployment.DeploymentRecord;
 import com.agenthub.domain.deployment.DeploymentRepository;
@@ -21,20 +24,26 @@ public class DeploymentApplicationService {
     private static final String DEPLOY_TARGET = "STATIC_PREVIEW";
 
     private final ArtifactRepository artifactRepository;
+    private final ArtifactSnapshotRepository artifactSnapshotRepository;
     private final DeploymentRepository deploymentRepository;
     private final MessageApplicationService messageApplicationService;
+    private final ActionAuditService actionAuditService;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
 
     public DeploymentApplicationService(
             ArtifactRepository artifactRepository,
+            ArtifactSnapshotRepository artifactSnapshotRepository,
             DeploymentRepository deploymentRepository,
             MessageApplicationService messageApplicationService,
+            ActionAuditService actionAuditService,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.artifactRepository = artifactRepository;
+        this.artifactSnapshotRepository = artifactSnapshotRepository;
         this.deploymentRepository = deploymentRepository;
         this.messageApplicationService = messageApplicationService;
+        this.actionAuditService = actionAuditService;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
@@ -42,6 +51,19 @@ public class DeploymentApplicationService {
     public DeploymentRecord createDemoDeployment(String artifactId) {
         Artifact artifact = artifactRepository.findById(new ArtifactId(artifactId))
                 .orElseThrow(() -> new NoSuchElementException("Artifact not found: " + artifactId));
+        ArtifactSnapshot snapshot = artifactSnapshotRepository.save(new ArtifactSnapshot(
+                idGenerator.nextId("snapshot"),
+                artifact.getId(),
+                artifact.getConversationId(),
+                artifact.getTaskRunId(),
+                artifact.getTitle(),
+                artifact.getType(),
+                artifact.getStatus(),
+                artifact.getLanguage(),
+                artifact.getContent(),
+                artifact.getVersion(),
+                "DEMO_DEPLOY",
+                timeProvider.now()));
 
         String deploymentId = idGenerator.nextId("deploy");
         String previewUrl = "http://localhost:5173/preview/" + artifact.getId().value();
@@ -60,6 +82,14 @@ public class DeploymentApplicationService {
 
         DeploymentRecord saved = deploymentRepository.save(deploymentRecord);
         appendDeployStatusMessage(saved);
+        actionAuditService.record(
+                artifact.getConversationId(),
+                "DEMO_DEPLOY",
+                "ARTIFACT",
+                artifact.getId().value(),
+                "COMPLETED",
+                "Created deploy snapshot " + snapshot.getSnapshotId() + " and static preview URL "
+                        + saved.getPreviewUrl() + ".");
         return saved;
     }
 

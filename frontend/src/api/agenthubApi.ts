@@ -1,5 +1,7 @@
 import type { AdapterDescriptor, Agent } from "../features/agents/agentTypes";
 import type { Artifact } from "../features/artifacts/artifactTypes";
+import type { ArtifactSnapshot } from "../features/artifacts/artifactSnapshotTypes";
+import type { ActionAuditLog } from "../features/audit/auditTypes";
 import type { Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
 import type { Conversation } from "../features/conversations/conversationTypes";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../features/context/contextTypes";
@@ -67,6 +69,19 @@ export interface ArtifactRevisionResponse {
   reviewArtifact: Artifact;
 }
 
+export interface ApplyDiffResponse {
+  appliedArtifact: Artifact | null;
+  baseArtifactId: string;
+  revisionArtifactId: string;
+  addedLines: number;
+  removedLines: number;
+  unchangedLines: number;
+  changedLines: number;
+  conflict: boolean;
+  conflictReason?: string | null;
+  latestAppliedArtifactId?: string | null;
+}
+
 export interface CreateAgentRequest {
   name: string;
   avatarUrl?: string;
@@ -110,16 +125,30 @@ export function sendMessage(
   conversationId: string,
   content: string,
   targetAgentId?: string | null,
-  mentionedAgentIds?: string[] | null
+  mentionedAgentIds?: string[] | null,
+  replyToMessageId?: string | null,
+  quotedMessageId?: string | null
 ): Promise<Message> {
   return request<Message>(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ content, targetAgentId: targetAgentId ?? null, mentionedAgentIds: mentionedAgentIds ?? [] })
+    body: JSON.stringify({
+      content,
+      targetAgentId: targetAgentId ?? null,
+      mentionedAgentIds: mentionedAgentIds ?? [],
+      replyToMessageId: replyToMessageId ?? null,
+      quotedMessageId: quotedMessageId ?? null
+    })
   });
 }
 
 export function getMessages(conversationId: string): Promise<Message[]> {
   return request<Message[]>(`/api/conversations/${conversationId}/messages`);
+}
+
+export function regenerateAgentReply(conversationId: string, messageId: string): Promise<Message> {
+  return request<Message>(`/api/conversations/${conversationId}/messages/${messageId}/regenerate-agent-reply`, {
+    method: "POST"
+  });
 }
 
 export function createDemoTask(
@@ -186,6 +215,42 @@ export function getArtifact(artifactId: string): Promise<Artifact> {
   return request<Artifact>(`/api/artifacts/${artifactId}`);
 }
 
+export function getArtifactSnapshotsByConversation(conversationId: string): Promise<ArtifactSnapshot[]> {
+  return request<ArtifactSnapshot[]>(`/api/conversations/${conversationId}/artifact-snapshots`);
+}
+
+export function getArtifactSnapshotsByArtifact(artifactId: string): Promise<ArtifactSnapshot[]> {
+  return request<ArtifactSnapshot[]>(`/api/artifacts/${artifactId}/snapshots`);
+}
+
+export function restoreArtifactSnapshot(snapshotId: string): Promise<Artifact> {
+  return request<Artifact>(`/api/artifact-snapshots/${snapshotId}/restore`, {
+    method: "POST"
+  });
+}
+
+export function getActionAuditsByConversation(conversationId: string): Promise<ActionAuditLog[]> {
+  return request<ActionAuditLog[]>(`/api/conversations/${conversationId}/action-audits`);
+}
+
+export interface RecordActionAuditRequest {
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  status: string;
+  summary: string;
+}
+
+export function recordActionAudit(
+  conversationId: string,
+  requestBody: RecordActionAuditRequest
+): Promise<ActionAuditLog> {
+  return request<ActionAuditLog>(`/api/conversations/${conversationId}/action-audits`, {
+    method: "POST",
+    body: JSON.stringify(requestBody)
+  });
+}
+
 export function createDemoArtifactRevision(
   artifactId: string,
   conversationId: string,
@@ -194,6 +259,13 @@ export function createDemoArtifactRevision(
   return request<ArtifactRevisionResponse>(`/api/artifacts/${artifactId}/demo-revision`, {
     method: "POST",
     body: JSON.stringify({ conversationId, revisionInstruction })
+  });
+}
+
+export function applyArtifactDiff(artifactId: string, force = false): Promise<ApplyDiffResponse> {
+  return request<ApplyDiffResponse>(`/api/artifacts/${artifactId}/apply-diff`, {
+    method: "POST",
+    body: JSON.stringify({ force })
   });
 }
 

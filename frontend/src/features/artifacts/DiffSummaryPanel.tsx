@@ -1,9 +1,15 @@
 import type { Artifact } from "./artifactTypes";
 import { buildDiffSummary, type LineDiffEntry } from "./artifactLineage";
+import { getIdValue } from "../../utils/id";
 
 interface DiffSummaryPanelProps {
   artifacts: Artifact[];
   artifact: Artifact | null;
+  appliedArtifactId?: string | null;
+  conflictArtifactId?: string | null;
+  conflictMessage?: string | null;
+  onApplyDiff?: (artifact: Artifact) => void;
+  onForceApplyDiff?: (artifact: Artifact) => void;
 }
 
 const MAX_VISIBLE_DIFF_LINES = 120;
@@ -20,12 +26,24 @@ function getDiffPrefix(entry: LineDiffEntry): string {
   return " ";
 }
 
-export function DiffSummaryPanel({ artifacts, artifact }: DiffSummaryPanelProps) {
+export function DiffSummaryPanel({
+  artifacts,
+  artifact,
+  appliedArtifactId,
+  conflictArtifactId,
+  conflictMessage,
+  onApplyDiff,
+  onForceApplyDiff
+}: DiffSummaryPanelProps) {
   if (!artifact) {
     return null;
   }
 
+  const artifactId = getIdValue(artifact.id);
   const summary = buildDiffSummary(artifacts, artifact);
+  const canApplyDiff = !summary.isInitialVersion && summary.hasRealLineDiff;
+  const isApplied = appliedArtifactId === artifactId;
+  const hasConflict = conflictArtifactId === artifactId;
   const visibleDiffEntries = summary.lineDiffEntries.slice(0, MAX_VISIBLE_DIFF_LINES);
   const hiddenLineCount = Math.max(summary.lineDiffEntries.length - visibleDiffEntries.length, 0);
 
@@ -35,6 +53,43 @@ export function DiffSummaryPanel({ artifacts, artifact }: DiffSummaryPanelProps)
         <strong>Diff 摘要</strong>
         <span>{summary.hasRealLineDiff ? "真实行级 diff" : summary.isInitialVersion ? "初始版本" : "无内容变化"}</span>
       </div>
+      <div className="diff-summary-apply">
+        <div>
+          <strong>{isApplied ? "当前 Diff 已应用" : "一键应用 Diff"}</strong>
+          <p>
+            {isApplied
+              ? "该版本已由后端 patch apply 生成，是当前工作台的已应用产物。"
+              : canApplyDiff
+              ? "调用后端 patch apply，将当前 revision 的行级 Diff 应用到父版本并生成新产物。"
+              : "初始版本或无行级变化时无需应用 Diff。"}
+          </p>
+        </div>
+        <button
+          type="button"
+          className={isApplied ? "secondary-button" : "primary-button"}
+          disabled={!canApplyDiff || isApplied || !onApplyDiff}
+          onClick={() => onApplyDiff?.(artifact)}
+        >
+          {isApplied ? "已应用" : "应用 Diff 结果"}
+        </button>
+      </div>
+
+      {hasConflict ? (
+        <div className="diff-conflict-card">
+          <div>
+            <strong>检测到 Diff 冲突</strong>
+            <p>{conflictMessage || "已有更新的已应用产物，当前 revision 可能不是最新基线。"}</p>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!onForceApplyDiff}
+            onClick={() => onForceApplyDiff?.(artifact)}
+          >
+            仍然强制应用
+          </button>
+        </div>
+      ) : null}
 
       <div className="diff-summary-section">
         <span className="diff-summary-section__label">修改指令</span>

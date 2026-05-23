@@ -2,6 +2,8 @@ package com.agenthub.application.orchestrator;
 
 import com.agenthub.application.agent.AgentApplicationService;
 import com.agenthub.application.agent.AgentExecutorService;
+import com.agenthub.application.audit.ActionAuditService;
+import com.agenthub.application.context.ContextRetrievalService;
 import com.agenthub.application.conversation.ConversationApplicationService;
 import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.application.task.TaskApplicationService;
@@ -13,6 +15,8 @@ import com.agenthub.domain.agent.BuiltInAgentIds;
 import com.agenthub.domain.artifact.Artifact;
 import com.agenthub.domain.artifact.ArtifactId;
 import com.agenthub.domain.artifact.ArtifactRepository;
+import com.agenthub.domain.artifact.ArtifactSnapshot;
+import com.agenthub.domain.artifact.ArtifactSnapshotRepository;
 import com.agenthub.domain.artifact.ArtifactStatus;
 import com.agenthub.domain.artifact.ArtifactType;
 import com.agenthub.domain.context.ContextRepository;
@@ -20,6 +24,7 @@ import com.agenthub.domain.context.ContextSnapshot;
 import com.agenthub.domain.context.ContextSnapshotId;
 import com.agenthub.domain.context.HandoffSummary;
 import com.agenthub.domain.context.PinnedContext;
+import com.agenthub.domain.context.RetrievedContextItem;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.message.Message;
 import com.agenthub.domain.message.MessageId;
@@ -31,6 +36,7 @@ import com.agenthub.domain.task.TaskRepository;
 import com.agenthub.domain.task.TaskRun;
 import com.agenthub.domain.task.TaskRunId;
 import com.agenthub.domain.task.TaskRunStatus;
+import com.agenthub.domain.task.TaskGraph;
 import com.agenthub.domain.task.TaskSpec;
 import com.agenthub.domain.task.TaskSpecId;
 import com.agenthub.domain.task.TaskSpecStatus;
@@ -57,7 +63,9 @@ public class OrchestratorService {
 
     private final TaskRepository taskRepository;
     private final ArtifactRepository artifactRepository;
+    private final ArtifactSnapshotRepository artifactSnapshotRepository;
     private final ContextRepository contextRepository;
+    private final ContextRetrievalService contextRetrievalService;
     private final MemoryRepository memoryRepository;
     private final MessageApplicationService messageApplicationService;
     private final ConversationApplicationService conversationApplicationService;
@@ -68,6 +76,7 @@ public class OrchestratorService {
     private final AgentRouter agentRouter;
     private final AgentStepExecutor agentStepExecutor;
     private final ResultAggregator resultAggregator;
+    private final ActionAuditService actionAuditService;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
     private final int memoryRetrievalLimit;
@@ -75,7 +84,9 @@ public class OrchestratorService {
     public OrchestratorService(
             TaskRepository taskRepository,
             ArtifactRepository artifactRepository,
+            ArtifactSnapshotRepository artifactSnapshotRepository,
             ContextRepository contextRepository,
+            ContextRetrievalService contextRetrievalService,
             MemoryRepository memoryRepository,
             MessageApplicationService messageApplicationService,
             ConversationApplicationService conversationApplicationService,
@@ -86,12 +97,15 @@ public class OrchestratorService {
             AgentRouter agentRouter,
             AgentStepExecutor agentStepExecutor,
             ResultAggregator resultAggregator,
+            ActionAuditService actionAuditService,
             IdGenerator idGenerator,
             TimeProvider timeProvider,
             @Value("${agenthub.memory.retrieval.limit:6}") int memoryRetrievalLimit) {
         this.taskRepository = taskRepository;
         this.artifactRepository = artifactRepository;
+        this.artifactSnapshotRepository = artifactSnapshotRepository;
         this.contextRepository = contextRepository;
+        this.contextRetrievalService = contextRetrievalService;
         this.memoryRepository = memoryRepository;
         this.messageApplicationService = messageApplicationService;
         this.conversationApplicationService = conversationApplicationService;
@@ -102,6 +116,7 @@ public class OrchestratorService {
         this.agentRouter = agentRouter;
         this.agentStepExecutor = agentStepExecutor;
         this.resultAggregator = resultAggregator;
+        this.actionAuditService = actionAuditService;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
         this.memoryRetrievalLimit = memoryRetrievalLimit;
@@ -129,7 +144,16 @@ public class OrchestratorService {
                 .toList();
         List<String> pinnedContextItems = buildPinnedContextItems(pinnedContexts);
         List<String> memoryContextItems = buildMemoryContextItems(memoryItems);
-        String pinnedInputContext = buildPinnedInputContext(pinnedContextItems, memoryContextItems);
+        List<RetrievedContextItem> retrievedContextItems = contextRetrievalService.retrieveForTask(
+                conversationRef,
+                userInput,
+                sourceMessageId,
+                Math.max(memoryRetrievalLimit, 8),
+                now);
+        List<String> retrievedContextSummaries = buildRetrievedContextSummaries(retrievedContextItems);
+        String pinnedInputContext = buildPinnedInputContext(
+                mergePinnedContextItems(pinnedContextItems, retrievedContextSummaries),
+                memoryContextItems);
 
         List<Agent> mentionedAgents = resolveMentionedAgents(sourceMessage);
         SelectedAgentResolution selectedAgentResolution = resolveSelectedAgent(selectedAgentId, sourceMessage, mentionedAgents);
@@ -302,6 +326,7 @@ public class OrchestratorService {
                 "生成登录页、说明文档、API 契约和评审产物。",
                 List.of(frontendStep, backendStep, reviewStep));
         List<TaskStep> demoSteps = List.of(frontendStep, backendStep, reviewStep);
+        TaskGraph taskGraph = TaskGraph.fromSteps(demoSteps);
         List<Artifact> demoArtifacts = artifactRepository.findByTaskRunId(taskRunId);
         List<ArtifactId> staticArtifactIds = List.of(
                 codeArtifact.getId(),
@@ -324,6 +349,7 @@ public class OrchestratorService {
                 TaskRunStatus.COMPLETED,
                 taskPlan,
                 demoSteps,
+                taskGraph,
                 "静态 Demo 任务已完成，产出代码、文档、API 契约、评审报告和上下文交接记录。"
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary + " " + resultSummary,
@@ -343,8 +369,11 @@ public class OrchestratorService {
                         "Reviewer 必须基于验收标准完成闭环检查",
                         selectedAgentResolution.sourceDescription(),
                         selectedAgentSummary), mergePinnedContextItems(
-                        mergePinnedContextItems(pinnedContextItems, memoryContextItems),
+                        mergePinnedContextItems(
+                                mergePinnedContextItems(pinnedContextItems, memoryContextItems),
+                                retrievedContextSummaries),
                         buildAdapterOutputContextItems(adapterOutputArtifacts))),
+                retrievedContextItems,
                 "该快照包含原始用户请求、生成的 Task Spec、三个 TaskStep，以及 LoginPage.tsx、README.md、login-api-contract.json 和评审报告产物。"
                         + buildAdapterOutputSnapshotSummary(adapterOutputArtifacts)
                         + selectedAgentResolution.sourceDescription() + " "
@@ -470,6 +499,7 @@ public class OrchestratorService {
         }
 
         Instant now = timeProvider.now();
+        ArtifactSnapshot revisionSnapshot = createArtifactSnapshot(originalArtifact, "DEMO_REVISION");
         Message revisionMessage = messageApplicationService.sendUserMessage(conversationId, revisionInstruction);
 
         TaskSpec taskSpec = new TaskSpec(
@@ -956,6 +986,21 @@ public class OrchestratorService {
                 .toList();
     }
 
+    private List<String> buildRetrievedContextSummaries(List<RetrievedContextItem> retrievedContextItems) {
+        return retrievedContextItems.stream()
+                .map(item -> "Retrieved context ["
+                        + item.getSourceType()
+                        + ":"
+                        + item.getSourceId()
+                        + "] score="
+                        + item.getScore()
+                        + " reason="
+                        + item.getReason()
+                        + " content="
+                        + item.getContent())
+                .toList();
+    }
+
     private String buildPinnedInputContext(List<String> pinnedContextItems, List<String> memoryContextItems) {
         List<String> contextItems = mergePinnedContextItems(pinnedContextItems, memoryContextItems);
         if (contextItems.isEmpty()) {
@@ -1122,6 +1167,23 @@ public class OrchestratorService {
     }
 
     private record SelectedAgentResolution(Agent agent, String sourceDescription) {
+    }
+
+    private ArtifactSnapshot createArtifactSnapshot(Artifact artifact, String operationType) {
+        ArtifactSnapshot snapshot = new ArtifactSnapshot(
+                idGenerator.nextId("snapshot"),
+                artifact.getId(),
+                artifact.getConversationId(),
+                artifact.getTaskRunId(),
+                artifact.getTitle(),
+                artifact.getType(),
+                artifact.getStatus(),
+                artifact.getLanguage(),
+                artifact.getContent(),
+                artifact.getVersion(),
+                operationType,
+                timeProvider.now());
+        return artifactSnapshotRepository.save(snapshot);
     }
 
     private Artifact createArtifact(
