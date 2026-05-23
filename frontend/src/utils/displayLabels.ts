@@ -58,6 +58,18 @@ export function displayArtifactType(value?: string | null): string {
   return value ? labels[value] || value : "-";
 }
 
+export function displayArtifactSourceKind(value?: string | null): string {
+  const labels: Record<string, string> = {
+    STATIC_TEMPLATE: "静态模板",
+    REAL_ADAPTER: "真实 Adapter 输出",
+    MOCK_FALLBACK: "Mock fallback",
+    USER_REVISION: "用户修改",
+    DEPLOY_PREVIEW: "部署预览"
+  };
+
+  return value ? labels[value] || value : "-";
+}
+
 export function displayMessageSender(value?: string | null): string {
   const labels: Record<string, string> = {
     USER: "你",

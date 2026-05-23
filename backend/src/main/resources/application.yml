@@ -16,6 +16,7 @@ agenthub:
     retrieval:
       limit: ${AGENTHUB_MEMORY_RETRIEVAL_LIMIT:6}
   orchestrator:
+    artifact-generation-mode: ${AGENTHUB_ARTIFACT_GENERATION_MODE:HYBRID_REAL}
     planner:
       type: ${AGENTHUB_PLANNER_TYPE:RULE_BASED}
       fallback-to-rule-based: ${AGENTHUB_PLANNER_FALLBACK_TO_RULE_BASED:true}

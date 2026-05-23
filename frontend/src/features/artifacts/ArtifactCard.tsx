@@ -1,6 +1,6 @@
 import type { Artifact } from "./artifactTypes";
 import { formatId, getIdValue } from "../../utils/id";
-import { displayArtifactType, displayStatus } from "../../utils/displayLabels";
+import { displayArtifactSourceKind, displayArtifactType, displayStatus } from "../../utils/displayLabels";
 
 interface ArtifactCardProps {
   artifact: Artifact;
@@ -29,6 +29,13 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
         <span>{displayArtifactType(artifact.type)}</span>
         <span>{displayStatus(artifact.status)}</span>
       </div>
+      {artifact.sourceKind ? (
+        <div className="artifact-card__tags">
+          <span className={`artifact-card__tag artifact-source-badge artifact-source-badge--${artifact.sourceKind.toLowerCase().replace(/_/g, "-")}`}>
+            {displayArtifactSourceKind(artifact.sourceKind)}
+          </span>
+        </div>
+      ) : null}
       {isRevision ? (
         <div className="artifact-card__tags">
           <span className="artifact-card__tag revision-badge">二次修改</span>

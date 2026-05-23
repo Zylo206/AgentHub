@@ -7,7 +7,7 @@ import type { ArtifactSnapshot } from "./artifactSnapshotTypes";
 import type { DeploymentRecord } from "../deployments/deploymentTypes";
 import { buildDiffSummary, getVersionHistoryEntries } from "./artifactLineage";
 import { formatId, getIdValue } from "../../utils/id";
-import { displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayArtifactSourceKind, displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
 interface ArtifactPanelProps {
   artifacts: Artifact[];
@@ -503,6 +503,13 @@ export function ArtifactPanel({
                 <p>
                   {displayArtifactType(selectedArtifact.type)} / {displayStatus(selectedArtifact.status)} / v{selectedArtifact.version}
                 </p>
+                {selectedArtifact.sourceKind ? (
+                  <p className="artifact-preview__line">
+                    来源：{displayArtifactSourceKind(selectedArtifact.sourceKind)}
+                    {selectedArtifact.sourceAdapterType ? ` / Adapter: ${selectedArtifact.sourceAdapterType}` : ""}
+                    {selectedArtifact.generationMode ? ` / Mode: ${selectedArtifact.generationMode}` : ""}
+                  </p>
+                ) : null}
                 {selectedVersionEntry?.parentArtifact ? (
                   <p className="artifact-preview__line revision-origin">
                     基于 {selectedVersionEntry.parentArtifact.title} v{selectedVersionEntry.parentArtifact.version}

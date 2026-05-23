@@ -20,7 +20,8 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - group chat Agent messages
 - task run query
 - artifact query
-- conditional Adapter Output artifact check when a non-MOCK adapter succeeds
+- source metadata check for static / real Adapter artifacts
+- optional REAL_ADAPTER artifact assertion when explicitly enabled
 - artifact revision
 - artifact safety snapshots
 - lightweight apply-diff generated artifact
@@ -71,5 +72,13 @@ Override both URLs in Bash:
 ```bash
 AGENTHUB_API_BASE_URL=http://127.0.0.1:8080 AGENTHUB_FRONTEND_BASE_URL=http://127.0.0.1:5173 node scripts/smoke-test.mjs
 ```
+
+If you explicitly configure a real Adapter and expect it to produce persisted artifacts, enable the stricter check:
+
+```powershell
+$env:AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER="true"; node scripts/smoke-test.mjs
+```
+
+Without this flag, the smoke test remains stable in the default Mock / fallback environment.
 
 This is an API-level smoke test with an HTTP reachability check for the local preview page. It does not run browser E2E automation, parse DOM content, make real LLM calls, call real external Agents, or perform real deployment.

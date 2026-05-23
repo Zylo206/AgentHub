@@ -2364,3 +2364,64 @@
 - 做仓库卫生和三项验证：backend build、frontend build、smoke test
 - 启动前后端后按 `docs/collaboration/demo-checklist.md` 人工跑一遍 V1.0 主链路
 - 下一轮优先做 Adapter 测试面板，提升半真实 Adapter 接入的可验收性
+
+## Phase 55：真实 Adapter 输出进入核心 Artifact 链路
+
+### 目标
+
+- 将真实 / 半真实 Adapter 的成功输出从“状态展示”推进为可见、可追踪的 Artifact
+- 保留静态模板和 Mock fallback，避免无 API key 或 Adapter 失败时破坏 Demo 主链路
+- 为后续从静态模板切到动态产物生成建立第一阶段基础
+
+### 主要变更
+
+- 新增 Artifact 来源元数据
+  - `sourceKind`
+  - `sourceAdapterType`
+  - `sourceTaskStepId`
+  - `generationMode`
+- 新增 `ArtifactSourceKind`
+  - `STATIC_TEMPLATE`
+  - `REAL_ADAPTER`
+  - `MOCK_FALLBACK`
+  - `USER_REVISION`
+  - `DEPLOY_PREVIEW`
+- 新增 `AdapterArtifactExtractor`
+  - 优先解析 Adapter 返回的结构化 JSON artifact contract
+  - JSON 不合法时降级为 Markdown / Review Report Artifact
+  - 仅在非 MOCK Adapter 成功且未 fallback 时持久化真实 Adapter Artifact
+- `OpenAICompatibleAgentAdapter` 的 user prompt 增加 artifact JSON 输出契约
+- `AgentStepExecutor` 支持 `agenthub.orchestrator.artifact-generation-mode`
+  - `STATIC_TEMPLATE`
+  - `HYBRID_REAL`
+  - `REAL_FIRST`
+- 前端 Artifact Studio、PreviewPage、TaskRunPanel 增加 Artifact source badge 和 source metadata 展示
+- `scripts/smoke-test.mjs` 增加 `AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER=true` 可选断言
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+- 如已配置真实 Adapter，可额外执行：
+  - `AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER=true node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认仍保留静态模板 Artifact，真实输出第一阶段以 `HYBRID_REAL` 方式并存
+- Codex / Claude Code / OpenCode 仍是 CLI 探测型半真实 Adapter，不代表深度平台接入完成
+- OPENAI_COMPATIBLE 需要环境变量配置；未配置或调用失败时仍 fallback 到 MOCK
+- REAL_FIRST 目前是配置语义入口，后续仍需继续收敛“真实产物替代静态模板”的执行策略
+
+### 遗留问题
+
+- 真实 Adapter 输出质量依赖模型响应，仍需要更严格 schema 校验和错误提示
+- 真实输出还没有完全替代 LoginPage / README / API Contract / Review Report 静态模板
+- CLI Adapter 输出结构无法保证，仍可能只能降级为文本 Artifact
+- 还缺 Adapter 测试面板，用户不能在 UI 中单独验证真实输出契约
+
+### 下一步建议
+
+- 做 Adapter 测试面板，允许在 `/agents` 或 Workspace 中手动触发 Adapter execute 并查看 JSON contract 解析结果
+- 继续推进 REAL_FIRST 模式，让真实 Adapter 产物在配置启用时成为主产物，静态模板只作为 fallback
+- 补充 smoke test 的真实 Adapter mock server 或 fixture，降低真实外部模型依赖

@@ -6,8 +6,8 @@ import com.agenthub.domain.agent.AgentId;
 import com.agenthub.domain.artifact.Artifact;
 import com.agenthub.domain.artifact.ArtifactId;
 import com.agenthub.domain.artifact.ArtifactRepository;
+import com.agenthub.domain.artifact.ArtifactSourceKind;
 import com.agenthub.domain.artifact.ArtifactStatus;
-import com.agenthub.domain.artifact.ArtifactType;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.task.TaskRunId;
 import com.agenthub.domain.task.TaskStep;
@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -29,14 +30,20 @@ public class AgentStepExecutor {
     private final AgentExecutorService agentExecutorService;
     private final IdGenerator idGenerator;
     private final ArtifactRepository artifactRepository;
+    private final AdapterArtifactExtractor adapterArtifactExtractor;
+    private final String artifactGenerationMode;
 
     public AgentStepExecutor(
             AgentExecutorService agentExecutorService,
             IdGenerator idGenerator,
-            ArtifactRepository artifactRepository) {
+            ArtifactRepository artifactRepository,
+            AdapterArtifactExtractor adapterArtifactExtractor,
+            @Value("${agenthub.orchestrator.artifact-generation-mode:HYBRID_REAL}") String artifactGenerationMode) {
         this.agentExecutorService = agentExecutorService;
         this.idGenerator = idGenerator;
         this.artifactRepository = artifactRepository;
+        this.adapterArtifactExtractor = adapterArtifactExtractor;
+        this.artifactGenerationMode = normalizeArtifactGenerationMode(artifactGenerationMode);
     }
 
     public TaskStep execute(StepExecutionCommand command) {
@@ -60,20 +67,27 @@ public class AgentStepExecutor {
                                 "requiredSkill", command.requiredSkill(),
                                 "parallelGroupKey", command.parallelGroupKey(),
                                 "dependsOnStepOrders", command.dependsOnStepOrders(),
+                                "artifactGenerationMode", artifactGenerationMode,
                                 "demoMode", true)));
 
         String adapterSummary = summarizeAdapterResponse(adapterResponse.content());
-        String outputContent = command.baseOutputContent()
-                + "\n\n并行调度信息：parallelGroupKey="
-                + command.parallelGroupKey()
-                + "，dependsOnStepOrders="
-                + command.dependsOnStepOrders()
-                + "，routingReason="
-                + command.routingReason()
-                + "\n\nAdapter 执行信息：\n"
-                + (adapterSummary == null ? "未记录 Adapter 响应。" : adapterSummary);
-
         List<ArtifactId> producedArtifactIds = appendAdapterOutputArtifactIfReal(command, stepId, adapterResponse);
+        int realAdapterArtifactCount = producedArtifactIds.size() - command.producedArtifactIds().size();
+        String outputContent = command.baseOutputContent()
+                + "\n\nParallel scheduling: parallelGroupKey="
+                + command.parallelGroupKey()
+                + ", dependsOnStepOrders="
+                + command.dependsOnStepOrders()
+                + ", routingReason="
+                + command.routingReason()
+                + "\n\nAdapter execution:\n"
+                + (adapterSummary == null ? "No adapter response summary recorded." : adapterSummary)
+                + "\n\nReal Adapter Artifact Info:\n"
+                + (realAdapterArtifactCount > 0
+                        ? "Generated " + realAdapterArtifactCount + " artifact(s) from non-MOCK adapter output."
+                        : "No real adapter artifact generated.")
+                + " generationMode="
+                + artifactGenerationMode;
 
         return new TaskStep(
                 stepId,
@@ -115,24 +129,39 @@ public class AgentStepExecutor {
             TaskStepId stepId,
             AgentResponse adapterResponse) {
         List<ArtifactId> producedArtifactIds = new ArrayList<>(command.producedArtifactIds());
-        if (!shouldPersistAdapterOutput(adapterResponse)) {
+        if (!shouldPersistAdapterOutput(adapterResponse) || "STATIC_TEMPLATE".equals(artifactGenerationMode)) {
             return List.copyOf(producedArtifactIds);
         }
 
-        Artifact adapterOutputArtifact = new Artifact(
-                new ArtifactId(idGenerator.nextId("artifact")),
-                new ConversationId(command.conversationId()),
-                command.taskRunId(),
-                "Adapter Output - " + command.agentName() + " - Step " + command.stepOrder() + ".md",
-                resolveAdapterOutputArtifactType(command),
-                ArtifactStatus.CREATED,
-                "md",
-                buildAdapterOutputArtifactContent(command, stepId, adapterResponse),
-                1,
-                command.now(),
-                command.now());
-        artifactRepository.save(adapterOutputArtifact);
-        producedArtifactIds.add(adapterOutputArtifact.getId());
+        AdapterArtifactExtractor.ExtractionResult extractionResult = adapterArtifactExtractor.extract(
+                adapterResponse.content(),
+                new AdapterArtifactExtractor.ExtractionContext(
+                        command.stepOrder(),
+                        command.agentName(),
+                        command.requiredSkill(),
+                        command.taskDescription()));
+        for (AdapterArtifactExtractor.AdapterArtifactSpec spec : extractionResult.artifacts()) {
+            Artifact adapterOutputArtifact = new Artifact(
+                    new ArtifactId(idGenerator.nextId("artifact")),
+                    new ConversationId(command.conversationId()),
+                    command.taskRunId(),
+                    null,
+                    buildAdapterRevisionInstruction(adapterResponse, extractionResult),
+                    spec.title(),
+                    spec.type(),
+                    ArtifactStatus.CREATED,
+                    spec.language(),
+                    buildAdapterOutputArtifactContent(command, stepId, adapterResponse, spec, extractionResult),
+                    1,
+                    ArtifactSourceKind.REAL_ADAPTER,
+                    adapterResponse.actualAdapterType() == null ? null : adapterResponse.actualAdapterType().name(),
+                    stepId.value(),
+                    artifactGenerationMode,
+                    command.now(),
+                    command.now());
+            artifactRepository.save(adapterOutputArtifact);
+            producedArtifactIds.add(adapterOutputArtifact.getId());
+        }
         return List.copyOf(producedArtifactIds);
     }
 
@@ -146,28 +175,25 @@ public class AgentStepExecutor {
                 && !adapterResponse.content().isBlank();
     }
 
-    private ArtifactType resolveAdapterOutputArtifactType(StepExecutionCommand command) {
-        String normalizedSkill = command.requiredSkill() == null ? "" : command.requiredSkill().toLowerCase();
-        String normalizedTask = command.taskDescription() == null ? "" : command.taskDescription().toLowerCase();
-        if (normalizedSkill.contains("review") || normalizedTask.contains("review") || normalizedTask.contains("检查")) {
-            return ArtifactType.REVIEW_REPORT;
-        }
-        return ArtifactType.MARKDOWN;
-    }
-
     private String buildAdapterOutputArtifactContent(
             StepExecutionCommand command,
             TaskStepId stepId,
-            AgentResponse adapterResponse) {
+            AgentResponse adapterResponse,
+            AdapterArtifactExtractor.AdapterArtifactSpec spec,
+            AdapterArtifactExtractor.ExtractionResult extractionResult) {
         return """
-                # Adapter Output
+                # Real Adapter Output
 
                 - Agent: %s
                 - TaskStep: %s
                 - Preferred Adapter: %s
                 - Actual Adapter: %s
                 - Status: %s
+                - Source Kind: REAL_ADAPTER
+                - Generation Mode: %s
                 - Persisted Because: actual adapter completed without MOCK fallback
+                - Artifact Summary: %s
+                - Extraction Fallback: %s
 
                 ## Response
 
@@ -178,7 +204,33 @@ public class AgentStepExecutor {
                 adapterResponse.preferredAdapterType(),
                 adapterResponse.actualAdapterType(),
                 adapterResponse.status(),
-                adapterResponse.content());
+                artifactGenerationMode,
+                spec.summary() == null || spec.summary().isBlank() ? "N/A" : spec.summary(),
+                extractionResult.fallbackReason() == null || extractionResult.fallbackReason().isBlank()
+                        ? "none"
+                        : extractionResult.fallbackReason(),
+                spec.content());
+    }
+
+    private String buildAdapterRevisionInstruction(
+            AgentResponse adapterResponse,
+            AdapterArtifactExtractor.ExtractionResult extractionResult) {
+        String assistantMessage = extractionResult.assistantMessage();
+        if (assistantMessage != null && !assistantMessage.isBlank()) {
+            return assistantMessage;
+        }
+        return "Persisted from " + adapterResponse.actualAdapterType() + " adapter output";
+    }
+
+    private String normalizeArtifactGenerationMode(String configuredMode) {
+        if (configuredMode == null || configuredMode.isBlank()) {
+            return "HYBRID_REAL";
+        }
+        String normalized = configuredMode.trim().toUpperCase();
+        return switch (normalized) {
+            case "STATIC_TEMPLATE", "HYBRID_REAL", "REAL_FIRST" -> normalized;
+            default -> "HYBRID_REAL";
+        };
     }
 
     public record StepExecutionCommand(

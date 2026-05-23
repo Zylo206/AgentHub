@@ -2,7 +2,7 @@ import type { Artifact } from "../artifacts/artifactTypes";
 import type { Agent } from "../agents/agentTypes";
 import type { TaskRun, TaskSpec, TaskStep } from "./chatTypes";
 import { formatId, getIdValue } from "../../utils/id";
-import { displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayArtifactSourceKind, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
 interface TaskRunPanelProps {
   agents: Agent[];
@@ -398,6 +398,15 @@ export function TaskRunPanel({
                   const assignedAgentId = getIdValue(step.assignedAgentId);
                   const assignedAgentName =
                     agentNameMap.get(assignedAgentId) || step.assignedAgentName || assignedAgentId;
+                  const stepProducedArtifactIds = new Set(
+                    step.producedArtifactIds.map((artifactId) => getIdValue(artifactId))
+                  );
+                  const stepProducedArtifacts = artifacts.filter((artifact) =>
+                    stepProducedArtifactIds.has(getIdValue(artifact.id))
+                  );
+                  const realAdapterArtifactCount = stepProducedArtifacts.filter(
+                    (artifact) => artifact.sourceKind === "REAL_ADAPTER"
+                  ).length;
 
                   return (
                     <button
@@ -444,6 +453,25 @@ export function TaskRunPanel({
                             <strong>Adapter 响应：</strong> {summarizeAdapterResponse(step.adapterResponseSummary)}
                           </div>
                         ) : null}
+                        <div className="step-generated-artifacts">
+                          {realAdapterArtifactCount > 0 ? (
+                            <span className="artifact-source-badge artifact-source-badge--real-adapter">
+                              Real output used · {realAdapterArtifactCount}
+                            </span>
+                          ) : (
+                            <span className="artifact-source-badge artifact-source-badge--static-template">
+                              Static template fallback
+                            </span>
+                          )}
+                          {stepProducedArtifacts.slice(0, 3).map((artifact) => (
+                            <span
+                              className={`artifact-source-badge artifact-source-badge--${(artifact.sourceKind || "STATIC_TEMPLATE").toLowerCase().replace(/_/g, "-")}`}
+                              key={getIdValue(artifact.id)}
+                            >
+                              {displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}
+                            </span>
+                          ))}
+                        </div>
                         {step.adapterErrorMessage ? (
                           <div className="step-adapter-error">{step.adapterErrorMessage}</div>
                         ) : null}

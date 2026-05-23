@@ -12,6 +12,10 @@ export interface Artifact {
   language: string;
   content: string;
   version: number;
+  sourceKind?: string | null;
+  sourceAdapterType?: string | null;
+  sourceTaskStepId?: string | null;
+  generationMode?: string | null;
   createdAt: string;
   updatedAt: string;
 }

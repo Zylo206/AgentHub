@@ -17,6 +17,7 @@ import com.agenthub.domain.artifact.ArtifactId;
 import com.agenthub.domain.artifact.ArtifactRepository;
 import com.agenthub.domain.artifact.ArtifactSnapshot;
 import com.agenthub.domain.artifact.ArtifactSnapshotRepository;
+import com.agenthub.domain.artifact.ArtifactSourceKind;
 import com.agenthub.domain.artifact.ArtifactStatus;
 import com.agenthub.domain.artifact.ArtifactType;
 import com.agenthub.domain.context.ContextRepository;
@@ -1185,8 +1186,7 @@ public class OrchestratorService {
 
     private List<Artifact> findAdapterOutputArtifacts(List<Artifact> artifacts, List<ArtifactId> staticArtifactIds) {
         return artifacts.stream()
-                .filter(artifact -> !containsArtifactId(staticArtifactIds, artifact.getId()))
-                .filter(artifact -> artifact.getTitle() != null && artifact.getTitle().startsWith("Adapter Output -"))
+                .filter(artifact -> artifact.getSourceKind() == ArtifactSourceKind.REAL_ADAPTER)
                 .toList();
     }
 

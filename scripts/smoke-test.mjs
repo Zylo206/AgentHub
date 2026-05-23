@@ -2,6 +2,7 @@
 
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const FRONTEND_BASE = (process.env.AGENTHUB_FRONTEND_BASE_URL || "http://127.0.0.1:5173").replace(/\/$/, "");
+const EXPECT_REAL_ADAPTER = process.env.AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER === "true";
 
 const DEMO_PROMPT = "帮我生成一个 React 登录页面，支持邮箱登录和验证码登录，同时生成 README，并检查代码质量。";
 const REVISION_INSTRUCTION = "把按钮改成蓝色，并增加 loading 状态。";
@@ -132,7 +133,14 @@ function assertBuiltInParticipants(conversation, label) {
 function resolvePreviewUrl(previewUrl) {
   const value = requireValue(previewUrl, "deployment previewUrl missing");
   try {
-    return new URL(value).toString();
+    const parsedUrl = new URL(value);
+    if (parsedUrl.hostname === "localhost") {
+      const frontendBaseUrl = new URL(FRONTEND_BASE);
+      parsedUrl.protocol = frontendBaseUrl.protocol;
+      parsedUrl.hostname = frontendBaseUrl.hostname;
+      parsedUrl.port = frontendBaseUrl.port;
+    }
+    return parsedUrl.toString();
   } catch {
     if (!String(value).startsWith("/")) {
       throw new Error(`Invalid preview URL: ${value}`);
@@ -169,6 +177,7 @@ function pickCodeArtifact(artifacts) {
 async function runSmokeTest() {
   console.log(`AgentHub smoke test target: ${API_BASE}`);
   console.log(`AgentHub frontend preview target: ${FRONTEND_BASE}`);
+  console.log(`AgentHub real adapter artifact expectation: ${EXPECT_REAL_ADAPTER ? "enabled" : "disabled"}`);
 
   const health = await request("/api/health");
   if (health?.status !== "UP") {
@@ -444,14 +453,20 @@ async function runSmokeTest() {
   const realAdapterSteps = steps.filter(
     (step) => step.actualAdapterType && step.actualAdapterType !== "MOCK" && step.adapterStatus === "COMPLETED"
   );
-  const adapterOutputArtifacts = artifacts.filter((item) => String(item.title || "").startsWith("Adapter Output -"));
+  const adapterOutputArtifacts = artifacts.filter((item) =>
+    item.sourceKind === "REAL_ADAPTER" || String(item.title || "").startsWith("Real Adapter Output -")
+  );
   if (realAdapterSteps.length > 0 && adapterOutputArtifacts.length < realAdapterSteps.length) {
     throw new Error(
       `expected adapter output artifacts for real adapter steps. realAdapterSteps=${realAdapterSteps.length}, adapterOutputArtifacts=${adapterOutputArtifacts.length}`
     );
   }
+  if (EXPECT_REAL_ADAPTER && adapterOutputArtifacts.length < 1) {
+    throw new Error("AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER=true but no REAL_ADAPTER artifact was produced");
+  }
   if (adapterOutputArtifacts.length > 0) {
     const invalidAdapterOutputArtifact = adapterOutputArtifacts.find((item) =>
+      item.sourceKind !== "REAL_ADAPTER" ||
       !String(item.content || "").includes("Persisted Because: actual adapter completed without MOCK fallback")
     );
     if (invalidAdapterOutputArtifact) {
@@ -695,7 +710,9 @@ async function runSmokeTest() {
   }
   if (adapterOutputArtifacts.length > 0) {
     const hasAdapterOutputMessage = messages.some((item) =>
-      String(item.content || "").includes("真实 / 半真实 Adapter 输出产物")
+      String(item.content || "").includes("真实 / 半真实 Adapter 输出产物") ||
+      String(item.content || "").includes("Created real / semi-real Adapter output artifact") ||
+      String(item.content || "").includes("Adapter output artifact")
     );
     if (!hasAdapterOutputMessage) {
       throw new Error("adapter output artifact message not found in message list");

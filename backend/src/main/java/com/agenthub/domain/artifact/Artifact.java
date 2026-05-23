@@ -17,6 +17,10 @@ public class Artifact {
     private final String language;
     private final String content;
     private final int version;
+    private final ArtifactSourceKind sourceKind;
+    private final String sourceAdapterType;
+    private final String sourceTaskStepId;
+    private final String generationMode;
     private final Instant createdAt;
     private final Instant updatedAt;
 
@@ -44,6 +48,10 @@ public class Artifact {
                 language,
                 content,
                 version,
+                ArtifactSourceKind.STATIC_TEMPLATE,
+                null,
+                null,
+                ArtifactSourceKind.STATIC_TEMPLATE.name(),
                 createdAt,
                 updatedAt);
     }
@@ -62,6 +70,44 @@ public class Artifact {
             int version,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                id,
+                conversationId,
+                taskRunId,
+                parentArtifactId,
+                revisionInstruction,
+                title,
+                type,
+                status,
+                language,
+                content,
+                version,
+                defaultSourceKind(parentArtifactId, revisionInstruction),
+                null,
+                null,
+                defaultSourceKind(parentArtifactId, revisionInstruction).name(),
+                createdAt,
+                updatedAt);
+    }
+
+    public Artifact(
+            ArtifactId id,
+            ConversationId conversationId,
+            TaskRunId taskRunId,
+            String parentArtifactId,
+            String revisionInstruction,
+            String title,
+            ArtifactType type,
+            ArtifactStatus status,
+            String language,
+            String content,
+            int version,
+            ArtifactSourceKind sourceKind,
+            String sourceAdapterType,
+            String sourceTaskStepId,
+            String generationMode,
+            Instant createdAt,
+            Instant updatedAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.taskRunId = taskRunId;
@@ -73,8 +119,22 @@ public class Artifact {
         this.language = language;
         this.content = content;
         this.version = version;
+        this.sourceKind = sourceKind == null ? ArtifactSourceKind.STATIC_TEMPLATE : sourceKind;
+        this.sourceAdapterType = sourceAdapterType;
+        this.sourceTaskStepId = sourceTaskStepId;
+        this.generationMode = generationMode == null || generationMode.isBlank()
+                ? this.sourceKind.name()
+                : generationMode;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+    }
+
+    private static ArtifactSourceKind defaultSourceKind(String parentArtifactId, String revisionInstruction) {
+        if ((parentArtifactId != null && !parentArtifactId.isBlank())
+                || (revisionInstruction != null && !revisionInstruction.isBlank())) {
+            return ArtifactSourceKind.USER_REVISION;
+        }
+        return ArtifactSourceKind.STATIC_TEMPLATE;
     }
 
     public ArtifactId getId() {
@@ -119,6 +179,22 @@ public class Artifact {
 
     public int getVersion() {
         return version;
+    }
+
+    public ArtifactSourceKind getSourceKind() {
+        return sourceKind;
+    }
+
+    public String getSourceAdapterType() {
+        return sourceAdapterType;
+    }
+
+    public String getSourceTaskStepId() {
+        return sourceTaskStepId;
+    }
+
+    public String getGenerationMode() {
+        return generationMode;
     }
 
     public Instant getCreatedAt() {

@@ -201,7 +201,24 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
             builder.append("Artifacts:\n");
             request.artifactSummaries().forEach(item -> builder.append("- ").append(item).append('\n'));
         }
-        builder.append("Respond concisely with implementation guidance or review output suitable for the current task step.");
+        builder.append("""
+                Output contract:
+                Return only JSON. Do not wrap it in markdown fences.
+                Schema:
+                {
+                  "assistantMessage": "short summary for AgentHub chat",
+                  "artifacts": [
+                    {
+                      "title": "file or report title",
+                      "type": "CODE | MARKDOWN | REVIEW_REPORT | API_CONTRACT | DATA_MODEL | WEB_PREVIEW",
+                      "language": "tsx | md | json | html | txt",
+                      "summary": "one sentence summary",
+                      "content": "complete artifact content"
+                    }
+                  ]
+                }
+                Generate artifacts suitable for the current task step. If the task is review-oriented, produce a REVIEW_REPORT.
+                """);
         return builder.toString();
     }
 

@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { getArtifact, getArtifactsByConversation } from "../../api/agenthubApi";
 import { buildArtifactVersions } from "../../features/artifacts/artifactLineage";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
-import { displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayArtifactSourceKind, displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { formatId, getIdValue } from "../../utils/id";
 import "../../styles/workspace.css";
 
@@ -165,6 +165,11 @@ export function PreviewPage() {
               {artifact.parentArtifactId || artifact.revisionInstruction ? (
                 <span className="status-pill status-pill--approved">Revision</span>
               ) : null}
+              {artifact.sourceKind ? (
+                <span className={`artifact-source-badge artifact-source-badge--${artifact.sourceKind.toLowerCase().replace(/_/g, "-")}`}>
+                  {displayArtifactSourceKind(artifact.sourceKind)}
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -180,6 +185,18 @@ export function PreviewPage() {
             <div>
               <dt>Updated</dt>
               <dd>{new Date(artifact.updatedAt).toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt>Source</dt>
+              <dd>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</dd>
+            </div>
+            <div>
+              <dt>Adapter</dt>
+              <dd>{artifact.sourceAdapterType || "-"}</dd>
+            </div>
+            <div>
+              <dt>Generation</dt>
+              <dd>{artifact.generationMode || "-"}</dd>
             </div>
           </dl>
 

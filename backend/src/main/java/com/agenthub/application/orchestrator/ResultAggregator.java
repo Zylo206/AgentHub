@@ -57,6 +57,6 @@ public class ResultAggregator {
     }
 
     private boolean isAdapterOutputArtifact(Artifact artifact) {
-        return artifact.getTitle() != null && artifact.getTitle().startsWith("Adapter Output -");
+        return artifact.getSourceKind() != null && "REAL_ADAPTER".equals(artifact.getSourceKind().name());
     }
 }
