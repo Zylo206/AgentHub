@@ -289,3 +289,21 @@
 - Action Audit 可追踪高风险操作。
 - Deploy Preview URL 可打开。
 - `node scripts/smoke-test.mjs` 通过。注意：默认 smoke 不代表 REAL_ADAPTER、REAL_FIRST、REJECTION、auto-trigger approval、Adapter stats persistence 全部闭环；这些需要显式开启对应环境变量做扩展断言。
+
+## O. Reviewer REJECTION / Retry-Revise 可选验收
+
+1. 启动 backend 时保持默认配置，运行普通 demo-task，确认默认 TaskRun 仍为 `COMPLETED`，消息流出现 `APPROVAL`。
+2. 使用拒绝触发 prompt，例如包含 `decision: reject`、`blocker` 或 `不通过`。
+3. 运行 Demo Task。
+4. 确认 TaskRun 状态为 `BLOCKED`。
+5. 确认 MessageStream 出现：
+   - Reviewer `REJECTION`
+   - Orchestrator `REJECTION`
+   - retry / revise 建议
+6. 确认 Artifact Studio 中 Review Report 状态为 `REJECTED`。
+7. 确认存在 `Reviewer retry / revise advice` Artifact，内容包含 blockers、affected artifacts 和 retry instruction。
+8. 执行 Artifact Revision 后，再次运行不含拒绝触发词的 Demo Task，确认可回到 `APPROVAL` 路径。
+9. 可用 smoke 扩展验证：
+   `$env:AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION="true"`
+   `node scripts/smoke-test.mjs`
+10. 注意：该能力仍是规则化 Reviewer decision，不是真实静态分析或完整自动修复系统。

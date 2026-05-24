@@ -77,6 +77,7 @@ public class OrchestratorService {
     private final TaskPlanner taskPlanner;
     private final AgentRouter agentRouter;
     private final AgentStepExecutor agentStepExecutor;
+    private final ReviewDecisionEvaluator reviewDecisionEvaluator;
     private final ResultAggregator resultAggregator;
     private final ActionAuditService actionAuditService;
     private final IdGenerator idGenerator;
@@ -98,6 +99,7 @@ public class OrchestratorService {
             TaskPlanner taskPlanner,
             AgentRouter agentRouter,
             AgentStepExecutor agentStepExecutor,
+            ReviewDecisionEvaluator reviewDecisionEvaluator,
             ResultAggregator resultAggregator,
             ActionAuditService actionAuditService,
             IdGenerator idGenerator,
@@ -117,6 +119,7 @@ public class OrchestratorService {
         this.taskPlanner = taskPlanner;
         this.agentRouter = agentRouter;
         this.agentStepExecutor = agentStepExecutor;
+        this.reviewDecisionEvaluator = reviewDecisionEvaluator;
         this.resultAggregator = resultAggregator;
         this.actionAuditService = actionAuditService;
         this.idGenerator = idGenerator;
@@ -346,6 +349,22 @@ public class OrchestratorService {
         TaskStep frontendStep = findExecutedStep(executedSteps, 1);
         TaskStep backendStep = findExecutedStep(executedSteps, 2);
         TaskStep reviewStep = findExecutedStep(executedSteps, 3);
+        ReviewDecision reviewDecision = reviewDecisionEvaluator.evaluate(
+                userInput,
+                reviewStep,
+                reviewArtifact,
+                List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId()));
+        Artifact retryAdviceArtifact = null;
+        if (reviewDecision.rejected()) {
+            reviewArtifact = withArtifactStatus(
+                    reviewArtifact,
+                    ArtifactStatus.REJECTED,
+                    reviewArtifact.getContent() + "\n\n" + buildReviewDecisionMarkdown(reviewDecision),
+                    now);
+            artifactRepository.save(reviewArtifact);
+            retryAdviceArtifact = createReviewRetryAdviceArtifact(conversationRef, taskRunId, reviewDecision, now);
+            artifactRepository.save(retryAdviceArtifact);
+        }
 
         TaskPlan taskPlan = new TaskPlan(
                 "生成登录页、说明文档、API 契约和评审产物。",
@@ -374,18 +393,21 @@ public class OrchestratorService {
                 adapterOutputArtifacts,
                 selectedAgentResolution.sourceDescription(),
                 selectedAgentSummary,
-                retrievedContextItems);
+                retrievedContextItems,
+                reviewDecision);
 
         TaskRun taskRun = new TaskRun(
                 taskRunId,
                 conversationRef,
                 taskSpec.getId(),
-                TaskRunStatus.COMPLETED,
+                reviewDecision.rejected() ? TaskRunStatus.BLOCKED : TaskRunStatus.COMPLETED,
                 taskPlan,
                 demoSteps,
                 taskGraph,
                 decisionLog,
-                "静态 Demo 任务已完成，产出代码、文档、API 契约、评审报告和上下文交接记录。"
+                (reviewDecision.rejected()
+                        ? "Reviewer rejected the current artifact set. TaskRun is BLOCKED until retry/revise is completed. "
+                        : "静态 Demo 任务已完成，产出代码、文档、API 契约、评审报告和上下文交接记录。")
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary + " " + resultSummary,
                 now,
@@ -411,6 +433,7 @@ public class OrchestratorService {
                 retrievedContextItems,
                 "该快照包含原始用户请求、生成的 Task Spec、三个 TaskStep，以及 LoginPage.tsx、README.md、login-api-contract.json 和评审报告产物。"
                         + buildAdapterOutputSnapshotSummary(adapterOutputArtifacts)
+                        + buildReviewDecisionSnapshotSummary(reviewDecision)
                         + selectedAgentResolution.sourceDescription() + " "
                         + selectedAgentSummary,
                 now);
@@ -475,11 +498,20 @@ public class OrchestratorService {
                 readmeArtifact,
                 apiContractArtifact,
                 reviewArtifact);
+        if (retryAdviceArtifact != null) {
+            messageApplicationService.appendSystemMessage(
+                    conversationId,
+                    MessageType.ARTIFACT_CARD,
+                    "Reviewer rejected the current output. Retry / revise advice artifact created: "
+                            + retryAdviceArtifact.getTitle(),
+                    List.of(retryAdviceArtifact.getId()));
+        }
         appendAgentProtocolMessages(
                 conversationId,
                 List.of(frontendStep, backendStep, reviewStep),
                 findAdditionalMentionedAgentSteps(demoSteps),
-                mentionedAgents);
+                mentionedAgents,
+                reviewDecision);
 
         messageApplicationService.appendSystemMessage(
                 conversationId,
@@ -984,7 +1016,8 @@ public class OrchestratorService {
             String conversationId,
             List<TaskStep> coreSteps,
             List<TaskStep> additionalMentionedAgentSteps,
-            List<Agent> mentionedAgents) {
+            List<Agent> mentionedAgents,
+            ReviewDecision reviewDecision) {
         messageApplicationService.appendAgentMessage(
                 conversationId,
                 BuiltInAgentIds.ORCHESTRATOR,
@@ -1047,29 +1080,33 @@ public class OrchestratorService {
                             MessageType.REVIEW,
                             "Agent protocol REVIEW: Reviewer checked the collaborative outputs for TaskStep "
                                     + reviewStep.getStepOrder()
-                                    + ". fallbackUsed="
-                                    + isFallbackStep(reviewStep)
-                                    + ". reviewDecision="
-                                    + (isReviewerRejection(reviewStep) ? "REJECTION" : "APPROVAL"),
+                            + ". fallbackUsed="
+                            + isFallbackStep(reviewStep)
+                            + ". reviewDecision="
+                            + (reviewDecision.rejected() ? "REJECTION" : "APPROVAL"),
                             reviewStep.getProducedArtifactIds());
-                    appendReviewerRejectionLoopMessages(conversationId, reviewStep);
+                    appendReviewerRejectionLoopMessages(conversationId, reviewStep, reviewDecision);
                 });
 
         messageApplicationService.appendAgentMessage(
                 conversationId,
                 BuiltInAgentIds.ORCHESTRATOR,
-                coreSteps.stream().anyMatch(this::isReviewerRejection) ? MessageType.REJECTION : MessageType.APPROVAL,
+                reviewDecision.rejected() ? MessageType.REJECTION : MessageType.APPROVAL,
                 "Agent protocol "
-                        + (coreSteps.stream().anyMatch(this::isReviewerRejection) ? "REJECTION" : "APPROVAL")
+                        + (reviewDecision.rejected() ? "REJECTION" : "APPROVAL")
                         + ": Orchestrator aggregated core steps and mentioned custom Agent steps. "
-                        + (coreSteps.stream().anyMatch(this::isReviewerRejection)
-                                ? "Reviewer requested a retry/revise loop before approval."
+                        + (reviewDecision.rejected()
+                                ? "Reviewer requested a retry/revise loop before approval. "
+                                        + "blockers=" + reviewDecision.blockers()
                                 : "This is an MVP collaboration protocol, not a full autonomous group-chat runtime."),
                 List.of());
     }
 
-    private void appendReviewerRejectionLoopMessages(String conversationId, TaskStep reviewStep) {
-        if (!isReviewerRejection(reviewStep)) {
+    private void appendReviewerRejectionLoopMessages(
+            String conversationId,
+            TaskStep reviewStep,
+            ReviewDecision reviewDecision) {
+        if (!reviewDecision.rejected()) {
             return;
         }
 
@@ -1079,16 +1116,16 @@ public class OrchestratorService {
                 MessageType.REJECTION,
                 "Agent protocol REJECTION: Reviewer rejected TaskStep "
                         + reviewStep.getStepOrder()
-                        + ". Blocked status is recorded as a collaboration message so Orchestrator can trigger revise/retry.",
+                        + ". Blocked status is recorded as a collaboration message so Orchestrator can trigger revise/retry. "
+                        + "source=" + reviewDecision.source()
+                        + ", blockers=" + reviewDecision.blockers(),
                 reviewStep.getProducedArtifactIds());
         messageApplicationService.appendAgentMessage(
                 conversationId,
                 BuiltInAgentIds.ORCHESTRATOR,
                 MessageType.REJECTION,
                 "Agent protocol REJECTION: Orchestrator recommends retry/revise. Suggested loop: "
-                        + "1) route blockers back to the owning worker, "
-                        + "2) revise affected Artifact(s), "
-                        + "3) rerun Reviewer before approval.",
+                        + reviewDecision.retryInstruction(),
                 reviewStep.getProducedArtifactIds());
     }
 
@@ -1187,7 +1224,8 @@ public class OrchestratorService {
             List<Artifact> adapterOutputArtifacts,
             String selectedAgentSource,
             String selectedAgentSummary,
-            List<RetrievedContextItem> retrievedContextItems) {
+            List<RetrievedContextItem> retrievedContextItems,
+            ReviewDecision reviewDecision) {
         String plannerDecision = "Planner mode=" + plan.planningMode()
                 + "; promptLayering=baseCapability,roleInstruction,availableAgents,conversationContext,retrievedContext,artifactHistory,outputSchema,fallbackPolicy"
                 + "; goal=" + plan.goal()
@@ -1216,9 +1254,19 @@ public class OrchestratorService {
                 + " artifact(s), including " + adapterOutputArtifacts.size()
                 + " adapter output artifact(s). Retrieved context sources="
                 + retrievedContextItems.size()
+                + ". reviewDecision=" + reviewDecision.decision()
+                + ", reviewSource=" + reviewDecision.source()
+                + ", affectedArtifacts=" + reviewDecision.affectedArtifactIds().stream().map(ArtifactId::value).toList()
                 + ". Summary and group chat messages were appended after step execution.";
-        String fallbackDecision = buildFallbackDecision(plan, steps);
-        String summary = "Backend structured decision log for Planner / Router / Executor / Aggregator / Fallback.";
+        String fallbackDecision = buildFallbackDecision(plan, steps)
+                + (reviewDecision.rejected()
+                        ? " Reviewer rejected the current artifact set; retryInstruction="
+                                + reviewDecision.retryInstruction()
+                                + "; blockers=" + reviewDecision.blockers()
+                        : " Reviewer approved the current artifact set.");
+        String summary = reviewDecision.rejected()
+                ? "Backend structured decision log recorded Reviewer REJECTION and retry/revise instruction."
+                : "Backend structured decision log for Planner / Router / Executor / Aggregator / Fallback.";
         return new OrchestratorDecisionLog(
                 plan.planningMode(),
                 plannerDecision,
@@ -1391,7 +1439,7 @@ public class OrchestratorService {
             List<Artifact> artifacts,
             List<ArtifactId> staticArtifactIds) {
         artifacts.stream()
-                .filter(artifact -> !containsArtifactId(staticArtifactIds, artifact.getId()))
+                .filter(artifact -> artifact.getSourceKind() == ArtifactSourceKind.REAL_ADAPTER)
                 .forEach(artifact -> messageApplicationService.appendSystemMessage(
                         conversationId,
                         MessageType.ARTIFACT_CARD,
@@ -1571,6 +1619,97 @@ public class OrchestratorService {
                 1,
                 now,
                 now);
+    }
+
+    private Artifact withArtifactStatus(
+            Artifact artifact,
+            ArtifactStatus status,
+            String content,
+            Instant now) {
+        return new Artifact(
+                artifact.getId(),
+                artifact.getConversationId(),
+                artifact.getTaskRunId(),
+                artifact.getParentArtifactId(),
+                artifact.getRevisionInstruction(),
+                artifact.getTitle(),
+                artifact.getType(),
+                status,
+                artifact.getLanguage(),
+                content,
+                artifact.getVersion(),
+                artifact.getSourceKind(),
+                artifact.getSourceAdapterType(),
+                artifact.getSourceTaskStepId(),
+                artifact.getGenerationMode(),
+                artifact.getCreatedAt(),
+                now);
+    }
+
+    private Artifact createReviewRetryAdviceArtifact(
+            ConversationId conversationId,
+            TaskRunId taskRunId,
+            ReviewDecision reviewDecision,
+            Instant now) {
+        return new Artifact(
+                new ArtifactId(idGenerator.nextId("artifact")),
+                conversationId,
+                taskRunId,
+                null,
+                "Reviewer rejection retry advice",
+                "Reviewer retry / revise advice",
+                ArtifactType.MARKDOWN,
+                ArtifactStatus.CREATED,
+                "md",
+                buildReviewDecisionMarkdown(reviewDecision),
+                1,
+                ArtifactSourceKind.STATIC_TEMPLATE,
+                null,
+                null,
+                "REVIEW_REJECTION_RETRY_ADVICE",
+                now,
+                now);
+    }
+
+    private String buildReviewDecisionMarkdown(ReviewDecision reviewDecision) {
+        return """
+                ## Reviewer Decision
+
+                Decision: %s
+                Source: %s
+
+                ### Blockers
+                %s
+
+                ### Affected Artifacts
+                %s
+
+                ### Retry / Revise Instruction
+                %s
+                """.formatted(
+                reviewDecision.decision(),
+                reviewDecision.source(),
+                formatMarkdownList(reviewDecision.blockers()),
+                formatMarkdownList(reviewDecision.affectedArtifactIds().stream().map(ArtifactId::value).toList()),
+                reviewDecision.retryInstruction());
+    }
+
+    private String formatMarkdownList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return "- None";
+        }
+        return String.join("\n", values.stream().map(value -> "- " + value).toList());
+    }
+
+    private String buildReviewDecisionSnapshotSummary(ReviewDecision reviewDecision) {
+        if (!reviewDecision.rejected()) {
+            return " Reviewer decision=APPROVED.";
+        }
+        return " Reviewer decision=REJECTED; retry/revise required. source="
+                + reviewDecision.source()
+                + "; blockers="
+                + reviewDecision.blockers()
+                + ".";
     }
 
     private String summarizeAdapterResponse(String responseContent) {

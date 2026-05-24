@@ -37,6 +37,10 @@ const SMOKE_ATTACHMENTS = [
 ];
 
 const DEMO_PROMPT = "帮我生成一个 React 登录页面，支持邮箱登录和验证码登录，同时生成 README，并检查代码质量。";
+const ACTIVE_DEMO_PROMPT = EXPECT_REVIEW_REJECTION
+  ? `${DEMO_PROMPT}\nReviewer instruction: decision: reject because blocker risk must trigger retry/revise.`
+  : DEMO_PROMPT;
+const EXPECTED_DEMO_TASK_STATUS = EXPECT_REVIEW_REJECTION ? "BLOCKED" : "COMPLETED";
 const REVISION_INSTRUCTION = "把按钮改成蓝色，并增加 loading 状态。";
 
 function pass(message) {
@@ -392,7 +396,7 @@ async function runSmokeTest() {
   const message = await request(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
     body: JSON.stringify({
-      content: DEMO_PROMPT,
+      content: ACTIVE_DEMO_PROMPT,
       targetAgentId: mentionedAgentIds[0],
       mentionedAgentIds,
       attachments: SMOKE_ATTACHMENTS
@@ -460,8 +464,8 @@ async function runSmokeTest() {
   }
   if (autoTriggeredTaskRun) {
     const autoTriggeredTaskRunId = requireValue(getIdValue(autoTriggeredTaskRun.id), "autoTriggeredTaskRunId missing");
-    if (autoTriggeredTaskRun.status !== "COMPLETED") {
-      throw new Error(`auto-triggered orchestrator run status expected COMPLETED, got ${autoTriggeredTaskRun.status}`);
+    if (autoTriggeredTaskRun.status !== EXPECTED_DEMO_TASK_STATUS) {
+      throw new Error(`auto-triggered orchestrator run status expected ${EXPECTED_DEMO_TASK_STATUS}, got ${autoTriggeredTaskRun.status}`);
     }
     if (!autoTriggeredTaskRun.orchestratorDecisionLog?.routingDecision) {
       throw new Error("auto-triggered orchestrator run missing routing decision evidence");
@@ -534,13 +538,13 @@ async function runSmokeTest() {
     method: "POST",
     body: JSON.stringify({
       messageId,
-      userInput: DEMO_PROMPT
+      userInput: ACTIVE_DEMO_PROMPT
     })
   });
   const taskRunId = requireValue(getIdValue(taskRun.id), "taskRunId missing");
   const steps = Array.isArray(taskRun.steps) ? taskRun.steps : [];
-  if (taskRun.status !== "COMPLETED") {
-    throw new Error(`demo task status expected COMPLETED, got ${taskRun.status}`);
+  if (taskRun.status !== EXPECTED_DEMO_TASK_STATUS) {
+    throw new Error(`demo task status expected ${EXPECTED_DEMO_TASK_STATUS}, got ${taskRun.status}`);
   }
   if (steps.length < 3) {
     throw new Error(`demo task expected at least 3 steps, got ${steps.length}`);
@@ -633,13 +637,13 @@ async function runSmokeTest() {
     method: "POST",
     body: JSON.stringify({
       messageId,
-      userInput: DEMO_PROMPT
+      userInput: ACTIVE_DEMO_PROMPT
     })
   });
   const rerunTaskRunId = requireValue(getIdValue(rerunTaskRun.id), "rerun taskRunId missing");
   const rerunSteps = Array.isArray(rerunTaskRun.steps) ? rerunTaskRun.steps : [];
-  if (rerunTaskRun.status !== "COMPLETED") {
-    throw new Error(`message rerun task status expected COMPLETED, got ${rerunTaskRun.status}`);
+  if (rerunTaskRun.status !== EXPECTED_DEMO_TASK_STATUS) {
+    throw new Error(`message rerun task status expected ${EXPECTED_DEMO_TASK_STATUS}, got ${rerunTaskRun.status}`);
   }
   if (rerunSteps.length < 3) {
     throw new Error(`message rerun task expected at least 3 steps, got ${rerunSteps.length}`);
@@ -697,6 +701,27 @@ async function runSmokeTest() {
   }
   const artifactId = requireValue(getIdValue(artifact.id), "artifactId missing");
   pass(`artifacts loaded: ${artifacts.length}, selected=${artifact.title || artifactId}`);
+  if (EXPECT_REVIEW_REJECTION) {
+    const rejectedReviewArtifact = artifacts.find((item) =>
+      item.type === "REVIEW_REPORT" &&
+      item.status === "REJECTED" &&
+      String(item.content || "").includes("Decision: REJECTED")
+    );
+    const retryAdviceArtifact = artifacts.find((item) =>
+      String(item.title || "").includes("retry / revise") &&
+      String(item.content || "").includes("Retry / Revise Instruction")
+    );
+    if (!rejectedReviewArtifact) {
+      throw new Error("review rejection expected a REJECTED Review Report artifact");
+    }
+    if (!retryAdviceArtifact) {
+      throw new Error("review rejection expected retry / revise advice artifact");
+    }
+    if (!String(taskRun.orchestratorDecisionLog?.aggregationDecision || "").includes("reviewDecision=REJECTED")) {
+      throw new Error("orchestratorDecisionLog did not record reviewDecision=REJECTED");
+    }
+    pass(`review rejection artifacts validated: ${rejectedReviewArtifact.title}, ${retryAdviceArtifact.title}`);
+  }
 
   const realAdapterSteps = steps.filter(
     (step) => step.actualAdapterType && step.actualAdapterType !== "MOCK" && step.adapterStatus === "COMPLETED"
@@ -955,7 +980,7 @@ async function runSmokeTest() {
   if (!Array.isArray(messages) || messages.length < 1) {
     throw new Error("expected messages to be returned");
   }
-  const hasUserMessage = messages.some((item) => item.senderType === "USER" && item.content === DEMO_PROMPT);
+  const hasUserMessage = messages.some((item) => item.senderType === "USER" && item.content === ACTIVE_DEMO_PROMPT);
   const hasStructuredReplyMessage = messages.some(
     (item) => item.replyToMessageId === messageId && item.quotedMessageId === messageId
   );

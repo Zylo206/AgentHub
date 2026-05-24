@@ -28,7 +28,7 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - optional REAL_ADAPTER artifact assertion when explicitly enabled
 - Tool Capability router smoke coverage for a custom review Agent
 - weighted routing evidence in `routingReason`
-- Agent collaboration protocol checks, with REJECTION reported as a gap if the backend path does not emit one
+- Agent collaboration protocol checks, with optional Reviewer REJECTION / retry-revise assertion
 - artifact revision
 - artifact safety snapshots
 - lightweight apply-diff generated artifact
@@ -90,7 +90,14 @@ $env:AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER="true"; node scripts/smoke-test.mjs
 
 Without this flag, the smoke test remains stable in the default Mock / fallback environment.
 
-The smoke test always validates a local REAL_ADAPTER artifact fixture contract and validates persisted REAL_ADAPTER artifacts when the backend produces them. It also creates an isolated custom `review` Agent to verify that Tool Capability routing can select an Agent for `QUALITY_REVIEW`. `REJECTION` is treated as conditional coverage: if the backend emits `messageType=REJECTION`, the script validates it; if not, the script prints a warning because the current demo-task path has no rejection/retry closure.
+The smoke test always validates a local REAL_ADAPTER artifact fixture contract and validates persisted REAL_ADAPTER artifacts when the backend produces them. It also creates an isolated custom `review` Agent to verify that Tool Capability routing can select an Agent for `QUALITY_REVIEW`. `REJECTION` remains opt-in so the default demo path stays stable. To verify the Reviewer rejection loop, run:
+
+```powershell
+$env:AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION="true"
+node scripts/smoke-test.mjs
+```
+
+This sends a rejection-triggering prompt and expects `TaskRun.status=BLOCKED`, `messageType=REJECTION`, a `REJECTED` Review Report, and a retry / revise advice artifact.
 
 If backend is started with message-level auto trigger and Adapter stats persistence enabled, enable the stricter checks:
 

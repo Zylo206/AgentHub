@@ -25,6 +25,9 @@ agenthub:
     planner:
       type: ${AGENTHUB_PLANNER_TYPE:RULE_BASED}
       fallback-to-rule-based: ${AGENTHUB_PLANNER_FALLBACK_TO_RULE_BASED:true}
+    review:
+      force-rejection-enabled: ${AGENTHUB_REVIEW_FORCE_REJECTION_ENABLED:false}
+      rejection-keywords: "${AGENTHUB_REVIEW_REJECTION_KEYWORDS:REJECTION,decision: reject,reject,不通过,拒绝,blocker,阻塞}"
   adapters:
     default-type: MOCK
     stats:

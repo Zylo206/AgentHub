@@ -3016,3 +3016,54 @@
 - 将浏览器 E2E 的 auto-trigger 验证从“卡片可见”增强到“点击创建确认 -> 点击批准并运行 -> TaskRun 完成”。
 - 增加 Adapter route stats 可视化面板，展示 attempts、successes、fallbacks、failures 和当前路由权重。
 - 继续补 reviewer REJECTION -> retry / revise 的闭环，避免协议只停留在 badge 展示。
+
+## Phase 68：Reviewer REJECTION 与 Retry / Revise 闭环
+
+### 目标
+
+- 将 `REJECTION` 从协议枚举 / 条件展示推进为可验收闭环。
+- Reviewer 拒绝时阻塞 TaskRun，生成 REJECTION 协作消息，并创建 retry / revise 修复建议 Artifact。
+- 默认 demo 仍走 APPROVAL，不破坏稳定 smoke。
+
+### 主要变更
+
+- 新增 `ReviewDecision` 和 `ReviewDecisionEvaluator`，以结构化判定替代只依赖 `TaskStep` 字符串偶发命中。
+- 增加 `agenthub.orchestrator.review.force-rejection-enabled` 和 `agenthub.orchestrator.review.rejection-keywords` 配置。
+- Orchestrator 在 Reviewer step 后生成 ReviewDecision：
+  - `APPROVED`：保持 TaskRun `COMPLETED` 和 `APPROVAL` 协作消息。
+  - `REJECTED`：TaskRun 标记为 `BLOCKED`，Review Report 标记为 `REJECTED`，并追加 Reviewer / Orchestrator `REJECTION` 消息。
+- 拒绝时创建 `Reviewer retry / revise advice` Artifact，内容包含 blockers、affected artifacts 和 retry instruction。
+- `OrchestratorDecisionLog` 记录 reviewDecision、source、affectedArtifacts、blockers 和 retryInstruction。
+- `scripts/smoke-test.mjs` 增加 opt-in REJECTION 断言：
+  - `$env:AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION="true"`
+  - `node scripts/smoke-test.mjs`
+- `.env.example`、`scripts/README.md`、`demo-checklist.md` 同步 REJECTION 可选验收说明。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- 默认 smoke：`node scripts/smoke-test.mjs`
+- REJECTION smoke：
+  - `$env:AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION="true"`
+  - `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- ReviewDecision v1 是规则化关键词判定，不是真实静态分析、测试执行或完整 QA 引擎。
+- retry / revise advice 是可见修复建议，不自动修改代码 Artifact。
+- 修复仍通过现有 Artifact Revision / Apply Diff / Approval Gate 路径完成。
+- 默认 demo 不触发 REJECTION，避免破坏主链路稳定性。
+
+### 遗留问题
+
+- 还没有根据 blocker 自动生成 patch。
+- 还没有 Reviewer 二次复审后的真实状态机迁移。
+- REJECTION 判定尚未接入真实测试结果、lint 结果或代码分析结果。
+
+### 下一步建议
+
+- 将 Reviewer REJECTION 与真实 line diff / patch apply 结合，支持“根据 blocker 生成候选修复”。
+- 增加浏览器 E2E 对 `BLOCKED` TaskRun 和 REJECTION badge 的可选验证。
+- 将 ReviewDecision 进一步纳入 Orchestrator explain panel 的结构化展示。
