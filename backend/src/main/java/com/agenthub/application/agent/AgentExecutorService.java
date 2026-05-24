@@ -1,6 +1,7 @@
 package com.agenthub.application.agent;
 
 import com.agenthub.infrastructure.adapter.AgentAdapterRegistry;
+import com.agenthub.infrastructure.adapter.AgentAdapterRegistry.AdapterRouteStats;
 import com.agenthub.infrastructure.adapter.AgentAdapterDescriptor;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
 import com.agenthub.infrastructure.adapter.AgentRequest;
@@ -31,5 +32,9 @@ public class AgentExecutorService {
 
     public List<AgentAdapterDescriptor> listAdapterDescriptors() {
         return agentAdapterRegistry.listDescriptors();
+    }
+
+    public AdapterRouteStats routeStats(AgentAdapterType adapterType) {
+        return agentAdapterRegistry.routeStats(adapterType);
     }
 }

@@ -19,6 +19,7 @@ public class Message {
     private final MessageType messageType;
     private final String content;
     private final List<ArtifactId> artifactIds;
+    private final List<MessageAttachment> attachments;
     private final Instant createdAt;
 
     public Message(
@@ -43,6 +44,7 @@ public class Message {
                 messageType,
                 content,
                 artifactIds,
+                List.of(),
                 createdAt);
     }
 
@@ -69,6 +71,7 @@ public class Message {
                 messageType,
                 content,
                 artifactIds,
+                List.of(),
                 createdAt);
     }
 
@@ -96,6 +99,7 @@ public class Message {
                 messageType,
                 content,
                 artifactIds,
+                List.of(),
                 createdAt);
     }
 
@@ -113,6 +117,38 @@ public class Message {
             String content,
             List<ArtifactId> artifactIds,
             Instant createdAt) {
+        this(
+                id,
+                conversationId,
+                senderType,
+                senderId,
+                targetAgentId,
+                mentionedAgentIds,
+                replyToMessageId,
+                quotedMessageId,
+                quotedMessageContent,
+                messageType,
+                content,
+                artifactIds,
+                List.of(),
+                createdAt);
+    }
+
+    public Message(
+            MessageId id,
+            ConversationId conversationId,
+            MessageSenderType senderType,
+            String senderId,
+            String targetAgentId,
+            List<String> mentionedAgentIds,
+            String replyToMessageId,
+            String quotedMessageId,
+            String quotedMessageContent,
+            MessageType messageType,
+            String content,
+            List<ArtifactId> artifactIds,
+            List<MessageAttachment> attachments,
+            Instant createdAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.senderType = senderType;
@@ -124,7 +160,8 @@ public class Message {
         this.quotedMessageContent = quotedMessageContent;
         this.messageType = messageType;
         this.content = content;
-        this.artifactIds = List.copyOf(artifactIds);
+        this.artifactIds = artifactIds == null ? List.of() : List.copyOf(artifactIds);
+        this.attachments = attachments == null ? List.of() : List.copyOf(attachments);
         this.createdAt = createdAt;
     }
 
@@ -174,6 +211,10 @@ public class Message {
 
     public List<ArtifactId> getArtifactIds() {
         return artifactIds;
+    }
+
+    public List<MessageAttachment> getAttachments() {
+        return attachments;
     }
 
     public Instant getCreatedAt() {

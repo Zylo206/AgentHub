@@ -1,9 +1,12 @@
 package com.agenthub.api.message;
 
 import com.agenthub.application.message.MessageApplicationService;
+import com.agenthub.application.orchestrator.OrchestratorService;
 import com.agenthub.common.ApiResponse;
+import com.agenthub.domain.message.MessageAttachment;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,9 +20,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class MessageController {
 
     private final MessageApplicationService messageApplicationService;
+    private final OrchestratorService orchestratorService;
 
-    public MessageController(MessageApplicationService messageApplicationService) {
+    public MessageController(
+            MessageApplicationService messageApplicationService,
+            OrchestratorService orchestratorService) {
         this.messageApplicationService = messageApplicationService;
+        this.orchestratorService = orchestratorService;
     }
 
     @PostMapping
@@ -33,7 +40,8 @@ public class MessageController {
                         request.targetAgentId(),
                         request.mentionedAgentIds(),
                         request.replyToMessageId(),
-                        request.quotedMessageId()),
+                        request.quotedMessageId(),
+                        toAttachments(request.attachments())),
                 "Message sent");
     }
 
@@ -50,6 +58,32 @@ public class MessageController {
                 messageApplicationService.regenerateAgentReply(conversationId, messageId),
                 "Agent reply regenerated");
     }
+
+    @PostMapping("/{messageId}/orchestrator-run")
+    public ApiResponse<?> runOrchestratorFromMessage(
+            @PathVariable("conversationId") String conversationId,
+            @PathVariable("messageId") String messageId,
+            @Valid @RequestBody(required = false) RunOrchestratorFromMessageRequest request) {
+        String selectedAgentId = request == null ? null : request.selectedAgentId();
+        return ApiResponse.success(
+                orchestratorService.runFromMessage(conversationId, messageId, selectedAgentId),
+                "Orchestrator run created");
+    }
+
+    private List<MessageAttachment> toAttachments(List<SendMessageAttachmentRequest> attachments) {
+        if (attachments == null) {
+            return List.of();
+        }
+
+        return attachments.stream()
+                .map(attachment -> new MessageAttachment(
+                        attachment.attachmentId(),
+                        attachment.fileName(),
+                        attachment.contentType(),
+                        attachment.size(),
+                        attachment.contentPreview()))
+                .toList();
+    }
 }
 
 record SendMessageRequest(
@@ -57,4 +91,14 @@ record SendMessageRequest(
         String targetAgentId,
         List<String> mentionedAgentIds,
         String replyToMessageId,
-        String quotedMessageId) {}
+        String quotedMessageId,
+        @Valid List<SendMessageAttachmentRequest> attachments) {}
+
+record SendMessageAttachmentRequest(
+        @NotBlank String attachmentId,
+        @NotBlank String fileName,
+        String contentType,
+        @PositiveOrZero long size,
+        String contentPreview) {}
+
+record RunOrchestratorFromMessageRequest(String selectedAgentId) {}

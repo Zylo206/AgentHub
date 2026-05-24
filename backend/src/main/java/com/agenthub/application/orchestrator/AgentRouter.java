@@ -1,35 +1,154 @@
 package com.agenthub.application.orchestrator;
 
+import com.agenthub.application.agent.AgentApplicationService;
+import com.agenthub.application.agent.AgentExecutorService;
 import com.agenthub.domain.agent.Agent;
 import com.agenthub.domain.agent.AgentRole;
+import com.agenthub.domain.agent.AgentStatus;
+import com.agenthub.domain.agent.BuiltInAgentIds;
+import com.agenthub.infrastructure.adapter.AgentAdapterDescriptor;
+import com.agenthub.infrastructure.adapter.AgentAdapterRegistry.AdapterRouteStats;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
+import java.util.Comparator;
 import java.util.Locale;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AgentRouter {
 
+    private final AgentApplicationService agentApplicationService;
+    private final AgentExecutorService agentExecutorService;
     private final AgentRoutingService agentRoutingService;
+    private final ToolCapabilityRegistry toolCapabilityRegistry;
 
-    public AgentRouter(AgentRoutingService agentRoutingService) {
+    public AgentRouter(
+            AgentApplicationService agentApplicationService,
+            AgentExecutorService agentExecutorService,
+            AgentRoutingService agentRoutingService,
+            ToolCapabilityRegistry toolCapabilityRegistry) {
+        this.agentApplicationService = agentApplicationService;
+        this.agentExecutorService = agentExecutorService;
         this.agentRoutingService = agentRoutingService;
+        this.toolCapabilityRegistry = toolCapabilityRegistry;
     }
 
     public RoutedAgent route(OrchestratorStepPlan stepPlan, Agent selectedAgent) {
         if (selectedAgent != null && stepPlan.stepOrder() == 1) {
+            boolean supportsSkill = toolCapabilityRegistry.supportsRequiredSkill(selectedAgent, stepPlan.requiredSkill());
+            RouteScores scores = scoreAgent(selectedAgent, stepPlan.requiredSkill());
             return new RoutedAgent(
                     selectedAgent.getId().value(),
                     selectedAgent.getName(),
-                    selectedAgent.getSystemPrompt(),
-                    agentRoutingService.resolvePreferredAdapterForAgent(selectedAgent));
+                    enrichSystemPromptWithToolCapabilities(selectedAgent.getSystemPrompt(), selectedAgent),
+                    scores.preferredAdapterType(),
+                    (supportsSkill
+                            ? "Selected Agent matched the required skill through tool capability mapping."
+                            : "Selected Agent is explicit but tool tags do not clearly match the required skill; execution still proceeds with adapter fallback protection.")
+                            + " "
+                            + scores.describe(),
+                    toolCapabilityRegistry.describeCapabilities(selectedAgent));
+        }
+
+        Optional<AgentMatch> capabilityMatch = findCapabilityMatchedAgent(stepPlan);
+        if (capabilityMatch.isPresent()) {
+            AgentMatch match = capabilityMatch.get();
+            Agent matchedAgent = match.agent();
+            return new RoutedAgent(
+                    matchedAgent.getId().value(),
+                    matchedAgent.getName(),
+                    enrichSystemPromptWithToolCapabilities(matchedAgent.getSystemPrompt(), matchedAgent),
+                    match.scores().preferredAdapterType(),
+                    "Tool capability router selected Agent for requiredSkill="
+                            + stepPlan.requiredSkill()
+                            + ". "
+                            + match.scores().describe()
+                            + ", originalPlanAgent="
+                            + stepPlan.agentName()
+                            + ".",
+                    toolCapabilityRegistry.describeCapabilities(matchedAgent));
         }
 
         AgentAdapterType preferredAdapterType = resolveStepPreferredAdapter(stepPlan);
+        RouteScores fallbackScores = scoreAdapter(0, preferredAdapterType);
         return new RoutedAgent(
                 stepPlan.agentId(),
                 stepPlan.agentName(),
                 defaultSystemPrompt(stepPlan.agentRole()),
-                preferredAdapterType);
+                preferredAdapterType,
+                stepPlan.routingReason() + " " + fallbackScores.describe(),
+                "Built-in Agent route; static tool capability mapping is not required.");
+    }
+
+    private Optional<AgentMatch> findCapabilityMatchedAgent(OrchestratorStepPlan stepPlan) {
+        return agentApplicationService.listAgents().stream()
+                .filter(agent -> agent.getStatus() == AgentStatus.ACTIVE)
+                .filter(agent -> !BuiltInAgentIds.ORCHESTRATOR.equals(agent.getId().value()))
+                .map(agent -> new AgentMatch(agent, scoreAgent(agent, stepPlan.requiredSkill())))
+                .filter(match -> match.scores().capabilityScore() > 0)
+                .max(Comparator
+                        .comparingInt((AgentMatch match) -> match.scores().totalScore())
+                        .thenComparingInt(match -> match.agent().getRole() == AgentRole.CUSTOM ? 1 : 0)
+                        .thenComparing(match -> match.agent().getUpdatedAt()));
+    }
+
+    private RouteScores scoreAgent(Agent agent, String requiredSkill) {
+        int capabilityScore = toolCapabilityRegistry.matchScore(agent, requiredSkill);
+        AgentAdapterType preferredAdapterType = agentRoutingService.resolvePreferredAdapterForAgent(agent);
+        return scoreAdapter(capabilityScore, preferredAdapterType);
+    }
+
+    private RouteScores scoreAdapter(int capabilityScore, AgentAdapterType preferredAdapterType) {
+        int adapterHealthScore = adapterHealthScore(preferredAdapterType);
+        AdapterRouteStats stats = agentExecutorService.routeStats(preferredAdapterType);
+        int historyScore = historyScore(stats);
+        int fallbackPenalty = fallbackPenalty(stats);
+        int totalScore = (int) Math.round(
+                capabilityScore * 0.60
+                        + adapterHealthScore * 0.25
+                        + historyScore * 0.15
+                        - fallbackPenalty);
+        return new RouteScores(
+                preferredAdapterType,
+                capabilityScore,
+                adapterHealthScore,
+                historyScore,
+                fallbackPenalty,
+                Math.max(0, totalScore));
+    }
+
+    private int adapterHealthScore(AgentAdapterType preferredAdapterType) {
+        Optional<AgentAdapterDescriptor> descriptor = agentExecutorService.listAdapterDescriptors().stream()
+                .filter(candidate -> candidate.adapterType() == preferredAdapterType)
+                .findFirst();
+        if (descriptor.isEmpty()) {
+            return 0;
+        }
+        AgentAdapterDescriptor value = descriptor.get();
+        if (!value.enabled()) {
+            return 0;
+        }
+        return switch (value.status()) {
+            case AVAILABLE -> 100;
+            case PLACEHOLDER -> 55;
+            case MISCONFIGURED -> 20;
+            case ERROR -> 10;
+            case DISABLED -> 0;
+        };
+    }
+
+    private int historyScore(AdapterRouteStats stats) {
+        if (stats.attempts() == 0) {
+            return 50;
+        }
+        return (int) Math.round(stats.successes() * 100.0 / stats.attempts());
+    }
+
+    private int fallbackPenalty(AdapterRouteStats stats) {
+        if (stats.attempts() == 0) {
+            return 0;
+        }
+        return (int) Math.round(stats.fallbacks() * 30.0 / stats.attempts());
     }
 
     private AgentAdapterType resolveStepPreferredAdapter(OrchestratorStepPlan stepPlan) {
@@ -55,10 +174,47 @@ public class AgentRouter {
         };
     }
 
+    private String enrichSystemPromptWithToolCapabilities(String systemPrompt, Agent agent) {
+        String basePrompt = systemPrompt == null || systemPrompt.isBlank()
+                ? "你是 AgentHub 中的自定义协作 Agent。"
+                : systemPrompt;
+        return basePrompt + "\n\n" + toolCapabilityRegistry.describeCapabilities(agent);
+    }
+
     public record RoutedAgent(
             String agentId,
             String agentName,
             String systemPrompt,
-            AgentAdapterType preferredAdapterType) {
+            AgentAdapterType preferredAdapterType,
+            String routingReason,
+            String toolCapabilitySummary) {
+    }
+
+    private record RouteScores(
+            AgentAdapterType preferredAdapterType,
+            int capabilityScore,
+            int adapterHealthScore,
+            int historyScore,
+            int fallbackPenalty,
+            int totalScore) {
+
+        private String describe() {
+            return "score="
+                    + totalScore
+                    + ", capabilityScore="
+                    + capabilityScore
+                    + ", adapterHealthScore="
+                    + adapterHealthScore
+                    + ", historyScore="
+                    + historyScore
+                    + ", fallbackPenalty="
+                    + fallbackPenalty
+                    + ", preferredAdapter="
+                    + preferredAdapterType
+                    + ".";
+        }
+    }
+
+    private record AgentMatch(Agent agent, RouteScores scores) {
     }
 }

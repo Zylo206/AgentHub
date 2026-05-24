@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class AgentAdapterRegistry {
 
     private final Map<AgentAdapterType, AgentAdapter> adapterMap;
+    private final Map<AgentAdapterType, MutableRouteStats> routeStats = new EnumMap<>(AgentAdapterType.class);
     private final AgentAdapterType defaultAdapterType;
     private final TimeProvider timeProvider;
 
@@ -47,6 +49,13 @@ public class AgentAdapterRegistry {
         return List.copyOf(descriptors);
     }
 
+    public synchronized AdapterRouteStats routeStats(AgentAdapterType adapterType) {
+        if (adapterType == null) {
+            return AdapterRouteStats.empty();
+        }
+        return AdapterRouteStats.from(routeStats.computeIfAbsent(adapterType, ignored -> new MutableRouteStats()));
+    }
+
     public AgentAdapter getAdapter(AgentAdapterType type) {
         AgentAdapter adapter = adapterMap.get(type);
         if (adapter == null) {
@@ -62,35 +71,59 @@ public class AgentAdapterRegistry {
     public AgentResponse executeWithFallback(AgentAdapterType preferredType, AgentRequest request) {
         if (preferredType == defaultAdapterType) {
             AgentResponse defaultResponse = getDefaultAdapter().execute(request);
-            return buildDirectResponse(preferredType, defaultAdapterType, defaultResponse);
+            AgentResponse response = buildDirectResponse(preferredType, defaultAdapterType, defaultResponse);
+            recordRouteResult(preferredType, response);
+            return response;
         }
 
         AgentAdapter preferredAdapter = adapterMap.get(preferredType);
         if (preferredAdapter == null) {
-            return buildFallbackResponse(
+            AgentResponse response = buildFallbackResponse(
                     preferredType,
                     "Preferred adapter is not registered in this demo build.",
                     request);
+            recordRouteResult(preferredType, response);
+            return response;
         }
 
         AgentAdapterDescriptor descriptor = preferredAdapter.describe();
         if (descriptor.status() != AgentAdapterHealthStatus.AVAILABLE) {
-            return buildFallbackResponse(
+            AgentResponse response = buildFallbackResponse(
                     preferredType,
                     descriptor.failureReason() == null ? descriptor.description() : descriptor.failureReason(),
                     request);
+            recordRouteResult(preferredType, response);
+            return response;
         }
 
         AgentResponse preferredResponse = preferredAdapter.execute(request);
         if (preferredResponse.status() == AgentExecutionStatus.COMPLETED) {
-            return buildDirectResponse(preferredType, preferredType, preferredResponse);
+            AgentResponse response = buildDirectResponse(preferredType, preferredType, preferredResponse);
+            recordRouteResult(preferredType, response);
+            return response;
         }
 
         String fallbackReason = preferredResponse.errorMessage();
         if (fallbackReason == null || fallbackReason.isBlank()) {
             fallbackReason = preferredResponse.content();
         }
-        return buildFallbackResponse(preferredType, fallbackReason, request);
+        AgentResponse response = buildFallbackResponse(preferredType, fallbackReason, request);
+        recordRouteResult(preferredType, response);
+        return response;
+    }
+
+    private synchronized void recordRouteResult(AgentAdapterType preferredType, AgentResponse response) {
+        MutableRouteStats stats = routeStats.computeIfAbsent(preferredType, ignored -> new MutableRouteStats());
+        stats.attempts.incrementAndGet();
+        if (response.status() == AgentExecutionStatus.COMPLETED && !response.fallbackUsed()) {
+            stats.successes.incrementAndGet();
+        }
+        if (response.fallbackUsed() || response.status() == AgentExecutionStatus.FALLBACK_USED) {
+            stats.fallbacks.incrementAndGet();
+        }
+        if (response.status() == AgentExecutionStatus.FAILED) {
+            stats.failures.incrementAndGet();
+        }
     }
 
     private AgentResponse buildDirectResponse(
@@ -140,6 +173,27 @@ public class AgentAdapterRegistry {
             return AgentAdapterType.valueOf(value.trim().toUpperCase().replace('-', '_'));
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Invalid default adapter type: " + value);
+        }
+    }
+
+    private static class MutableRouteStats {
+        private final AtomicLong attempts = new AtomicLong();
+        private final AtomicLong successes = new AtomicLong();
+        private final AtomicLong fallbacks = new AtomicLong();
+        private final AtomicLong failures = new AtomicLong();
+    }
+
+    public record AdapterRouteStats(long attempts, long successes, long fallbacks, long failures) {
+        private static AdapterRouteStats empty() {
+            return new AdapterRouteStats(0, 0, 0, 0);
+        }
+
+        private static AdapterRouteStats from(MutableRouteStats stats) {
+            return new AdapterRouteStats(
+                    stats.attempts.get(),
+                    stats.successes.get(),
+                    stats.fallbacks.get(),
+                    stats.failures.get());
         }
     }
 }

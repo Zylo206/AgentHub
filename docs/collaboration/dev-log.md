@@ -2425,3 +2425,408 @@
 - 做 Adapter 测试面板，允许在 `/agents` 或 Workspace 中手动触发 Adapter execute 并查看 JSON contract 解析结果
 - 继续推进 REAL_FIRST 模式，让真实 Adapter 产物在配置启用时成为主产物，静态模板只作为 fallback
 - 补充 smoke test 的真实 Adapter mock server 或 fixture，降低真实外部模型依赖
+
+## Phase 56：Adapter 测试面板与真实输出契约可视化
+
+### 目标
+
+- 在前端提供手动 Adapter 测试入口，让 OPENAI_COMPATIBLE / Codex / Claude Code / OpenCode 的可用性、fallback、原始响应和 artifact JSON 解析结果可见
+- 降低“真实 Adapter 输出进入 Artifact 链路”后缺少手动验收入口的风险
+
+### 主要变更
+
+- `agenthubApi.ts` 新增 `executeAdapter`
+- `agentTypes.ts` 新增 `AdapterExecutionResponse`
+- `/agents` 页面新增 Adapter 手动测试面板
+  - 可选择 Adapter
+  - 可输入测试 Prompt
+  - 展示 preferred / actual / status / fallbackUsed
+  - 展示 errorMessage / fallback 原因
+  - 展示原始响应
+  - 前端解析 `assistantMessage + artifacts[]` JSON contract，并展示 artifact title / type / language / summary / content length
+- `workspace.css` 增加 Adapter 测试面板样式
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- 手动打开 `/agents`
+- 选择 `MOCK` 执行 Adapter 测试，确认返回稳定响应
+- 选择未配置的 `OPENAI_COMPATIBLE` / CLI Adapter，确认实际 fallback 到 MOCK，且 fallback 原因可见
+- 如配置真实 Adapter，确认原始响应和 artifacts[] 解析结果可见
+
+### 静态 / Mock / Placeholder 部分
+
+- 测试面板只是手动验证入口，不代表 Codex / Claude Code / OpenCode 已完成深度真实接入
+- 未配置或不可用 Adapter 仍会 fallback 到 MOCK
+- JSON 解析在前端用于展示，真实 Artifact 持久化仍以后端 `AdapterArtifactExtractor` 为准
+
+### 遗留问题
+
+- 还没有独立 mock OpenAI-compatible server 用于稳定测试 REAL_ADAPTER 输出
+- 还没有把测试结果保存为审计记录或 Artifact
+- Adapter 测试入口尚未和 Agent Builder 的 created Agent 直接绑定
+
+### 下一步建议
+
+- 推进 REAL_FIRST 模式，让真实 Adapter Artifact 在配置启用时优先替代静态模板
+- 或补充 Adapter test fixture / mock server，让 smoke test 能稳定覆盖真实输出契约
+
+## Phase 57：DeepSeek OpenAI-compatible 配置化接入
+
+### 目标
+
+- 让现有 `OPENAI_COMPATIBLE` Adapter 可以通过环境变量启用并接入 DeepSeek OpenAI-style API
+- 参考 KnowFlow 的 DeepSeek 接入方式：配置 base URL、Bearer token、model，并调用 `/chat/completions`
+- 保持真实 API key 不进入仓库，未配置或调用失败时继续 fallback 到 MOCK
+
+### 主要变更
+
+- `application.yml` 中 `agenthub.adapters.openai-compatible.enabled` 改为读取 `AGENTHUB_OPENAI_ENABLED`
+- `.env.example` 增加 `AGENTHUB_OPENAI_ENABLED` 和 DeepSeek OpenAI-compatible 示例配置
+- `OpenAICompatibleAgentAdapter` 请求体显式设置 `stream=false`，保持当前非流式调用边界
+- `scripts/README.md` 增加 DeepSeek / OpenAI-compatible 本地环境变量配置和 Adapter Test Panel 验证说明
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- 本轮不在仓库中保存真实 API key
+- 如需真实调用验证，需在本机临时设置：
+  - `AGENTHUB_OPENAI_ENABLED=true`
+  - `AGENTHUB_OPENAI_BASE_URL=https://api.deepseek.com`
+  - `AGENTHUB_OPENAI_API_KEY=<your-api-key>`
+  - `AGENTHUB_OPENAI_MODEL=deepseek-v4-flash`
+  - 然后在 `/agents` Adapter Test Panel 测试 `OPENAI_COMPATIBLE`
+
+### 静态 / Mock / Placeholder 部分
+
+- DeepSeek 接入复用 `OPENAI_COMPATIBLE` 非流式调用，不是单独的新 Adapter
+- Codex / Claude Code / OpenCode 仍是 CLI 探测型半真实 Adapter，不代表深度平台接入完成
+- 未配置环境变量、外部调用失败或超时时，主链路仍应 fallback 到 MOCK
+- 真实 Adapter 输出能否进入 Artifact 取决于模型是否返回符合 artifact JSON contract 的内容
+
+### 遗留问题
+
+- 未实现流式输出
+- 未做真实 DeepSeek 调用的自动化测试
+- 真实模型输出仍需要更严格的 schema 校验和 fixture 覆盖
+- 用户粘贴到聊天中的 API key 应在平台控制台轮换，避免密钥泄露风险
+
+### 下一步建议
+
+- 用户本机用临时环境变量验证 DeepSeek Adapter Test Panel
+- 验证通过后再推进 `REAL_FIRST` 模式或增加 OpenAI-compatible mock fixture
+- 若要纳入 smoke test，应先提供不依赖公网和真实 key 的 mock OpenAI-compatible 服务
+
+## Phase 58：多 @Agent 自定义 Step、Agent 协作消息协议与 Tool Capability 路由
+
+### 目标
+
+- 将 `mentionedAgentIds` 从“只影响第一个 selectedAgent”推进为“多个被 @ Agent 都能进入 TaskGraph”
+- 引入轻量 Agent 协作消息协议，让 MessageStream 能区分 `TASK / RESULT / REVIEW / APPROVAL / REJECTION / ERROR`
+- 将 `toolTags` 从展示标签推进为 Router 可读取的静态 Tool Capability 映射
+
+### 主要变更
+
+- `TaskPlanner` 为额外 mentioned Agent 生成独立 `OrchestratorStepPlan`
+  - 第一个 mentioned / selected Agent 仍作为核心 Step 1
+  - 后续 mentioned Agent 会追加为 custom collaboration step
+  - 追加 step 使用 `MENTIONED_AGENT_GROUP` 进入 TaskGraph
+- `OrchestratorService` 在 demo-task 中执行附加 mentioned Agent step
+  - 保留 Frontend / Backend / Reviewer 三步和静态 Artifact 主链路
+  - 额外 mentioned Agent step 参与 `CompletableFuture` 执行、TaskRun、TaskGraph、DecisionLog 和 MessageStream
+- `MessageType` 增加 Agent 协作协议类型
+  - `TASK`
+  - `RESULT`
+  - `REVIEW`
+  - `APPROVAL`
+  - `REJECTION`
+- `MessageApplicationService` 支持追加带协议类型的 Agent 消息
+- 新增 `ToolCapabilityRegistry`
+  - `code / preview / review / deploy / api` 映射为轻量 tool capabilities
+  - `AgentRouter` 将 tool capability summary 注入 selected custom Agent system prompt
+  - Router 能解释 selected Agent 是否匹配 step requiredSkill
+- 前端 `MessageBubble` 增加协议 badge 展示
+- `scripts/smoke-test.mjs` 增加 `TASK / RESULT / REVIEW / APPROVAL` 协作协议消息断言
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- smoke test 已增加协议断言，需在启动前后端后执行：
+  - `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 这仍不是完整自由群聊 runtime
+- 多 @Agent 目前支持消息开头连续 @，不做自然语言中间 @ 解析
+- 额外 mentioned Agent step 进入 TaskGraph，但产物仍可能依赖静态模板或 Mock fallback
+- Tool Capability 是静态映射，不是真实工具执行权限系统
+- Agent 协作消息协议是 MVP 级消息类型，不是完整 Agent-to-Agent 通信总线
+
+### 遗留问题
+
+- 还没有让每个 mentioned custom Agent 动态决定产物类型
+- 还没有把 `toolTags` 绑定到真实 Tool Registry
+- Reviewer 的 `REJECTION` / retry 语义还没有形成完整闭环
+- 多 Agent 回复仍由 demo-task 驱动，不是任意消息自动触发
+
+### 下一步建议
+
+- 做 step-level Reviewer 审查和失败重试，将 `REJECTION` 协议真正接入执行链路
+- 将 `toolTags` 升级为可配置 Tool Registry，并在 Agent Builder 中选择工具能力
+- 让 LLM Planner 输出动态 mentioned Agent steps，而不是仅由规则化 planner 追加
+
+## Phase 59：Tool Capability 驱动的默认 Agent 路由
+
+### 目标
+
+- 将 `toolTags` 的静态 Tool Capability 映射从解释信息推进为实际路由策略
+- 在没有显式 selectedAgent / mentioned Agent 覆盖某个 step 时，让 Router 根据 `requiredSkill -> capability -> Agent` 选择默认执行 Agent
+- 保持 Mock fallback、demo-task、TaskGraph、Agent 协作消息协议和 smoke test 主链路稳定
+
+### 主要变更
+
+- `ToolCapabilityRegistry`
+  - 增加 `matchScore(agent, requiredSkill)`
+  - 扩展内置 tool tag 映射：`code_editor`、`contract_writer`、`schema_designer`、`review_checker`、`task_planner`、`task_router`
+  - 支持 `FRONTEND_ARTIFACT_GENERATION`、`QUALITY_REVIEW`、`API_CONTRACT_DESIGN` 等 requiredSkill 匹配
+- `AgentRouter`
+  - 注入 `AgentApplicationService`
+  - 默认路由时扫描 active Agents
+  - 排除 Orchestrator，按 capability score 选择匹配 Agent
+  - 同分时优先自定义 Agent，再按更新时间排序
+  - 将真实 capability routing reason 写入 `RoutedAgent`
+- `OrchestratorService`
+  - core step 不再硬编码 Frontend / Backend / Reviewer 的 assigned agent
+  - 使用 `frontendRoute`、`backendRoute`、`reviewRoute` 的 agentId / agentName / systemPrompt / routingReason
+  - TaskStep 中可以看到 Tool Capability Router 的实际选择结果
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- 重启 backend / frontend
+- `node scripts/smoke-test.mjs`
+  - 结果：通过
+  - 覆盖 health、adapter、multi-mention、TaskGraph、Artifact Revision、Apply Diff、Deploy、Preview、Agent 协作协议
+- API 级手动验证
+  - 创建 `toolTags=["review"]` 的自定义 Agent
+  - 不显式 @ 该 Agent，直接运行 demo-task
+  - Review Step 被路由到自定义 Agent
+  - `routingReason=Tool capability router selected Agent for requiredSkill=QUALITY_REVIEW...`
+
+### 静态 / Mock / Placeholder 部分
+
+- Tool Capability 仍是静态 registry，不是真实工具执行系统
+- Router 选择 Agent 后，Adapter 仍可能 fallback 到 MOCK
+- Artifact 主链路仍保留 static / hybrid fallback 边界
+- 这不是完整动态技能调度或真实工具调用
+
+### 遗留问题
+
+- Tool Capability 还没有前端独立管理页面
+- Router 还没有复杂权重，例如历史成功率、Adapter health、任务成本、上下文相关度
+- 还没有把 tool capability 变成真实可执行 tool invocation
+- smoke test 尚未固化“自定义 Agent capability route”断言
+
+### 下一步建议
+
+- 将 capability route 验证加入 smoke test
+- 在 Agent Builder 中把 toolTags 展示为更明确的 Tool Capability 选择器
+- 后续可引入 Adapter health / Agent success history 作为 Router 打分因子
+
+## Phase 60：文档 V1.0 同步与课题完成度收口
+
+### 目标
+
+- 将 README、技术设计、Roadmap 和 Demo Checklist 同步到当前 MVP 增强后期状态
+- 明确区分真实功能、半真实 Adapter、静态 Demo、Mock fallback 和未完成能力
+- 让文档能支撑后续答辩、Demo 录制和继续开发，不再停留在旧骨架描述
+
+### 主要变更
+
+- `README.md`
+  - 重写为 V1.0 项目入口
+  - 说明当前阶段、已实现能力、静态 / Mock / 半真实边界、启动方式、smoke test、DeepSeek / OPENAI_COMPATIBLE 配置和推荐演示主线
+- `docs/technical-design.md`
+  - 同步 Orchestrator、TaskGraph、Tool Capability Router、LLM Planner、Adapter、Context / Memory、Approval / Audit、Deploy Preview 架构
+  - 明确当前仍不是生产级 DAG、长期记忆、真实部署或深度 Agent 平台接入
+- `docs/roadmap.md`
+  - 更新为 MVP 增强后期路线
+  - 梳理已完成能力、下一阶段 P0/P1/P2 和不建议现在做的事项
+- `docs/collaboration/demo-checklist.md`
+  - 更新为 V1.0 人工验收清单
+  - 覆盖 Workspace、多 `@Agent`、Agent 协作协议、Tool Capability Router、Context / Memory、Adapter Test、REAL_ADAPTER、Diff / Approval / Audit / Deploy / smoke test
+
+### 验证方式
+
+- 文档路径检查：
+  - `README.md`
+  - `docs/technical-design.md`
+  - `docs/roadmap.md`
+  - `docs/collaboration/demo-checklist.md`
+  - `docs/collaboration/dev-log.md`
+- Markdown 内容人工检查：
+  - 标题层级正常
+  - 表格结构正常
+  - 代码块闭合
+  - Mock / Static / Placeholder / 半真实边界明确
+- 本轮只改文档，不需要重新运行前后端构建
+
+### 静态 / Mock / Placeholder 部分
+
+- 文档明确说明 demo-task 仍是规则化主链路，不是完整自治 Agent runtime
+- Codex / Claude Code / OpenCode 仍是 CLI 探测型半真实 Adapter
+- Deploy Preview 仍是本地 static demo simulation
+- Tool Capability 仍是静态 registry，不是真实 tool invocation
+- REAL_ADAPTER Artifact 仍依赖真实 Adapter 成功和输出 contract
+
+### 遗留问题
+
+- `docs/mvp-requirements-alignment.md` 可后续单独同步为最新评分表
+- `docs/product-design.md` 和 `docs/demo-scenario.md` 后续仍需按 V1.0 演示口径再收敛
+- README 和部分历史文档曾出现编码显示问题，后续提交前需再次人工打开确认
+- smoke test 尚未固化“自定义 Agent capability route”断言
+
+### 下一步建议
+
+- 先做仓库卫生与 build / smoke 全量验证
+- 然后推进 REAL_FIRST 收敛和 Adapter fixture / mock server
+- 再做 Reviewer `REJECTION` 闭环和 Tool Capability UI 化
+
+## Phase 61：P0-6 仓库卫生与 smoke test 验证增强
+
+### 目标
+
+- 确保 TypeScript build cache 不进入仓库
+- 为 REAL_ADAPTER Artifact 增加稳定 fixture 合同验证
+- 为 Tool Capability Router 增加 API 级 smoke 覆盖
+- 对 `REJECTION` 协议做可用则验证、不可用则报告缺口
+
+### 主要变更
+
+- `.gitignore` 明确增加 build cache 段落，并保留 `*.tsbuildinfo` / `**/*.tsbuildinfo`
+- `scripts/smoke-test.mjs` 增加本地 REAL_ADAPTER Artifact fixture contract 校验
+- `scripts/smoke-test.mjs` 对后端实际产生的 REAL_ADAPTER Artifact 校验 `sourceKind`、`sourceAdapterType`、`sourceTaskStepId`、`generationMode`、`content` 持久化说明
+- `scripts/smoke-test.mjs` 新增隔离会话：创建 `toolTags=["review"]` 的自定义 Agent，验证 `QUALITY_REVIEW` step 被 Tool Capability Router 选中，并校验 `routingReason`
+- `scripts/smoke-test.mjs` 对 `REJECTION` 消息采用条件断言：如果消息流出现 `messageType=REJECTION`，校验 sender / content；如果没有出现，输出 warning 并记录为当前覆盖缺口
+- `scripts/README.md` 同步 smoke test 覆盖范围、REAL_ADAPTER fixture、Tool Capability route 和 REJECTION 条件覆盖说明
+
+### 验证方式
+
+- `git ls-files "*.tsbuildinfo"`：无输出，当前没有 tracked tsbuildinfo
+- `Get-ChildItem -Recurse -Force -File -Filter *.tsbuildinfo`：发现本地 build cache 位于 `frontend/tsconfig.app.tsbuildinfo` 和 `frontend/tsconfig.node.tsbuildinfo`，应继续保持 ignored
+- `node --check scripts/smoke-test.mjs`
+- 启动 backend / frontend 后执行：`node scripts/smoke-test.mjs`
+- 如配置真实 Adapter 并期望真实产物：`$env:AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER="true"; node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- REAL_ADAPTER fixture 是本地合同校验，不代表真实外部模型已调用
+- Tool Capability route 仍验证静态 `toolTags -> requiredSkill` 映射，不是真实 tool invocation
+- 当前 demo-task 主路径没有实际生成 `REJECTION` 消息，smoke test 会报告 warning；Reviewer rejection / retry 闭环仍未完成
+
+### 遗留问题
+
+- 仍缺不依赖公网和真实 API key 的 OpenAI-compatible mock server
+- `REJECTION` / retry 语义还没有接入执行链路
+- Tool Capability 仍未升级为可执行 Tool Registry
+
+## Phase 62：P1-5 浏览器级 E2E 与 smoke 扩展
+
+### 目标
+
+- 增加轻量浏览器级 E2E，覆盖 Workspace、Preview、Approval Gate 主流程
+- 扩展 API smoke，覆盖自动触发 Orchestrator、attachments、Context Retrieval 解释信息、Adapter weighted routing 证据
+- 保持变更范围在 `scripts/`、已有 package 测试脚本和本 dev-log 内，不触碰业务代码
+
+### 主要变更
+
+- 新增 `scripts/e2e-browser.mjs`
+  - 通过 API seed 浏览器测试会话、消息附件、message-level Orchestrator run、Artifact 和 demo deployment
+  - 使用 Playwright 打开 `/workspace`，选择 seed 会话，验证 message stream、Orchestrator explain panel、artifact preview
+  - 在浏览器内点击 `Deploy Selected Artifact`，验证 `.approval-gate`，确认 `Approve Deploy` 后验证 deploy status card
+  - 打开 `/preview/:artifactId` 风格的静态预览 URL，验证 preview card 和 content 渲染
+- `frontend/package.json`
+  - 新增 `npm run e2e:browser`，指向 `node ../scripts/e2e-browser.mjs`
+  - 不新增根 package，也不引入提交级 Playwright 依赖
+- `scripts/smoke-test.mjs`
+  - 主消息增加 lightweight attachments，并断言后端持久化 `fileName` / `contentPreview`
+  - 如果 `/messages/{messageId}/orchestrator-run` 可用，执行并断言自动触发 Orchestrator 返回 `COMPLETED` 和 routing decision evidence
+  - 对 `retrievedContextItems` 增加 `score` 与 `reason` 解释断言
+  - 对 Tool Capability Router 的 `routingReason` 增加 weighted evidence 断言：`score`、`capabilityScore`、`adapterHealthScore`、`historyScore`、`fallbackPenalty`、`preferredAdapter`
+- `scripts/README.md`
+  - 同步 smoke 覆盖范围和浏览器 E2E 运行方式
+
+### 验证方式
+
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+- `cd frontend; npm run lint`
+- 启动 backend / frontend 后执行：
+  - `node scripts/smoke-test.mjs`
+  - `cd frontend; npm run e2e:browser`
+
+### 静态 / Mock / Placeholder 部分
+
+- 浏览器 E2E wrapper 需要本地已安装 Playwright；本轮不把 Playwright 加入 committed dependency
+- 浏览器 E2E 不负责启动 backend / frontend server
+- Deploy Preview 仍是 local static demo simulation，不是外部部署
+- Adapter weighted routing 仍验证 routing explanation 和 score evidence，不代表真实 tool invocation
+
+### 遗留风险
+
+- 当前工作区已有大量业务代码与文档未提交改动，本轮只追加限定范围改动，未回滚或清理既有变更
+- 如果前端文案或 CSS class 大幅调整，浏览器 E2E 选择器需要同步维护
+- 如果 Playwright 未安装，`scripts/e2e-browser.mjs` 会给出安装提示并失败，不能完成浏览器验证
+
+## Phase 63：P1 Agent 协作触发、加权路由、Context 可解释 UI、附件与浏览器 E2E
+
+### 目标
+
+- 补齐 P1-1 到 P1-5：任意消息显式触发 Agent 协作、Adapter health 加权路由、Context Retrieval 可解释 UI、轻量附件模型、浏览器级 E2E。
+- 保持现有 demo-task、Artifact Revision、Approval Gate、Deploy Preview、smoke test 主链路稳定。
+
+### 主要变更
+
+- 后端消息模型支持 lightweight attachments，Message DTO / send message / list message 链路保留附件元数据和 content preview。
+- 新增 message-level Orchestrator run 入口，支持基于某条消息显式触发 Agent 协作，同时保留原 demo-task 手动入口。
+- AgentRouter 引入 Adapter health / history / fallback penalty 参与路由评分，routingReason 输出 capabilityScore、adapterHealthScore、historyScore、fallbackPenalty、preferredAdapter 等证据。
+- ContextPanel 展示 Retrieved Context 的 sourceType、score、reason 和注入 TaskStep 线索，避免上下文只停留在静态列表。
+- ChatInput / MessageBubble 支持轻量附件展示，不接对象存储和真实上传服务。
+- 新增 `scripts/e2e-browser.mjs` 和 `npm run e2e:browser`，使用 Playwright runtime 覆盖 Workspace、Approval Gate、Deploy Status Card、Preview 页面主流程。
+- 为浏览器 E2E 增加 `playwright-core` dev dependency，并默认使用本机 Microsoft Edge channel，避免下载 Playwright 浏览器包。
+- 补充本地 favicon，修复 ContextPanel 重复 React key 警告，保证浏览器 E2E 控制台质量门通过。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `cd frontend && npm run lint`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+- 启动临时 backend `http://127.0.0.1:18082` 和 frontend `http://127.0.0.1:5173` 后执行：
+  - `node scripts/smoke-test.mjs`
+  - `cd frontend && npm run e2e:browser`
+- `git diff --check`
+- `git ls-files "*.tsbuildinfo"`：无输出
+
+### 静态 / Mock / Placeholder 部分
+
+- 任意消息触发 Agent 协作本轮是显式 message-level trigger，不是完全自治后台调度。
+- Lightweight attachments 只保存元数据和 content preview，不做真实文件上传、对象存储或图片处理。
+- Adapter health history 仍是内存统计，不是持久化运行画像。
+- Browser E2E 是轻量 UI 主链路验证，不是完整浏览器自动化测试体系。
+- Tool Capability 仍是路由能力，不代表真实 tool invocation 已完成。
+
+### 遗留问题
+
+- 自动从任意任务消息直接触发 Orchestrator 仍需产品策略确认，当前保留显式触发以避免误执行。
+- Adapter health 历史未持久化，重启后会丢失。
+- 附件没有真实上传、下载、权限和大小限制治理。
+- 浏览器 E2E 依赖本机 Edge channel 或用户指定的 Chromium channel。
+
+### 下一步建议
+
+- 将自动触发策略做成可配置确认流：高风险任务先进入 Approval / Review，再触发 Orchestrator。
+- 把 Adapter health history 接入持久化或本地 snapshot，提升路由稳定性。
+- 做轻量附件上传 API 和 Artifact 附件关联。

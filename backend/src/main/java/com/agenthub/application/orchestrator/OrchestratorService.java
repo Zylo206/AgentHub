@@ -128,6 +128,19 @@ public class OrchestratorService {
         return createDemoTaskFromMessage(conversationId, messageId, userInput, null);
     }
 
+    public TaskRun runFromMessage(String conversationId, String messageId, String selectedAgentId) {
+        Message sourceMessage = messageApplicationService.getMessage(messageId);
+        if (!sourceMessage.getConversationId().equals(new ConversationId(conversationId))) {
+            throw new IllegalArgumentException("Source message does not belong to the provided conversation.");
+        }
+
+        return createDemoTaskFromMessage(
+                conversationId,
+                messageId,
+                sourceMessage.getContent(),
+                selectedAgentId);
+    }
+
     public TaskRun createDemoTaskFromMessage(
             String conversationId,
             String messageId,
@@ -248,17 +261,15 @@ public class OrchestratorService {
         artifactRepository.save(apiContractArtifact);
         artifactRepository.save(reviewArtifact);
 
-        List<AgentStepExecutor.StepExecutionCommand> stepCommands = List.of(
+        List<AgentStepExecutor.StepExecutionCommand> stepCommands = new ArrayList<>(List.of(
                 buildStepExecutionCommand(
                         conversationId,
                         taskRunId,
                         frontendStepPlan,
-                        selectedAgent == null ? BuiltInAgentIds.FRONTEND_BUILDER : selectedAgent.getId().value(),
-                        selectedAgent == null ? "前端构建 Agent" : selectedAgent.getName(),
+                        frontendRoute.agentId(),
+                        frontendRoute.agentName(),
                         userInput,
-                        selectedAgent == null
-                                ? "你负责 AgentHub Demo 中的前端实现。"
-                                : selectedAgent.getSystemPrompt(),
+                        frontendRoute.systemPrompt(),
                         selectedAgent == null
                                 ? "生成 React 登录页面和初始 README 草案。"
                                 : "由用户选择的 Agent 执行前端产物生成。",
@@ -278,15 +289,16 @@ public class OrchestratorService {
                         List.of("LoginPage.tsx", "README.md"),
                         List.of(codeArtifact.getId(), readmeArtifact.getId()),
                         frontendRoute.preferredAdapterType(),
+                        frontendRoute.routingReason(),
                         now),
                 buildStepExecutionCommand(
                         conversationId,
                         taskRunId,
                         backendStepPlan,
-                        BuiltInAgentIds.BACKEND_WORKER,
-                        "后端协作 Agent",
+                        backendRoute.agentId(),
+                        backendRoute.agentName(),
                         userInput,
-                        "你负责 AgentHub Demo 中的 API 契约和后端结构说明。",
+                        backendRoute.systemPrompt(),
                         "根据页面字段和任务范围生成登录 API 契约。",
                         backendStepPlan.requiredSkill(),
                         "使用登录页输入作为契约输入，并保持 API 便于后续迭代。",
@@ -298,15 +310,16 @@ public class OrchestratorService {
                         List.of("LoginPage.tsx", "README.md"),
                         List.of(apiContractArtifact.getId()),
                         backendRoute.preferredAdapterType(),
+                        backendRoute.routingReason(),
                         now),
                 buildStepExecutionCommand(
                         conversationId,
                         taskRunId,
                         reviewStepPlan,
-                        BuiltInAgentIds.REVIEWER,
-                        "评审 Agent",
+                        reviewRoute.agentId(),
+                        reviewRoute.agentName(),
                         userInput,
-                        "你负责 AgentHub Demo 中的评审和验收检查。",
+                        reviewRoute.systemPrompt(),
                         "检查生成的页面、README、API 契约和验收标准。",
                         reviewStepPlan.requiredSkill(),
                         "结合 Task Spec、代码产物、README 产物和 API 契约产物一起评审。",
@@ -318,7 +331,17 @@ public class OrchestratorService {
                         List.of("LoginPage.tsx", "README.md", "login-api-contract.json"),
                         List.of(reviewArtifact.getId()),
                         reviewRoute.preferredAdapterType(),
-                        now));
+                        reviewRoute.routingReason(),
+                        now)));
+        stepCommands.addAll(buildAdditionalMentionedAgentStepCommands(
+                conversationId,
+                taskRunId,
+                orchestratorPlan,
+                mentionedAgents,
+                selectedAgent,
+                userInput,
+                pinnedInputContext,
+                now));
         List<TaskStep> executedSteps = executeStepCommandsWithParallelGroups(stepCommands);
         TaskStep frontendStep = findExecutedStep(executedSteps, 1);
         TaskStep backendStep = findExecutedStep(executedSteps, 2);
@@ -326,8 +349,8 @@ public class OrchestratorService {
 
         TaskPlan taskPlan = new TaskPlan(
                 "生成登录页、说明文档、API 契约和评审产物。",
-                List.of(frontendStep, backendStep, reviewStep));
-        List<TaskStep> demoSteps = List.of(frontendStep, backendStep, reviewStep);
+                executedSteps);
+        List<TaskStep> demoSteps = executedSteps;
         TaskGraph taskGraph = TaskGraph.fromSteps(demoSteps);
         List<Artifact> demoArtifacts = artifactRepository.findByTaskRunId(taskRunId);
         List<ArtifactId> staticArtifactIds = List.of(
@@ -446,10 +469,17 @@ public class OrchestratorService {
                 frontendStep,
                 backendStep,
                 reviewStep,
+                findAdditionalMentionedAgentSteps(demoSteps),
+                mentionedAgents,
                 codeArtifact,
                 readmeArtifact,
                 apiContractArtifact,
                 reviewArtifact);
+        appendAgentProtocolMessages(
+                conversationId,
+                List.of(frontendStep, backendStep, reviewStep),
+                findAdditionalMentionedAgentSteps(demoSteps),
+                mentionedAgents);
 
         messageApplicationService.appendSystemMessage(
                 conversationId,
@@ -727,6 +757,7 @@ public class OrchestratorService {
             List<String> artifactSummaries,
             List<ArtifactId> producedArtifactIds,
             AgentAdapterType preferredAdapterType,
+            String routingReason,
             Instant now) {
         return new AgentStepExecutor.StepExecutionCommand(
                 conversationId,
@@ -746,7 +777,7 @@ public class OrchestratorService {
                 preferredAdapterType,
                 stepPlan.parallelGroupKey(),
                 stepPlan.dependsOnStepOrders(),
-                stepPlan.routingReason(),
+                routingReason == null || routingReason.isBlank() ? stepPlan.routingReason() : routingReason,
                 now);
     }
 
@@ -885,6 +916,193 @@ public class OrchestratorService {
                 .orElseThrow(() -> new IllegalStateException("Orchestrator step plan not found: " + stepOrder));
     }
 
+    private List<AgentStepExecutor.StepExecutionCommand> buildAdditionalMentionedAgentStepCommands(
+            String conversationId,
+            TaskRunId taskRunId,
+            OrchestratorPlan plan,
+            List<Agent> mentionedAgents,
+            Agent selectedAgent,
+            String userInput,
+            String pinnedInputContext,
+            Instant now) {
+        if (mentionedAgents == null || mentionedAgents.isEmpty()) {
+            return List.of();
+        }
+
+        String selectedAgentId = selectedAgent == null ? null : selectedAgent.getId().value();
+        List<String> additionalMentionedAgentIds = mentionedAgents.stream()
+                .filter(agent -> agent != null && agent.getId() != null)
+                .map(agent -> agent.getId().value())
+                .filter(agentId -> selectedAgentId == null || !selectedAgentId.equals(agentId))
+                .distinct()
+                .toList();
+        if (additionalMentionedAgentIds.isEmpty()) {
+            return List.of();
+        }
+
+        return plan.steps().stream()
+                .filter(stepPlan -> additionalMentionedAgentIds.contains(stepPlan.agentId()))
+                .map(stepPlan -> {
+                    Agent mentionedAgent = agentApplicationService.getAgent(stepPlan.agentId());
+                    AgentAdapterType preferredAdapterType = agentRoutingService.resolvePreferredAdapterForAgent(mentionedAgent);
+                    return buildStepExecutionCommand(
+                            conversationId,
+                            taskRunId,
+                            stepPlan,
+                            mentionedAgent.getId().value(),
+                            mentionedAgent.getName(),
+                            userInput,
+                            mentionedAgent.getSystemPrompt() == null || mentionedAgent.getSystemPrompt().isBlank()
+                                    ? "你是 AgentHub 群聊中的自定义协作 Agent。"
+                                    : mentionedAgent.getSystemPrompt(),
+                            stepPlan.taskDescription(),
+                            stepPlan.requiredSkill(),
+                            "该 TaskStep 来自 source message.mentionedAgentIds。"
+                                    + " Agent toolTags=" + mentionedAgent.getToolTags()
+                                    + pinnedInputContext,
+                            "该被 @ 的 Agent 已完成独立协作响应；如 Adapter 可用，其输出会被捕获为 REAL_ADAPTER Artifact。",
+                            List.of(
+                                    "mentionedAgentIds",
+                                    "Agent name: " + mentionedAgent.getName(),
+                                    "Agent tools: " + mentionedAgent.getToolTags()),
+                            List.of("LoginPage.tsx", "README.md", "login-api-contract.json"),
+                            List.of(),
+                            preferredAdapterType,
+                            stepPlan.routingReason(),
+                            now);
+                })
+                .toList();
+    }
+
+    private List<TaskStep> findAdditionalMentionedAgentSteps(List<TaskStep> steps) {
+        return steps.stream()
+                .filter(step -> step.getStepOrder() > 3)
+                .toList();
+    }
+
+    private void appendAgentProtocolMessages(
+            String conversationId,
+            List<TaskStep> coreSteps,
+            List<TaskStep> additionalMentionedAgentSteps,
+            List<Agent> mentionedAgents) {
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                BuiltInAgentIds.ORCHESTRATOR,
+                MessageType.TASK,
+                "Agent protocol TASK: Orchestrator accepted a group-chat task. mentionedAgentCount="
+                        + (mentionedAgents == null ? 0 : mentionedAgents.size())
+                        + ", coreSteps="
+                        + coreSteps.stream().map(TaskStep::getStepOrder).toList()
+                        + ", additionalCustomSteps="
+                        + additionalMentionedAgentSteps.stream().map(TaskStep::getStepOrder).toList(),
+                List.of());
+
+        coreSteps.stream()
+                .filter(step -> step.getStepOrder() != 3)
+                .forEach(step -> messageApplicationService.appendAgentMessage(
+                        conversationId,
+                        step.getAssignedAgentId().value(),
+                        MessageType.RESULT,
+                        "Agent protocol RESULT: core Agent completed TaskStep "
+                                + step.getStepOrder()
+                                + ". assignedAgentId="
+                                + step.getAssignedAgentId().value()
+                                + ", preferredAdapter="
+                                + step.getPreferredAdapterType()
+                                + ", actualAdapter="
+                                + step.getActualAdapterType()
+                                + ", fallbackUsed="
+                                + isFallbackStep(step)
+                                + ", producedArtifacts="
+                                + step.getProducedArtifactIds().stream().map(ArtifactId::value).toList(),
+                        step.getProducedArtifactIds()));
+
+        for (TaskStep step : additionalMentionedAgentSteps) {
+            messageApplicationService.appendAgentMessage(
+                    conversationId,
+                    step.getAssignedAgentId().value(),
+                    MessageType.RESULT,
+                    "Agent protocol RESULT: mentioned custom Agent completed TaskStep "
+                            + step.getStepOrder()
+                            + ". assignedAgentId="
+                            + step.getAssignedAgentId().value()
+                            + ", preferredAdapter="
+                            + step.getPreferredAdapterType()
+                            + ", actualAdapter="
+                            + step.getActualAdapterType()
+                            + ", fallbackUsed="
+                            + isFallbackStep(step)
+                            + ", producedArtifacts="
+                            + step.getProducedArtifactIds().stream().map(ArtifactId::value).toList(),
+                    step.getProducedArtifactIds());
+        }
+
+        coreSteps.stream()
+                .filter(step -> step.getStepOrder() == 3)
+                .findFirst()
+                .ifPresent(reviewStep -> {
+                    messageApplicationService.appendAgentMessage(
+                            conversationId,
+                            reviewStep.getAssignedAgentId().value(),
+                            MessageType.REVIEW,
+                            "Agent protocol REVIEW: Reviewer checked the collaborative outputs for TaskStep "
+                                    + reviewStep.getStepOrder()
+                                    + ". fallbackUsed="
+                                    + isFallbackStep(reviewStep)
+                                    + ". reviewDecision="
+                                    + (isReviewerRejection(reviewStep) ? "REJECTION" : "APPROVAL"),
+                            reviewStep.getProducedArtifactIds());
+                    appendReviewerRejectionLoopMessages(conversationId, reviewStep);
+                });
+
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                BuiltInAgentIds.ORCHESTRATOR,
+                coreSteps.stream().anyMatch(this::isReviewerRejection) ? MessageType.REJECTION : MessageType.APPROVAL,
+                "Agent protocol "
+                        + (coreSteps.stream().anyMatch(this::isReviewerRejection) ? "REJECTION" : "APPROVAL")
+                        + ": Orchestrator aggregated core steps and mentioned custom Agent steps. "
+                        + (coreSteps.stream().anyMatch(this::isReviewerRejection)
+                                ? "Reviewer requested a retry/revise loop before approval."
+                                : "This is an MVP collaboration protocol, not a full autonomous group-chat runtime."),
+                List.of());
+    }
+
+    private void appendReviewerRejectionLoopMessages(String conversationId, TaskStep reviewStep) {
+        if (!isReviewerRejection(reviewStep)) {
+            return;
+        }
+
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                reviewStep.getAssignedAgentId().value(),
+                MessageType.REJECTION,
+                "Agent protocol REJECTION: Reviewer rejected TaskStep "
+                        + reviewStep.getStepOrder()
+                        + ". Blocked status is recorded as a collaboration message so Orchestrator can trigger revise/retry.",
+                reviewStep.getProducedArtifactIds());
+        messageApplicationService.appendAgentMessage(
+                conversationId,
+                BuiltInAgentIds.ORCHESTRATOR,
+                MessageType.REJECTION,
+                "Agent protocol REJECTION: Orchestrator recommends retry/revise. Suggested loop: "
+                        + "1) route blockers back to the owning worker, "
+                        + "2) revise affected Artifact(s), "
+                        + "3) rerun Reviewer before approval.",
+                reviewStep.getProducedArtifactIds());
+    }
+
+    private boolean isReviewerRejection(TaskStep step) {
+        String content = ((step.getOutputContent() == null ? "" : step.getOutputContent()) + "\n"
+                + (step.getAdapterResponseSummary() == null ? "" : step.getAdapterResponseSummary()) + "\n"
+                + (step.getAdapterErrorMessage() == null ? "" : step.getAdapterErrorMessage())).toLowerCase();
+        return content.contains("rejection")
+                || content.contains("decision: reject")
+                || content.contains("decision: rejection")
+                || content.contains("通过：否")
+                || content.contains("拒绝");
+    }
+
     private void appendDemoGroupChatMessages(
             String conversationId,
             String frontendAgentId,
@@ -894,6 +1112,8 @@ public class OrchestratorService {
             TaskStep frontendStep,
             TaskStep backendStep,
             TaskStep reviewStep,
+            List<TaskStep> additionalMentionedAgentSteps,
+            List<Agent> mentionedAgents,
             Artifact codeArtifact,
             Artifact readmeArtifact,
             Artifact apiContractArtifact,

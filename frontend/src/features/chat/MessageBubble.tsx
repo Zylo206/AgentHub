@@ -30,6 +30,10 @@ function getBubbleVariant(message: Message): string {
     return "user";
   }
 
+  if (["TASK", "RESULT", "REVIEW", "APPROVAL", "REJECTION"].includes(message.messageType)) {
+    return `agent-protocol agent-protocol--${message.messageType.toLowerCase()}`;
+  }
+
   if (message.senderType === "AGENT") {
     return "agent";
   }
@@ -51,6 +55,19 @@ function getBubbleVariant(message: Message): string {
   }
 
   return "system";
+}
+
+function getProtocolLabel(messageType: string): string | null {
+  const labels: Record<string, string> = {
+    TASK: "TASK",
+    RESULT: "RESULT",
+    REVIEW: "REVIEW",
+    APPROVAL: "APPROVAL",
+    REJECTION: "REJECTION",
+    ERROR: "ERROR"
+  };
+
+  return labels[messageType] ?? null;
 }
 
 function getReferenceMessageId(message: Message): string | null {
@@ -89,6 +106,8 @@ export function MessageBubble({
   const messageId = formatId(message.id);
   const referenceMessageId = getReferenceMessageId(message);
   const artifactIds = message.artifactIds.map((artifactId) => formatId(artifactId)).filter(Boolean);
+  const protocolLabel = getProtocolLabel(message.messageType);
+  const attachments = message.attachments ?? [];
 
   return (
     <div className={`message-row message-row--${message.senderType.toLowerCase()} ${highlighted ? "message-row--highlighted" : ""}`}>
@@ -102,6 +121,7 @@ export function MessageBubble({
             {message.senderType === "AGENT" && agentStepLabel ? (
               <span className="message-agent-step">{agentStepLabel}</span>
             ) : null}
+            {protocolLabel ? <span className={`message-protocol-pill message-protocol-pill--${protocolLabel.toLowerCase()}`}>{protocolLabel}</span> : null}
           </span>
           <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
         </div>
@@ -185,6 +205,25 @@ export function MessageBubble({
           </div>
         ) : null}
         <div className="message-bubble__body">{message.content}</div>
+        {attachments.length > 0 ? (
+          <div className="message-attachment-list">
+            {attachments.map((attachment, index) => (
+              <article className="message-attachment-card" key={attachment.attachmentId || attachment.id || `${attachment.fileName}-${index}`}>
+                <div className="message-attachment-card__header">
+                  <strong>{attachment.fileName}</strong>
+                  <span>{attachment.source || "ATTACHMENT"}</span>
+                </div>
+                <div className="message-attachment-card__meta">
+                  {attachment.contentType || attachment.mimeType ? <span>{attachment.contentType || attachment.mimeType}</span> : null}
+                  {typeof (attachment.size ?? attachment.sizeBytes) === "number" ? (
+                    <span>{attachment.size ?? attachment.sizeBytes} bytes</span>
+                  ) : null}
+                </div>
+                {attachment.contentPreview || attachment.previewText ? <p>{attachment.contentPreview || attachment.previewText}</p> : null}
+              </article>
+            ))}
+          </div>
+        ) : null}
         {artifactIds.length > 0 ? (
           <div className="message-bubble__artifacts">
             {artifactIds.map((artifactId) => (

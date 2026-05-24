@@ -1,11 +1,12 @@
-import type { TaskSpec } from "../chat/chatTypes";
-import type { ContextSnapshot, HandoffSummary, PinnedContext } from "./contextTypes";
+import type { TaskRun, TaskSpec, TaskStep } from "../chat/chatTypes";
+import type { ContextSnapshot, HandoffSummary, PinnedContext, RetrievedContextItem } from "./contextTypes";
 import type { MemoryItem } from "../memory/memoryTypes";
-import { formatId } from "../../utils/id";
+import { formatId, getIdValue } from "../../utils/id";
 import { displayArtifactType, displayStatus } from "../../utils/displayLabels";
 
 interface ContextPanelProps {
   taskSpec: TaskSpec | null;
+  taskRuns: TaskRun[];
   pinnedContexts: PinnedContext[];
   memories: MemoryItem[];
   contextSnapshots: ContextSnapshot[];
@@ -25,8 +26,60 @@ function formatPinnedSource(pinnedContext: PinnedContext): string {
   return `${pinnedContext.sourceType || "MESSAGE"} · ${pinnedContext.sourceId}`;
 }
 
+function getRetrievedItemStepId(item: RetrievedContextItem): string | null {
+  return (
+    getIdValue(item.taskStepId) ||
+    getIdValue(item.injectedStepId) ||
+    getIdValue(item.injectionStepId) ||
+    getIdValue(item.targetStepId) ||
+    getIdValue(item.stepId) ||
+    item.injectedIntoStep ||
+    null
+  );
+}
+
+function stepContainsRetrievedItem(step: TaskStep, item: RetrievedContextItem): boolean {
+  const inputContext = (step.inputContext || "").toLowerCase();
+  if (!inputContext) {
+    return false;
+  }
+
+  return [item.sourceId, item.title, item.content, item.reason]
+    .filter(Boolean)
+    .some((value) => inputContext.includes(String(value).toLowerCase().slice(0, 160)));
+}
+
+function resolveInjectionStepLabel(
+  snapshot: ContextSnapshot,
+  item: RetrievedContextItem,
+  taskRuns: TaskRun[]
+): string {
+  const backendStepId = getRetrievedItemStepId(item);
+  const taskRunId = getIdValue(snapshot.taskRunId);
+  const taskRun = taskRuns.find((run) => getIdValue(run.id) === taskRunId);
+
+  if (backendStepId) {
+    const matchedStep = taskRun?.steps.find((step) => getIdValue(step.id) === backendStepId);
+    if (matchedStep) {
+      return `TaskStep ${matchedStep.stepOrder} / ${matchedStep.assignedAgentName || formatId(matchedStep.assignedAgentId)}`;
+    }
+
+    return `Step ${backendStepId}`;
+  }
+
+  const matchedSteps = taskRun?.steps.filter((step) => stepContainsRetrievedItem(step, item)) ?? [];
+  if (matchedSteps.length > 0) {
+    return matchedSteps
+      .map((step) => `TaskStep ${step.stepOrder} / ${step.assignedAgentName || formatId(step.assignedAgentId)}`)
+      .join(", ");
+  }
+
+  return taskRunId ? `TaskRun ${formatId(snapshot.taskRunId)} / no exact TaskStep inputContext match` : "No TaskRun fallback available";
+}
+
 export function ContextPanel({
   taskSpec,
+  taskRuns,
   pinnedContexts,
   memories,
   contextSnapshots,
@@ -56,16 +109,16 @@ export function ContextPanel({
           <div className="context-list-block">
             <span className="context-list-block__label">验收标准</span>
             <ul>
-              {taskSpec.acceptanceCriteria.map((item) => (
-                <li key={item}>{item}</li>
+              {taskSpec.acceptanceCriteria.map((item, index) => (
+                <li key={`acceptance-${index}-${item.slice(0, 32)}`}>{item}</li>
               ))}
             </ul>
           </div>
           <div className="context-list-block">
             <span className="context-list-block__label">预期产物</span>
             <div className="tag-row">
-              {taskSpec.expectedArtifacts.map((artifactType) => (
-                <span key={artifactType} className="tag-chip">
+              {taskSpec.expectedArtifacts.map((artifactType, index) => (
+                <span key={`expected-artifact-${index}-${artifactType}`} className="tag-chip">
                   {displayArtifactType(artifactType)}
                 </span>
               ))}
@@ -144,8 +197,8 @@ export function ContextPanel({
                     <p className="context-card__summary">该 TaskRun 没有使用手动固定上下文。</p>
                   ) : (
                     <ul>
-                      {snapshot.pinnedContextItems.map((item) => (
-                        <li key={item}>{item}</li>
+                      {snapshot.pinnedContextItems.map((item, index) => (
+                        <li key={`${formatId(snapshot.id)}-pinned-${index}-${item.slice(0, 32)}`}>{item}</li>
                       ))}
                     </ul>
                   )}
@@ -153,17 +206,25 @@ export function ContextPanel({
                 {snapshot.retrievedContextItems?.length ? (
                   <div className="context-list-block">
                     <span className="context-list-block__label">Retrieved Context</span>
-                    <ul>
-                      {snapshot.retrievedContextItems.map((item) => (
-                        <li key={`${item.sourceType}-${item.sourceId}`}>
-                          <strong>{item.sourceType}</strong> / {item.title} / score {item.score.toFixed(1)}
-                          <br />
-                          <span>{item.reason}</span>
-                          <br />
-                          <span>{item.content}</span>
-                        </li>
+                    <div className="retrieved-context-list">
+                      {snapshot.retrievedContextItems.map((item, index) => (
+                        <article
+                          className="retrieved-context-item"
+                          key={`${formatId(snapshot.id)}-retrieved-${index}-${item.sourceType}-${item.sourceId}`}
+                        >
+                          <div className="retrieved-context-item__topline">
+                            <strong>{item.title || item.sourceId}</strong>
+                            <span>{item.sourceType}</span>
+                          </div>
+                          <div className="retrieved-context-item__meta">
+                            <span>score {Number.isFinite(item.score) ? item.score.toFixed(2) : "-"}</span>
+                            <span>injects into {resolveInjectionStepLabel(snapshot, item, taskRuns)}</span>
+                          </div>
+                          <p className="retrieved-context-item__reason">{item.reason || "No retrieval reason provided."}</p>
+                          <p className="retrieved-context-item__content">{item.content}</p>
+                        </article>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 ) : null}
               </section>
@@ -199,16 +260,16 @@ export function ContextPanel({
                 <div className="context-list-block">
                   <span className="context-list-block__label">关键决策</span>
                   <ul>
-                    {handoff.keyDecisions.map((decision) => (
-                      <li key={decision}>{decision}</li>
+                    {handoff.keyDecisions.map((decision, index) => (
+                      <li key={`${handoff.id}-decision-${index}-${decision.slice(0, 32)}`}>{decision}</li>
                     ))}
                   </ul>
                 </div>
                 <div className="context-list-block">
                   <span className="context-list-block__label">待解决问题</span>
                   <ul>
-                    {handoff.openIssues.map((issue) => (
-                      <li key={issue}>{issue}</li>
+                    {handoff.openIssues.map((issue, index) => (
+                      <li key={`${handoff.id}-issue-${index}-${issue.slice(0, 32)}`}>{issue}</li>
                     ))}
                   </ul>
                 </div>

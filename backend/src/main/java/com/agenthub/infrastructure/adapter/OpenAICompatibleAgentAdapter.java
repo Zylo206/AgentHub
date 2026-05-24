@@ -25,6 +25,8 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
     private final String apiKey;
     private final String model;
     private final int timeoutSeconds;
+    private final boolean fixtureEnabled;
+    private final String fixtureReviewDecision;
 
     public OpenAICompatibleAgentAdapter(
             TimeProvider timeProvider,
@@ -33,7 +35,9 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
             @Value("${agenthub.adapters.openai-compatible.base-url:}") String baseUrl,
             @Value("${agenthub.adapters.openai-compatible.api-key:}") String apiKey,
             @Value("${agenthub.adapters.openai-compatible.model:}") String model,
-            @Value("${agenthub.adapters.openai-compatible.timeout-seconds:30}") int timeoutSeconds) {
+            @Value("${agenthub.adapters.openai-compatible.timeout-seconds:30}") int timeoutSeconds,
+            @Value("${agenthub.adapters.openai-compatible.fixture-enabled:false}") boolean fixtureEnabled,
+            @Value("${agenthub.adapters.openai-compatible.fixture-review-decision:APPROVE}") String fixtureReviewDecision) {
         this.timeProvider = timeProvider;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
@@ -41,6 +45,8 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model == null ? "" : model.trim();
         this.timeoutSeconds = timeoutSeconds <= 0 ? 30 : timeoutSeconds;
+        this.fixtureEnabled = fixtureEnabled;
+        this.fixtureReviewDecision = fixtureReviewDecision == null ? "APPROVE" : fixtureReviewDecision.trim().toUpperCase();
     }
 
     @Override
@@ -58,6 +64,16 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                     false,
                     "OpenAI Compatible adapter is disabled in configuration.",
                     "Set agenthub.adapters.openai-compatible.enabled=true to enable it.");
+        }
+
+        if (fixtureEnabled) {
+            return new AgentAdapterDescriptor(
+                    AgentAdapterType.OPENAI_COMPATIBLE,
+                    AgentAdapterHealthStatus.AVAILABLE,
+                    true,
+                    false,
+                    "OpenAI Compatible adapter is using local fixture mode for deterministic contract tests.",
+                    null);
         }
 
         List<String> missingFields = new ArrayList<>();
@@ -106,6 +122,10 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                     descriptor.failureReason(),
                     startedAt,
                     timeProvider.now());
+        }
+
+        if (fixtureEnabled) {
+            return executeFixture(request, startedAt);
         }
 
         try {
@@ -167,6 +187,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         var root = objectMapper.createObjectNode();
         root.put("model", model);
         root.put("temperature", 0.2);
+        root.put("stream", false);
 
         var messages = root.putArray("messages");
 
@@ -182,6 +203,139 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                 .put("content", buildUserMessageContent(request));
 
         return root;
+    }
+
+    private AgentResponse executeFixture(AgentRequest request, Instant startedAt) {
+        try {
+            return new AgentResponse(
+                    request.requestId(),
+                    AgentAdapterType.OPENAI_COMPATIBLE,
+                    AgentAdapterType.OPENAI_COMPATIBLE,
+                    AgentAdapterType.OPENAI_COMPATIBLE,
+                    false,
+                    AgentExecutionStatus.COMPLETED,
+                    objectMapper.writeValueAsString(buildFixtureArtifactContract(request)),
+                    List.of("JSON:openai-compatible-fixture-contract"),
+                    null,
+                    startedAt,
+                    timeProvider.now());
+        } catch (Exception exception) {
+            return failedResponse(request, startedAt, "OpenAI Compatible fixture failed to build JSON contract.");
+        }
+    }
+
+    private JsonNode buildFixtureArtifactContract(AgentRequest request) {
+        String task = ((request.taskDescription() == null ? "" : request.taskDescription()) + "\n"
+                + (request.userInput() == null ? "" : request.userInput()) + "\n"
+                + String.valueOf(request.metadata().getOrDefault("requiredSkill", ""))).toLowerCase();
+        var root = objectMapper.createObjectNode();
+        var artifacts = root.putArray("artifacts");
+
+        if (containsAny(task, "review", "quality", "risk", "妫€鏌?", "璇勫")) {
+            boolean rejected = "REJECT".equals(fixtureReviewDecision) || "REJECTION".equals(fixtureReviewDecision);
+            root.put("assistantMessage", rejected
+                    ? "REJECTION: Fixture reviewer found acceptance blockers and requests revision."
+                    : "APPROVAL: Fixture reviewer checked the generated outputs.");
+            artifacts.addObject()
+                    .put("title", rejected ? "fixture-review-rejection.md" : "fixture-review-report.md")
+                    .put("type", "REVIEW_REPORT")
+                    .put("language", "md")
+                    .put("summary", rejected
+                            ? "Fixture reviewer rejected the current output and requested a revise/retry loop."
+                            : "Fixture reviewer approved the current output with minor follow-up notes.")
+                    .put("content", rejected
+                            ? """
+                            REJECTION
+
+                            Decision: REJECTION
+                            Blockers:
+                            - API contract and UI behavior are not aligned enough for acceptance.
+                            - Error state copy is missing from the generated login flow.
+
+                            Suggested next action: revise the API contract and retry the frontend handoff.
+                            """
+                            : """
+                            APPROVAL
+
+                            Decision: APPROVAL
+                            Notes:
+                            - Login UI, README, and API contract are present.
+                            - Remaining issues are acceptable for the static demo path.
+                            """);
+            return root;
+        }
+
+        if (containsAny(task, "backend", "api", "contract", "data model", "鎺ュ彛")) {
+            root.put("assistantMessage", "Fixture backend worker produced a login API contract.");
+            artifacts.addObject()
+                    .put("title", "fixture-login-api-contract.json")
+                    .put("type", "API_CONTRACT")
+                    .put("language", "json")
+                    .put("summary", "Fixture API contract for the login flow.")
+                    .put("content", """
+                            {
+                              "endpoint": "/api/auth/login",
+                              "method": "POST",
+                              "request": {
+                                "email": "string",
+                                "verificationCode": "string"
+                              },
+                              "successResponse": {
+                                "token": "string",
+                                "userId": "string",
+                                "displayName": "string"
+                              },
+                              "errorResponse": {
+                                "code": "INVALID_CODE",
+                                "message": "Verification code is invalid or expired."
+                              }
+                            }
+                            """);
+            return root;
+        }
+
+        root.put("assistantMessage", "Fixture frontend worker produced a React login component and README.");
+        artifacts.addObject()
+                .put("title", "FixtureLoginPage.tsx")
+                .put("type", "CODE")
+                .put("language", "tsx")
+                .put("summary", "Fixture React login component generated without external network calls.")
+                .put("content", """
+                        import { useState } from "react";
+
+                        export default function FixtureLoginPage() {
+                          const [email, setEmail] = useState("");
+                          const [verificationCode, setVerificationCode] = useState("");
+                          return (
+                            <form aria-label="fixture-login">
+                              <input value={email} onChange={(event) => setEmail(event.target.value)} />
+                              <input value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} />
+                              <button type="submit">Sign in</button>
+                            </form>
+                          );
+                        }
+                        """);
+        artifacts.addObject()
+                .put("title", "fixture-login-readme.md")
+                .put("type", "MARKDOWN")
+                .put("language", "md")
+                .put("summary", "Fixture README for the login component.")
+                .put("content", """
+                        # Fixture Login Page
+
+                        This artifact is generated by the local OPENAI_COMPATIBLE fixture adapter.
+                        It verifies the REAL_ADAPTER JSON contract without calling external networks.
+                        """);
+        return root;
+    }
+
+    private boolean containsAny(String input, String... keywords) {
+        for (String keyword : keywords) {
+            if (input.contains(keyword.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String buildUserMessageContent(AgentRequest request) {

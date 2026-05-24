@@ -1,9 +1,14 @@
-import type { AdapterDescriptor, Agent } from "../features/agents/agentTypes";
+import type {
+  AdapterDescriptor,
+  AdapterExecutionResponse,
+  Agent,
+  ToolCapabilityKey
+} from "../features/agents/agentTypes";
 import type { Artifact } from "../features/artifacts/artifactTypes";
 import type { ArtifactSnapshot } from "../features/artifacts/artifactSnapshotTypes";
 import type { ActionAuditLog } from "../features/audit/auditTypes";
 import type { ApprovalRequest } from "../features/approval/approvalTypes";
-import type { Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
+import type { LightweightAttachment, Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
 import type { Conversation } from "../features/conversations/conversationTypes";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../features/context/contextTypes";
 import type { DeploymentRecord } from "../features/deployments/deploymentTypes";
@@ -88,7 +93,7 @@ export interface CreateAgentRequest {
   avatarUrl?: string;
   systemPrompt?: string;
   capabilityTags: string[];
-  toolTags: string[];
+  toolTags: Array<ToolCapabilityKey | string>;
   preferredAdapterType: string;
 }
 
@@ -105,6 +110,30 @@ export function createAgent(requestBody: CreateAgentRequest): Promise<Agent> {
 
 export function getAdapters(): Promise<AdapterDescriptor[]> {
   return request<AdapterDescriptor[]>("/api/adapters");
+}
+
+export interface ExecuteAdapterRequest {
+  conversationId: string;
+  taskRunId?: string | null;
+  taskStepId?: string | null;
+  agentId: string;
+  agentName: string;
+  userInput?: string | null;
+  systemPrompt?: string | null;
+  taskDescription?: string | null;
+  contextItems?: string[];
+  artifactSummaries?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export function executeAdapter(
+  adapterType: string,
+  requestBody: ExecuteAdapterRequest
+): Promise<AdapterExecutionResponse> {
+  return request<AdapterExecutionResponse>(`/api/adapters/${adapterType}/execute`, {
+    method: "POST",
+    body: JSON.stringify(requestBody)
+  });
 }
 
 export function createConversation(title: string, type: "SINGLE" | "GROUP"): Promise<Conversation> {
@@ -128,8 +157,17 @@ export function sendMessage(
   targetAgentId?: string | null,
   mentionedAgentIds?: string[] | null,
   replyToMessageId?: string | null,
-  quotedMessageId?: string | null
+  quotedMessageId?: string | null,
+  attachments?: LightweightAttachment[] | null
 ): Promise<Message> {
+  const normalizedAttachments = (attachments ?? []).map((attachment) => ({
+    attachmentId: attachment.attachmentId || attachment.id || `demo-${attachment.fileName}`,
+    fileName: attachment.fileName,
+    contentType: attachment.contentType || attachment.mimeType || "text/plain",
+    size: attachment.size ?? attachment.sizeBytes ?? 0,
+    contentPreview: attachment.contentPreview || attachment.previewText || null
+  }));
+
   return request<Message>(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
     body: JSON.stringify({
@@ -137,7 +175,8 @@ export function sendMessage(
       targetAgentId: targetAgentId ?? null,
       mentionedAgentIds: mentionedAgentIds ?? [],
       replyToMessageId: replyToMessageId ?? null,
-      quotedMessageId: quotedMessageId ?? null
+      quotedMessageId: quotedMessageId ?? null,
+      attachments: normalizedAttachments
     })
   });
 }

@@ -11,10 +11,36 @@ export interface Message {
   replyToMessageId?: string | null;
   quotedMessageId?: string | null;
   quotedMessageContent?: string | null;
-  messageType: "TEXT" | "TASK_SPEC" | "TASK_STATUS" | "DEPLOY_STATUS" | "ARTIFACT_CARD" | "ERROR" | string;
+  messageType:
+    | "TEXT"
+    | "TASK"
+    | "RESULT"
+    | "REVIEW"
+    | "APPROVAL"
+    | "REJECTION"
+    | "TASK_SPEC"
+    | "TASK_STATUS"
+    | "DEPLOY_STATUS"
+    | "ARTIFACT_CARD"
+    | "ERROR"
+    | string;
   content: string;
+  attachments?: LightweightAttachment[];
   artifactIds: IdValue[];
   createdAt: string;
+}
+
+export interface LightweightAttachment {
+  attachmentId?: string;
+  id?: string;
+  fileName: string;
+  contentType?: string;
+  mimeType?: string;
+  size?: number;
+  sizeBytes?: number;
+  contentPreview?: string;
+  previewText?: string;
+  source?: "LOCAL_DEMO" | "TEXT_SNIPPET" | string;
 }
 
 export interface TaskSpec {

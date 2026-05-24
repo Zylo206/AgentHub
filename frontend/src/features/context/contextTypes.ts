@@ -19,6 +19,12 @@ export interface RetrievedContextItem {
   content: string;
   score: number;
   reason: string;
+  taskStepId?: IdValue | null;
+  injectedStepId?: IdValue | null;
+  injectionStepId?: IdValue | null;
+  targetStepId?: IdValue | null;
+  stepId?: IdValue | null;
+  injectedIntoStep?: string | null;
 }
 
 export interface PinnedContext {

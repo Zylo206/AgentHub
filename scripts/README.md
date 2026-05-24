@@ -11,17 +11,24 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - conversation creation
 - conversation participants
 - message creation
+- lightweight message attachments
+- optional message-level Orchestrator auto-trigger via `/messages/{messageId}/orchestrator-run`
 - structured reply / quote message relation
 - manual message pin as context
 - demo task run
 - task input context / ContextSnapshot pinned context and retrieved context
+- retrieved context score / reason explanation
 - TaskGraph execution batches
 - message-based demo task rerun
 - group chat Agent messages
 - task run query
 - artifact query
 - source metadata check for static / real Adapter artifacts
+- REAL_ADAPTER artifact fixture contract validation
 - optional REAL_ADAPTER artifact assertion when explicitly enabled
+- Tool Capability router smoke coverage for a custom review Agent
+- weighted routing evidence in `routingReason`
+- Agent collaboration protocol checks, with REJECTION reported as a gap if the backend path does not emit one
 - artifact revision
 - artifact safety snapshots
 - lightweight apply-diff generated artifact
@@ -33,6 +40,8 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - deployment query
 - message stream deployment status
 - single Agent reply regeneration
+
+Run the API smoke test:
 
 Start the backend and frontend first, then run:
 
@@ -81,4 +90,54 @@ $env:AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER="true"; node scripts/smoke-test.mjs
 
 Without this flag, the smoke test remains stable in the default Mock / fallback environment.
 
+The smoke test always validates a local REAL_ADAPTER artifact fixture contract and validates persisted REAL_ADAPTER artifacts when the backend produces them. It also creates an isolated custom `review` Agent to verify that Tool Capability routing can select an Agent for `QUALITY_REVIEW`. `REJECTION` is treated as conditional coverage: if the backend emits `messageType=REJECTION`, the script validates it; if not, the script prints a warning because the current demo-task path has no rejection/retry closure.
+
 This is an API-level smoke test with an HTTP reachability check for the local preview page. It does not run browser E2E automation, parse DOM content, make real LLM calls, call real external Agents, or perform real deployment.
+
+## Browser E2E
+
+`e2e-browser.mjs` is a lightweight Playwright wrapper that seeds a browser-test conversation through the API, then verifies the rendered Workspace, Orchestrator explain panel, artifact preview, approval gate, deploy status card, and static preview page.
+
+The wrapper can use `playwright-core`, `playwright`, or `@playwright/test` from the frontend package. The lightest path is `playwright-core` plus the local Microsoft Edge browser channel:
+
+```powershell
+cd frontend
+npm install --save-dev playwright-core
+npm run e2e:browser
+```
+
+Or run the wrapper directly from the repository root:
+
+```powershell
+node scripts/e2e-browser.mjs
+```
+
+Environment overrides:
+
+```powershell
+$env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
+$env:AGENTHUB_FRONTEND_BASE_URL="http://127.0.0.1:5173"
+$env:AGENTHUB_E2E_BROWSER_CHANNEL="msedge"
+$env:AGENTHUB_E2E_HEADLESS="false"
+node scripts/e2e-browser.mjs
+```
+
+The browser E2E requires backend and frontend to already be running. It does not start servers, does not call real LLM providers, and does not perform an external deployment.
+
+## OpenAI-compatible / DeepSeek Adapter
+
+AgentHub uses the same basic shape as KnowFlow's DeepSeek client: configure a base URL, send `Authorization: Bearer ...`, and call `/chat/completions`.
+
+PowerShell example:
+
+```powershell
+$env:AGENTHUB_OPENAI_ENABLED="true"
+$env:AGENTHUB_OPENAI_BASE_URL="https://api.deepseek.com"
+$env:AGENTHUB_OPENAI_API_KEY="<your-api-key>"
+$env:AGENTHUB_OPENAI_MODEL="deepseek-v4-flash"
+$env:AGENTHUB_ARTIFACT_GENERATION_MODE="HYBRID_REAL"
+cd backend
+mvn spring-boot:run
+```
+
+Do not write real API keys into `.env.example`, README, or committed scripts. After startup, open `/agents` and use the Adapter Test panel to test `OPENAI_COMPATIBLE`.

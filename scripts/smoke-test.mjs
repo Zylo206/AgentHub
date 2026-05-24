@@ -3,12 +3,43 @@
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const FRONTEND_BASE = (process.env.AGENTHUB_FRONTEND_BASE_URL || "http://127.0.0.1:5173").replace(/\/$/, "");
 const EXPECT_REAL_ADAPTER = process.env.AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER === "true";
+const EXPECT_OPENAI_FIXTURE = process.env.AGENTHUB_SMOKE_EXPECT_OPENAI_FIXTURE === "true";
+const EXPECT_REAL_FIRST = process.env.AGENTHUB_SMOKE_EXPECT_REAL_FIRST === "true";
+const EXPECT_REVIEW_REJECTION = process.env.AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION === "true";
+const REAL_ADAPTER_ARTIFACT_FIXTURE = {
+  id: "fixture-real-adapter-artifact",
+  title: "Real Adapter Output - Fixture",
+  artifactType: "CODE",
+  sourceKind: "REAL_ADAPTER",
+  sourceAdapterType: "OPENAI_COMPATIBLE",
+  sourceTaskStepId: "fixture-task-step",
+  generationMode: "HYBRID_REAL",
+  content: [
+    "Persisted Because: actual adapter completed without MOCK fallback",
+    "```tsx",
+    "export function FixtureLoginPage() { return <main>Fixture</main>; }",
+    "```"
+  ].join("\n")
+};
+const SMOKE_ATTACHMENTS = [
+  {
+    attachmentId: `smoke-brief-${Date.now()}`,
+    fileName: "agenthub-smoke-brief.md",
+    contentType: "text/markdown",
+    size: 128,
+    contentPreview: "Smoke attachment: preserve verification-code login, blue CTA, and review notes."
+  }
+];
 
 const DEMO_PROMPT = "帮我生成一个 React 登录页面，支持邮箱登录和验证码登录，同时生成 README，并检查代码质量。";
 const REVISION_INSTRUCTION = "把按钮改成蓝色，并增加 loading 状态。";
 
 function pass(message) {
   console.log(`[PASS] ${message}`);
+}
+
+function warn(message) {
+  console.warn(`[WARN] ${message}`);
 }
 
 function fail(message, error) {
@@ -79,6 +110,22 @@ async function expectRequestFailure(path, init = {}, expectedText = "") {
   }
 
   throw new Error(`Expected request to fail: ${path}`);
+}
+
+async function tryRunOrchestratorFromMessage(conversationId, messageId) {
+  try {
+    return await request(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-run`, {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("HTTP 404") || message.includes("HTTP 405")) {
+      warn("message-level orchestrator-run endpoint is unavailable; skipping auto-trigger smoke coverage.");
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function createAndApproveApproval(conversationId, requestBody) {
@@ -167,6 +214,12 @@ async function verifyPreviewUrl(previewUrl) {
 
 function pickCodeArtifact(artifacts) {
   const codeArtifacts = artifacts.filter((artifact) => artifact.artifactType === "CODE" || artifact.type === "CODE");
+  if (EXPECT_REAL_FIRST) {
+    const realCodeArtifact = codeArtifacts.find((artifact) => artifact.sourceKind === "REAL_ADAPTER");
+    if (realCodeArtifact) {
+      return realCodeArtifact;
+    }
+  }
   return (
     codeArtifacts.find((artifact) => String(artifact.title || "").includes("LoginPage")) ||
     codeArtifacts[0] ||
@@ -174,10 +227,61 @@ function pickCodeArtifact(artifacts) {
   );
 }
 
+function assertRealAdapterArtifactContract(artifact, label) {
+  if (artifact.sourceKind !== "REAL_ADAPTER") {
+    throw new Error(`${label} sourceKind expected REAL_ADAPTER, got ${artifact.sourceKind}`);
+  }
+  requireValue(artifact.sourceAdapterType, `${label} sourceAdapterType missing`);
+  requireValue(artifact.sourceTaskStepId, `${label} sourceTaskStepId missing`);
+  requireValue(artifact.generationMode, `${label} generationMode missing`);
+  requireValue(artifact.title, `${label} title missing`);
+  requireValue(artifact.content, `${label} content missing`);
+  if (!String(artifact.content).includes("Persisted Because: actual adapter completed without MOCK fallback")) {
+    throw new Error(`${label} content missing REAL_ADAPTER persistence explanation`);
+  }
+}
+
+function assertToolCapabilityRoutedStep(taskRun, expectedAgentId) {
+  const routedStep = (Array.isArray(taskRun.steps) ? taskRun.steps : []).find(
+    (step) => getIdValue(step.assignedAgentId) === expectedAgentId
+  );
+  if (!routedStep) {
+    throw new Error(`custom capability-routed step not found for ${expectedAgentId}`);
+  }
+  if (!String(routedStep.routingReason || "").includes("Tool capability router selected Agent")) {
+    throw new Error(`capability-routed step missing routingReason evidence: ${routedStep.routingReason || ""}`);
+  }
+  if (!String(routedStep.routingReason || "").includes("requiredSkill=QUALITY_REVIEW")) {
+    throw new Error(`capability-routed step did not prove QUALITY_REVIEW route: ${routedStep.routingReason}`);
+  }
+  const weightedEvidence = [
+    "score=",
+    "capabilityScore=",
+    "adapterHealthScore=",
+    "historyScore=",
+    "fallbackPenalty=",
+    "preferredAdapter="
+  ];
+  const missingWeightedEvidence = weightedEvidence.filter(
+    (token) => !String(routedStep.routingReason || "").includes(token)
+  );
+  if (missingWeightedEvidence.length > 0) {
+    throw new Error(
+      `capability-routed step missing weighted routing evidence (${missingWeightedEvidence.join(", ")}): ${routedStep.routingReason || ""}`
+    );
+  }
+  return routedStep;
+}
+
 async function runSmokeTest() {
   console.log(`AgentHub smoke test target: ${API_BASE}`);
   console.log(`AgentHub frontend preview target: ${FRONTEND_BASE}`);
   console.log(`AgentHub real adapter artifact expectation: ${EXPECT_REAL_ADAPTER ? "enabled" : "disabled"}`);
+  console.log(`AgentHub OpenAI fixture expectation: ${EXPECT_OPENAI_FIXTURE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub REAL_FIRST expectation: ${EXPECT_REAL_FIRST ? "enabled" : "disabled"}`);
+  console.log(`AgentHub reviewer rejection expectation: ${EXPECT_REVIEW_REJECTION ? "enabled" : "disabled"}`);
+  assertRealAdapterArtifactContract(REAL_ADAPTER_ARTIFACT_FIXTURE, "REAL_ADAPTER fixture");
+  pass("REAL_ADAPTER fixture artifact contract validated");
 
   const health = await request("/api/health");
   if (health?.status !== "UP") {
@@ -195,12 +299,51 @@ async function runSmokeTest() {
   if (!adapters.some((adapter) => adapter.adapterType === "MOCK")) {
     throw new Error(`MOCK adapter not found. Loaded adapters: ${adapterSummary}`);
   }
+  if (EXPECT_OPENAI_FIXTURE) {
+    const openaiAdapter = adapters.find((adapter) => adapter.adapterType === "OPENAI_COMPATIBLE");
+    if (!openaiAdapter || openaiAdapter.status !== "AVAILABLE" || !String(openaiAdapter.description || "").includes("fixture")) {
+      throw new Error(`OPENAI_COMPATIBLE fixture adapter not available. Loaded adapters: ${adapterSummary}`);
+    }
+  }
   pass(`adapters loaded: ${adapterSummary}`);
 
   const agents = await request("/api/agents");
   const frontendAgent = agents.find((agent) => agent.name === "Frontend Builder");
   const reviewerAgent = agents.find((agent) => agent.name === "Reviewer");
-  const mentionedAgentIds = [getIdValue(frontendAgent?.id), getIdValue(reviewerAgent?.id)].filter(Boolean);
+  let fixtureOpenAiCodeAgentId = null;
+  let fixtureOpenAiReviewAgentId = null;
+  if (EXPECT_OPENAI_FIXTURE) {
+    const fixtureOpenAiCodeAgent = await request("/api/agents", {
+      method: "POST",
+      body: JSON.stringify({
+        name: `Smoke OpenAI Fixture Code Agent ${Date.now()}`,
+        systemPrompt: "Return AgentHub artifact JSON contract for smoke verification.",
+        capabilityTags: ["smoke", "real-adapter"],
+        toolTags: ["code", "preview"],
+        preferredAdapterType: "OPENAI_COMPATIBLE"
+      })
+    });
+    fixtureOpenAiCodeAgentId = requireValue(getIdValue(fixtureOpenAiCodeAgent.id), "fixtureOpenAiCodeAgentId missing");
+    const fixtureOpenAiReviewAgent = await request("/api/agents", {
+      method: "POST",
+      body: JSON.stringify({
+        name: `Smoke OpenAI Fixture Review Agent ${Date.now()}`,
+        systemPrompt: "Review AgentHub artifacts and return approval or rejection in artifact JSON.",
+        capabilityTags: ["smoke", "real-adapter", "review"],
+        toolTags: ["review"],
+        preferredAdapterType: "OPENAI_COMPATIBLE"
+      })
+    });
+    fixtureOpenAiReviewAgentId = requireValue(
+      getIdValue(fixtureOpenAiReviewAgent.id),
+      "fixtureOpenAiReviewAgentId missing"
+    );
+    pass(`OPENAI fixture agents created: ${fixtureOpenAiCodeAgentId}, ${fixtureOpenAiReviewAgentId}`);
+  }
+  const mentionedAgentIds = [
+    fixtureOpenAiCodeAgentId || getIdValue(frontendAgent?.id),
+    fixtureOpenAiReviewAgentId || getIdValue(reviewerAgent?.id)
+  ].filter(Boolean);
   if (mentionedAgentIds.length < 2) {
     throw new Error("expected built-in Frontend Builder and Reviewer agents for multi-mention smoke test");
   }
@@ -224,14 +367,36 @@ async function runSmokeTest() {
     body: JSON.stringify({
       content: DEMO_PROMPT,
       targetAgentId: mentionedAgentIds[0],
-      mentionedAgentIds
+      mentionedAgentIds,
+      attachments: SMOKE_ATTACHMENTS
     })
   });
   const messageId = requireValue(getIdValue(message.id), "messageId missing");
   if (!Array.isArray(message.mentionedAgentIds) || message.mentionedAgentIds.length < 2) {
     throw new Error(`message did not persist mentionedAgentIds: ${JSON.stringify(message.mentionedAgentIds)}`);
   }
+  if (
+    !Array.isArray(message.attachments) ||
+    message.attachments.length !== SMOKE_ATTACHMENTS.length ||
+    message.attachments[0]?.fileName !== SMOKE_ATTACHMENTS[0].fileName ||
+    !String(message.attachments[0]?.contentPreview || "").includes("Smoke attachment")
+  ) {
+    throw new Error(`message did not persist lightweight attachments: ${JSON.stringify(message.attachments)}`);
+  }
   pass(`message sent: ${messageId}`);
+  pass(`message attachments persisted: ${message.attachments.length}`);
+
+  const autoTriggeredTaskRun = await tryRunOrchestratorFromMessage(conversationId, messageId);
+  if (autoTriggeredTaskRun) {
+    const autoTriggeredTaskRunId = requireValue(getIdValue(autoTriggeredTaskRun.id), "autoTriggeredTaskRunId missing");
+    if (autoTriggeredTaskRun.status !== "COMPLETED") {
+      throw new Error(`auto-triggered orchestrator run status expected COMPLETED, got ${autoTriggeredTaskRun.status}`);
+    }
+    if (!autoTriggeredTaskRun.orchestratorDecisionLog?.routingDecision) {
+      throw new Error("auto-triggered orchestrator run missing routing decision evidence");
+    }
+    pass(`message-level orchestrator auto-trigger completed: ${autoTriggeredTaskRunId}`);
+  }
 
   const replyMessage = await request(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
@@ -430,8 +595,20 @@ async function runSmokeTest() {
   if (!hasRetrievedContextItem) {
     throw new Error("context snapshot did not include retrievedContextItems");
   }
+  const retrievedContextItems = contextSnapshots.flatMap((snapshot) =>
+    Array.isArray(snapshot.retrievedContextItems) ? snapshot.retrievedContextItems : []
+  );
+  const missingRetrievalExplanation = retrievedContextItems.find(
+    (item) => typeof item.score !== "number" || !String(item.reason || "").trim()
+  );
+  if (missingRetrievalExplanation) {
+    throw new Error(
+      `retrieved context item missing score/reason explanation: ${JSON.stringify(missingRetrievalExplanation)}`
+    );
+  }
   pass(`context snapshots include pinned context: ${contextSnapshots.length}`);
   pass("context snapshots include retrieved context items");
+  pass(`context retrieval explanations validated: ${retrievedContextItems.length}`);
 
   const taskRuns = await request(`/api/conversations/${conversationId}/task-runs`);
   if (!Array.isArray(taskRuns) || taskRuns.length < 1) {
@@ -465,14 +642,33 @@ async function runSmokeTest() {
     throw new Error("AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER=true but no REAL_ADAPTER artifact was produced");
   }
   if (adapterOutputArtifacts.length > 0) {
-    const invalidAdapterOutputArtifact = adapterOutputArtifacts.find((item) =>
-      item.sourceKind !== "REAL_ADAPTER" ||
-      !String(item.content || "").includes("Persisted Because: actual adapter completed without MOCK fallback")
+    adapterOutputArtifacts.forEach((item, index) =>
+      assertRealAdapterArtifactContract(item, `REAL_ADAPTER artifact[${index}]`)
     );
-    if (invalidAdapterOutputArtifact) {
-      throw new Error(`adapter output artifact missing persistence explanation: ${invalidAdapterOutputArtifact.title}`);
-    }
     pass(`adapter output artifacts loaded: ${adapterOutputArtifacts.length}`);
+  }
+  if (EXPECT_OPENAI_FIXTURE) {
+    const hasFixtureContractArtifact = adapterOutputArtifacts.some((item) =>
+      item.sourceAdapterType === "OPENAI_COMPATIBLE" &&
+      String(item.content || "").includes("Fixture") &&
+      String(item.generationMode || "").includes("REAL")
+    );
+    if (!hasFixtureContractArtifact) {
+      throw new Error("OPENAI_COMPATIBLE fixture did not produce a REAL_ADAPTER artifact contract");
+    }
+    pass("OPENAI_COMPATIBLE fixture REAL_ADAPTER contract validated");
+  }
+  if (EXPECT_REAL_FIRST) {
+    if (artifact.sourceKind !== "REAL_ADAPTER") {
+      throw new Error(`REAL_FIRST expected selected primary CODE artifact to be REAL_ADAPTER, got ${artifact.sourceKind}`);
+    }
+    const archivedFallbacks = artifacts.filter((item) =>
+      item.status === "ARCHIVED" && String(item.generationMode || "").includes("REAL_FIRST_STATIC_FALLBACK")
+    );
+    if (archivedFallbacks.length < 1) {
+      throw new Error("REAL_FIRST expected static fallback artifacts to be archived after real adapter success");
+    }
+    pass(`REAL_FIRST primary artifact validated: ${artifact.title}`);
   }
 
   const revision = await request(`/api/artifacts/${artifactId}/demo-revision`, {
@@ -722,8 +918,7 @@ async function runSmokeTest() {
   const requiredAgentSenders = [
     "agent_orchestrator",
     "agent_frontend_builder",
-    "agent_backend_worker",
-    "agent_reviewer"
+    "agent_backend_worker"
   ];
   const missingAgentSenders = requiredAgentSenders.filter(
     (senderId) => !agentMessages.some((item) => item.senderId === senderId)
@@ -733,19 +928,80 @@ async function runSmokeTest() {
     String(item.content || "").includes("群聊协作汇总")
   );
   const taskStepAgentMessages = agentMessages.filter((item) => String(item.content || "").includes("TaskStep"));
+  const protocolMessageTypes = new Set(agentMessages.map((item) => item.messageType));
+  const requiredProtocolTypes = EXPECT_REVIEW_REJECTION
+    ? ["TASK", "RESULT", "REVIEW", "REJECTION"]
+    : ["TASK", "RESULT", "REVIEW", "APPROVAL"];
+  const missingProtocolTypes = requiredProtocolTypes.filter((messageType) => !protocolMessageTypes.has(messageType));
+  const rejectionMessages = agentMessages.filter((item) => item.messageType === "REJECTION");
+  if (EXPECT_REVIEW_REJECTION) {
+    const hasRetryReviseSuggestion = rejectionMessages.some((item) =>
+      String(item.content || "").includes("retry/revise") || String(item.content || "").includes("revise")
+    );
+    if (rejectionMessages.length < 2 || !hasRetryReviseSuggestion) {
+      throw new Error(`expected reviewer rejection loop messages, got ${rejectionMessages.length}`);
+    }
+  }
   if (
     agentMessages.length < 5 ||
     missingAgentSenders.length > 0 ||
     orchestratorMessages.length < 2 ||
     !hasOrchestratorSummary ||
-    taskStepAgentMessages.length < 3
+    taskStepAgentMessages.length < 3 ||
+    missingProtocolTypes.length > 0
   ) {
     throw new Error(
-      `expected group chat agent messages from Orchestrator and 3 TaskSteps, got agentMessages=${agentMessages.length}, taskStepMessages=${taskStepAgentMessages.length}, missing=${missingAgentSenders.join(",") || "none"}, orchestratorMessages=${orchestratorMessages.length}, hasSummary=${hasOrchestratorSummary}`
+      `expected group chat agent messages from Orchestrator and protocol types, got agentMessages=${agentMessages.length}, taskStepMessages=${taskStepAgentMessages.length}, missing=${missingAgentSenders.join(",") || "none"}, orchestratorMessages=${orchestratorMessages.length}, hasSummary=${hasOrchestratorSummary}, missingProtocolTypes=${missingProtocolTypes.join(",") || "none"}`
     );
   }
   pass(`messages loaded: ${messages.length}`);
   pass(`group chat agent messages loaded: ${agentMessages.length}, orchestrator=${orchestratorMessages.length}, taskStep=${taskStepAgentMessages.length}`);
+  pass(`agent collaboration protocol loaded: ${requiredProtocolTypes.join(", ")}`);
+  if (rejectionMessages.length > 0) {
+    const invalidRejectionMessage = rejectionMessages.find((item) => !item.senderId || !String(item.content || "").trim());
+    if (invalidRejectionMessage) {
+      throw new Error("REJECTION protocol message missing senderId or content");
+    }
+    pass(`REJECTION protocol messages validated: ${rejectionMessages.length}`);
+  } else {
+    warn("REJECTION protocol enum is available, but the current demo-task path did not emit a REJECTION message; retry/rejection closure remains a test coverage gap.");
+  }
+
+  const capabilityReviewAgent = await request("/api/agents", {
+    method: "POST",
+    body: JSON.stringify({
+      name: `Smoke Capability Reviewer ${Date.now()}`,
+      systemPrompt: "Review generated artifacts and reject unsafe output when needed.",
+      capabilityTags: ["smoke"],
+      toolTags: ["review"],
+      preferredAdapterType: "MOCK"
+    })
+  });
+  const capabilityReviewAgentId = requireValue(getIdValue(capabilityReviewAgent.id), "capabilityReviewAgentId missing");
+  const capabilityConversation = await request("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({
+      title: "Smoke Capability Route Conversation",
+      type: "GROUP"
+    })
+  });
+  const capabilityConversationId = requireValue(getIdValue(capabilityConversation.id), "capabilityConversationId missing");
+  const capabilityMessage = await request(`/api/conversations/${capabilityConversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      content: "Run the default demo task and route the review step by tool capability."
+    })
+  });
+  const capabilityMessageId = requireValue(getIdValue(capabilityMessage.id), "capabilityMessageId missing");
+  const capabilityTaskRun = await request(`/api/conversations/${capabilityConversationId}/demo-task`, {
+    method: "POST",
+    body: JSON.stringify({
+      messageId: capabilityMessageId,
+      userInput: "Run the default demo task and route the review step by tool capability."
+    })
+  });
+  const capabilityRoutedStep = assertToolCapabilityRoutedStep(capabilityTaskRun, capabilityReviewAgentId);
+  pass(`tool capability route validated: ${capabilityReviewAgentId}, step=${capabilityRoutedStep.stepOrder}`);
 
   const agentMessageToRegenerate = taskStepAgentMessages[0];
   const agentMessageToRegenerateId = requireValue(

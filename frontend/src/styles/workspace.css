@@ -508,6 +508,31 @@
   border-left: 4px solid var(--blue);
 }
 
+.message-bubble--agent-protocol {
+  background: #ffffff;
+  border-left: 4px solid #2563eb;
+}
+
+.agent-protocol--task {
+  border-left-color: #2563eb;
+}
+
+.agent-protocol--result {
+  border-left-color: #16a34a;
+}
+
+.agent-protocol--review {
+  border-left-color: #f59e0b;
+}
+
+.agent-protocol--approval {
+  border-left-color: #0f766e;
+}
+
+.agent-protocol--rejection {
+  border-left-color: #dc2626;
+}
+
 .message-bubble--deploy-status {
   border-left: 4px solid var(--success);
   background: linear-gradient(180deg, #ffffff, var(--success-soft));
@@ -545,6 +570,35 @@
   font-weight: 800;
   line-height: 1;
   padding: 4px 7px;
+}
+
+.message-protocol-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.message-protocol-pill--result,
+.message-protocol-pill--approval {
+  background: #ecfdf5;
+  color: #15803d;
+}
+
+.message-protocol-pill--review {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.message-protocol-pill--rejection,
+.message-protocol-pill--error {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .message-bubble__body {
@@ -1874,6 +1928,10 @@
   .message-bubble {
     max-width: 96%;
   }
+
+  .chat-attachment-composer__grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Product visual upgrade: dark IM sidebar, chat stage, timeline execution and Artifact Studio. */
@@ -2949,6 +3007,332 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.agent-builder-capability-fieldset {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 34%),
+    #ffffff;
+}
+
+.agent-builder-capability-fieldset legend {
+  padding: 0 8px;
+  color: var(--text-main);
+  font-weight: 900;
+}
+
+.agent-builder-capability-fieldset p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.tool-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.tool-capability-card {
+  display: grid;
+  gap: 8px;
+  min-height: 126px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+
+.tool-capability-card:hover {
+  border-color: rgba(37, 99, 235, 0.34);
+  transform: translateY(-1px);
+}
+
+.tool-capability-card--selected {
+  border-color: rgba(37, 99, 235, 0.50);
+  background: linear-gradient(180deg, #ffffff, var(--primary-soft));
+  box-shadow: inset 4px 0 0 var(--primary), var(--shadow-sm);
+}
+
+.tool-capability-card input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.tool-capability-card span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tool-capability-card strong {
+  color: var(--text-main);
+}
+
+.tool-capability-card small {
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.tool-capability-card em {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+.tool-capability-resolved {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px dashed rgba(37, 99, 235, 0.24);
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.tool-capability-resolved > span,
+.agent-builder-muted {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.adapter-test-panel {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.adapter-test-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.adapter-test-panel__header h2 {
+  margin: 4px 0;
+}
+
+.adapter-test-panel__header p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.adapter-test-form {
+  display: grid;
+  gap: 14px;
+}
+
+.adapter-test-result {
+  display: grid;
+  gap: 14px;
+}
+
+.adapter-test-result__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.adapter-test-result__grid div,
+.adapter-test-result__section,
+.adapter-test-artifact {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.adapter-test-result__grid span,
+.adapter-test-artifact span,
+.adapter-test-artifact small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.adapter-test-result__grid strong,
+.adapter-test-artifact strong {
+  color: var(--text-main);
+}
+
+.adapter-test-result__section {
+  display: grid;
+  gap: 10px;
+}
+
+.adapter-test-result__section pre {
+  overflow: auto;
+  max-height: 320px;
+  margin: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: #0f172a;
+  color: #e5e7eb;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.adapter-test-artifact-list {
+  display: grid;
+  gap: 10px;
+}
+
+.adapter-test-artifact p {
+  margin: 6px 0;
+  color: var(--text-muted);
+}
+
+.retrieved-context-list,
+.message-attachment-list,
+.chat-attachment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.retrieved-context-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.retrieved-context-item__topline,
+.retrieved-context-item__meta,
+.message-attachment-card__header,
+.message-attachment-card__meta,
+.chat-attachment-composer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.retrieved-context-item__topline strong,
+.message-attachment-card__header strong,
+.chat-attachment-chip strong,
+.chat-attachment-composer__header strong {
+  color: var(--text-main);
+}
+
+.retrieved-context-item__topline span,
+.retrieved-context-item__meta span,
+.message-attachment-card__header span,
+.message-attachment-card__meta span,
+.chat-attachment-composer__header span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.retrieved-context-item__reason,
+.retrieved-context-item__content,
+.message-attachment-card p,
+.chat-attachment-chip span {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.retrieved-context-item__content,
+.message-attachment-card p {
+  color: var(--text-main);
+}
+
+.chat-attachment-composer {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px dashed rgba(37, 99, 235, 0.22);
+  border-radius: 16px;
+  background: #f8fbff;
+}
+
+.chat-attachment-composer__grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.chat-attachment-composer__input,
+.chat-attachment-composer__preview {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 9px 10px;
+}
+
+.chat-attachment-composer__preview {
+  resize: vertical;
+}
+
+.chat-attachment-chip,
+.message-attachment-card {
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.chat-attachment-chip {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-attachment-chip > div,
+.message-attachment-card {
+  display: grid;
+  gap: 6px;
+}
+
+.message-attachment-list {
+  margin-top: 10px;
+}
+
+.message-bubble--user .message-attachment-card {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.message-bubble--user .message-attachment-card__header strong,
+.message-bubble--user .message-attachment-card p {
+  color: #ffffff;
+}
+
+.message-bubble--user .message-attachment-card__header span,
+.message-bubble--user .message-attachment-card__meta span {
+  color: rgba(255, 255, 255, 0.76);
 }
 
 @media (max-width: 1400px) {

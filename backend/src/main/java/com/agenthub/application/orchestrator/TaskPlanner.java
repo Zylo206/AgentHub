@@ -103,6 +103,7 @@ public class TaskPlanner {
         if (needsReview) {
             steps.add(reviewStep(steps.size() + 1, hasParallelMentionGroup));
         }
+        appendAdditionalMentionedAgentSteps(steps, selectedAgent, mentionedAgents);
 
         if (steps.isEmpty()) {
             steps.add(frontendStep(1, selectedAgent, hasParallelMentionGroup));
@@ -248,6 +249,7 @@ public class TaskPlanner {
         }
 
         steps.sort((left, right) -> Integer.compare(left.stepOrder(), right.stepOrder()));
+        appendAdditionalMentionedAgentSteps(steps, selectedAgent, mentionedAgents);
         return new OrchestratorPlan(
                 goal,
                 steps,
@@ -421,6 +423,54 @@ public class TaskPlanner {
                 parallelGroupKey,
                 dependsOnStepOrders,
                 routingReason);
+    }
+
+    private void appendAdditionalMentionedAgentSteps(
+            List<OrchestratorStepPlan> steps,
+            Agent selectedAgent,
+            List<Agent> mentionedAgents) {
+        if (mentionedAgents == null || mentionedAgents.isEmpty()) {
+            return;
+        }
+
+        String selectedAgentId = selectedAgent == null ? null : selectedAgent.getId().value();
+        mentionedAgents.stream()
+                .filter(agent -> agent != null && agent.getId() != null)
+                .filter(agent -> selectedAgentId == null || !selectedAgentId.equals(agent.getId().value()))
+                .forEach(agent -> steps.add(mentionedAgentStep(steps.size() + 1, agent)));
+    }
+
+    private OrchestratorStepPlan mentionedAgentStep(int stepOrder, Agent agent) {
+        String requiredSkill = inferRequiredSkillFromToolTags(agent);
+        return new OrchestratorStepPlan(
+                stepOrder,
+                agent.getId().value(),
+                agent.getName(),
+                agent.getRole().name(),
+                "由被 @ 的 Agent “" + agent.getName() + "” 执行群聊协作子任务，并给出独立产出或建议。",
+                requiredSkill,
+                List.of("MARKDOWN", "REVIEW_REPORT"),
+                preferredAdapterName(agent),
+                List.of("mentionedAgentIds", "TaskSpec", "用户原始需求", "Conversation participants"),
+                "MENTIONED_AGENT_GROUP",
+                List.of(),
+                "User explicitly mentioned this Agent; router adds it as an independent custom collaboration step.");
+    }
+
+    private String inferRequiredSkillFromToolTags(Agent agent) {
+        List<String> tags = agent.getToolTags().stream()
+                .map(tag -> tag == null ? "" : tag.trim().toLowerCase(Locale.ROOT))
+                .toList();
+        if (tags.stream().anyMatch(tag -> tag.contains("review") || tag.contains("qa") || tag.contains("quality"))) {
+            return "QUALITY_REVIEW";
+        }
+        if (tags.stream().anyMatch(tag -> tag.contains("api") || tag.contains("backend"))) {
+            return "API_CONTRACT_DESIGN";
+        }
+        if (tags.stream().anyMatch(tag -> tag.contains("deploy") || tag.contains("release"))) {
+            return "DEPLOYMENT";
+        }
+        return "FRONTEND_ARTIFACT_GENERATION";
     }
 
     private boolean containsAny(String input, String... keywords) {

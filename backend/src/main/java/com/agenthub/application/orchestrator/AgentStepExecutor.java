@@ -8,6 +8,7 @@ import com.agenthub.domain.artifact.ArtifactId;
 import com.agenthub.domain.artifact.ArtifactRepository;
 import com.agenthub.domain.artifact.ArtifactSourceKind;
 import com.agenthub.domain.artifact.ArtifactStatus;
+import com.agenthub.domain.artifact.ArtifactType;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.task.TaskRunId;
 import com.agenthub.domain.task.TaskStep;
@@ -133,6 +134,7 @@ public class AgentStepExecutor {
             return List.copyOf(producedArtifactIds);
         }
 
+        List<ArtifactId> adapterArtifactIds = new ArrayList<>();
         AdapterArtifactExtractor.ExtractionResult extractionResult = adapterArtifactExtractor.extract(
                 adapterResponse.content(),
                 new AdapterArtifactExtractor.ExtractionContext(
@@ -160,9 +162,51 @@ public class AgentStepExecutor {
                     command.now(),
                     command.now());
             artifactRepository.save(adapterOutputArtifact);
-            producedArtifactIds.add(adapterOutputArtifact.getId());
+            adapterArtifactIds.add(adapterOutputArtifact.getId());
         }
+        if ("REAL_FIRST".equals(artifactGenerationMode) && !adapterArtifactIds.isEmpty()) {
+            archiveStaticFallbackArtifacts(command.producedArtifactIds(), command.now());
+            List<ArtifactId> realFirstArtifactIds = new ArrayList<>(adapterArtifactIds);
+            realFirstArtifactIds.addAll(producedArtifactIds);
+            return List.copyOf(realFirstArtifactIds);
+        }
+        producedArtifactIds.addAll(adapterArtifactIds);
         return List.copyOf(producedArtifactIds);
+    }
+
+    private void archiveStaticFallbackArtifacts(List<ArtifactId> fallbackArtifactIds, Instant now) {
+        for (ArtifactId fallbackArtifactId : fallbackArtifactIds) {
+            artifactRepository.findById(fallbackArtifactId).ifPresent(artifact -> artifactRepository.save(new Artifact(
+                    artifact.getId(),
+                    artifact.getConversationId(),
+                    artifact.getTaskRunId(),
+                    artifact.getParentArtifactId(),
+                    artifact.getRevisionInstruction(),
+                    archivedFallbackTitle(artifact.getType()),
+                    artifact.getType(),
+                    ArtifactStatus.ARCHIVED,
+                    artifact.getLanguage(),
+                    artifact.getContent(),
+                    artifact.getVersion(),
+                    ArtifactSourceKind.STATIC_TEMPLATE,
+                    artifact.getSourceAdapterType(),
+                    artifact.getSourceTaskStepId(),
+                    "REAL_FIRST_STATIC_FALLBACK",
+                    artifact.getCreatedAt(),
+                    now)));
+        }
+    }
+
+    private String archivedFallbackTitle(ArtifactType artifactType) {
+        return switch (artifactType) {
+            case CODE -> "Archived static fallback - code";
+            case MARKDOWN -> "Archived static fallback - markdown";
+            case FILE -> "Archived static fallback - file";
+            case API_CONTRACT -> "Archived static fallback - api contract";
+            case REVIEW_REPORT -> "Archived static fallback - review report";
+            case DATA_MODEL -> "Archived static fallback - data model";
+            case WEB_PREVIEW -> "Archived static fallback - web preview";
+        };
     }
 
     private boolean shouldPersistAdapterOutput(AgentResponse adapterResponse) {

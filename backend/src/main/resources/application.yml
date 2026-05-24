@@ -23,11 +23,13 @@ agenthub:
   adapters:
     default-type: MOCK
     openai-compatible:
-      enabled: false
+      enabled: ${AGENTHUB_OPENAI_ENABLED:false}
       base-url: ${AGENTHUB_OPENAI_BASE_URL:}
       api-key: ${AGENTHUB_OPENAI_API_KEY:}
       model: ${AGENTHUB_OPENAI_MODEL:}
       timeout-seconds: 30
+      fixture-enabled: ${AGENTHUB_OPENAI_FIXTURE_ENABLED:false}
+      fixture-review-decision: ${AGENTHUB_OPENAI_FIXTURE_REVIEW_DECISION:APPROVE}
     codex:
       enabled: ${AGENTHUB_CODEX_ENABLED:false}
       command: ${AGENTHUB_CODEX_COMMAND:codex}

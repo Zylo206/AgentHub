@@ -6,7 +6,10 @@ Thumbs.db
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+
+# Build caches
 *.tsbuildinfo
+**/*.tsbuildinfo
 
 # Backend
 backend/target/

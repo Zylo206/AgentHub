@@ -42,7 +42,7 @@ import { ChatInput } from "../../features/chat/ChatInput";
 import { parseLeadingAgentMention } from "../../features/chat/agentMention";
 import { MessageStream } from "../../features/chat/MessageStream";
 import { TaskRunPanel } from "../../features/chat/TaskRunPanel";
-import type { Message, TaskRun, TaskSpec, TaskStep } from "../../features/chat/chatTypes";
+import type { LightweightAttachment, Message, TaskRun, TaskSpec, TaskStep } from "../../features/chat/chatTypes";
 import { ConversationList } from "../../features/conversations/ConversationList";
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import { ContextPanel } from "../../features/context/ContextPanel";
@@ -96,6 +96,7 @@ export function WorkspacePage() {
   const [selectedTaskStepId, setSelectedTaskStepId] = useState<string | null>(null);
   const [showAllArtifacts, setShowAllArtifacts] = useState(true);
   const [draftMessage, setDraftMessage] = useState(PRODUCT_DEMO_PROMPT);
+  const [draftAttachments, setDraftAttachments] = useState<LightweightAttachment[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
   const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
@@ -394,7 +395,7 @@ export function WorkspacePage() {
   }
 
   async function handleSendMessage() {
-    if (!currentConversationId || !draftMessage.trim()) {
+    if (!currentConversationId || (!draftMessage.trim() && draftAttachments.length === 0)) {
       return;
     }
 
@@ -408,7 +409,7 @@ export function WorkspacePage() {
     const targetAgent = mentionedAgents[0] ?? selectedAgent;
     const contentToSend = mentionedAgents.length > 0 ? parsedMention.cleanedContent.trim() : draftMessage.trim();
 
-    if (!contentToSend) {
+    if (!contentToSend && draftAttachments.length === 0) {
       setErrorMessage(parsedMention.rawMention ? `请在 ${parsedMention.rawMention} 后补充消息内容。` : "请先输入消息内容。");
       return;
     }
@@ -426,7 +427,8 @@ export function WorkspacePage() {
         targetAgent ? getIdValue(targetAgent.id) : null,
         mentionedAgents.map((agent) => getIdValue(agent.id)).filter(Boolean),
         quoteMode === "reply" ? referencedMessageId : null,
-        referencedMessageId
+        referencedMessageId,
+        draftAttachments
       );
       if (parsedMention.matchedAgent) {
         setSelectedAgent(parsedMention.matchedAgent);
@@ -434,6 +436,7 @@ export function WorkspacePage() {
       const refreshedMessages = await getMessages(currentConversationId);
       setMessages(refreshedMessages);
       setDraftMessage("");
+      setDraftAttachments([]);
       setQuotedMessage(null);
       setQuoteMode("quote");
     } catch (error) {
@@ -982,6 +985,7 @@ export function WorkspacePage() {
           />
           <ContextPanel
             taskSpec={activeTaskSpec}
+            taskRuns={taskRuns}
             pinnedContexts={pinnedContexts}
             memories={memories}
             contextSnapshots={contextSnapshots}
@@ -996,7 +1000,9 @@ export function WorkspacePage() {
             selectedAgent={selectedAgent}
             quotedMessage={quotedMessage}
             quoteMode={quoteMode}
+            attachments={draftAttachments}
             onChange={setDraftMessage}
+            onAttachmentsChange={setDraftAttachments}
             onClearQuote={() => {
               setQuotedMessage(null);
               setQuoteMode("quote");
