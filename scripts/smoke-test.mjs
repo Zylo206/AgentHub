@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 
+import { existsSync, readFileSync } from "node:fs";
+
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const FRONTEND_BASE = (process.env.AGENTHUB_FRONTEND_BASE_URL || "http://127.0.0.1:5173").replace(/\/$/, "");
 const EXPECT_REAL_ADAPTER = process.env.AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER === "true";
 const EXPECT_OPENAI_FIXTURE = process.env.AGENTHUB_SMOKE_EXPECT_OPENAI_FIXTURE === "true";
 const EXPECT_REAL_FIRST = process.env.AGENTHUB_SMOKE_EXPECT_REAL_FIRST === "true";
 const EXPECT_REVIEW_REJECTION = process.env.AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION === "true";
+const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
+const EXPECT_ADAPTER_STATS_PERSISTENCE = process.env.AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE === "true";
+const ADAPTER_STATS_PATH = process.env.AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH || "";
 const REAL_ADAPTER_ARTIFACT_FIXTURE = {
   id: "fixture-real-adapter-artifact",
   title: "Real Adapter Output - Fixture",
@@ -122,6 +127,26 @@ async function tryRunOrchestratorFromMessage(conversationId, messageId) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("HTTP 404") || message.includes("HTTP 405")) {
       warn("message-level orchestrator-run endpoint is unavailable; skipping auto-trigger smoke coverage.");
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function runOrchestratorFromMessageWithApproval(conversationId, messageId, approvalId) {
+  return request(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-run`, {
+    method: "POST",
+    body: JSON.stringify({ approvalId })
+  });
+}
+
+async function getOrchestratorTriggerSuggestion(conversationId, messageId) {
+  try {
+    return await request(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-trigger-suggestion`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("HTTP 404") || message.includes("HTTP 405")) {
+      warn("orchestrator trigger suggestion endpoint is unavailable; skipping suggestion coverage.");
       return null;
     }
     throw error;
@@ -280,6 +305,8 @@ async function runSmokeTest() {
   console.log(`AgentHub OpenAI fixture expectation: ${EXPECT_OPENAI_FIXTURE ? "enabled" : "disabled"}`);
   console.log(`AgentHub REAL_FIRST expectation: ${EXPECT_REAL_FIRST ? "enabled" : "disabled"}`);
   console.log(`AgentHub reviewer rejection expectation: ${EXPECT_REVIEW_REJECTION ? "enabled" : "disabled"}`);
+  console.log(`AgentHub auto-trigger approval expectation: ${EXPECT_AUTO_TRIGGER_APPROVAL ? "enabled" : "disabled"}`);
+  console.log(`AgentHub adapter stats persistence expectation: ${EXPECT_ADAPTER_STATS_PERSISTENCE ? "enabled" : "disabled"}`);
   assertRealAdapterArtifactContract(REAL_ADAPTER_ARTIFACT_FIXTURE, "REAL_ADAPTER fixture");
   pass("REAL_ADAPTER fixture artifact contract validated");
 
@@ -386,7 +413,51 @@ async function runSmokeTest() {
   pass(`message sent: ${messageId}`);
   pass(`message attachments persisted: ${message.attachments.length}`);
 
-  const autoTriggeredTaskRun = await tryRunOrchestratorFromMessage(conversationId, messageId);
+  const triggerSuggestion = await getOrchestratorTriggerSuggestion(conversationId, messageId);
+  if (triggerSuggestion?.enabled) {
+    if (!triggerSuggestion.matched) {
+      throw new Error(`auto-trigger suggestion is enabled but did not match demo prompt: ${triggerSuggestion.reason}`);
+    }
+    if (EXPECT_AUTO_TRIGGER_APPROVAL && !triggerSuggestion.requireApproval) {
+      throw new Error("expected auto-trigger to require approval, but suggestion.requireApproval=false");
+    }
+    pass(`auto-trigger suggestion matched: ${triggerSuggestion.decision}`);
+  } else if (EXPECT_AUTO_TRIGGER_APPROVAL) {
+    throw new Error("AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL=true but suggestion endpoint reported disabled");
+  } else {
+    pass("auto-trigger suggestion disabled by configuration");
+  }
+
+  let autoTriggeredTaskRun = null;
+  if (triggerSuggestion?.enabled && triggerSuggestion.requireApproval) {
+    await expectRequestFailure(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-run`, {
+      method: "POST",
+      body: JSON.stringify({})
+    }, "approvalId is required");
+    pass("backend approval enforced for auto-triggered orchestrator run without approvalId");
+
+    const approvalRequestsAfterMessage = await request(`/api/conversations/${conversationId}/approval-requests`);
+    const pendingAutoTriggerApproval = approvalRequestsAfterMessage.find((approval) =>
+      approval.actionType === "ORCHESTRATOR_RUN" &&
+      approval.targetType === "MESSAGE" &&
+      approval.targetId === messageId &&
+      approval.status === "PENDING"
+    );
+    const approvalId = pendingAutoTriggerApproval?.approvalId || await createAndApproveApproval(conversationId, {
+      actionType: "ORCHESTRATOR_RUN",
+      targetType: "MESSAGE",
+      targetId: messageId,
+      riskLevel: "MEDIUM",
+      summary: "Smoke test approves message-level Orchestrator run.",
+      affectedItems: [`Message: ${messageId}`]
+    });
+    if (pendingAutoTriggerApproval) {
+      await request(`/api/approval-requests/${approvalId}/approve`, { method: "POST" });
+    }
+    autoTriggeredTaskRun = await runOrchestratorFromMessageWithApproval(conversationId, messageId, approvalId);
+  } else {
+    autoTriggeredTaskRun = await tryRunOrchestratorFromMessage(conversationId, messageId);
+  }
   if (autoTriggeredTaskRun) {
     const autoTriggeredTaskRunId = requireValue(getIdValue(autoTriggeredTaskRun.id), "autoTriggeredTaskRunId missing");
     if (autoTriggeredTaskRun.status !== "COMPLETED") {
@@ -1024,6 +1095,20 @@ async function runSmokeTest() {
     throw new Error("regenerated agent reply content missing regeneration marker");
   }
   pass(`single agent reply regenerated: ${getIdValue(regeneratedAgentMessage.id)}`);
+
+  if (EXPECT_ADAPTER_STATS_PERSISTENCE) {
+    if (!ADAPTER_STATS_PATH) {
+      throw new Error("AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE=true requires AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH");
+    }
+    if (!existsSync(ADAPTER_STATS_PATH)) {
+      throw new Error(`adapter stats snapshot was not written: ${ADAPTER_STATS_PATH}`);
+    }
+    const statsSnapshot = JSON.parse(readFileSync(ADAPTER_STATS_PATH, "utf8"));
+    if (!statsSnapshot.adapters || !statsSnapshot.adapters.MOCK || statsSnapshot.adapters.MOCK.attempts < 1) {
+      throw new Error(`adapter stats snapshot missing MOCK attempts: ${JSON.stringify(statsSnapshot)}`);
+    }
+    pass(`adapter stats persistence validated: ${ADAPTER_STATS_PATH}`);
+  }
 
   console.log("Smoke test completed successfully.");
 }

@@ -17,11 +17,20 @@ agenthub:
       limit: ${AGENTHUB_MEMORY_RETRIEVAL_LIMIT:6}
   orchestrator:
     artifact-generation-mode: ${AGENTHUB_ARTIFACT_GENERATION_MODE:HYBRID_REAL}
+    auto-trigger:
+      enabled: ${AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_ENABLED:false}
+      require-approval: ${AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_REQUIRE_APPROVAL:true}
+      mode: ${AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_MODE:KEYWORD_OR_MENTION}
+      keywords: ${AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_KEYWORDS:生成,创建,实现,修改,检查,review,页面,组件,workflow,工作流,协作,agent}
     planner:
       type: ${AGENTHUB_PLANNER_TYPE:RULE_BASED}
       fallback-to-rule-based: ${AGENTHUB_PLANNER_FALLBACK_TO_RULE_BASED:true}
   adapters:
     default-type: MOCK
+    stats:
+      persistence:
+        enabled: ${AGENTHUB_ADAPTER_STATS_PERSISTENCE_ENABLED:true}
+        path: ${AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH:./.agenthub/adapter-route-stats.json}
     openai-compatible:
       enabled: ${AGENTHUB_OPENAI_ENABLED:false}
       base-url: ${AGENTHUB_OPENAI_BASE_URL:}

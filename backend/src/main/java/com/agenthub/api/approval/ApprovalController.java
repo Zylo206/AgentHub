@@ -2,6 +2,8 @@ package com.agenthub.api.approval;
 
 import com.agenthub.application.approval.ApprovalApplicationService;
 import com.agenthub.common.ApiResponse;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,7 +25,7 @@ public class ApprovalController {
     @PostMapping("/conversations/{conversationId}/approval-requests")
     public ApiResponse<?> createApprovalRequest(
             @PathVariable("conversationId") String conversationId,
-            @RequestBody CreateApprovalRequest request) {
+            @Valid @RequestBody CreateApprovalRequest request) {
         return ApiResponse.success(approvalApplicationService.create(
                 conversationId,
                 request.actionType(),
@@ -50,11 +52,11 @@ public class ApprovalController {
     }
 
     public record CreateApprovalRequest(
-            String actionType,
-            String targetType,
-            String targetId,
+            @NotBlank String actionType,
+            @NotBlank String targetType,
+            @NotBlank String targetId,
             String riskLevel,
-            String summary,
+            @NotBlank String summary,
             List<String> affectedItems) {
     }
 }

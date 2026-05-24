@@ -1,4 +1,5 @@
 import type { Artifact } from "../artifacts/artifactTypes";
+import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { IdValue } from "../../utils/id";
 
 export interface Message {
@@ -129,6 +130,18 @@ export interface TaskRun {
   resultSummary: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OrchestratorTriggerSuggestion {
+  enabled: boolean;
+  mode: string;
+  requireApproval: boolean;
+  matched: boolean;
+  decision: string;
+  reason: string;
+  matchedKeywords: string[];
+  pendingApproval?: ApprovalRequest | null;
+  taskRun?: TaskRun | null;
 }
 
 export interface WorkspaceSnapshot {

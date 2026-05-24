@@ -42,7 +42,7 @@ React Workspace
 
 - 解析 selectedAgent 和消息开头单/多 `@AgentName`。
 - 展示 `targetAgentId / mentionedAgentIds` 对消息和 TaskRun 的影响。
-- 展示 Agent 协作消息协议：`TASK / RESULT / REVIEW / APPROVAL / REJECTION / ERROR`。
+- 展示 Agent 协作消息协议：`TASK / RESULT / REVIEW / APPROVAL / ERROR` 已进入默认链路；`REJECTION` 枚举已保留，但 reviewer rejection / retry 执行闭环仍未完成。
 - 展示 TaskGraph、ExecutionBatch、Adapter fallback、OrchestratorDecisionLog。
 - 承载 Artifact 预览、Revision、Apply Diff、Approval Gate、Deploy Preview、Action Audit。
 
@@ -266,6 +266,8 @@ Deploy 当前是静态模拟：
 - `/api/adapters`
 - `/api/conversations`
 - `/api/conversations/{conversationId}/messages`
+- `/api/conversations/{conversationId}/messages/{messageId}/orchestrator-run`
+- `/api/conversations/{conversationId}/messages/{messageId}/orchestrator-trigger-suggestion`
 - `/api/conversations/{conversationId}/demo-task`
 - `/api/conversations/{conversationId}/task-runs`
 - `/api/conversations/{conversationId}/artifacts`
@@ -277,7 +279,11 @@ Deploy 当前是静态模拟：
 - `/api/artifacts/{artifactId}/demo-deploy`
 - `/api/artifact-snapshots/{snapshotId}/restore`
 - `/api/conversations/{conversationId}/approval-requests`
+- `/api/approval-requests/{approvalId}/approve`
+- `/api/approval-requests/{approvalId}/cancel`
 - `/api/conversations/{conversationId}/action-audits`
+
+Message-level Orchestrator run 在 `agenthub.orchestrator.auto-trigger.enabled=true` 且 `require-approval=true` 时，对用户消息必须携带已批准的 `approvalId`。默认配置关闭 auto-trigger，因此手动 demo-task 主链路不受影响。
 
 验证命令：
 
@@ -292,7 +298,7 @@ cd ..
 node scripts/smoke-test.mjs
 ```
 
-smoke test 是 API 级验证，不是浏览器 E2E。
+smoke test 是 API 级验证，不是浏览器 E2E。默认 smoke 只验证稳定 MVP 主链路；真实 Adapter、REAL_FIRST、REJECTION、auto-trigger approval、Adapter stats persistence 需要通过环境变量显式开启扩展断言。
 
 ## 11. 当前技术边界
 
@@ -305,3 +311,15 @@ smoke test 是 API 级验证，不是浏览器 E2E。
 - 无文件附件 / 图片 / PPT 完整链路。
 - Codex / Claude Code / OpenCode 不是深度真实接入。
 - Tool Capability 不是真实 tool invocation。
+
+## 12. Adapter Health Stats Persistence
+
+`AgentAdapterRegistry` 的路由画像不再只保存在进程内存中。当前实现使用轻量本地 JSON snapshot：
+
+- 默认启用：`agenthub.adapters.stats.persistence.enabled=true`
+- 默认路径：`./.agenthub/adapter-route-stats.json`
+- 环境变量覆盖：`AGENTHUB_ADAPTER_STATS_PERSISTENCE_ENABLED` / `AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH`
+
+Snapshot 记录每个 Adapter 的 `attempts / successes / fallbacks / failures`。应用启动时会加载历史 snapshot，Adapter 执行完成后写回完整 snapshot。写入失败只记录 warning，不影响 Adapter 执行、Mock fallback 或 Orchestrator 主链路。
+
+`AgentRouter` 继续通过 `AgentExecutorService.routeStats(...)` 读取同一份画像，并将 `historyScore` 与 `fallbackPenalty` 纳入路由评分。该持久化只服务本地 demo 和重启后的评分连续性，不接 MySQL，也不引入外部依赖。

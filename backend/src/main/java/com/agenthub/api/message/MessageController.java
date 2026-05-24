@@ -1,13 +1,16 @@
 package com.agenthub.api.message;
 
 import com.agenthub.application.message.MessageApplicationService;
-import com.agenthub.application.orchestrator.OrchestratorService;
+import com.agenthub.application.orchestrator.OrchestratorAutoTriggerService;
 import com.agenthub.common.ApiResponse;
+import com.agenthub.domain.message.Message;
 import com.agenthub.domain.message.MessageAttachment;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,30 +22,40 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/conversations/{conversationId}/messages")
 public class MessageController {
 
+    private static final Logger logger = LoggerFactory.getLogger(MessageController.class);
+
     private final MessageApplicationService messageApplicationService;
-    private final OrchestratorService orchestratorService;
+    private final OrchestratorAutoTriggerService orchestratorAutoTriggerService;
 
     public MessageController(
             MessageApplicationService messageApplicationService,
-            OrchestratorService orchestratorService) {
+            OrchestratorAutoTriggerService orchestratorAutoTriggerService) {
         this.messageApplicationService = messageApplicationService;
-        this.orchestratorService = orchestratorService;
+        this.orchestratorAutoTriggerService = orchestratorAutoTriggerService;
     }
 
     @PostMapping
     public ApiResponse<?> sendMessage(
             @PathVariable("conversationId") String conversationId,
             @Valid @RequestBody SendMessageRequest request) {
-        return ApiResponse.success(
-                messageApplicationService.sendUserMessage(
-                        conversationId,
-                        request.content(),
-                        request.targetAgentId(),
-                        request.mentionedAgentIds(),
-                        request.replyToMessageId(),
-                        request.quotedMessageId(),
-                        toAttachments(request.attachments())),
-                "Message sent");
+        Message message = messageApplicationService.sendUserMessage(
+                conversationId,
+                request.content(),
+                request.targetAgentId(),
+                request.mentionedAgentIds(),
+                request.replyToMessageId(),
+                request.quotedMessageId(),
+                toAttachments(request.attachments()));
+        try {
+            orchestratorAutoTriggerService.handleAfterUserMessage(message);
+        } catch (RuntimeException exception) {
+            logger.warn(
+                    "Message was saved but orchestrator auto-trigger side effect failed. conversationId={}, messageId={}",
+                    conversationId,
+                    message.getId().value(),
+                    exception);
+        }
+        return ApiResponse.success(message, "Message sent");
     }
 
     @GetMapping
@@ -65,9 +78,19 @@ public class MessageController {
             @PathVariable("messageId") String messageId,
             @Valid @RequestBody(required = false) RunOrchestratorFromMessageRequest request) {
         String selectedAgentId = request == null ? null : request.selectedAgentId();
+        String approvalId = request == null ? null : request.approvalId();
         return ApiResponse.success(
-                orchestratorService.runFromMessage(conversationId, messageId, selectedAgentId),
+                orchestratorAutoTriggerService.runFromMessage(conversationId, messageId, selectedAgentId, approvalId),
                 "Orchestrator run created");
+    }
+
+    @GetMapping("/{messageId}/orchestrator-trigger-suggestion")
+    public ApiResponse<?> getOrchestratorTriggerSuggestion(
+            @PathVariable("conversationId") String conversationId,
+            @PathVariable("messageId") String messageId) {
+        return ApiResponse.success(
+                orchestratorAutoTriggerService.evaluateMessage(conversationId, messageId),
+                "Orchestrator trigger suggestion evaluated");
     }
 
     private List<MessageAttachment> toAttachments(List<SendMessageAttachmentRequest> attachments) {
@@ -101,4 +124,4 @@ record SendMessageAttachmentRequest(
         @PositiveOrZero long size,
         String contentPreview) {}
 
-record RunOrchestratorFromMessageRequest(String selectedAgentId) {}
+record RunOrchestratorFromMessageRequest(String selectedAgentId, String approvalId) {}

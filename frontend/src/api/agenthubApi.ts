@@ -8,7 +8,13 @@ import type { Artifact } from "../features/artifacts/artifactTypes";
 import type { ArtifactSnapshot } from "../features/artifacts/artifactSnapshotTypes";
 import type { ActionAuditLog } from "../features/audit/auditTypes";
 import type { ApprovalRequest } from "../features/approval/approvalTypes";
-import type { LightweightAttachment, Message, TaskRun, TaskSpec } from "../features/chat/chatTypes";
+import type {
+  LightweightAttachment,
+  Message,
+  OrchestratorTriggerSuggestion,
+  TaskRun,
+  TaskSpec
+} from "../features/chat/chatTypes";
 import type { Conversation } from "../features/conversations/conversationTypes";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../features/context/contextTypes";
 import type { DeploymentRecord } from "../features/deployments/deploymentTypes";
@@ -200,6 +206,34 @@ export function createDemoTask(
   return request<TaskRun>(`/api/conversations/${conversationId}/demo-task`, {
     method: "POST",
     body: JSON.stringify({ messageId, userInput, selectedAgentId: selectedAgentId ?? null })
+  });
+}
+
+export interface RunOrchestratorFromMessageRequest {
+  selectedAgentId?: string | null;
+  approvalId?: string | null;
+}
+
+export function getOrchestratorTriggerSuggestion(
+  conversationId: string,
+  messageId: string
+): Promise<OrchestratorTriggerSuggestion> {
+  return request<OrchestratorTriggerSuggestion>(
+    `/api/conversations/${conversationId}/messages/${messageId}/orchestrator-trigger-suggestion`
+  );
+}
+
+export function runOrchestratorFromMessage(
+  conversationId: string,
+  messageId: string,
+  requestBody: RunOrchestratorFromMessageRequest = {}
+): Promise<TaskRun> {
+  return request<TaskRun>(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-run`, {
+    method: "POST",
+    body: JSON.stringify({
+      selectedAgentId: requestBody.selectedAgentId ?? null,
+      approvalId: requestBody.approvalId ?? null
+    })
   });
 }
 

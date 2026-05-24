@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import type { Agent } from "../agents/agentTypes";
+import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { PinnedContext } from "../context/contextTypes";
 import { MessageBubble } from "./MessageBubble";
-import type { Message } from "./chatTypes";
+import type { Message, OrchestratorTriggerSuggestion } from "./chatTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole } from "../../utils/displayLabels";
 
@@ -13,6 +14,9 @@ interface MessageStreamProps {
   loading: boolean;
   rerunningMessageId?: string | null;
   regeneratingMessageId?: string | null;
+  triggerSuggestionsByMessageId?: Record<string, OrchestratorTriggerSuggestion | null>;
+  approvalByMessageId?: Record<string, ApprovalRequest | null>;
+  autoTriggerRunningMessageId?: string | null;
   onSelectArtifact: (artifactId: string) => void;
   onToggleMessagePin: (messageId: string, pinnedContextId?: string | null) => void;
   onSaveMessageAsMemory: (message: Message) => void;
@@ -21,6 +25,8 @@ interface MessageStreamProps {
   onReplyMessage: (message: Message) => void;
   onRerunFromMessage: (message: Message) => void;
   onRegenerateAgentReply: (message: Message) => void;
+  onConfirmOrchestratorTrigger: (message: Message) => void;
+  onRefreshOrchestratorSuggestion: (message: Message) => void;
 }
 
 function resolveSenderLabel(message: Message, agents: Agent[]): string {
@@ -104,6 +110,9 @@ export function MessageStream({
   loading,
   rerunningMessageId,
   regeneratingMessageId,
+  triggerSuggestionsByMessageId = {},
+  approvalByMessageId = {},
+  autoTriggerRunningMessageId,
   onSelectArtifact,
   onToggleMessagePin,
   onSaveMessageAsMemory,
@@ -111,7 +120,9 @@ export function MessageStream({
   onQuoteMessage,
   onReplyMessage,
   onRerunFromMessage,
-  onRegenerateAgentReply
+  onRegenerateAgentReply,
+  onConfirmOrchestratorTrigger,
+  onRefreshOrchestratorSuggestion
 }: MessageStreamProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(() => new Set());
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -200,6 +211,9 @@ export function MessageStream({
               }
               rerunning={rerunningMessageId === messageId}
               regenerating={regeneratingMessageId === messageId}
+              autoTriggerSuggestion={triggerSuggestionsByMessageId[messageId] ?? null}
+              autoTriggerApproval={approvalByMessageId[messageId] ?? null}
+              autoTriggerRunning={autoTriggerRunningMessageId === messageId}
               replyMessages={replyMessages}
               threadExpanded={expandedThreadIds.has(messageId)}
               highlighted={highlightedMessageId === messageId}
@@ -211,6 +225,8 @@ export function MessageStream({
               onReplyMessage={onReplyMessage}
               onRerunFromMessage={onRerunFromMessage}
               onRegenerateAgentReply={onRegenerateAgentReply}
+              onConfirmOrchestratorTrigger={onConfirmOrchestratorTrigger}
+              onRefreshOrchestratorSuggestion={onRefreshOrchestratorSuggestion}
               onToggleThread={() => toggleThread(messageId)}
               onJumpToMessage={jumpToMessage}
             />

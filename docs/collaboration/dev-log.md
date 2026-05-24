@@ -2830,3 +2830,189 @@
 - 将自动触发策略做成可配置确认流：高风险任务先进入 Approval / Review，再触发 Orchestrator。
 - 把 Adapter health history 接入持久化或本地 snapshot，提升路由稳定性。
 - 做轻量附件上传 API 和 Artifact 附件关联。
+
+## Phase 64：Message-level Orchestrator 自动触发与后端 Approval Gate
+
+### 目标
+
+- 将显式 message-level Orchestrator trigger 产品化为可配置自动触发能力，同时通过后端 ApprovalRequest 避免任务消息被后台误执行。
+- 保留现有手动 `/orchestrator-run` 入口和 demo-task 主链路。
+
+### 主要变更
+
+- 新增 `OrchestratorAutoTriggerService`，在用户消息发送后按配置评估是否建议触发 Orchestrator。
+- 新增 `OrchestratorAutoTriggerResult`，用于返回 `enabled / mode / requireApproval / matched / reason / matchedKeywords / pendingApproval / taskRun` 等信息。
+- `MessageController` 在发送消息后调用自动触发评估；默认配置关闭，不影响现有发送消息行为。
+- 扩展 `POST /api/conversations/{conversationId}/messages/{messageId}/orchestrator-run` 请求体，支持可选 `approvalId`。
+- 新增 `GET /api/conversations/{conversationId}/messages/{messageId}/orchestrator-trigger-suggestion`，让前端可以查询某条消息是否匹配自动触发策略。
+- 审批模式下，命中消息只创建 `ApprovalRequest` 和 `APPROVAL` 系统消息；必须 approve 后携带 `approvalId` 执行，执行成功后消费该 approval。
+- 增加 `agenthub.orchestrator.auto-trigger.*` 配置和 `.env.example` 示例。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+
+### 静态 / Mock / Placeholder 部分
+
+- 自动触发默认关闭，仍不是完全自治 Agent 后台调度。
+- `require-approval=true` 时不会自动执行 Orchestrator，只创建待确认审批。
+- 审批与触发状态仍使用内存仓储，重启后不会持久保存。
+- 本轮只完成后端能力，前端确认 UI 需要后续 worker 接入。
+
+### 遗留问题
+
+- 前端还需要在消息发送后展示 pending approval / trigger suggestion。
+- Approval approve 后当前仍需要调用 message-level run 入口携带 `approvalId` 执行，尚未做 approve 即自动执行。
+- 自动触发关键词策略仍是轻量规则，不是 LLM intent classifier。
+
+### 下一步建议
+
+- 前端接入 trigger suggestion 和 pending approval 状态，提供“确认运行 Orchestrator / 取消”操作。
+- 将 approval 与 trigger execution 做更完整的 UI 状态联动，并补充 smoke test 对审批触发链路的断言。
+
+## Phase 65：Adapter Health Stats 本地持久化
+
+### 目标
+
+- 将 Adapter 路由健康画像从进程内存升级为本地 JSON snapshot，避免 backend 重启后 `historyScore` 和 `fallbackPenalty` 丢失。
+- 保持执行主链路、Mock fallback、message trigger 和前端行为不变。
+
+### 主要变更
+
+- 新增 `AgentAdapterStatsRepository`，定义 Adapter route stats 的轻量加载和保存接口。
+- 新增 `FileAgentAdapterStatsRepository`，使用本地 JSON 文件保存 `attempts / successes / fallbacks / failures`。
+- `AgentAdapterRegistry` 启动时加载历史 stats，Adapter 执行完成后写回完整 snapshot。
+- 写入和读取失败只记录 warning，不阻断 Adapter 执行、fallback 或 Orchestrator 路由。
+- `application.yml` 增加 `agenthub.adapters.stats.persistence.*` 配置，默认路径为 `./.agenthub/adapter-route-stats.json`。
+- `AgentRouter` 继续通过 `AgentExecutorService.routeStats(...)` 使用历史画像参与路由评分，无需改前端。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+
+### 静态 / Mock / Placeholder 部分
+
+- 该持久化只面向本地 demo，不接 MySQL，不引入外部网络或复杂依赖。
+- Snapshot 是完整覆盖写，不是生产级事件日志或多实例一致性方案。
+- Adapter stats 仍只统计当前路由执行结果，不代表真实 provider SLA 监控。
+
+### 遗留问题
+
+- 多实例部署需要集中式存储或事件流，本地 JSON 不适用。
+- 如后续引入更复杂评分维度，需要扩展 snapshot version 和兼容读取逻辑。
+
+## Phase 66：自动触发确认流产品化与 Adapter Stats 持久化集成
+
+### 目标
+
+- 将 message-level Orchestrator trigger 从显式按钮推进为可配置自动触发建议，并通过 Approval Gate 做确认流。
+- 将 Adapter health routing stats 从进程内存升级为本地持久化 snapshot，避免重启后路由画像丢失。
+- 保持 demo-task、手动 `Run Demo Task`、Artifact Revision、Deploy Preview 和 Mock fallback 稳定。
+
+### 主要变更
+
+- `OrchestratorAutoTriggerService` 支持 `enabled / require-approval / mode / keywords` 配置。
+- 用户消息发送后可按关键词或 `@Agent` 命中自动触发策略；默认关闭，开启后默认要求 Approval。
+- `orchestrator-run` 支持 `approvalId`，并在 `require-approval=true` 且消息命中时强制后端校验 approval，避免只靠前端约束。
+- Workspace 消息卡片展示 auto-trigger suggestion、pending approval、approved、consumed 等状态。
+- 前端确认流按 `approveApprovalRequest(approvalId) -> runOrchestratorFromMessage(..., approvalId)` 执行，并保留手动 demo-task 入口。
+- `AgentAdapterRegistry` 启动加载本地 route stats，执行后写回 JSON snapshot。
+- `FileAgentAdapterStatsRepository` 使用本地 JSON 保存 `attempts / successes / fallbacks / failures`，读取或写入失败只 warning，不阻断主链路。
+- `.env.example` 增加 auto-trigger 和 adapter stats persistence 配置；`.gitignore` 增加 `.agenthub/`。
+- `scripts/smoke-test.mjs` 增加可选断言：
+  - `$env:AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL="true"`
+  - `$env:AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE="true"`
+- `scripts/e2e-browser.mjs` 兼容 auto-trigger approval 环境，并可验证消息卡片中的 `.message-auto-trigger`。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run lint`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+- 启动临时 backend：
+  - `$env:AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_ENABLED="true"`
+  - `$env:AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_REQUIRE_APPROVAL="true"`
+  - `$env:AGENTHUB_ADAPTER_STATS_PERSISTENCE_ENABLED="true"`
+  - `$env:AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH="backend/target/adapter-route-stats-smoke.json"`
+- 启动临时 frontend 后执行：
+  - `$env:AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL="true"; $env:AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE="true"; node scripts/smoke-test.mjs`
+  - `$env:AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL="true"; cd frontend; npm run e2e:browser`
+- `git diff --check`
+- `git ls-files "*.tsbuildinfo"`：无输出
+
+### 静态 / Mock / Placeholder 部分
+
+- 自动触发仍是关键词 / mention 规则，不是 LLM intent classifier。
+- Approval Gate 是本地内存审批流，未接 RBAC、多用户审批或持久化数据库。
+- Adapter stats snapshot 是本地 JSON，不是生产级多实例监控或 SLA 统计。
+- E2E 是轻量浏览器主链路验证，不是完整 UI 自动化测试体系。
+
+### 遗留问题
+
+- auto-trigger 默认仍关闭，正式演示时需要显式开启配置。
+- ApprovalRequest 本身仍是内存仓储，重启后审批状态会丢失。
+- Adapter stats snapshot 不是事件日志，无法审计每次 Adapter 调用细节。
+- 自动触发策略还缺更细粒度风险分级和用户偏好配置。
+
+### 下一步建议
+
+- 将 auto-trigger 配置暴露到 Workspace 设置面板，支持用户选择“关闭 / 建议 / 自动但需确认”。
+- 将 ApprovalRequest 持久化，与 ActionAuditLog 一起形成完整操作审计链。
+- 增加 Adapter route stats 面板，展示各 Adapter 的 attempts、successes、fallbacks、failures 和当前路由权重。
+
+## Phase 67：Multi-agent 课题核对与 Auto-trigger / Stats 稳定性修复
+
+### 目标
+
+- 使用 Codex multi-agent 对课题要求、后端实现和前端验收路径做并行核对。
+- 修复 auto-trigger approval、Adapter stats persistence、前端确认交互和文档口径中的关键不一致。
+- 保持 demo-task、Artifact、Revision、Deploy Preview、Approval Gate、Audit 和 smoke test 主链路稳定。
+
+### 主要变更
+
+- `FileAgentAdapterStatsRepository` 的持久化写入改为串行保存，并使用唯一临时文件，降低并行 TaskStep 同时写 JSON snapshot 的 Windows 文件占用风险。
+- `OrchestratorAutoTriggerService` 在 auto-trigger enabled 且 require-approval=true 时，对用户消息级 Orchestrator run 强制校验 `approvalId`，不再只依赖关键词命中路径。
+- `MessageController` 将 auto-trigger 后置副作用隔离为 warning，避免消息已保存后因审批或触发副作用失败导致发送接口整体失败。
+- `ApprovalController` / `ActionAuditController` 增加最小 request validation，避免空 action、target、status、summary 进入审批和审计记录。
+- `MessageBubble` 和 `WorkspacePage` 将 auto-trigger 确认流调整为两步：先创建确认请求，再批准并运行，并将相关 UI 文案中文化。
+- README、technical-design、demo-checklist 同步默认 smoke 与 opt-in extended smoke 的边界，明确 REAL_ADAPTER、REAL_FIRST、REJECTION、auto-trigger approval、Adapter stats persistence 不是默认 smoke 全部强断言。
+- dev-log 中的扩展 smoke 命令改为 PowerShell 友好的环境变量写法。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run lint`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+- 启动临时 backend / frontend 后执行扩展 smoke：
+  - `$env:AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL="true"`
+  - `$env:AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE="true"`
+  - `node scripts/smoke-test.mjs`
+- 执行浏览器 E2E：
+  - `$env:AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL="true"`
+  - `cd frontend && npm run e2e:browser`
+- `git diff --check`
+- `git ls-files "*.tsbuildinfo"`：无输出
+
+### 静态 / Mock / Placeholder 部分
+
+- auto-trigger 仍是规则化关键词 / mention 策略，不是 LLM intent classifier。
+- Approval Gate 仍是本地轻量审批，不是完整 RBAC、多用户审批或企业级审批流。
+- Adapter stats persistence 是本地 JSON snapshot，不是生产级监控、SLA 统计或多实例一致性方案。
+- REJECTION 协议枚举可用，但 reviewer rejection -> retry / revise 的完整闭环仍未完成。
+
+### 遗留问题
+
+- 浏览器 E2E 当前验证 auto-trigger 卡片可见和主链路完成，但仍可进一步细化到真实点击两步确认 UI。
+- `POST /messages` 仍只返回 Message，auto-trigger suggestion / pending approval 需要通过后续查询或卡片展示获取。
+- `/api/adapters` 仍未直接暴露 route stats 面板数据。
+- ApprovalRequest 仍是内存仓储，重启后审批状态不会保留。
+
+### 下一步建议
+
+- 将浏览器 E2E 的 auto-trigger 验证从“卡片可见”增强到“点击创建确认 -> 点击批准并运行 -> TaskRun 完成”。
+- 增加 Adapter route stats 可视化面板，展示 attempts、successes、fallbacks、failures 和当前路由权重。
+- 继续补 reviewer REJECTION -> retry / revise 的闭环，避免协议只停留在 badge 展示。

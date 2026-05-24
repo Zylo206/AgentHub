@@ -8,6 +8,7 @@ const FRONTEND_BASE = (process.env.AGENTHUB_FRONTEND_BASE_URL || "http://127.0.0
 const HEADLESS = process.env.AGENTHUB_E2E_HEADLESS !== "false";
 const SLOW_MO = Number(process.env.AGENTHUB_E2E_SLOW_MO || 0);
 const BROWSER_CHANNEL = process.env.AGENTHUB_E2E_BROWSER_CHANNEL || "msedge";
+const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
 const TEST_TITLE = `E2E Browser Conversation ${Date.now()}`;
 const TEST_PROMPT = [
   "Browser E2E: generate a React login preview, include verification-code login,",
@@ -118,6 +119,44 @@ async function createAndApproveApproval(conversationId, requestBody) {
   return approvalId;
 }
 
+async function runOrchestratorFromMessage(conversationId, messageId, approvalId = null) {
+  return request(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-run`, {
+    method: "POST",
+    body: JSON.stringify({ approvalId })
+  });
+}
+
+async function runOrchestratorFromMessageWithOptionalApproval(conversationId, messageId) {
+  try {
+    return await runOrchestratorFromMessage(conversationId, messageId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("approvalId is required")) {
+      throw error;
+    }
+  }
+
+  const approvalRequests = await request(`/api/conversations/${conversationId}/approval-requests`);
+  const pendingApproval = approvalRequests.find((approval) =>
+    approval.actionType === "ORCHESTRATOR_RUN" &&
+    approval.targetType === "MESSAGE" &&
+    approval.targetId === messageId &&
+    approval.status === "PENDING"
+  );
+  const approvalId = pendingApproval?.approvalId || await createAndApproveApproval(conversationId, {
+    actionType: "ORCHESTRATOR_RUN",
+    targetType: "MESSAGE",
+    targetId: messageId,
+    riskLevel: "MEDIUM",
+    summary: "Browser E2E approves message-level Orchestrator run.",
+    affectedItems: [`Message: ${messageId}`]
+  });
+  if (pendingApproval) {
+    await request(`/api/approval-requests/${approvalId}/approve`, { method: "POST" });
+  }
+  return runOrchestratorFromMessage(conversationId, messageId, approvalId);
+}
+
 function resolvePreviewUrl(previewUrl) {
   const value = requireValue(previewUrl, "deployment previewUrl missing");
   try {
@@ -164,10 +203,7 @@ async function seedE2eData() {
     })
   });
   const messageId = requireValue(getIdValue(message.id), "messageId missing");
-  const taskRun = await request(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-run`, {
-    method: "POST",
-    body: JSON.stringify({})
-  });
+  const taskRun = await runOrchestratorFromMessageWithOptionalApproval(conversationId, messageId);
   if (taskRun.status !== "COMPLETED") {
     throw new Error(`orchestrator-run status expected COMPLETED, got ${taskRun.status}`);
   }
@@ -226,6 +262,9 @@ async function runBrowserE2e() {
     await waitForVisible(page, ".workspace-page", "workspace page");
     await page.getByRole("button", { name: new RegExp(TEST_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
     await waitForVisible(page, ".message-stream", "message stream");
+    if (EXPECT_AUTO_TRIGGER_APPROVAL) {
+      await waitForVisible(page, ".message-auto-trigger", "message auto-trigger card");
+    }
     await waitForVisible(page, ".orchestrator-explain-panel", "orchestrator explain panel");
     await waitForVisible(page, ".artifact-card", "artifact card");
     await page.locator(".artifact-card").first().click();

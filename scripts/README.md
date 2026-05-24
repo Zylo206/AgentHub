@@ -92,6 +92,17 @@ Without this flag, the smoke test remains stable in the default Mock / fallback 
 
 The smoke test always validates a local REAL_ADAPTER artifact fixture contract and validates persisted REAL_ADAPTER artifacts when the backend produces them. It also creates an isolated custom `review` Agent to verify that Tool Capability routing can select an Agent for `QUALITY_REVIEW`. `REJECTION` is treated as conditional coverage: if the backend emits `messageType=REJECTION`, the script validates it; if not, the script prints a warning because the current demo-task path has no rejection/retry closure.
 
+If backend is started with message-level auto trigger and Adapter stats persistence enabled, enable the stricter checks:
+
+```powershell
+$env:AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL="true"
+$env:AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE="true"
+$env:AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH="E:\CodeProject2\AgentHub\backend\target\adapter-route-stats-smoke.json"
+node scripts/smoke-test.mjs
+```
+
+These flags validate that matched task messages require approval before `orchestrator-run` executes and that adapter route stats are written to the configured JSON snapshot.
+
 This is an API-level smoke test with an HTTP reachability check for the local preview page. It does not run browser E2E automation, parse DOM content, make real LLM calls, call real external Agents, or perform real deployment.
 
 ## Browser E2E
@@ -119,6 +130,7 @@ $env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
 $env:AGENTHUB_FRONTEND_BASE_URL="http://127.0.0.1:5173"
 $env:AGENTHUB_E2E_BROWSER_CHANNEL="msedge"
 $env:AGENTHUB_E2E_HEADLESS="false"
+$env:AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL="true"
 node scripts/e2e-browser.mjs
 ```
 

@@ -254,12 +254,19 @@
 3. 启动 backend 和 frontend。
 4. 执行：
    `node scripts/smoke-test.mjs`
-5. 检查 `.gitignore` 包含：
+5. 如需要验收 auto-trigger approval 与 Adapter stats persistence，先按 PowerShell 设置：
+   `$env:AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL="true"`
+   `$env:AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE="true"`
+   `$env:AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH="E:\CodeProject2\AgentHub\backend\target\adapter-route-stats-smoke.json"`
+   然后再次执行：
+   `node scripts/smoke-test.mjs`
+6. 检查 `.gitignore` 包含：
    - `*.tsbuildinfo`
    - `backend/.agenthub/`
-6. 执行：
+   - `.agenthub/`
+7. 执行：
    `git status`
-7. 确认没有误提交：
+8. 确认没有误提交：
    - `node_modules`
    - `dist`
    - `target`
@@ -281,4 +288,4 @@
 - Apply Diff / Deploy / Restore 必须经过 ApprovalRequest。
 - Action Audit 可追踪高风险操作。
 - Deploy Preview URL 可打开。
-- `node scripts/smoke-test.mjs` 通过。
+- `node scripts/smoke-test.mjs` 通过。注意：默认 smoke 不代表 REAL_ADAPTER、REAL_FIRST、REJECTION、auto-trigger approval、Adapter stats persistence 全部闭环；这些需要显式开启对应环境变量做扩展断言。

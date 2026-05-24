@@ -3,6 +3,8 @@ package com.agenthub.api.audit;
 import com.agenthub.application.audit.ActionAuditService;
 import com.agenthub.common.ApiResponse;
 import com.agenthub.domain.conversation.ConversationId;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,7 +30,7 @@ public class ActionAuditController {
     @PostMapping("/conversations/{conversationId}/action-audits")
     public ApiResponse<?> recordActionAudit(
             @PathVariable("conversationId") String conversationId,
-            @RequestBody RecordActionAuditRequest request) {
+            @Valid @RequestBody RecordActionAuditRequest request) {
         return ApiResponse.success(actionAuditService.record(
                 new ConversationId(conversationId),
                 request.actionType(),
@@ -39,10 +41,10 @@ public class ActionAuditController {
     }
 
     public record RecordActionAuditRequest(
-            String actionType,
-            String targetType,
-            String targetId,
-            String status,
-            String summary) {
+            @NotBlank String actionType,
+            @NotBlank String targetType,
+            @NotBlank String targetId,
+            @NotBlank String status,
+            @NotBlank String summary) {
     }
 }

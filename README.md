@@ -25,7 +25,7 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台 MV
 - RuleBased Planner + 可配置 LLM Planner JSON Schema + Prompt Layering + fallback。
 - selectedAgent、`Message.targetAgentId`、`Message.mentionedAgentIds`。
 - 多 `@Agent` 进入 TaskGraph，额外 mentioned Agent 生成 custom collaboration step。
-- Agent 协作消息协议：`TASK / RESULT / REVIEW / APPROVAL / REJECTION / ERROR`。
+- Agent 协作消息协议：`TASK / RESULT / REVIEW / APPROVAL / ERROR` 已进入默认链路；`REJECTION` 枚举已保留，但 retry / revise 执行闭环仍是后续任务。
 - Tool Capability Registry：`toolTags -> capability -> Router scoring`。
 - Adapter 层：MOCK、OPENAI_COMPATIBLE、Codex / Claude Code / OpenCode CLI 探测型 Adapter。
 - 非 MOCK Adapter 成功时可生成 REAL_ADAPTER Artifact；失败时 fallback 到 MOCK。
@@ -34,7 +34,7 @@ AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台 MV
 - ApprovalRequest：Apply Diff / Force Apply / Deploy / Restore 等高风险操作需要后端审批。
 - Action Audit：记录 approval、apply、deploy、restore 等操作时间线。
 - Deploy Status Card：静态 demo deploy、Preview URL、`/preview/:artifactId`。
-- API 级 smoke test：覆盖主链路、multi-mention、memory、approval、deploy preview、protocol messages。
+- API 级 smoke test：默认覆盖主链路、multi-mention、memory、approval、deploy preview、protocol messages；真实 Adapter、REAL_FIRST、REJECTION、auto-trigger approval、Adapter stats persistence 属于显式开启的扩展断言。
 
 ### 前端
 
@@ -116,7 +116,18 @@ $env:AGENTHUB_FRONTEND_BASE_URL="http://127.0.0.1:5173"
 node scripts/smoke-test.mjs
 ```
 
-smoke test 是 API 级主链路验证，不是浏览器 E2E。当前覆盖 health、adapter、conversation、message、multi-mention、TaskGraph、memory、revision、apply diff、approval、deploy、preview URL、Agent 协作协议和单条 Agent 回复重新生成。
+smoke test 是 API 级主链路验证，不是浏览器 E2E。当前默认覆盖 health、adapter、conversation、message、multi-mention、TaskGraph、memory、revision、apply diff、approval、deploy、preview URL、Agent 协作协议和单条 Agent 回复重新生成。
+
+扩展断言需要显式开启，避免在无真实配置环境下误判：
+
+```powershell
+$env:AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL="true"
+$env:AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE="true"
+$env:AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH="E:\CodeProject2\AgentHub\backend\target\adapter-route-stats-smoke.json"
+node scripts/smoke-test.mjs
+```
+
+`REAL_ADAPTER / REAL_FIRST / REJECTION` 也有对应 opt-in smoke 断言；默认通过不代表这些能力已经完整闭环。
 
 ## OPENAI_COMPATIBLE / DeepSeek 配置
 
@@ -149,11 +160,11 @@ $env:AGENTHUB_OPENAI_MODEL="deepseek-v4-flash"
 
 ## 文档入口
 
-- [技术设计](E:/CodeProject2/AgentHub/docs/technical-design.md)
-- [Roadmap](E:/CodeProject2/AgentHub/docs/roadmap.md)
-- [Demo Checklist](E:/CodeProject2/AgentHub/docs/collaboration/demo-checklist.md)
-- [开发记录](E:/CodeProject2/AgentHub/docs/collaboration/dev-log.md)
-- [课题对齐评估](E:/CodeProject2/AgentHub/docs/mvp-requirements-alignment.md)
+- [技术设计](docs/technical-design.md)
+- [Roadmap](docs/roadmap.md)
+- [Demo Checklist](docs/collaboration/demo-checklist.md)
+- [开发记录](docs/collaboration/dev-log.md)
+- [课题对齐评估](docs/mvp-requirements-alignment.md)
 
 ## 下一阶段
 

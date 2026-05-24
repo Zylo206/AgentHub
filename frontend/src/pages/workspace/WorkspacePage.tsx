@@ -21,11 +21,14 @@ import {
   getHandoffSummariesByTaskRun,
   getMemoriesByConversation,
   getMessages,
+  getApprovalRequestsByConversation,
+  getOrchestratorTriggerSuggestion,
   getPinnedContextsByConversation,
   getTaskRunsByConversation,
   getTaskSpecsByConversation,
   pinMessageAsContext,
   regenerateAgentReply,
+  runOrchestratorFromMessage,
   restoreArtifactSnapshotWithApproval,
   saveMessageAsMemory,
   sendMessage,
@@ -36,13 +39,21 @@ import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes"
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
 import type { ArtifactSnapshot } from "../../features/artifacts/artifactSnapshotTypes";
+import type { ApprovalRequest } from "../../features/approval/approvalTypes";
 import { ActionAuditTimelinePanel } from "../../features/audit/ActionAuditTimelinePanel";
 import type { ActionAuditLog } from "../../features/audit/auditTypes";
 import { ChatInput } from "../../features/chat/ChatInput";
 import { parseLeadingAgentMention } from "../../features/chat/agentMention";
 import { MessageStream } from "../../features/chat/MessageStream";
 import { TaskRunPanel } from "../../features/chat/TaskRunPanel";
-import type { LightweightAttachment, Message, TaskRun, TaskSpec, TaskStep } from "../../features/chat/chatTypes";
+import type {
+  LightweightAttachment,
+  Message,
+  OrchestratorTriggerSuggestion,
+  TaskRun,
+  TaskSpec,
+  TaskStep
+} from "../../features/chat/chatTypes";
 import { ConversationList } from "../../features/conversations/ConversationList";
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import { ContextPanel } from "../../features/context/ContextPanel";
@@ -85,6 +96,10 @@ export function WorkspacePage() {
   const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
   const [artifactSnapshots, setArtifactSnapshots] = useState<ArtifactSnapshot[]>([]);
   const [actionAudits, setActionAudits] = useState<ActionAuditLog[]>([]);
+  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([]);
+  const [triggerSuggestionsByMessageId, setTriggerSuggestionsByMessageId] = useState<
+    Record<string, OrchestratorTriggerSuggestion | null>
+  >({});
   const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [contextSnapshots, setContextSnapshots] = useState<ContextSnapshot[]>([]);
@@ -114,6 +129,7 @@ export function WorkspacePage() {
   const [runningDemoTask, setRunningDemoTask] = useState(false);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
+  const [autoTriggerRunningMessageId, setAutoTriggerRunningMessageId] = useState<string | null>(null);
   const [revisingArtifact, setRevisingArtifact] = useState(false);
   const [deployingArtifact, setDeployingArtifact] = useState(false);
   const [restoringSnapshot, setRestoringSnapshot] = useState(false);
@@ -152,6 +168,26 @@ export function WorkspacePage() {
     () => artifactSnapshots.filter((snapshot) => getIdValue(snapshot.artifactId) === selectedArtifactId),
     [artifactSnapshots, selectedArtifactId]
   );
+  const approvalByMessageId = useMemo(() => {
+    const byMessageId: Record<string, ApprovalRequest | null> = {};
+    approvalRequests.forEach((approvalRequest) => {
+      if (approvalRequest.targetType !== "MESSAGE" || approvalRequest.actionType !== "ORCHESTRATOR_RUN") {
+        return;
+      }
+
+      const previous = byMessageId[approvalRequest.targetId];
+      if (!previous || approvalRequest.status === "PENDING" || approvalRequest.status === "APPROVED") {
+        byMessageId[approvalRequest.targetId] = approvalRequest;
+      }
+    });
+    Object.entries(triggerSuggestionsByMessageId).forEach(([messageId, suggestion]) => {
+      if (!suggestion?.pendingApproval || byMessageId[messageId]) {
+        return;
+      }
+      byMessageId[messageId] = suggestion.pendingApproval;
+    });
+    return byMessageId;
+  }, [approvalRequests, triggerSuggestionsByMessageId]);
 
   const highlightedArtifactIds = useMemo(
     () => (selectedTaskStep ? selectedTaskStep.producedArtifactIds.map((artifactId) => getIdValue(artifactId)) : []),
@@ -208,6 +244,31 @@ export function WorkspacePage() {
     }
   }, []);
 
+  const loadMessageTriggerSuggestions = useCallback(async (conversationId: string, messageData: Message[]) => {
+    const userMessages = messageData
+      .filter((message) => message.senderType === "USER")
+      .slice(-20);
+
+    if (userMessages.length === 0) {
+      setTriggerSuggestionsByMessageId({});
+      return;
+    }
+
+    const entries = await Promise.all(
+      userMessages.map(async (message) => {
+        const messageId = getIdValue(message.id);
+        try {
+          const suggestion = await getOrchestratorTriggerSuggestion(conversationId, messageId);
+          return [messageId, suggestion] as const;
+        } catch {
+          return [messageId, null] as const;
+        }
+      })
+    );
+
+    setTriggerSuggestionsByMessageId(Object.fromEntries(entries));
+  }, []);
+
   const loadConversationData = useCallback(async (conversationId: string) => {
     setErrorMessage(null);
     setLoadingMessages(true);
@@ -223,6 +284,7 @@ export function WorkspacePage() {
         deploymentData,
         artifactSnapshotData,
         actionAuditData,
+        approvalRequestData,
         pinnedContextData,
         memoryData
       ] = await Promise.all([
@@ -233,6 +295,7 @@ export function WorkspacePage() {
         getDeploymentsByConversation(conversationId),
         getArtifactSnapshotsByConversation(conversationId),
         getActionAuditsByConversation(conversationId),
+        getApprovalRequestsByConversation(conversationId),
         getPinnedContextsByConversation(conversationId),
         getMemoriesByConversation(conversationId)
       ]);
@@ -244,8 +307,10 @@ export function WorkspacePage() {
       setDeployments(deploymentData);
       setArtifactSnapshots(artifactSnapshotData);
       setActionAudits(actionAuditData);
+      setApprovalRequests(approvalRequestData);
       setPinnedContexts(pinnedContextData);
       setMemories(memoryData);
+      void loadMessageTriggerSuggestions(conversationId, messageData);
       setShowAllArtifacts(true);
       setSelectedTaskStepId(null);
       setSelectedTaskRunId((previousId) => {
@@ -260,7 +325,7 @@ export function WorkspacePage() {
       setLoadingTaskRuns(false);
       setLoadingArtifacts(false);
     }
-  }, []);
+  }, [loadMessageTriggerSuggestions]);
 
   const loadContextData = useCallback(async (taskRunId: string) => {
     setErrorMessage(null);
@@ -294,6 +359,8 @@ export function WorkspacePage() {
       setDeployments([]);
       setArtifactSnapshots([]);
       setActionAudits([]);
+      setApprovalRequests([]);
+      setTriggerSuggestionsByMessageId({});
       setPinnedContexts([]);
       setMemories([]);
       setContextSnapshots([]);
@@ -433,8 +500,7 @@ export function WorkspacePage() {
       if (parsedMention.matchedAgent) {
         setSelectedAgent(parsedMention.matchedAgent);
       }
-      const refreshedMessages = await getMessages(currentConversationId);
-      setMessages(refreshedMessages);
+      await loadConversationData(currentConversationId);
       setDraftMessage("");
       setDraftAttachments([]);
       setQuotedMessage(null);
@@ -591,6 +657,94 @@ export function WorkspacePage() {
     }
 
     await runDemoTaskFromMessage(message);
+  }
+
+  async function handleRefreshOrchestratorSuggestion(message: Message) {
+    if (!currentConversationId || message.senderType !== "USER") {
+      return;
+    }
+
+    const messageId = getIdValue(message.id);
+    setErrorMessage(null);
+
+    try {
+      const suggestion = await getOrchestratorTriggerSuggestion(currentConversationId, messageId);
+      const refreshedApprovals = await getApprovalRequestsByConversation(currentConversationId);
+      setTriggerSuggestionsByMessageId((previous) => ({ ...previous, [messageId]: suggestion }));
+      setApprovalRequests(refreshedApprovals);
+      setOperationMessage("Auto-trigger suggestion refreshed.");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleConfirmOrchestratorTrigger(message: Message) {
+    if (!currentConversationId || message.senderType !== "USER") {
+      return;
+    }
+
+    const messageId = getIdValue(message.id);
+    const suggestion = triggerSuggestionsByMessageId[messageId];
+    if (!suggestion?.matched) {
+      setErrorMessage("No matched auto-trigger suggestion is available for this message.");
+      return;
+    }
+
+    setAutoTriggerRunningMessageId(messageId);
+    setErrorMessage(null);
+    setOperationMessage(null);
+
+    try {
+      let approvalId: string | null = null;
+      if (suggestion.requireApproval) {
+        let approval = approvalByMessageId[messageId] ?? suggestion.pendingApproval ?? null;
+        const approvalStatus = approval?.status.toUpperCase() ?? null;
+        if (!approval || approvalStatus === "CANCELLED" || approvalStatus === "EXPIRED") {
+          approval = await createApprovalRequest(currentConversationId, {
+            actionType: "ORCHESTRATOR_RUN",
+            targetType: "MESSAGE",
+            targetId: messageId,
+            riskLevel: "MEDIUM",
+            summary: "Run Orchestrator from message after auto-trigger match.",
+            affectedItems: [
+              `messageId=${messageId}`,
+              `mode=${suggestion.mode}`,
+              `reason=${suggestion.reason}`
+            ]
+          });
+          const refreshedApprovals = await getApprovalRequestsByConversation(currentConversationId);
+          setApprovalRequests(refreshedApprovals);
+          setOperationMessage("已创建 Agent 协作确认请求，请再次点击批准并运行。");
+          return;
+        }
+
+        approvalId = approval.approvalId;
+        if (approval.status.toUpperCase() !== "APPROVED") {
+          await approveApprovalRequest(approvalId);
+        }
+      }
+
+      const taskRun = await runOrchestratorFromMessage(currentConversationId, messageId, {
+        selectedAgentId: selectedAgent ? getIdValue(selectedAgent.id) : null,
+        approvalId
+      });
+      const refreshedConversation = await getConversation(currentConversationId);
+
+      await loadConversationData(currentConversationId);
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          getIdValue(conversation.id) === currentConversationId ? refreshedConversation : conversation
+        )
+      );
+      setSelectedTaskRunId(getIdValue(taskRun.id));
+      setSelectedTaskStepId(null);
+      setShowAllArtifacts(true);
+      setOperationMessage("Approved auto-trigger flow and started Agent collaboration.");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setAutoTriggerRunningMessageId(null);
+    }
   }
 
   async function handleRegenerateAgentReply(message: Message) {
@@ -964,6 +1118,9 @@ export function WorkspacePage() {
             loading={loadingMessages}
             rerunningMessageId={rerunningMessageId}
             regeneratingMessageId={regeneratingMessageId}
+            triggerSuggestionsByMessageId={triggerSuggestionsByMessageId}
+            approvalByMessageId={approvalByMessageId}
+            autoTriggerRunningMessageId={autoTriggerRunningMessageId}
             onSelectArtifact={setSelectedArtifactId}
             onToggleMessagePin={handleToggleMessagePin}
             onSaveMessageAsMemory={handleSaveMessageAsMemory}
@@ -972,6 +1129,8 @@ export function WorkspacePage() {
             onReplyMessage={handleReplyMessage}
             onRerunFromMessage={handleRerunFromMessage}
             onRegenerateAgentReply={handleRegenerateAgentReply}
+            onConfirmOrchestratorTrigger={handleConfirmOrchestratorTrigger}
+            onRefreshOrchestratorSuggestion={handleRefreshOrchestratorSuggestion}
           />
           <TaskRunPanel
             agents={agents}

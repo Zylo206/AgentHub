@@ -1,28 +1,36 @@
 package com.agenthub.infrastructure.adapter;
 
 import com.agenthub.common.TimeProvider;
+import com.agenthub.infrastructure.adapter.stats.AgentAdapterStatsRepository;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
 public class AgentAdapterRegistry {
 
+    private static final Logger logger = LoggerFactory.getLogger(AgentAdapterRegistry.class);
+
     private final Map<AgentAdapterType, AgentAdapter> adapterMap;
     private final Map<AgentAdapterType, MutableRouteStats> routeStats = new EnumMap<>(AgentAdapterType.class);
+    private final AgentAdapterStatsRepository statsRepository;
     private final AgentAdapterType defaultAdapterType;
     private final TimeProvider timeProvider;
 
     public AgentAdapterRegistry(
             List<AgentAdapter> adapters,
+            AgentAdapterStatsRepository statsRepository,
             TimeProvider timeProvider,
             @Value("${agenthub.adapters.default-type:MOCK}") String defaultAdapterType) {
         this.timeProvider = timeProvider;
+        this.statsRepository = statsRepository;
         this.defaultAdapterType = parseAdapterType(defaultAdapterType);
         this.adapterMap = new EnumMap<>(AgentAdapterType.class);
 
@@ -33,6 +41,8 @@ public class AgentAdapterRegistry {
         if (!this.adapterMap.containsKey(AgentAdapterType.MOCK)) {
             throw new IllegalStateException("MOCK adapter must be registered.");
         }
+
+        loadPersistedRouteStats();
     }
 
     public List<AgentAdapterType> listAdapters() {
@@ -112,17 +122,49 @@ public class AgentAdapterRegistry {
         return response;
     }
 
-    private synchronized void recordRouteResult(AgentAdapterType preferredType, AgentResponse response) {
-        MutableRouteStats stats = routeStats.computeIfAbsent(preferredType, ignored -> new MutableRouteStats());
-        stats.attempts.incrementAndGet();
-        if (response.status() == AgentExecutionStatus.COMPLETED && !response.fallbackUsed()) {
-            stats.successes.incrementAndGet();
+    private void recordRouteResult(AgentAdapterType preferredType, AgentResponse response) {
+        Map<AgentAdapterType, AdapterRouteStats> snapshot;
+        synchronized (this) {
+            MutableRouteStats stats = routeStats.computeIfAbsent(preferredType, ignored -> new MutableRouteStats());
+            stats.attempts.incrementAndGet();
+            if (response.status() == AgentExecutionStatus.COMPLETED && !response.fallbackUsed()) {
+                stats.successes.incrementAndGet();
+            }
+            if (response.fallbackUsed() || response.status() == AgentExecutionStatus.FALLBACK_USED) {
+                stats.fallbacks.incrementAndGet();
+            }
+            if (response.status() == AgentExecutionStatus.FAILED) {
+                stats.failures.incrementAndGet();
+            }
+            snapshot = snapshotRouteStats();
         }
-        if (response.fallbackUsed() || response.status() == AgentExecutionStatus.FALLBACK_USED) {
-            stats.fallbacks.incrementAndGet();
+        persistRouteStats(snapshot);
+    }
+
+    private void loadPersistedRouteStats() {
+        try {
+            Map<AgentAdapterType, AdapterRouteStats> persistedStats = statsRepository.load();
+            synchronized (this) {
+                persistedStats.forEach((adapterType, stats) ->
+                        routeStats.put(adapterType, MutableRouteStats.from(stats)));
+            }
+        } catch (RuntimeException exception) {
+            logger.warn("Failed to initialize adapter route stats from persistence. Starting with empty stats.",
+                    exception);
         }
-        if (response.status() == AgentExecutionStatus.FAILED) {
-            stats.failures.incrementAndGet();
+    }
+
+    private Map<AgentAdapterType, AdapterRouteStats> snapshotRouteStats() {
+        Map<AgentAdapterType, AdapterRouteStats> snapshot = new EnumMap<>(AgentAdapterType.class);
+        routeStats.forEach((adapterType, stats) -> snapshot.put(adapterType, AdapterRouteStats.from(stats)));
+        return Map.copyOf(snapshot);
+    }
+
+    private void persistRouteStats(Map<AgentAdapterType, AdapterRouteStats> snapshot) {
+        try {
+            statsRepository.save(snapshot);
+        } catch (RuntimeException exception) {
+            logger.warn("Adapter route stats persistence failed. Execution will continue.", exception);
         }
     }
 
@@ -181,6 +223,15 @@ public class AgentAdapterRegistry {
         private final AtomicLong successes = new AtomicLong();
         private final AtomicLong fallbacks = new AtomicLong();
         private final AtomicLong failures = new AtomicLong();
+
+        private static MutableRouteStats from(AdapterRouteStats stats) {
+            MutableRouteStats mutableStats = new MutableRouteStats();
+            mutableStats.attempts.set(Math.max(0, stats.attempts()));
+            mutableStats.successes.set(Math.max(0, stats.successes()));
+            mutableStats.fallbacks.set(Math.max(0, stats.fallbacks()));
+            mutableStats.failures.set(Math.max(0, stats.failures()));
+            return mutableStats;
+        }
     }
 
     public record AdapterRouteStats(long attempts, long successes, long fallbacks, long failures) {

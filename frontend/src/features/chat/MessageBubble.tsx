@@ -1,4 +1,5 @@
-import type { Message } from "./chatTypes";
+import type { ApprovalRequest } from "../approval/approvalTypes";
+import type { Message, OrchestratorTriggerSuggestion } from "./chatTypes";
 import { formatId, getIdValue } from "../../utils/id";
 
 interface MessageBubbleProps {
@@ -10,6 +11,9 @@ interface MessageBubbleProps {
   pinnedContextId?: string | null;
   rerunning?: boolean;
   regenerating?: boolean;
+  autoTriggerSuggestion?: OrchestratorTriggerSuggestion | null;
+  autoTriggerApproval?: ApprovalRequest | null;
+  autoTriggerRunning?: boolean;
   replyMessages?: Message[];
   threadExpanded?: boolean;
   highlighted?: boolean;
@@ -21,6 +25,8 @@ interface MessageBubbleProps {
   onReplyMessage: (message: Message) => void;
   onRerunFromMessage: (message: Message) => void;
   onRegenerateAgentReply: (message: Message) => void;
+  onConfirmOrchestratorTrigger: (message: Message) => void;
+  onRefreshOrchestratorSuggestion: (message: Message) => void;
   onToggleThread: () => void;
   onJumpToMessage: (messageId: string) => void;
 }
@@ -79,6 +85,68 @@ function getMessagePreview(message: Message): string {
   return content.length > 120 ? `${content.slice(0, 120)}...` : content;
 }
 
+function getApprovalStatus(approval?: ApprovalRequest | null): string | null {
+  return approval?.status ? approval.status.toUpperCase() : null;
+}
+
+function getAutoTriggerStatus(
+  suggestion?: OrchestratorTriggerSuggestion | null,
+  approval?: ApprovalRequest | null
+): { label: string; tone: "pending" | "ready" | "done"; canRun: boolean; actionLabel: string; detail: string } | null {
+  if (!suggestion || !suggestion.enabled || !suggestion.matched) {
+    return null;
+  }
+
+  const approvalStatus = getApprovalStatus(approval ?? suggestion.pendingApproval);
+  if (approvalStatus === "CONSUMED") {
+    return {
+      label: "协作已启动",
+      tone: "done",
+      canRun: false,
+      actionLabel: "已启动",
+      detail: "确认请求已被 Orchestrator 执行消费。"
+    };
+  }
+
+  if (approvalStatus === "CANCELLED" || approvalStatus === "EXPIRED") {
+    return {
+      label: `确认已${approvalStatus === "CANCELLED" ? "取消" : "过期"}`,
+      tone: "pending",
+      canRun: true,
+      actionLabel: "重新创建确认请求",
+      detail: suggestion.reason
+    };
+  }
+
+  if (suggestion.requireApproval) {
+    if (!approvalStatus) {
+      return {
+        label: "建议触发 Agent 协作",
+        tone: "pending",
+        canRun: true,
+        actionLabel: "创建确认请求",
+        detail: suggestion.reason
+      };
+    }
+
+    return {
+      label: approvalStatus === "APPROVED" ? "已批准，可运行" : "需要确认",
+      tone: approvalStatus === "APPROVED" ? "ready" : "pending",
+      canRun: true,
+      actionLabel: approvalStatus === "APPROVED" ? "运行已批准协作" : "批准并运行",
+      detail: suggestion.reason
+    };
+  }
+
+  return {
+    label: "建议触发 Agent 协作",
+    tone: "ready",
+    canRun: true,
+    actionLabel: "运行协作",
+    detail: suggestion.reason
+  };
+}
+
 export function MessageBubble({
   message,
   senderLabel,
@@ -88,6 +156,9 @@ export function MessageBubble({
   pinnedContextId,
   rerunning,
   regenerating,
+  autoTriggerSuggestion,
+  autoTriggerApproval,
+  autoTriggerRunning,
   replyMessages = [],
   threadExpanded = false,
   highlighted = false,
@@ -99,6 +170,8 @@ export function MessageBubble({
   onReplyMessage,
   onRerunFromMessage,
   onRegenerateAgentReply,
+  onConfirmOrchestratorTrigger,
+  onRefreshOrchestratorSuggestion,
   onToggleThread,
   onJumpToMessage
 }: MessageBubbleProps) {
@@ -108,6 +181,7 @@ export function MessageBubble({
   const artifactIds = message.artifactIds.map((artifactId) => formatId(artifactId)).filter(Boolean);
   const protocolLabel = getProtocolLabel(message.messageType);
   const attachments = message.attachments ?? [];
+  const autoTriggerStatus = getAutoTriggerStatus(autoTriggerSuggestion, autoTriggerApproval);
 
   return (
     <div className={`message-row message-row--${message.senderType.toLowerCase()} ${highlighted ? "message-row--highlighted" : ""}`}>
@@ -187,6 +261,44 @@ export function MessageBubble({
           <div className="message-target-agent">
             <span>发送给：</span>
             <span className="message-target-agent-name">@{targetAgentLabel || message.targetAgentId}</span>
+          </div>
+        ) : null}
+        {autoTriggerStatus ? (
+          <div className={`message-auto-trigger message-auto-trigger--${autoTriggerStatus.tone}`}>
+            <div className="message-auto-trigger__header">
+              <div>
+                <strong>{autoTriggerStatus.label}</strong>
+                <p>{autoTriggerStatus.detail}</p>
+              </div>
+              <span>{autoTriggerSuggestion?.mode || "AUTO_TRIGGER"}</span>
+            </div>
+            {autoTriggerSuggestion?.matchedKeywords?.length ? (
+              <div className="message-auto-trigger__keywords">
+                {autoTriggerSuggestion.matchedKeywords.map((keyword) => (
+                  <span key={keyword}>{keyword}</span>
+                ))}
+              </div>
+            ) : null}
+            <div className="message-auto-trigger__actions">
+              {autoTriggerStatus.canRun ? (
+                <button
+                  type="button"
+                  className="message-action-button message-action-button--primary"
+                  disabled={autoTriggerRunning}
+                  onClick={() => onConfirmOrchestratorTrigger(message)}
+                >
+                  {autoTriggerRunning ? "处理中..." : autoTriggerStatus.actionLabel}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="message-action-button"
+                disabled={autoTriggerRunning}
+                onClick={() => onRefreshOrchestratorSuggestion(message)}
+              >
+                刷新建议
+              </button>
+            </div>
           </div>
         ) : null}
         {referenceMessageId ? (
