@@ -3067,3 +3067,102 @@
 - 将 Reviewer REJECTION 与真实 line diff / patch apply 结合，支持“根据 blocker 生成候选修复”。
 - 增加浏览器 E2E 对 `BLOCKED` TaskRun 和 REJECTION badge 的可选验证。
 - 将 ReviewDecision 进一步纳入 Orchestrator explain panel 的结构化展示。
+
+## Phase 69：P1 IM 协作深度五项验收增强
+
+### 目标
+
+- 完善 P1-1 到 P1-5 的可验收性，而不是重做已有主链路。
+- 让任意消息触发、Adapter health 加权路由、Context Retrieval 可解释 UI、轻量附件模型和浏览器 E2E 在界面和脚本中更清楚。
+
+### 主要变更
+
+- `/api/adapters` 返回 Adapter route stats：attempts、successes、fallbacks、failures、successRate、fallbackRate。
+- Agent List 展示首选 Adapter 的路由画像，用于说明 Adapter health / 历史成功率 / fallback 频率如何影响路由。
+- ContextPanel 在 retrieved context 为空时显示显式空状态，并在命中项中补充 source、score、reason、injects into 和 match mode。
+- ChatInput 的轻量附件能力从手动文件名扩展为可选择本地文件并提取元数据 / 文本预览；仍不上传真实文件。
+- Browser E2E 增加 message attachment card 和 retrieved context item 的 UI 可见性断言。
+- `scripts/README.md` 同步 smoke / E2E 覆盖范围。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+- 如需完整运行，先启动 backend / frontend，再执行 `node scripts/smoke-test.mjs` 和 `cd frontend && npm run e2e:browser`。
+
+### 静态 / Mock / Placeholder 部分
+
+- auto-trigger 仍是配置化规则触发，不是完整 LLM intent classifier。
+- Adapter route stats 是本地轻量画像，不是生产级监控系统。
+- 轻量附件只保存 metadata / preview，不做真实上传、对象存储或文件下载。
+- Browser E2E 是主流程冒烟，不是完整 UI 自动化测试体系。
+
+### 遗留问题
+
+- Adapter 候选池全局加权执行尚未替代 preferred adapter + fallback 的稳定链路。
+- Context Retrieval explain 仍是规则化分数，不含 embedding、向量召回或权限过滤。
+- 轻量附件没有真实二进制内容存储和下载链路。
+- Browser E2E 还可以继续覆盖 REJECTION、diff apply 和完整 auto-trigger 点击链。
+
+### 下一步建议
+
+- 如果继续补 P1，优先完善 Demo 视频脚本和中文文档编码。
+- 后续可做 Adapter route stats 专门面板，展示各 Adapter 路由权重变化。
+- 附件模型下一步再考虑最小文件上传接口，不要直接引入复杂对象存储。
+
+## Phase 70：真实动态能力推进第一轮
+
+### 目标
+
+- 将当前“静态 / 半真实 / 可展示”的 MVP 继续推进到更真实的数据链路和动态执行骨架。
+- 优先补真实文件附件、Adapter 候选池加权路由、Context Retrieval v3、REAL_FIRST 验证入口、浏览器 E2E 附件覆盖和持久化层规划。
+
+### 主要变更
+
+- 新增 `AttachmentRecord`、`AttachmentRepository`、`InMemoryAttachmentRepository`。
+- 新增 `AttachmentStorageService` / `LocalAttachmentStorageService` 和 `AttachmentApplicationService`，默认使用本地文件系统保存上传文件。
+- 新增 `AttachmentController`：
+  - `POST /api/conversations/{conversationId}/attachments`
+  - `GET /api/attachments/{attachmentId}`
+  - `GET /api/attachments/{attachmentId}/download`
+  - `GET /api/conversations/{conversationId}/attachments`
+- `MessageController` 在发送消息时兼容旧 metadata-only attachment，同时会把已上传附件绑定到 message。
+- 新增 `AdapterRoutingService` / `AdapterRoutingDecision`，将 Adapter 候选池评分从 AgentRouter 中拆出：health、success rate、fallback penalty、preferred bonus 共同影响首选 Adapter。
+- `ContextRetrievalService` 升级到 v3 解释字段：`sourceRank`、`baseScore`、`keywordScore`、`recencyScore`、`importanceScore`、`matchedTokens`、`windowPolicy`。
+- 前端 `ChatInput` 支持先上传真实文件再发送 `attachmentId`；`MessageBubble` 展示下载链接。
+- `ContextPanel` 展示 Context Retrieval v3 分项得分和 matched tokens。
+- `scripts/smoke-test.mjs` 使用真实附件上传 / 下载链路验证消息附件。
+- `scripts/e2e-browser.mjs` 在 seed 阶段上传真实轻量附件，而不是只写 metadata。
+- 新增 `docs/persistence-plan.md`，规划内存仓储、本地附件、JDBC/MySQL 仓储和附件 metadata / binary 分层。
+- `scripts/README.md` 同步真实附件、Context Retrieval v3 和浏览器 E2E 覆盖范围。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 附件存储是本地文件系统，不是 MinIO / S3 / 对象存储。
+- Adapter 候选池只选择首选 Adapter，执行失败仍通过现有 Registry fallback 到 MOCK。
+- Context Retrieval v3 仍是规则检索，不做 embedding、向量库、权限过滤或跨会话全局检索。
+- REAL_FIRST 仍需要显式配置和真实 / fixture Adapter 成功输出；默认环境仍允许静态模板和 Mock fallback。
+- 浏览器 E2E 仍是关键 UI 可见性验证，不是完整端到端测试体系。
+
+### 遗留问题
+
+- 附件 metadata 仍是内存仓储，重启后会丢失。
+- 本地附件文件没有清理策略、checksum、病毒扫描或权限模型。
+- Adapter 候选池还没有独立 UI 面板展示每个候选分数。
+- Context Retrieval v3 仍未接入真正语义检索。
+- 持久化层仍是规划文档，尚未实现 JDBC/MySQL 仓储。
+
+### 下一步建议
+
+- 补 Adapter Routing Decision 的前端面板，把候选 Adapter 分数、最终选择和 fallback policy 可视化。
+- 扩展 smoke test 的 REAL_FIRST fixture 路径，确保无真实 key 时也能稳定验证真实输出契约。
+- 如继续推进生产化，优先实现附件 metadata 的持久化仓储，而不是直接上对象存储。

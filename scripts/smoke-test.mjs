@@ -72,13 +72,18 @@ function getIdValue(value) {
 
 async function request(path, init = {}) {
   let response;
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init.headers || {})
-      }
+      headers: isFormData
+        ? {
+            ...(init.headers || {})
+          }
+        : {
+            "Content-Type": "application/json",
+            ...(init.headers || {})
+          }
     });
   } catch (error) {
     throw new Error(`Cannot reach backend at ${API_BASE}. Start backend first. ${error.message}`);
@@ -105,6 +110,23 @@ async function request(path, init = {}) {
   }
 
   return payload.data;
+}
+
+async function uploadSmokeAttachment(conversationId) {
+  const content = "Smoke attachment: preserve verification-code login, blue CTA, and review notes.";
+  const formData = new FormData();
+  formData.append("file", new Blob([content], { type: "text/markdown" }), "agenthub-smoke-brief.md");
+  const attachment = await request(`/api/conversations/${conversationId}/attachments`, {
+    method: "POST",
+    body: formData
+  });
+  if (!attachment.attachmentId || attachment.fileName !== "agenthub-smoke-brief.md") {
+    throw new Error(`uploaded attachment response invalid: ${JSON.stringify(attachment)}`);
+  }
+  if (!String(attachment.contentPreview || "").includes("Smoke attachment")) {
+    throw new Error("uploaded text attachment missing contentPreview");
+  }
+  return attachment;
 }
 
 async function expectRequestFailure(path, init = {}, expectedText = "") {
@@ -330,6 +352,16 @@ async function runSmokeTest() {
   if (!adapters.some((adapter) => adapter.adapterType === "MOCK")) {
     throw new Error(`MOCK adapter not found. Loaded adapters: ${adapterSummary}`);
   }
+  const adapterStatsMissing = adapters.filter((adapter) =>
+    typeof adapter.routeAttempts !== "number" ||
+    typeof adapter.successRate !== "number" ||
+    typeof adapter.fallbackRate !== "number"
+  );
+  if (adapterStatsMissing.length > 0) {
+    throw new Error(
+      `adapter route stats fields missing: ${adapterStatsMissing.map((adapter) => adapter.adapterType).join(", ")}`
+    );
+  }
   if (EXPECT_OPENAI_FIXTURE) {
     const openaiAdapter = adapters.find((adapter) => adapter.adapterType === "OPENAI_COMPATIBLE");
     if (!openaiAdapter || openaiAdapter.status !== "AVAILABLE" || !String(openaiAdapter.description || "").includes("fixture")) {
@@ -337,6 +369,7 @@ async function runSmokeTest() {
     }
   }
   pass(`adapters loaded: ${adapterSummary}`);
+  pass("adapter route stats exposed");
 
   const agents = await request("/api/agents");
   const frontendAgent = agents.find((agent) => agent.name === "Frontend Builder");
@@ -393,13 +426,24 @@ async function runSmokeTest() {
   const initialParticipantIds = assertBuiltInParticipants(conversation, "created conversation");
   pass(`conversation participants initialized: ${initialParticipantIds.join(", ")}`);
 
+  const uploadedAttachment = await uploadSmokeAttachment(conversationId);
+  pass(`attachment uploaded: ${uploadedAttachment.attachmentId}`);
+
   const message = await request(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
     body: JSON.stringify({
       content: ACTIVE_DEMO_PROMPT,
       targetAgentId: mentionedAgentIds[0],
       mentionedAgentIds,
-      attachments: SMOKE_ATTACHMENTS
+      attachments: [
+        {
+          attachmentId: uploadedAttachment.attachmentId,
+          fileName: uploadedAttachment.fileName,
+          contentType: uploadedAttachment.contentType,
+          size: uploadedAttachment.sizeBytes,
+          contentPreview: uploadedAttachment.contentPreview
+        }
+      ]
     })
   });
   const messageId = requireValue(getIdValue(message.id), "messageId missing");
@@ -408,14 +452,23 @@ async function runSmokeTest() {
   }
   if (
     !Array.isArray(message.attachments) ||
-    message.attachments.length !== SMOKE_ATTACHMENTS.length ||
-    message.attachments[0]?.fileName !== SMOKE_ATTACHMENTS[0].fileName ||
+    message.attachments.length !== 1 ||
+    message.attachments[0]?.attachmentId !== uploadedAttachment.attachmentId ||
+    message.attachments[0]?.fileName !== uploadedAttachment.fileName ||
     !String(message.attachments[0]?.contentPreview || "").includes("Smoke attachment")
   ) {
     throw new Error(`message did not persist lightweight attachments: ${JSON.stringify(message.attachments)}`);
   }
+  const downloadedAttachment = await fetch(`${API_BASE}/api/attachments/${uploadedAttachment.attachmentId}/download`);
+  if (downloadedAttachment.status !== 200) {
+    throw new Error(`attachment download expected HTTP 200, got ${downloadedAttachment.status}`);
+  }
+  const downloadedText = await downloadedAttachment.text();
+  if (!downloadedText.includes("Smoke attachment")) {
+    throw new Error("downloaded attachment content mismatch");
+  }
   pass(`message sent: ${messageId}`);
-  pass(`message attachments persisted: ${message.attachments.length}`);
+  pass(`message attachments persisted and downloadable: ${message.attachments.length}`);
 
   const triggerSuggestion = await getOrchestratorTriggerSuggestion(conversationId, messageId);
   if (triggerSuggestion?.enabled) {
@@ -568,7 +621,7 @@ async function runSmokeTest() {
     throw new Error("first task step inputContext did not include retrieved memory content");
   }
   if (!String(steps[0]?.inputContext || "").includes("Retrieved context")) {
-    throw new Error("first task step inputContext did not include Context Retrieval v2 results");
+    throw new Error("first task step inputContext did not include Context Retrieval v3 results");
   }
   const decisionLog = taskRun.orchestratorDecisionLog;
   if (!decisionLog) {

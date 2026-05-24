@@ -1,12 +1,12 @@
 package com.agenthub.api.message;
 
+import com.agenthub.application.attachment.AttachmentApplicationService;
 import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.application.orchestrator.OrchestratorAutoTriggerService;
 import com.agenthub.common.ApiResponse;
 import com.agenthub.domain.message.Message;
 import com.agenthub.domain.message.MessageAttachment;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 import org.slf4j.Logger;
@@ -26,26 +26,37 @@ public class MessageController {
 
     private final MessageApplicationService messageApplicationService;
     private final OrchestratorAutoTriggerService orchestratorAutoTriggerService;
+    private final AttachmentApplicationService attachmentApplicationService;
 
     public MessageController(
             MessageApplicationService messageApplicationService,
-            OrchestratorAutoTriggerService orchestratorAutoTriggerService) {
+            OrchestratorAutoTriggerService orchestratorAutoTriggerService,
+            AttachmentApplicationService attachmentApplicationService) {
         this.messageApplicationService = messageApplicationService;
         this.orchestratorAutoTriggerService = orchestratorAutoTriggerService;
+        this.attachmentApplicationService = attachmentApplicationService;
     }
 
     @PostMapping
     public ApiResponse<?> sendMessage(
             @PathVariable("conversationId") String conversationId,
             @Valid @RequestBody SendMessageRequest request) {
+        if ((request.content() == null || request.content().isBlank())
+                && (request.attachments() == null || request.attachments().isEmpty())) {
+            throw new IllegalArgumentException("Message content or attachments must be provided.");
+        }
         Message message = messageApplicationService.sendUserMessage(
                 conversationId,
-                request.content(),
+                request.content() == null ? "" : request.content(),
                 request.targetAgentId(),
                 request.mentionedAgentIds(),
                 request.replyToMessageId(),
                 request.quotedMessageId(),
                 toAttachments(request.attachments()));
+        attachmentApplicationService.attachToMessage(
+                conversationId,
+                message.getId().value(),
+                message.getAttachments());
         try {
             orchestratorAutoTriggerService.handleAfterUserMessage(message);
         } catch (RuntimeException exception) {
@@ -99,18 +110,21 @@ public class MessageController {
         }
 
         return attachments.stream()
+                .filter(attachment -> attachment.attachmentId() != null && !attachment.attachmentId().isBlank())
+                .filter(attachment -> attachment.fileName() != null && !attachment.fileName().isBlank())
                 .map(attachment -> new MessageAttachment(
                         attachment.attachmentId(),
                         attachment.fileName(),
                         attachment.contentType(),
                         attachment.size(),
                         attachment.contentPreview()))
+                .map(attachmentApplicationService::toMessageAttachment)
                 .toList();
     }
 }
 
 record SendMessageRequest(
-        @NotBlank String content,
+        String content,
         String targetAgentId,
         List<String> mentionedAgentIds,
         String replyToMessageId,
@@ -118,8 +132,8 @@ record SendMessageRequest(
         @Valid List<SendMessageAttachmentRequest> attachments) {}
 
 record SendMessageAttachmentRequest(
-        @NotBlank String attachmentId,
-        @NotBlank String fileName,
+        String attachmentId,
+        String fileName,
         String contentType,
         @PositiveOrZero long size,
         String contentPreview) {}

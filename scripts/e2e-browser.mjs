@@ -73,13 +73,18 @@ async function loadPlaywright() {
 
 async function request(path, init = {}) {
   let response;
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init.headers || {})
-      }
+      headers: isFormData
+        ? {
+            ...(init.headers || {})
+          }
+        : {
+            "Content-Type": "application/json",
+            ...(init.headers || {})
+          }
     });
   } catch (error) {
     throw new Error(`Cannot reach backend at ${API_BASE}. Start backend first. ${error.message}`);
@@ -102,6 +107,25 @@ async function request(path, init = {}) {
     throw new Error(payload?.message || payload?.errorCode || `API failure from ${path}`);
   }
   return payload.data;
+}
+
+async function uploadE2eAttachment(conversationId) {
+  const formData = new FormData();
+  formData.append(
+    "file",
+    new Blob(["Browser E2E brief: preserve verification-code login and blue primary CTA."], {
+      type: "text/markdown"
+    }),
+    "browser-e2e-brief.md"
+  );
+  const attachment = await request(`/api/conversations/${conversationId}/attachments`, {
+    method: "POST",
+    body: formData
+  });
+  if (!attachment.attachmentId) {
+    throw new Error(`attachment upload response missing id: ${JSON.stringify(attachment)}`);
+  }
+  return attachment;
 }
 
 async function createAndApproveApproval(conversationId, requestBody) {
@@ -187,17 +211,18 @@ async function seedE2eData() {
     body: JSON.stringify({ title: TEST_TITLE, type: "GROUP" })
   });
   const conversationId = requireValue(getIdValue(conversation.id), "conversationId missing");
+  const uploadedAttachment = await uploadE2eAttachment(conversationId);
   const message = await request(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
     body: JSON.stringify({
       content: TEST_PROMPT,
       attachments: [
         {
-          attachmentId: `e2e-brief-${Date.now()}`,
-          fileName: "browser-e2e-brief.md",
-          contentType: "text/markdown",
-          size: 96,
-          contentPreview: "Browser E2E brief: preserve verification-code login and blue primary CTA."
+          attachmentId: uploadedAttachment.attachmentId,
+          fileName: uploadedAttachment.fileName,
+          contentType: uploadedAttachment.contentType,
+          size: uploadedAttachment.sizeBytes,
+          contentPreview: uploadedAttachment.contentPreview
         }
       ]
     })
@@ -262,10 +287,15 @@ async function runBrowserE2e() {
     await waitForVisible(page, ".workspace-page", "workspace page");
     await page.getByRole("button", { name: new RegExp(TEST_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
     await waitForVisible(page, ".message-stream", "message stream");
+    await waitForVisible(page, ".message-attachment-card", "message attachment card");
+    await page.getByText("browser-e2e-brief.md").first().waitFor({ state: "visible", timeout: 10000 });
     if (EXPECT_AUTO_TRIGGER_APPROVAL) {
       await waitForVisible(page, ".message-auto-trigger", "message auto-trigger card");
     }
     await waitForVisible(page, ".orchestrator-explain-panel", "orchestrator explain panel");
+    await waitForVisible(page, ".retrieved-context-item", "retrieved context item");
+    await page.getByText(/score/i).first().waitFor({ state: "visible", timeout: 10000 });
+    await page.getByText(/injects into/i).first().waitFor({ state: "visible", timeout: 10000 });
     await waitForVisible(page, ".artifact-card", "artifact card");
     await page.locator(".artifact-card").first().click();
     await waitForVisible(page, ".artifact-preview", "artifact preview");

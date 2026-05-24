@@ -2,7 +2,7 @@ package com.agenthub.application.agent;
 
 import com.agenthub.common.IdGenerator;
 import com.agenthub.infrastructure.adapter.AgentAdapterDescriptor;
-import com.agenthub.infrastructure.adapter.AgentAdapterHealthStatus;
+import com.agenthub.infrastructure.adapter.AgentAdapterRegistry.AdapterRouteStats;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
 import com.agenthub.infrastructure.adapter.AgentRequest;
 import com.agenthub.infrastructure.adapter.AgentResponse;
@@ -30,14 +30,23 @@ public class AgentAdapterApplicationService {
 
     public List<AvailableAdapterView> listAdapters() {
         return agentExecutorService.listAdapterDescriptors().stream()
-                .map(descriptor -> new AvailableAdapterView(
-                        descriptor.adapterType().name(),
-                        descriptor.status().name(),
-                        descriptor.enabled(),
-                        descriptor.placeholder(),
-                        descriptor.description(),
-                        descriptor.failureReason(),
-                        descriptor.adapterType() == defaultAdapterType))
+                .map(descriptor -> {
+                    AdapterRouteStats stats = agentExecutorService.routeStats(descriptor.adapterType());
+                    return new AvailableAdapterView(
+                            descriptor.adapterType().name(),
+                            descriptor.status().name(),
+                            descriptor.enabled(),
+                            descriptor.placeholder(),
+                            descriptor.description(),
+                            descriptor.failureReason(),
+                            descriptor.adapterType() == defaultAdapterType,
+                            stats.attempts(),
+                            stats.successes(),
+                            stats.fallbacks(),
+                            stats.failures(),
+                            stats.fallbackRate(),
+                            stats.successRate());
+                })
                 .toList();
     }
 
@@ -95,6 +104,12 @@ public class AgentAdapterApplicationService {
             boolean placeholder,
             String description,
             String failureReason,
-            boolean isDefault) {
+            boolean isDefault,
+            long routeAttempts,
+            long routeSuccesses,
+            long routeFallbacks,
+            long routeFailures,
+            double fallbackRate,
+            double successRate) {
     }
 }

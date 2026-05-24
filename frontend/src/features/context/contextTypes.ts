@@ -19,6 +19,14 @@ export interface RetrievedContextItem {
   content: string;
   score: number;
   reason: string;
+  sourceRank?: number;
+  baseScore?: number;
+  keywordScore?: number;
+  recencyScore?: number;
+  importanceScore?: number;
+  semanticScore?: number;
+  matchedTokens?: string[];
+  windowPolicy?: string;
   taskStepId?: IdValue | null;
   injectedStepId?: IdValue | null;
   injectionStepId?: IdValue | null;

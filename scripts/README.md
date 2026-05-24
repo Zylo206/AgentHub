@@ -11,13 +11,13 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - conversation creation
 - conversation participants
 - message creation
-- lightweight message attachments
+- real uploaded message attachments
 - optional message-level Orchestrator auto-trigger via `/messages/{messageId}/orchestrator-run`
 - structured reply / quote message relation
 - manual message pin as context
 - demo task run
 - task input context / ContextSnapshot pinned context and retrieved context
-- retrieved context score / reason explanation
+- retrieved context v3 score breakdown, matched tokens, source rank, and window policy
 - TaskGraph execution batches
 - message-based demo task rerun
 - group chat Agent messages
@@ -28,6 +28,7 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - optional REAL_ADAPTER artifact assertion when explicitly enabled
 - Tool Capability router smoke coverage for a custom review Agent
 - weighted routing evidence in `routingReason`
+- `/api/adapters` route stats fields: attempts, success rate, fallback rate
 - Agent collaboration protocol checks, with optional Reviewer REJECTION / retry-revise assertion
 - artifact revision
 - artifact safety snapshots
@@ -108,13 +109,13 @@ $env:AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH="E:\CodeProject2\AgentHub\backend\t
 node scripts/smoke-test.mjs
 ```
 
-These flags validate that matched task messages require approval before `orchestrator-run` executes and that adapter route stats are written to the configured JSON snapshot.
+These flags validate that matched task messages require approval before `orchestrator-run` executes, that adapter route stats are written to the configured JSON snapshot, and that `/api/adapters` exposes route stats for Workspace / Agent Builder visualization.
 
-This is an API-level smoke test with an HTTP reachability check for the local preview page. It does not run browser E2E automation, parse DOM content, make real LLM calls, call real external Agents, or perform real deployment.
+This is an API-level smoke test with real local attachment upload/download and an HTTP reachability check for the local preview page. It does not run browser E2E automation, parse DOM content, make real LLM calls, call real external Agents, or perform real deployment.
 
 ## Browser E2E
 
-`e2e-browser.mjs` is a lightweight Playwright wrapper that seeds a browser-test conversation through the API, then verifies the rendered Workspace, Orchestrator explain panel, artifact preview, approval gate, deploy status card, and static preview page.
+`e2e-browser.mjs` is a lightweight Playwright wrapper that seeds a browser-test conversation through the API, uploads a small real text attachment, then verifies the rendered Workspace, message attachment card, retrieved context explanation, Orchestrator explain panel, artifact preview, approval gate, deploy status card, and static preview page.
 
 The wrapper can use `playwright-core`, `playwright`, or `@playwright/test` from the frontend package. The lightest path is `playwright-core` plus the local Microsoft Edge browser channel:
 

@@ -9,9 +9,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@ConditionalOnProperty(name = "agenthub.persistence.mode", havingValue = "memory", matchIfMissing = true)
 public class InMemoryArtifactRepository implements ArtifactRepository {
 
     private final ConcurrentHashMap<String, Artifact> storage = new ConcurrentHashMap<>();

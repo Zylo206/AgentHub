@@ -7,6 +7,96 @@
   overflow: hidden;
 }
 
+.adapter-routing-panel {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.adapter-routing-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.adapter-routing-panel__header strong {
+  color: var(--text-main);
+}
+
+.adapter-routing-panel__header p,
+.adapter-routing-panel p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.adapter-routing-panel__selected {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.adapter-routing-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.adapter-routing-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.adapter-routing-card--selected {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: #eff6ff;
+}
+
+.adapter-routing-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.adapter-routing-card__topline span {
+  color: var(--text-muted);
+}
+
+.adapter-routing-card__score {
+  margin-top: 8px;
+  color: var(--text-main);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.adapter-routing-card__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.adapter-routing-card__metrics span {
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 4px 7px;
+}
+
 .workspace-sidebar,
 .workspace-main,
 .workspace-artifacts {
@@ -3322,6 +3412,29 @@
   color: var(--text-main);
 }
 
+.retrieved-context-item__tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.retrieved-context-item__tokens span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.message-attachment-card__download {
+  color: var(--primary);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 6px;
+  text-decoration: none;
+}
+
 .chat-attachment-composer {
   display: grid;
   gap: 10px;
@@ -3334,9 +3447,13 @@
 
 .chat-attachment-composer__grid {
   display: grid;
-  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1fr) auto;
+  grid-template-columns: auto minmax(160px, 0.8fr) minmax(220px, 1fr) auto;
   gap: 8px;
   align-items: stretch;
+}
+
+.chat-attachment-composer__file {
+  display: none;
 }
 
 .chat-attachment-composer__input,

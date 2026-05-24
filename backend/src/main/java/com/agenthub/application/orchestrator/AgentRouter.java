@@ -1,13 +1,10 @@
 package com.agenthub.application.orchestrator;
 
 import com.agenthub.application.agent.AgentApplicationService;
-import com.agenthub.application.agent.AgentExecutorService;
 import com.agenthub.domain.agent.Agent;
 import com.agenthub.domain.agent.AgentRole;
 import com.agenthub.domain.agent.AgentStatus;
 import com.agenthub.domain.agent.BuiltInAgentIds;
-import com.agenthub.infrastructure.adapter.AgentAdapterDescriptor;
-import com.agenthub.infrastructure.adapter.AgentAdapterRegistry.AdapterRouteStats;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
 import java.util.Comparator;
 import java.util.Locale;
@@ -18,19 +15,19 @@ import org.springframework.stereotype.Service;
 public class AgentRouter {
 
     private final AgentApplicationService agentApplicationService;
-    private final AgentExecutorService agentExecutorService;
     private final AgentRoutingService agentRoutingService;
     private final ToolCapabilityRegistry toolCapabilityRegistry;
+    private final AdapterRoutingService adapterRoutingService;
 
     public AgentRouter(
             AgentApplicationService agentApplicationService,
-            AgentExecutorService agentExecutorService,
             AgentRoutingService agentRoutingService,
-            ToolCapabilityRegistry toolCapabilityRegistry) {
+            ToolCapabilityRegistry toolCapabilityRegistry,
+            AdapterRoutingService adapterRoutingService) {
         this.agentApplicationService = agentApplicationService;
-        this.agentExecutorService = agentExecutorService;
         this.agentRoutingService = agentRoutingService;
         this.toolCapabilityRegistry = toolCapabilityRegistry;
+        this.adapterRoutingService = adapterRoutingService;
     }
 
     public RoutedAgent route(OrchestratorStepPlan stepPlan, Agent selectedAgent) {
@@ -99,56 +96,18 @@ public class AgentRouter {
     }
 
     private RouteScores scoreAdapter(int capabilityScore, AgentAdapterType preferredAdapterType) {
-        int adapterHealthScore = adapterHealthScore(preferredAdapterType);
-        AdapterRouteStats stats = agentExecutorService.routeStats(preferredAdapterType);
-        int historyScore = historyScore(stats);
-        int fallbackPenalty = fallbackPenalty(stats);
+        AdapterRoutingDecision adapterDecision = adapterRoutingService.route(preferredAdapterType);
+        AdapterRoutingDecision.AdapterCandidateScore selectedScore = adapterDecision.selectedScore();
+        int adapterCandidateScore = selectedScore == null ? 0 : (int) Math.round(selectedScore.totalScore());
         int totalScore = (int) Math.round(
-                capabilityScore * 0.60
-                        + adapterHealthScore * 0.25
-                        + historyScore * 0.15
-                        - fallbackPenalty);
+                capabilityScore * 0.55
+                        + adapterCandidateScore * 0.45);
         return new RouteScores(
-                preferredAdapterType,
+                adapterDecision.selectedAdapterType(),
                 capabilityScore,
-                adapterHealthScore,
-                historyScore,
-                fallbackPenalty,
+                adapterCandidateScore,
+                adapterDecision.describe(),
                 Math.max(0, totalScore));
-    }
-
-    private int adapterHealthScore(AgentAdapterType preferredAdapterType) {
-        Optional<AgentAdapterDescriptor> descriptor = agentExecutorService.listAdapterDescriptors().stream()
-                .filter(candidate -> candidate.adapterType() == preferredAdapterType)
-                .findFirst();
-        if (descriptor.isEmpty()) {
-            return 0;
-        }
-        AgentAdapterDescriptor value = descriptor.get();
-        if (!value.enabled()) {
-            return 0;
-        }
-        return switch (value.status()) {
-            case AVAILABLE -> 100;
-            case PLACEHOLDER -> 55;
-            case MISCONFIGURED -> 20;
-            case ERROR -> 10;
-            case DISABLED -> 0;
-        };
-    }
-
-    private int historyScore(AdapterRouteStats stats) {
-        if (stats.attempts() == 0) {
-            return 50;
-        }
-        return (int) Math.round(stats.successes() * 100.0 / stats.attempts());
-    }
-
-    private int fallbackPenalty(AdapterRouteStats stats) {
-        if (stats.attempts() == 0) {
-            return 0;
-        }
-        return (int) Math.round(stats.fallbacks() * 30.0 / stats.attempts());
     }
 
     private AgentAdapterType resolveStepPreferredAdapter(OrchestratorStepPlan stepPlan) {
@@ -193,9 +152,8 @@ public class AgentRouter {
     private record RouteScores(
             AgentAdapterType preferredAdapterType,
             int capabilityScore,
-            int adapterHealthScore,
-            int historyScore,
-            int fallbackPenalty,
+            int adapterCandidateScore,
+            String adapterDecisionSummary,
             int totalScore) {
 
         private String describe() {
@@ -203,14 +161,14 @@ public class AgentRouter {
                     + totalScore
                     + ", capabilityScore="
                     + capabilityScore
-                    + ", adapterHealthScore="
-                    + adapterHealthScore
-                    + ", historyScore="
-                    + historyScore
-                    + ", fallbackPenalty="
-                    + fallbackPenalty
+                    + ", adapterCandidateScore="
+                    + adapterCandidateScore
+                    + ", selectedAdapter="
+                    + preferredAdapterType
                     + ", preferredAdapter="
                     + preferredAdapterType
+                    + ", adapterDecision="
+                    + adapterDecisionSummary
                     + ".";
         }
     }

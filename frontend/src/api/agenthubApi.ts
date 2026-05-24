@@ -19,6 +19,7 @@ import type { Conversation } from "../features/conversations/conversationTypes";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../features/context/contextTypes";
 import type { DeploymentRecord } from "../features/deployments/deploymentTypes";
 import type { MemoryItem } from "../features/memory/memoryTypes";
+import type { IdValue } from "../utils/id";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -28,17 +29,23 @@ interface ApiResponse<T> {
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+export const API_BASE_URL = API_BASE;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {})
-      }
+      headers: isFormData
+        ? {
+            ...(init?.headers ?? {})
+          }
+        : {
+            "Content-Type": "application/json",
+            ...(init?.headers ?? {})
+          }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "未知网络错误";
@@ -185,6 +192,37 @@ export function sendMessage(
       attachments: normalizedAttachments
     })
   });
+}
+
+export interface AttachmentRecord {
+  attachmentId: string;
+  conversationId: IdValue;
+  messageId?: string | null;
+  fileName: string;
+  contentType?: string | null;
+  sizeBytes: number;
+  storagePath?: string;
+  storageKey?: string | null;
+  checksumSha256?: string | null;
+  visibility?: string | null;
+  ownerUserId?: string | null;
+  scanStatus?: string | null;
+  contentPreview?: string | null;
+  createdAt: string;
+  deletedAt?: string | null;
+}
+
+export function uploadConversationAttachment(conversationId: string, file: File): Promise<AttachmentRecord> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request<AttachmentRecord>(`/api/conversations/${conversationId}/attachments`, {
+    method: "POST",
+    body: formData
+  });
+}
+
+export function getAttachmentDownloadUrl(attachmentId: string): string {
+  return `${API_BASE}/api/attachments/${attachmentId}/download`;
 }
 
 export function getMessages(conversationId: string): Promise<Message[]> {

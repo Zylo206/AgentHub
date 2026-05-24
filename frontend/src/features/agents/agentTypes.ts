@@ -83,6 +83,12 @@ export interface AdapterDescriptor {
   description: string;
   failureReason?: string | null;
   isDefault?: boolean;
+  routeAttempts?: number;
+  routeSuccesses?: number;
+  routeFallbacks?: number;
+  routeFailures?: number;
+  fallbackRate?: number;
+  successRate?: number;
 }
 
 export interface AdapterExecutionResponse {

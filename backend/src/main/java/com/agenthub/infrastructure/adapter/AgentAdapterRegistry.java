@@ -246,5 +246,13 @@ public class AgentAdapterRegistry {
                     stats.fallbacks.get(),
                     stats.failures.get());
         }
+
+        public double fallbackRate() {
+            return attempts == 0 ? 0 : (double) fallbacks / attempts;
+        }
+
+        public double successRate() {
+            return attempts == 0 ? 0 : (double) successes / attempts;
+        }
     }
 }

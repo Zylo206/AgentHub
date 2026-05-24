@@ -32,9 +32,11 @@ import {
   restoreArtifactSnapshotWithApproval,
   saveMessageAsMemory,
   sendMessage,
+  uploadConversationAttachment,
   unpinContext
 } from "../../api/agenthubApi";
 import { AgentList } from "../../features/agents/AgentList";
+import { AdapterRoutingPanel } from "../../features/agents/AdapterRoutingPanel";
 import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
@@ -510,6 +512,31 @@ export function WorkspacePage() {
     } finally {
       setSendingMessage(false);
     }
+  }
+
+  async function handleUploadAttachments(files: File[]): Promise<LightweightAttachment[]> {
+    if (!currentConversationId) {
+      throw new Error("Please select a conversation before uploading attachments.");
+    }
+
+    const uploadedAttachments = await Promise.all(
+      files.map(async (file) => {
+        const attachment = await uploadConversationAttachment(currentConversationId, file);
+        return {
+          attachmentId: attachment.attachmentId,
+          id: attachment.attachmentId,
+          fileName: attachment.fileName,
+          contentType: attachment.contentType || "application/octet-stream",
+          mimeType: attachment.contentType || "application/octet-stream",
+          size: attachment.sizeBytes,
+          sizeBytes: attachment.sizeBytes,
+          contentPreview: attachment.contentPreview || "",
+          previewText: attachment.contentPreview || "",
+          source: "UPLOADED_FILE"
+        };
+      })
+    );
+    return uploadedAttachments;
   }
 
   async function handleToggleMessagePin(messageId: string, pinnedContextId?: string | null) {
@@ -1132,6 +1159,7 @@ export function WorkspacePage() {
             onConfirmOrchestratorTrigger={handleConfirmOrchestratorTrigger}
             onRefreshOrchestratorSuggestion={handleRefreshOrchestratorSuggestion}
           />
+          <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
           <TaskRunPanel
             agents={agents}
             artifacts={artifacts}
@@ -1162,6 +1190,7 @@ export function WorkspacePage() {
             attachments={draftAttachments}
             onChange={setDraftMessage}
             onAttachmentsChange={setDraftAttachments}
+            onUploadFiles={handleUploadAttachments}
             onClearQuote={() => {
               setQuotedMessage(null);
               setQuoteMode("quote");

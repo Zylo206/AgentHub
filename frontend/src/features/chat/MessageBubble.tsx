@@ -1,5 +1,6 @@
 import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { Message, OrchestratorTriggerSuggestion } from "./chatTypes";
+import { getAttachmentDownloadUrl } from "../../api/agenthubApi";
 import { formatId, getIdValue } from "../../utils/id";
 
 interface MessageBubbleProps {
@@ -145,6 +146,10 @@ function getAutoTriggerStatus(
     actionLabel: "运行协作",
     detail: suggestion.reason
   };
+}
+
+function isDownloadableAttachment(attachmentId?: string | null): boolean {
+  return Boolean(attachmentId && !attachmentId.startsWith("demo-") && !attachmentId.startsWith("local-"));
 }
 
 export function MessageBubble({
@@ -332,6 +337,16 @@ export function MessageBubble({
                   ) : null}
                 </div>
                 {attachment.contentPreview || attachment.previewText ? <p>{attachment.contentPreview || attachment.previewText}</p> : null}
+                {isDownloadableAttachment(attachment.attachmentId) ? (
+                  <a
+                    className="message-attachment-card__download"
+                    href={getAttachmentDownloadUrl(attachment.attachmentId as string)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download
+                  </a>
+                ) : null}
               </article>
             ))}
           </div>

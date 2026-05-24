@@ -9,6 +9,15 @@ mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
 
 agenthub:
+  persistence:
+    mode: ${AGENTHUB_PERSISTENCE_MODE:memory}
+    jdbc:
+      url: ${AGENTHUB_JDBC_URL:}
+      username: ${AGENTHUB_JDBC_USERNAME:}
+      password: ${AGENTHUB_JDBC_PASSWORD:}
+  attachments:
+    storage-dir: ${AGENTHUB_ATTACHMENTS_STORAGE_DIR:./.agenthub/uploads}
+    max-file-size-bytes: ${AGENTHUB_ATTACHMENTS_MAX_FILE_SIZE_BYTES:5242880}
   memory:
     persistence:
       enabled: ${AGENTHUB_MEMORY_PERSISTENCE_ENABLED:true}

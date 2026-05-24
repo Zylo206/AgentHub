@@ -38,6 +38,14 @@ function renderLimitedTags(tags: string[], keyPrefix: string, className = "agent
   );
 }
 
+function formatRate(value?: number | null): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "0%";
+  }
+
+  return `${Math.round(value * 100)}%`;
+}
+
 export function AgentList({
   agents,
   adapterDescriptors,
@@ -56,13 +64,14 @@ export function AgentList({
   return (
     <div className="agent-list">
       {agents.map((agent) => {
+        const agentId = formatId(agent.id);
         const adapterDescriptor = findAdapterDescriptor(adapterDescriptors, agent.preferredAdapterType);
 
         return (
           <button
             type="button"
-            key={formatId(agent.id)}
-            className={`agent-item ${selectedAgentId === formatId(agent.id) ? "agent-item--selected" : ""}`}
+            key={agentId}
+            className={`agent-item ${selectedAgentId === agentId ? "agent-item--selected" : ""}`}
             onClick={() => onSelectAgent?.(agent)}
           >
             <div className="agent-item__row">
@@ -90,6 +99,9 @@ export function AgentList({
                 <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(adapterDescriptor.status)}`}>
                   {displayStatus(adapterDescriptor.status)}
                 </span>
+                <span className="agent-adapter-health__hint">
+                  路由画像：{adapterDescriptor.routeAttempts ?? 0} 次 / 成功 {formatRate(adapterDescriptor.successRate)} / fallback {formatRate(adapterDescriptor.fallbackRate)}
+                </span>
                 {adapterDescriptor.status !== "AVAILABLE" ? (
                   <span className="agent-adapter-health__hint">不可用时会回退到 MOCK。</span>
                 ) : null}
@@ -97,14 +109,14 @@ export function AgentList({
             ) : null}
             {agent.capabilityTags.length > 0 ? (
               <div className="tag-row">
-                {renderLimitedTags(agent.capabilityTags, `${formatId(agent.id)}-cap`)}
+                {renderLimitedTags(agent.capabilityTags, `${agentId}-cap`)}
               </div>
             ) : null}
             {agent.toolTags.length > 0 ? (
               <div className="tag-row">
                 {renderLimitedTags(
                   agent.toolTags,
-                  `${formatId(agent.id)}-tool`,
+                  `${agentId}-tool`,
                   "agent-tag agent-tag--tool"
                 )}
               </div>

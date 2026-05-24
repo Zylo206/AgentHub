@@ -1,4 +1,4 @@
-import { FormEvent } from "react";
+import { FormEvent, useRef } from "react";
 import type { Agent } from "../agents/agentTypes";
 import type { LightweightAttachment, Message } from "./chatTypes";
 import { formatId } from "../../utils/id";
@@ -13,6 +13,7 @@ interface ChatInputProps {
   attachments: LightweightAttachment[];
   onChange: (value: string) => void;
   onAttachmentsChange: (attachments: LightweightAttachment[]) => void;
+  onUploadFiles?: (files: File[]) => Promise<LightweightAttachment[]>;
   onClearQuote?: () => void;
   onSend: () => void;
 }
@@ -27,9 +28,12 @@ export function ChatInput({
   attachments,
   onChange,
   onAttachmentsChange,
+  onUploadFiles,
   onClearQuote,
   onSend
 }: ChatInputProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   function addAttachment(fileName: string, previewText = "") {
     const trimmedFileName = fileName.trim();
     const trimmedPreview = previewText.trim();
@@ -51,6 +55,53 @@ export function ChatInput({
         source: trimmedFileName ? "LOCAL_DEMO" : "TEXT_SNIPPET"
       }
     ]);
+  }
+
+  async function addLocalFiles(files: FileList | null) {
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const fileList = Array.from(files);
+    if (onUploadFiles) {
+      const uploadedAttachments = await onUploadFiles(fileList);
+      onAttachmentsChange([...attachments, ...uploadedAttachments]);
+      return;
+    }
+
+    const nextAttachments: LightweightAttachment[] = await Promise.all(
+      fileList.map(async (file, index) => {
+        const isTextLike =
+          file.type.startsWith("text/") ||
+          /\.(md|txt|json|csv|log|tsx?|jsx?|css|html)$/i.test(file.name);
+        const contentPreview = isTextLike ? await file.text().then((text) => text.slice(0, 1200)).catch(() => "") : "";
+
+        return {
+          attachmentId: `local-${Date.now()}-${index}-${file.name}`,
+          fileName: file.name,
+          contentType: file.type || "application/octet-stream",
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          sizeBytes: file.size,
+          contentPreview,
+          previewText: contentPreview,
+          source: "LOCAL_DEMO" as const
+        };
+      })
+    );
+
+    onAttachmentsChange([...attachments, ...nextAttachments]);
+  }
+
+  function clearManualAttachmentFields(form: HTMLFormElement | null | undefined) {
+    const input = form?.querySelector<HTMLInputElement>(".chat-attachment-composer__input");
+    const textarea = form?.elements.namedItem("attachmentPreview") as HTMLTextAreaElement | null;
+    if (input) {
+      input.value = "";
+    }
+    if (textarea) {
+      textarea.value = "";
+    }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -94,14 +145,35 @@ export function ChatInput({
       />
       <div className="chat-attachment-composer">
         <div className="chat-attachment-composer__header">
-          <strong>Demo attachments</strong>
-          <span>No upload; sends lightweight metadata only.</span>
+          <strong>轻量附件</strong>
+          <span>不上传文件，只发送文件名、大小、类型和文本预览。</span>
         </div>
         <div className="chat-attachment-composer__grid">
           <input
+            ref={fileInputRef}
+            className="chat-attachment-composer__file"
+            type="file"
+            multiple
+            disabled={disabled || sending}
+            onChange={(event) => {
+              void addLocalFiles(event.currentTarget.files).catch((error) => {
+                console.warn("Attachment upload failed", error);
+              });
+              event.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={disabled || sending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            选择本地文件
+          </button>
+          <input
             className="chat-attachment-composer__input"
             type="text"
-            placeholder="local filename, e.g. brief.md"
+            placeholder="手动输入文件名，例如 brief.md"
             disabled={disabled || sending}
             onKeyDown={(event) => {
               if (event.key !== "Enter") {
@@ -112,17 +184,14 @@ export function ChatInput({
               const input = event.currentTarget;
               const textarea = input.form?.elements.namedItem("attachmentPreview") as HTMLTextAreaElement | null;
               addAttachment(input.value, textarea?.value ?? "");
-              input.value = "";
-              if (textarea) {
-                textarea.value = "";
-              }
+              clearManualAttachmentFields(input.form);
             }}
           />
           <textarea
             className="chat-attachment-composer__preview"
             name="attachmentPreview"
             rows={2}
-            placeholder="optional preview text or paste a small snippet"
+            placeholder="可选：粘贴一小段内容预览"
             disabled={disabled || sending}
           />
           <button
@@ -134,15 +203,10 @@ export function ChatInput({
               const input = form?.querySelector<HTMLInputElement>(".chat-attachment-composer__input");
               const textarea = form?.elements.namedItem("attachmentPreview") as HTMLTextAreaElement | null;
               addAttachment(input?.value ?? "", textarea?.value ?? "");
-              if (input) {
-                input.value = "";
-              }
-              if (textarea) {
-                textarea.value = "";
-              }
+              clearManualAttachmentFields(form);
             }}
           >
-            Add attachment
+            添加附件
           </button>
         </div>
         {attachments.length > 0 ? (
@@ -160,7 +224,7 @@ export function ChatInput({
                     onAttachmentsChange(attachments.filter((item) => item !== attachment))
                   }
                 >
-                  Remove
+                  移除
                 </button>
               </div>
             ))}

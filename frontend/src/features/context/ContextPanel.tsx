@@ -77,6 +77,22 @@ function resolveInjectionStepLabel(
   return taskRunId ? `TaskRun ${formatId(snapshot.taskRunId)} / no exact TaskStep inputContext match` : "No TaskRun fallback available";
 }
 
+function resolveInjectionMode(
+  snapshot: ContextSnapshot,
+  item: RetrievedContextItem,
+  taskRuns: TaskRun[]
+): string {
+  if (getRetrievedItemStepId(item)) {
+    return "backend step id";
+  }
+
+  const taskRunId = getIdValue(snapshot.taskRunId);
+  const taskRun = taskRuns.find((run) => getIdValue(run.id) === taskRunId);
+  const matchedSteps = taskRun?.steps.filter((step) => stepContainsRetrievedItem(step, item)) ?? [];
+
+  return matchedSteps.length > 0 ? "inputContext fallback" : "unmatched";
+}
+
 export function ContextPanel({
   taskSpec,
   taskRuns,
@@ -217,16 +233,39 @@ export function ContextPanel({
                             <span>{item.sourceType}</span>
                           </div>
                           <div className="retrieved-context-item__meta">
+                            {item.sourceRank ? <span>rank #{item.sourceRank}</span> : null}
                             <span>score {Number.isFinite(item.score) ? item.score.toFixed(2) : "-"}</span>
+                            {typeof item.baseScore === "number" ? <span>base {item.baseScore.toFixed(1)}</span> : null}
+                            {typeof item.keywordScore === "number" ? <span>keyword {item.keywordScore.toFixed(1)}</span> : null}
+                            {typeof item.recencyScore === "number" ? <span>recency {item.recencyScore.toFixed(1)}</span> : null}
+                            {typeof item.importanceScore === "number" ? <span>importance {item.importanceScore.toFixed(1)}</span> : null}
+                            {typeof item.semanticScore === "number" ? <span>semantic {item.semanticScore.toFixed(1)}</span> : null}
+                            <span>source {item.sourceType}:{item.sourceId}</span>
+                            {item.windowPolicy ? <span>window {item.windowPolicy}</span> : null}
                             <span>injects into {resolveInjectionStepLabel(snapshot, item, taskRuns)}</span>
+                            <span>match {resolveInjectionMode(snapshot, item, taskRuns)}</span>
                           </div>
+                          {item.matchedTokens?.length ? (
+                            <div className="retrieved-context-item__tokens">
+                              {item.matchedTokens.map((token) => (
+                                <span key={`${item.sourceType}-${item.sourceId}-${token}`}>{token}</span>
+                              ))}
+                            </div>
+                          ) : null}
                           <p className="retrieved-context-item__reason">{item.reason || "No retrieval reason provided."}</p>
                           <p className="retrieved-context-item__content">{item.content}</p>
                         </article>
                       ))}
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="context-list-block">
+                    <span className="context-list-block__label">Retrieved Context</span>
+                    <p className="context-card__summary">
+                      本次 TaskRun 没有命中可注入的检索上下文，或后端未返回 retrievedContextItems。
+                    </p>
+                  </div>
+                )}
               </section>
             ))}
           </div>

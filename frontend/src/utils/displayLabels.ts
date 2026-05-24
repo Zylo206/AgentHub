@@ -24,12 +24,16 @@ export function displayStatus(value?: string | null): string {
     ERROR: "异常",
     CREATED: "已创建",
     ACCEPTED: "已验收",
+    REJECTED: "已拒绝",
     PENDING: "待处理",
     RUNNING: "运行中",
     COMPLETED: "已完成",
     FAILED: "失败",
     BLOCKED: "阻塞",
     APPROVED: "已批准",
+    CANCELLED: "已取消",
+    CONSUMED: "已消费",
+    EXPIRED: "已过期",
     FALLBACK_USED: "已 fallback"
   };
 
@@ -50,6 +54,7 @@ export function displayArtifactType(value?: string | null): string {
     CODE: "代码",
     MARKDOWN: "文档",
     API_CONTRACT: "API 契约",
+    DATA_MODEL: "数据模型",
     REVIEW_REPORT: "评审报告",
     WEB_PREVIEW: "网页预览",
     DIFF_SUMMARY: "Diff 摘要"
@@ -72,7 +77,7 @@ export function displayArtifactSourceKind(value?: string | null): string {
 
 export function displayMessageSender(value?: string | null): string {
   const labels: Record<string, string> = {
-    USER: "你",
+    USER: "用户",
     AGENT: "Agent",
     SYSTEM: "系统"
   };
