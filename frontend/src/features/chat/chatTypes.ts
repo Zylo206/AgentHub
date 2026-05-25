@@ -84,6 +84,8 @@ export interface TaskStep {
   artifactParseStatus?: string | null;
   artifactQualityStatus?: string | null;
   artifactQualityReason?: string | null;
+  artifactQualityScore?: number | null;
+  artifactBuildValidationStatus?: string | null;
   producedArtifactIds: IdValue[];
   createdAt: string;
   updatedAt: string;

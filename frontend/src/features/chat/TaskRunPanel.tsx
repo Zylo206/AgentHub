@@ -28,6 +28,31 @@ function summarizeAdapterResponse(responseSummary?: string): string | null {
   return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized;
 }
 
+function formatQualityScore(score: number | null | undefined): string {
+  if (typeof score !== "number" || !Number.isFinite(score)) {
+    return "N/A";
+  }
+
+  return score.toFixed(2);
+}
+
+function formatBuildValidationValue(status?: string | null): string {
+  return status || "NOT_EVALUATED";
+}
+
+function getReviewRetryReviseLabel(step: TaskStep): string {
+  if (step.artifactQualityStatus !== "REJECTED") {
+    return "NOT_TRIGGERED";
+  }
+
+  const reason = `${step.artifactQualityReason || ""}`.toLowerCase();
+  if (reason.includes("retry") || reason.includes("revise")) {
+    return "TRIGGERED";
+  }
+
+  return "REJECTED";
+}
+
 function getAdapterDisplay(step: TaskStep) {
   const preferred = step.preferredAdapterType || step.adapterType || null;
   const actual = step.actualAdapterType || step.adapterType || null;
@@ -506,6 +531,9 @@ export function TaskRunPanel({
                   const realAdapterArtifactCount = stepProducedArtifacts.filter(
                     (artifact) => artifact.sourceKind === "REAL_ADAPTER"
                   ).length;
+                  const qualityScore = formatQualityScore(step.artifactQualityScore);
+                  const buildValidationStatus = formatBuildValidationValue(step.artifactBuildValidationStatus);
+                  const reviewRetryReviseState = getReviewRetryReviseLabel(step);
 
                   return (
                     <button
@@ -577,15 +605,24 @@ export function TaskRunPanel({
                               step.realOutputUsed
                                 ? "artifact-source-badge--real-adapter"
                                 : "artifact-source-badge--static-template"
-                            }`}
+                          }`}
                           >
                             Real output: {step.realOutputUsed ? "USED" : "NOT_USED"}
+                          </span>
+                          <span className="artifact-source-badge">
+                            Review retry/revise: {reviewRetryReviseState}
                           </span>
                           <span className="artifact-source-badge">
                             Parse: {step.artifactParseStatus || "NOT_ATTEMPTED"}
                           </span>
                           <span className="artifact-source-badge">
                             Quality: {step.artifactQualityStatus || "NOT_EVALUATED"}
+                          </span>
+                          <span className="artifact-source-badge">
+                            Build validation: {buildValidationStatus}
+                          </span>
+                          <span className="artifact-source-badge">
+                            Quality score: {qualityScore}
                           </span>
                         </div>
                         {step.artifactQualityReason ? (

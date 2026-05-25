@@ -3472,3 +3472,50 @@
 
 - 在真实 provider smoke 稳定后，再做 MySQL 端到端实库验证。
 - 若真实 Adapter 输出仍不稳定，优先补 JSON Schema 校验和更强 prompt contract，而不是先做 token streaming。
+
+## Phase 78：自动评审 Retry / REAL_ADAPTER 构建校验与代码质量评分
+
+### 目标
+
+- 继续从半真实 Adapter 输出推进到可解释、可回退的真实动态产物链路。
+- 为真实 Adapter 产物增加轻量构建校验和代码质量评分。
+- 让 Reviewer 失败路径输出结构化 retry / revise 指令，不伪造自动修复。
+
+### 主要变更
+
+- `AdapterArtifactQualityEvaluator` 增加规则化质量评分、build validation 状态和 retry advice 文案。
+- `AgentStepExecutor` 在 `REAL_FIRST` 下拒绝未通过合法 JSON、质量门禁或轻量构建校验的真实产物，保留静态 fallback。
+- `ReviewDecisionEvaluator` 输出结构化 `REVISE_AND_RETRY` 指令，明确 `autoFix=false` 和 affected artifacts。
+- `OrchestratorService` 保留 Artifact 质量元数据，并为 Reviewer rejection advice artifact 增加结构化 retry plan。
+- Artifact Studio / TaskRunPanel 展示真实输出、build validation、quality score、retry/revise 信息。
+- smoke 脚本增加可选断言：真实 build validation、真实质量分数、真实质量原因。
+
+### 验证方式
+
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- 默认 memory 模式运行 `node scripts/smoke-test.mjs`
+- 默认 memory 模式运行 `node scripts/sse-smoke-test.mjs`
+- `node scripts/real-adapter-smoke-test.mjs` 在未配置真实 provider 时保持 opt-in skip，不影响默认验证。
+
+### 静态 / Mock / Placeholder 部分
+
+- 构建校验是轻量规则校验，没有执行真实 `npm build`、lint、unit test 或浏览器渲染。
+- 代码质量评分是启发式分数，不是完整静态分析、安全扫描或模型评测。
+- Reviewer retry / revise 本轮只生成结构化建议，不自动修改代码 Artifact。
+- 默认环境仍允许 MOCK / static fallback，真实 provider 仍需显式配置。
+
+### 遗留问题
+
+- 真实代码质量仍依赖外部模型输出和后续真实构建验证。
+- retry / revise 还没有自动触发二次 Agent 修复运行。
+- 质量评分尚未沉淀为独立 dashboard 或历史趋势。
+
+### 下一步建议
+
+- 增加可选真实 build/lint 验证脚本，但默认仍不阻塞无 Node 项目结构的 Demo。
+- 将 retry / revise advice 接入显式用户确认流，允许用户一键创建修复 TaskRun。
+- 后续在真实 provider 链路稳定后再推进持久化实库验证。

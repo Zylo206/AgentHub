@@ -1778,6 +1778,8 @@ public class OrchestratorService {
                 artifact.getSourceAdapterType(),
                 artifact.getSourceTaskStepId(),
                 artifact.getGenerationMode(),
+                artifact.getQualityStatus(),
+                artifact.getQualityReason(),
                 artifact.getCreatedAt(),
                 now);
     }
@@ -1803,6 +1805,8 @@ public class OrchestratorService {
                 null,
                 null,
                 "REVIEW_REJECTION_RETRY_ADVICE",
+                "ADVICE",
+                "score=0; status=ADVICE; reason=Structured reviewer retry/revise advice; autoFix=false.",
                 now,
                 now);
     }
@@ -1822,6 +1826,12 @@ public class OrchestratorService {
 
                 ### Retry / Revise Instruction
                 %s
+
+                ### Structured Retry Plan
+                - action: REVISE_AND_RETRY
+                - autoFix: false
+                - owner: owning-worker
+                - rerun: quality checks, reviewer
                 """.formatted(
                 reviewDecision.decision(),
                 reviewDecision.source(),

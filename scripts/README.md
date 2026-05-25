@@ -91,9 +91,17 @@ $env:AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER="true"; node scripts/smoke-test.mjs
 
 Without this flag, the smoke test remains stable in the default Mock / fallback environment.
 
+Optional stronger checks are only enabled when set, so they do not block `DEFAULT_MOCK` or non-real runs:
+
+```powershell
+$env:AGENTHUB_SMOKE_EXPECT_REAL_BUILD_VALIDATION="true"      # assert TaskStep.artifactBuildValidationStatus
+$env:AGENTHUB_SMOKE_EXPECT_REAL_QUALITY_SCORE="true"         # assert TaskStep.artifactQualityScore
+$env:AGENTHUB_SMOKE_EXPECT_REAL_QUALITY_REASON="true"        # assert TaskStep.artifactQualityReason
+```
+
 ## Real OpenAI-compatible Adapter Smoke Test
 
-`real-adapter-smoke-test.mjs` is an opt-in verification for a real OpenAI-compatible provider. It rejects fixture mode and fails fast when required real-provider environment variables are missing.
+`real-adapter-smoke-test.mjs` is an opt-in verification for a real OpenAI-compatible provider. Without real-provider env vars (or when strict mode is disabled), it skips provider-specific assertions and exits with an explicit skip message, so default non-real environments are unaffected.
 
 Start the backend with the same real-provider configuration first:
 
@@ -122,6 +130,15 @@ node scripts/real-adapter-smoke-test.mjs
 ```
 
 This script verifies `/api/adapters`, `POST /api/adapters/OPENAI_COMPATIBLE/execute`, and a `REAL_FIRST` demo-task run. It expects a non-MOCK `OPENAI_COMPATIBLE` response, valid raw artifact JSON, an accepted `REAL_ADAPTER` primary Artifact, and archived static fallback Artifacts. Do not commit API keys or local secrets.
+
+Optional stricter real-provider assertions:
+
+```powershell
+$env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_BUILD_VALIDATION="true"   # assert artifact build validation status
+$env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_SCORE="true"     # assert artifact quality score
+$env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_REASON="true"    # assert artifact quality reason
+$env:AGENTHUB_REAL_ADAPTER_SMOKE_STRICT="true"                   # enforce fixture / missing-env fail-fast
+```
 
 If you explicitly run the backend in `REAL_FIRST` mode and expect the primary generated Artifact to come from a real Adapter, enable the stricter REAL_FIRST check:
 

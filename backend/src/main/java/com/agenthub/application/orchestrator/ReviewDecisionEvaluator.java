@@ -54,12 +54,16 @@ public class ReviewDecisionEvaluator {
     }
 
     private ReviewDecision rejected(String source, List<ArtifactId> affectedArtifactIds) {
+        List<ArtifactId> safeAffectedArtifactIds = affectedArtifactIds == null ? List.of() : List.copyOf(affectedArtifactIds);
         return ReviewDecision.rejected(
                 List.of(
                         "Reviewer found blocker evidence and did not approve the current artifact set.",
                         "Affected artifacts must be revised before approval."),
-                affectedArtifactIds,
-                "Route blockers back to the owning worker, revise affected Artifact(s), then rerun Reviewer before approval.",
+                safeAffectedArtifactIds,
+                "action=REVISE_AND_RETRY; autoFix=false; owner=owning-worker; affectedArtifacts="
+                        + safeAffectedArtifactIds.stream().map(ArtifactId::value).toList()
+                        + "; steps=[inspectBlockers,reviseAffectedArtifacts,rerunQualityChecks,rerunReviewer]; "
+                        + "note=Orchestrator records guidance only and does not fabricate an automatic fix.",
                 source);
     }
 

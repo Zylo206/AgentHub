@@ -176,13 +176,15 @@ public class AgentStepExecutor {
                 adapterArtifactQualityEvaluator.evaluate(extractionResult);
         boolean realFirstRequiresValidJson = "REAL_FIRST".equals(artifactGenerationMode)
                 && !"VALID_JSON_ARTIFACTS".equals(qualityReport.parseStatus());
-        if (realFirstRequiresValidJson || !qualityReport.hasAcceptedArtifacts()) {
+        boolean realFirstRequiresBuildPass = "REAL_FIRST".equals(artifactGenerationMode)
+                && "FAILED".equals(qualityReport.buildValidationStatus());
+        if (realFirstRequiresValidJson || realFirstRequiresBuildPass || !qualityReport.hasAcceptedArtifacts()) {
             return new AdapterArtifactAppendResult(
                     List.copyOf(producedArtifactIds),
                     List.of(),
                     qualityReport.parseStatus(),
-                    qualityReport.qualityStatus(),
-                    qualityReport.qualityReason());
+                    "REJECTED",
+                    buildStepQualityReason(qualityReport));
         }
 
         for (AdapterArtifactQualityEvaluator.ArtifactQuality artifactQuality : qualityReport.artifactQualities()) {
@@ -190,6 +192,9 @@ public class AgentStepExecutor {
                 continue;
             }
             AdapterArtifactExtractor.AdapterArtifactSpec spec = artifactQuality.spec();
+            if ("FAILED".equals(artifactQuality.buildValidationStatus())) {
+                continue;
+            }
             Artifact adapterOutputArtifact = new Artifact(
                     new ArtifactId(idGenerator.nextId("artifact")),
                     new ConversationId(command.conversationId()),
@@ -207,7 +212,7 @@ public class AgentStepExecutor {
                     stepId.value(),
                     artifactGenerationMode,
                     artifactQuality.qualityStatus(),
-                    artifactQuality.qualityReason(),
+                    buildArtifactQualityReason(artifactQuality),
                     command.now(),
                     command.now());
             artifactRepository.save(adapterOutputArtifact);
@@ -220,7 +225,8 @@ public class AgentStepExecutor {
                     List.of(),
                     qualityReport.parseStatus(),
                     "REJECTED",
-                    "All extracted adapter artifacts failed quality checks.");
+                    "All extracted adapter artifacts failed quality/build checks. "
+                            + buildStepQualityReason(qualityReport));
         }
         if ("REAL_FIRST".equals(artifactGenerationMode) && !adapterArtifactIds.isEmpty()) {
             archiveStaticFallbackArtifacts(command.producedArtifactIds(), command.now());
@@ -231,7 +237,7 @@ public class AgentStepExecutor {
                     List.copyOf(adapterArtifactIds),
                     qualityReport.parseStatus(),
                     qualityReport.qualityStatus(),
-                    qualityReport.qualityReason());
+                    buildStepQualityReason(qualityReport));
         }
         producedArtifactIds.addAll(adapterArtifactIds);
         return new AdapterArtifactAppendResult(
@@ -239,7 +245,20 @@ public class AgentStepExecutor {
                 List.copyOf(adapterArtifactIds),
                 qualityReport.parseStatus(),
                 qualityReport.qualityStatus(),
-                qualityReport.qualityReason());
+                buildStepQualityReason(qualityReport));
+    }
+
+    private String buildStepQualityReason(AdapterArtifactQualityEvaluator.QualityReport qualityReport) {
+        return qualityReport.qualityReason()
+                + "; buildLintStatus=" + qualityReport.buildValidationStatus()
+                + "; buildLintReason=" + qualityReport.buildValidationReason()
+                + "; buildLintMode=STATIC_NO_EXTERNAL_NPM";
+    }
+
+    private String buildArtifactQualityReason(AdapterArtifactQualityEvaluator.ArtifactQuality artifactQuality) {
+        return artifactQuality.qualityReason()
+                + "; buildLintStatus=" + artifactQuality.buildValidationStatus()
+                + "; buildLintReason=" + artifactQuality.buildValidationReason();
     }
 
     private void archiveStaticFallbackArtifacts(List<ArtifactId> fallbackArtifactIds, Instant now) {

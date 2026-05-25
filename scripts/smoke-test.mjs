@@ -11,6 +11,9 @@ const EXPECT_REVIEW_REJECTION = process.env.AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTI
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
 const EXPECT_ADAPTER_STATS_PERSISTENCE = process.env.AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE === "true";
 const EXPECT_JDBC_PROFILE = process.env.AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE === "true";
+const EXPECT_REAL_BUILD_VALIDATION = process.env.AGENTHUB_SMOKE_EXPECT_REAL_BUILD_VALIDATION === "true";
+const EXPECT_REAL_QUALITY_SCORE = process.env.AGENTHUB_SMOKE_EXPECT_REAL_QUALITY_SCORE === "true";
+const EXPECT_REAL_QUALITY_REASON = process.env.AGENTHUB_SMOKE_EXPECT_REAL_QUALITY_REASON === "true";
 const PERSISTENCE_MODE = process.env.AGENTHUB_PERSISTENCE_MODE || "";
 const ADAPTER_STATS_PATH = process.env.AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH || "";
 const REAL_ADAPTER_ARTIFACT_FIXTURE = {
@@ -298,6 +301,22 @@ function assertRealAdapterArtifactContract(artifact, label) {
   }
 }
 
+function isStepRetryReviseTriggered(step) {
+  if (step.artifactQualityStatus !== "REJECTED") {
+    return false;
+  }
+  const reason = String(step.artifactQualityReason || "").toLowerCase();
+  return reason.includes("retry") || reason.includes("revise");
+}
+
+function normalizeQualityScore(score) {
+  if (typeof score !== "number" || !Number.isFinite(score)) {
+    return "N/A";
+  }
+
+  return String(score.toFixed(2));
+}
+
 function assertToolCapabilityRoutedStep(taskRun, expectedAgentId) {
   const routedStep = (Array.isArray(taskRun.steps) ? taskRun.steps : []).find(
     (step) => getIdValue(step.assignedAgentId) === expectedAgentId
@@ -340,6 +359,9 @@ async function runSmokeTest() {
   console.log(`AgentHub auto-trigger approval expectation: ${EXPECT_AUTO_TRIGGER_APPROVAL ? "enabled" : "disabled"}`);
   console.log(`AgentHub adapter stats persistence expectation: ${EXPECT_ADAPTER_STATS_PERSISTENCE ? "enabled" : "disabled"}`);
   console.log(`AgentHub JDBC profile expectation: ${EXPECT_JDBC_PROFILE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real build-validation assertion: ${EXPECT_REAL_BUILD_VALIDATION ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real quality score assertion: ${EXPECT_REAL_QUALITY_SCORE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real quality reason assertion: ${EXPECT_REAL_QUALITY_REASON ? "enabled" : "disabled"}`);
   if (EXPECT_JDBC_PROFILE && PERSISTENCE_MODE.toLowerCase() !== "jdbc") {
     throw new Error("AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true requires AGENTHUB_PERSISTENCE_MODE=jdbc in the smoke test environment");
   }
@@ -804,6 +826,7 @@ async function runSmokeTest() {
   const realAdapterSteps = steps.filter(
     (step) => step.actualAdapterType && step.actualAdapterType !== "MOCK" && step.adapterStatus === "COMPLETED"
   );
+  const expectRealQualityMetadata = EXPECT_REAL_BUILD_VALIDATION || EXPECT_REAL_QUALITY_SCORE || EXPECT_REAL_QUALITY_REASON;
   const adapterOutputArtifacts = artifacts.filter((item) =>
     item.sourceKind === "REAL_ADAPTER" || String(item.title || "").startsWith("Real Adapter Output -")
   );
@@ -811,6 +834,11 @@ async function runSmokeTest() {
     (step) => step.realOutputUsed === true || step.artifactQualityStatus === "ACCEPTED"
   );
   const rejectedRealAdapterSteps = realAdapterSteps.filter((step) => step.artifactQualityStatus === "REJECTED");
+  if (expectRealQualityMetadata && realAdapterSteps.length === 0) {
+    throw new Error(
+      "expected TaskStep.quality metadata assertions but no non-MOCK completed real Adapter steps were found"
+    );
+  }
   if (acceptedRealAdapterSteps.length > 0 && adapterOutputArtifacts.length < acceptedRealAdapterSteps.length) {
     throw new Error(
       `expected adapter output artifacts for accepted real adapter steps. acceptedRealAdapterSteps=${acceptedRealAdapterSteps.length}, adapterOutputArtifacts=${adapterOutputArtifacts.length}`
@@ -822,6 +850,48 @@ async function runSmokeTest() {
       `rejected real adapter steps missing artifactQualityReason: ${rejectedStepsMissingReason.map((step) => step.stepOrder).join(", ")}`
     );
   }
+  if (EXPECT_REAL_BUILD_VALIDATION) {
+    const missingBuildValidation = realAdapterSteps.filter((step) => !step.artifactBuildValidationStatus);
+    if (missingBuildValidation.length > 0) {
+      throw new Error(
+        `real adapter steps missing artifactBuildValidationStatus: ${missingBuildValidation.map((step) => step.stepOrder).join(", ")}`
+      );
+    }
+    pass("real adapter build validation status present on TaskSteps");
+  }
+  if (EXPECT_REAL_QUALITY_SCORE) {
+    const missingQualityScore = realAdapterSteps.filter(
+      (step) => typeof step.artifactQualityScore !== "number" || !Number.isFinite(step.artifactQualityScore)
+    );
+    if (missingQualityScore.length > 0) {
+      throw new Error(
+        `real adapter steps missing artifactQualityScore: ${missingQualityScore.map((step) => step.stepOrder).join(", ")}`
+      );
+    }
+    pass(`real adapter quality score present on TaskSteps (scores: ${realAdapterSteps.map((step) =>
+      `#${step.stepOrder}=${normalizeQualityScore(step.artifactQualityScore)}`
+    ).join(", ")})`);
+  }
+  if (EXPECT_REAL_QUALITY_REASON) {
+    const missingQualityReason = realAdapterSteps.filter((step) => !String(step.artifactQualityReason || "").trim());
+    if (missingQualityReason.length > 0) {
+      throw new Error(
+        `real adapter steps missing artifactQualityReason: ${missingQualityReason.map((step) => step.stepOrder).join(", ")}`
+      );
+    }
+    pass("real adapter quality reason present on TaskSteps");
+  }
+  if (EXPECT_REVIEW_REJECTION) {
+    const retryTriggered = realAdapterSteps.some((step) => isStepRetryReviseTriggered(step));
+    if (!retryTriggered) {
+      const retryCandidates = realAdapterSteps.map((step) => `#${step.stepOrder}:${step.artifactQualityStatus}`).join(", ");
+      throw new Error(`expected retry/revise signal during review rejection, got ${retryCandidates}`);
+    }
+    pass("review rejection loop exposed retry/revise intent");
+  }
+  if (expectRealQualityMetadata && adapterOutputArtifacts.length === 0) {
+    throw new Error("expected real quality metadata assertions but no REAL_ADAPTER artifacts were produced");
+  }
   if (EXPECT_REAL_ADAPTER && adapterOutputArtifacts.length < 1) {
     throw new Error("AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER=true but no REAL_ADAPTER artifact was produced");
   }
@@ -829,6 +899,43 @@ async function runSmokeTest() {
     adapterOutputArtifacts.forEach((item, index) =>
       assertRealAdapterArtifactContract(item, `REAL_ADAPTER artifact[${index}]`)
     );
+    if (EXPECT_REAL_BUILD_VALIDATION) {
+      const adapterArtifactsWithoutBuildValidation = adapterOutputArtifacts.filter((artifact) => !artifact.buildValidationStatus);
+      if (adapterArtifactsWithoutBuildValidation.length > 0) {
+        throw new Error(
+          `REAL_ADAPTER artifacts missing buildValidationStatus: ${adapterArtifactsWithoutBuildValidation
+            .map((item) => item.title || item.id)
+            .join(", ")}`
+        );
+      }
+      pass("real adapter artifacts include build validation status");
+    }
+    if (EXPECT_REAL_QUALITY_SCORE) {
+      const adapterArtifactsWithoutQualityScore = adapterOutputArtifacts.filter(
+        (artifact) => typeof artifact.qualityScore !== "number" || !Number.isFinite(artifact.qualityScore)
+      );
+      if (adapterArtifactsWithoutQualityScore.length > 0) {
+        throw new Error(
+          `REAL_ADAPTER artifacts missing qualityScore: ${adapterArtifactsWithoutQualityScore.map((item) => item.title || item.id).join(", ")}`
+        );
+      }
+      pass(
+        `real adapter artifacts quality score present: ${adapterOutputArtifacts
+          .map((item) => `${item.title || item.id}=${typeof item.qualityScore === "number" ? item.qualityScore.toFixed(2) : "N/A"}`)
+          .join(", ")}`
+      );
+    }
+    if (EXPECT_REAL_QUALITY_REASON) {
+      const adapterArtifactsWithoutQualityReason = adapterOutputArtifacts.filter(
+        (artifact) => !String(artifact.qualityReason || "").trim()
+      );
+      if (adapterArtifactsWithoutQualityReason.length > 0) {
+        throw new Error(
+          `REAL_ADAPTER artifacts missing qualityReason: ${adapterArtifactsWithoutQualityReason.map((item) => item.title || item.id).join(", ")}`
+        );
+      }
+      pass("real adapter artifacts include quality reason");
+    }
     const missingStepQuality = realAdapterSteps.filter((step) =>
       !step.artifactParseStatus || !step.artifactQualityStatus || !step.artifactQualityReason
     );

@@ -108,6 +108,22 @@ function getSafeArtifactFileName(artifact: Artifact): string {
   return `${baseName}-v${artifact.version}.${getArtifactFileExtension(artifact)}`;
 }
 
+function formatBuildValidationValue(artifact: Artifact): string {
+  if (!artifact.buildValidationStatus) {
+    return "NOT_EVALUATED";
+  }
+
+  return artifact.buildValidationStatus;
+}
+
+function formatQualityScore(score: number | null | undefined): string {
+  if (typeof score !== "number" || !Number.isFinite(score)) {
+    return "N/A";
+  }
+
+  return score.toFixed(2);
+}
+
 function renderArtifactContent(artifact: Artifact) {
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
     return (
@@ -511,11 +527,19 @@ export function ArtifactPanel({
                     {selectedArtifact.generationMode ? ` / Mode: ${selectedArtifact.generationMode}` : ""}
                   </p>
                 ) : null}
-                {selectedArtifact.qualityStatus || selectedArtifact.qualityReason ? (
+                {selectedArtifact.sourceKind ? (
                   <p className="artifact-preview__line">
-                    Quality: {selectedArtifact.qualityStatus || "UNKNOWN"}
-                    {selectedArtifact.qualityReason ? ` / ${selectedArtifact.qualityReason}` : ""}
+                    {selectedArtifact.sourceKind === "REAL_ADAPTER" ? "Real Adapter output" : "Static / fallback output"} quality:
+                    {" "}
+                    {selectedArtifact.qualityStatus || "UNKNOWN"}
                   </p>
+                ) : null}
+                {selectedArtifact.sourceKind === "REAL_ADAPTER" ? (
+                  <p className="artifact-preview__line">Build validation: {formatBuildValidationValue(selectedArtifact)}</p>
+                ) : null}
+                <p className="artifact-preview__line">Code quality score: {formatQualityScore(selectedArtifact.qualityScore)}</p>
+                {selectedArtifact.qualityReason ? (
+                  <p className="artifact-preview__line">Quality reason: {selectedArtifact.qualityReason}</p>
                 ) : null}
                 {selectedVersionEntry?.parentArtifact ? (
                   <p className="artifact-preview__line revision-origin">

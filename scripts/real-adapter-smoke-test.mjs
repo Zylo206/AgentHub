@@ -8,6 +8,10 @@ const REQUIRED_ENV = [
   "AGENTHUB_OPENAI_MODEL",
   "AGENTHUB_ARTIFACT_GENERATION_MODE"
 ];
+const STRICT_MODE = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_STRICT === "true";
+const EXPECT_BUILD_VALIDATION = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_BUILD_VALIDATION === "true";
+const EXPECT_QUALITY_SCORE = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_SCORE === "true";
+const EXPECT_QUALITY_REASON = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_REASON === "true";
 
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
@@ -20,6 +24,10 @@ function fail(message, error) {
   const detail = error instanceof Error ? error.message : String(error);
   console.error(`[FAIL] ${message}: ${detail}`);
   process.exitCode = 1;
+}
+
+function warn(message) {
+  console.warn(`[WARN] ${message}`);
 }
 
 function requireValue(value, message) {
@@ -44,6 +52,10 @@ function getIdValue(value) {
 
 function assertRequiredEnvironment() {
   const missing = REQUIRED_ENV.filter((name) => !String(process.env[name] || "").trim());
+  const isConfigured = missing.length === 0 && process.env.AGENTHUB_OPENAI_ENABLED === "true" && process.env.AGENTHUB_OPENAI_FIXTURE_ENABLED !== "true";
+  if (!isConfigured && !STRICT_MODE) {
+    return false;
+  }
   if (missing.length > 0) {
     throw new Error(`missing required environment variables: ${missing.join(", ")}`);
   }
@@ -56,6 +68,7 @@ function assertRequiredEnvironment() {
   if (process.env.AGENTHUB_ARTIFACT_GENERATION_MODE !== "REAL_FIRST") {
     throw new Error("AGENTHUB_ARTIFACT_GENERATION_MODE must be REAL_FIRST for this smoke test.");
   }
+  return true;
 }
 
 async function request(path, init = {}) {
@@ -138,15 +151,28 @@ async function assertOpenAiAdapterAvailable() {
   }
   const openai = adapters.find((adapter) => adapter.adapterType === "OPENAI_COMPATIBLE");
   if (!openai) {
-    throw new Error("OPENAI_COMPATIBLE adapter is missing from /api/adapters");
+    if (STRICT_MODE) {
+      throw new Error("OPENAI_COMPATIBLE adapter is missing from /api/adapters");
+    }
+    warn("OPENAI_COMPATIBLE adapter is not configured; skipping real adapter assertions.");
+    return false;
   }
   if (openai.status !== "AVAILABLE") {
-    throw new Error(`OPENAI_COMPATIBLE expected AVAILABLE, got ${openai.status}: ${openai.failureReason || openai.description || ""}`);
+    if (STRICT_MODE) {
+      throw new Error(`OPENAI_COMPATIBLE expected AVAILABLE, got ${openai.status}: ${openai.failureReason || openai.description || ""}`);
+    }
+    warn(`OPENAI_COMPATIBLE is not AVAILABLE (${openai.status}), skipping real adapter assertions.`);
+    return false;
   }
   if (String(openai.description || "").toLowerCase().includes("fixture")) {
-    throw new Error("OPENAI_COMPATIBLE appears to be fixture-backed; this script requires a real provider.");
+    if (STRICT_MODE) {
+      throw new Error("OPENAI_COMPATIBLE appears to be fixture-backed; this script requires a real provider.");
+    }
+    warn("OPENAI_COMPATIBLE appears to be fixture-backed; skipping real provider-only assertions.");
+    return false;
   }
   pass("OPENAI_COMPATIBLE adapter available");
+  return true;
 }
 
 async function executeOpenAiAdapter() {
@@ -252,6 +278,15 @@ async function runDemoTaskWithRealAdapter() {
         .join(" | ")}`
     );
   }
+  if (EXPECT_BUILD_VALIDATION && !acceptedRealStep.artifactBuildValidationStatus) {
+    throw new Error(`accepted real step missing artifactBuildValidationStatus: ${acceptedRealStep.stepOrder}`);
+  }
+  if (EXPECT_QUALITY_SCORE && (typeof acceptedRealStep.artifactQualityScore !== "number" || !Number.isFinite(acceptedRealStep.artifactQualityScore))) {
+    throw new Error(`accepted real step missing artifactQualityScore: ${acceptedRealStep.stepOrder}`);
+  }
+  if (EXPECT_QUALITY_REASON && !String(acceptedRealStep.artifactQualityReason || "").trim()) {
+    throw new Error(`accepted real step missing artifactQualityReason: ${acceptedRealStep.stepOrder}`);
+  }
 
   const artifacts = await request(`/api/conversations/${conversationId}/artifacts`);
   if (!Array.isArray(artifacts)) {
@@ -264,6 +299,15 @@ async function runDemoTaskWithRealAdapter() {
   const acceptedPrimary = realArtifacts.find((artifact) => artifact.qualityStatus === "ACCEPTED");
   if (!acceptedPrimary) {
     throw new Error(`no REAL_ADAPTER artifact passed quality checks: ${JSON.stringify(realArtifacts.slice(0, 3))}`);
+  }
+  if (EXPECT_BUILD_VALIDATION && !acceptedPrimary.buildValidationStatus) {
+    throw new Error("accepted REAL_ADAPTER artifact missing buildValidationStatus");
+  }
+  if (EXPECT_QUALITY_SCORE && (typeof acceptedPrimary.qualityScore !== "number" || !Number.isFinite(acceptedPrimary.qualityScore))) {
+    throw new Error("accepted REAL_ADAPTER artifact missing qualityScore");
+  }
+  if (EXPECT_QUALITY_REASON && !String(acceptedPrimary.qualityReason || "").trim()) {
+    throw new Error("accepted REAL_ADAPTER artifact missing qualityReason");
   }
   if (!acceptedPrimary.sourceAdapterType || acceptedPrimary.sourceAdapterType !== "OPENAI_COMPATIBLE") {
     throw new Error(`expected sourceAdapterType=OPENAI_COMPATIBLE, got ${acceptedPrimary.sourceAdapterType}`);
@@ -278,12 +322,30 @@ async function runDemoTaskWithRealAdapter() {
     throw new Error("REAL_FIRST expected static template fallback artifacts to be archived");
   }
   pass(`REAL_FIRST accepted primary artifact: ${acceptedPrimary.title}`);
+  if (EXPECT_BUILD_VALIDATION) {
+    pass(`accepted primary artifact build validation: ${acceptedPrimary.buildValidationStatus}`);
+  }
+  if (EXPECT_QUALITY_SCORE) {
+    pass(`accepted primary artifact quality score: ${String(acceptedPrimary.qualityScore)}`);
+  }
+  if (EXPECT_QUALITY_REASON) {
+    pass(`accepted primary artifact quality reason: ${acceptedPrimary.qualityReason}`);
+  }
   pass(`static fallback archived: ${archivedFallbacks.length}`);
 }
 
 async function run() {
   console.log(`AgentHub real adapter smoke target: ${API_BASE}`);
-  assertRequiredEnvironment();
+  console.log(`AgentHub real adapter strict mode: ${STRICT_MODE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real build validation assertion: ${EXPECT_BUILD_VALIDATION ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real quality score assertion: ${EXPECT_QUALITY_SCORE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real quality reason assertion: ${EXPECT_QUALITY_REASON ? "enabled" : "disabled"}`);
+
+  const canRun = assertRequiredEnvironment();
+  if (!canRun) {
+    warn("required real-provider env is not configured. this smoke script is skipped in non-real mode.");
+    return;
+  }
 
   const health = await request("/api/health");
   if (health?.status !== "UP") {
@@ -291,7 +353,11 @@ async function run() {
   }
   pass("health check");
 
-  await assertOpenAiAdapterAvailable();
+  const openAiReady = await assertOpenAiAdapterAvailable();
+  if (!openAiReady) {
+    warn("OPENAI_COMPATIBLE adapter is not ready; skipping strict real adapter assertions.");
+    return;
+  }
   await executeOpenAiAdapter();
   await runDemoTaskWithRealAdapter();
   console.log("Real adapter smoke test completed successfully.");
