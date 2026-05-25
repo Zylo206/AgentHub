@@ -9,6 +9,11 @@ mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
 
 agenthub:
+  realtime:
+    enabled: ${AGENTHUB_REALTIME_ENABLED:true}
+    heartbeat-seconds: ${AGENTHUB_REALTIME_HEARTBEAT_SECONDS:25}
+    event-retention-per-conversation: ${AGENTHUB_REALTIME_EVENT_RETENTION_PER_CONVERSATION:200}
+    run-state-ttl-minutes: ${AGENTHUB_REALTIME_RUN_STATE_TTL_MINUTES:30}
   persistence:
     mode: ${AGENTHUB_PERSISTENCE_MODE:memory}
     jdbc:

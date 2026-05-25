@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createConversation,
   approveApprovalRequest,
@@ -9,6 +9,7 @@ import {
   applyArtifactDiff,
   createDemoTask,
   getActionAuditsByConversation,
+  getActiveRealtimeState,
   getAdapters,
   getAgents,
   getArtifact,
@@ -22,6 +23,7 @@ import {
   getMemoriesByConversation,
   getMessages,
   getApprovalRequestsByConversation,
+  getConversationEventsUrl,
   getOrchestratorTriggerSuggestion,
   getPinnedContextsByConversation,
   getTaskRunsByConversation,
@@ -116,6 +118,10 @@ export function WorkspacePage() {
   const [draftAttachments, setDraftAttachments] = useState<LightweightAttachment[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<"DISCONNECTED" | "CONNECTING" | "CONNECTED" | "ERROR">(
+    "DISCONNECTED"
+  );
+  const [activeRealtimeRunSummary, setActiveRealtimeRunSummary] = useState<string | null>(null);
   const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
   const [quoteMode, setQuoteMode] = useState<"quote" | "reply">("quote");
 
@@ -135,6 +141,7 @@ export function WorkspacePage() {
   const [revisingArtifact, setRevisingArtifact] = useState(false);
   const [deployingArtifact, setDeployingArtifact] = useState(false);
   const [restoringSnapshot, setRestoringSnapshot] = useState(false);
+  const realtimeRefreshTimerRef = useRef<number | null>(null);
 
   const currentConversation =
     conversations.find((conversation) => getIdValue(conversation.id) === currentConversationId) ?? null;
@@ -375,6 +382,110 @@ export function WorkspacePage() {
     }
 
     void loadConversationData(currentConversationId);
+  }, [currentConversationId, loadConversationData]);
+
+  useEffect(() => {
+    if (!currentConversationId) {
+      setRealtimeStatus("DISCONNECTED");
+      setActiveRealtimeRunSummary(null);
+      return;
+    }
+
+    let closed = false;
+    setRealtimeStatus("CONNECTING");
+
+    const scheduleRefresh = () => {
+      if (closed) {
+        return;
+      }
+      if (realtimeRefreshTimerRef.current !== null) {
+        window.clearTimeout(realtimeRefreshTimerRef.current);
+      }
+      realtimeRefreshTimerRef.current = window.setTimeout(() => {
+        realtimeRefreshTimerRef.current = null;
+        void loadConversationData(currentConversationId);
+        void getActiveRealtimeState(currentConversationId)
+          .then((state) => {
+            if (!closed) {
+              setActiveRealtimeRunSummary(state ? `${state.status} / ${state.summary || state.taskRunId}` : null);
+            }
+          })
+          .catch(() => {
+            if (!closed) {
+              setActiveRealtimeRunSummary(null);
+            }
+          });
+      }, 250);
+    };
+
+    const eventSource = new EventSource(getConversationEventsUrl(currentConversationId));
+    eventSource.onopen = () => {
+      if (!closed) {
+        setRealtimeStatus("CONNECTED");
+      }
+    };
+    eventSource.onerror = () => {
+      if (!closed) {
+        setRealtimeStatus("ERROR");
+      }
+    };
+
+    const handleRealtimeEvent = (event: MessageEvent) => {
+      if (event.type === "HEARTBEAT" || event.type === "CONNECTED") {
+        setRealtimeStatus("CONNECTED");
+        return;
+      }
+      if (
+        [
+          "MESSAGE_CREATED",
+          "TASK_RUN_CREATED",
+          "TASK_RUN_UPDATED",
+          "TASK_STEP_UPDATED",
+          "ARTIFACT_CREATED",
+          "ARTIFACT_UPDATED",
+          "CONTEXT_UPDATED",
+          "HANDOFF_UPDATED",
+          "DEPLOYMENT_CREATED",
+          "APPROVAL_UPDATED",
+          "ACTION_AUDIT_CREATED"
+        ].includes(event.type)
+      ) {
+        setRealtimeStatus("CONNECTED");
+        scheduleRefresh();
+        return;
+      }
+
+      if (event.type !== "ERROR") {
+        console.warn("Unknown AgentHub realtime event:", event.type, event.data);
+      }
+    };
+
+    [
+      "CONNECTED",
+      "HEARTBEAT",
+      "MESSAGE_CREATED",
+      "TASK_RUN_CREATED",
+      "TASK_RUN_UPDATED",
+      "TASK_STEP_UPDATED",
+      "ARTIFACT_CREATED",
+      "ARTIFACT_UPDATED",
+      "CONTEXT_UPDATED",
+      "HANDOFF_UPDATED",
+      "DEPLOYMENT_CREATED",
+      "APPROVAL_UPDATED",
+      "ACTION_AUDIT_CREATED",
+      "ERROR"
+    ].forEach((eventType) => eventSource.addEventListener(eventType, handleRealtimeEvent));
+
+    return () => {
+      closed = true;
+      eventSource.close();
+      if (realtimeRefreshTimerRef.current !== null) {
+        window.clearTimeout(realtimeRefreshTimerRef.current);
+        realtimeRefreshTimerRef.current = null;
+      }
+      setRealtimeStatus("DISCONNECTED");
+    };
   }, [currentConversationId, loadConversationData]);
 
   useEffect(() => {
@@ -1068,6 +1179,17 @@ export function WorkspacePage() {
                 <span className="conversation-participant-pill">
                   {actionAudits.length} record(s)
                   <small>apply / deploy / restore</small>
+                </span>
+              </div>
+            </div>
+          ) : null}
+          {currentConversation ? (
+            <div className="conversation-participants">
+              <span className="conversation-participants__label">Realtime</span>
+              <div className="conversation-participants__list">
+                <span className={`conversation-participant-pill realtime-pill realtime-pill--${realtimeStatus.toLowerCase()}`}>
+                  {realtimeStatus}
+                  <small>{activeRealtimeRunSummary || "SSE server push"}</small>
                 </span>
               </div>
             </div>

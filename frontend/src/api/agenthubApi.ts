@@ -31,6 +31,33 @@ interface ApiResponse<T> {
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 export const API_BASE_URL = API_BASE;
 
+export interface RealtimeEvent {
+  eventId: string;
+  conversationId: string;
+  eventType: string;
+  resourceType: string;
+  resourceId: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface RealtimeRunState {
+  taskRunId: string;
+  conversationId: string;
+  sourceMessageId: string;
+  status: string;
+  lastEventId?: string | null;
+  summary?: string | null;
+  resourceRefs: string[];
+  createdAt: string;
+  updatedAt: string;
+  errorMessage?: string | null;
+}
+
+export function getConversationEventsUrl(conversationId: string): string {
+  return `${API_BASE}/api/conversations/${conversationId}/events`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
@@ -285,6 +312,14 @@ export function getTaskRunsByConversation(conversationId: string): Promise<TaskR
 
 export function getTaskRun(taskRunId: string): Promise<TaskRun> {
   return request<TaskRun>(`/api/task-runs/${taskRunId}`);
+}
+
+export function getTaskRunRealtimeState(taskRunId: string): Promise<RealtimeRunState | null> {
+  return request<RealtimeRunState | null>(`/api/task-runs/${taskRunId}/realtime-state`);
+}
+
+export function getActiveRealtimeState(conversationId: string): Promise<RealtimeRunState | null> {
+  return request<RealtimeRunState | null>(`/api/conversations/${conversationId}/active-realtime-state`);
 }
 
 export function getContextSnapshotsByConversation(conversationId: string): Promise<ContextSnapshot[]> {

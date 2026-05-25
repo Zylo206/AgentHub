@@ -1,6 +1,8 @@
 package com.agenthub.application.approval;
 
 import com.agenthub.application.audit.ActionAuditService;
+import com.agenthub.application.realtime.RealtimeEventPublisher;
+import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
 import com.agenthub.domain.approval.ApprovalRepository;
@@ -20,16 +22,19 @@ public class ApprovalApplicationService {
 
     private final ApprovalRepository approvalRepository;
     private final ActionAuditService actionAuditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
 
     public ApprovalApplicationService(
             ApprovalRepository approvalRepository,
             ActionAuditService actionAuditService,
+            RealtimeEventPublisher realtimeEventPublisher,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.approvalRepository = approvalRepository;
         this.actionAuditService = actionAuditService;
+        this.realtimeEventPublisher = realtimeEventPublisher;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
@@ -63,6 +68,7 @@ public class ApprovalApplicationService {
                 approvalRequest.getTargetId(),
                 approvalRequest.getStatus().name(),
                 "Approval request created: " + approvalRequest.getActionType() + ". " + approvalRequest.getSummary());
+        publishApprovalUpdated(approvalRequest);
         return approvalRequest;
     }
 
@@ -78,6 +84,7 @@ public class ApprovalApplicationService {
                 approved.getTargetId(),
                 approved.getStatus().name(),
                 "Approval request approved: " + approved.getApprovalId());
+        publishApprovalUpdated(approved);
         return approved;
     }
 
@@ -93,6 +100,7 @@ public class ApprovalApplicationService {
                 cancelled.getTargetId(),
                 cancelled.getStatus().name(),
                 "Approval request cancelled: " + cancelled.getApprovalId());
+        publishApprovalUpdated(cancelled);
         return cancelled;
     }
 
@@ -116,6 +124,7 @@ public class ApprovalApplicationService {
                     expired.getTargetId(),
                     expired.getStatus().name(),
                     "Approval request expired before execution: " + expired.getApprovalId());
+            publishApprovalUpdated(expired);
             throw new IllegalStateException("Approval request is expired: " + approvalId);
         }
         if (approvalRequest.getStatus() != ApprovalStatus.APPROVED) {
@@ -144,6 +153,7 @@ public class ApprovalApplicationService {
                 consumed.getTargetId(),
                 consumed.getStatus().name(),
                 "Approval request consumed by backend operation: " + consumed.getApprovalId());
+        publishApprovalUpdated(consumed);
         return consumed;
     }
 
@@ -168,5 +178,17 @@ public class ApprovalApplicationService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase();
+    }
+
+    private void publishApprovalUpdated(ApprovalRequest approvalRequest) {
+        realtimeEventPublisher.publish(
+                approvalRequest.getConversationId(),
+                RealtimeEventType.APPROVAL_UPDATED,
+                "APPROVAL_REQUEST",
+                approvalRequest.getApprovalId(),
+                java.util.Map.of(
+                        "actionType", approvalRequest.getActionType(),
+                        "targetType", approvalRequest.getTargetType(),
+                        "status", approvalRequest.getStatus().name()));
     }
 }

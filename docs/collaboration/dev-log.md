@@ -3166,3 +3166,93 @@
 - 补 Adapter Routing Decision 的前端面板，把候选 Adapter 分数、最终选择和 fallback policy 可视化。
 - 扩展 smoke test 的 REAL_FIRST fixture 路径，确保无真实 key 时也能稳定验证真实输出契约。
 - 如继续推进生产化，优先实现附件 metadata 的持久化仓储，而不是直接上对象存储。
+
+## Phase 71：附件生产化骨架、Adapter 路由面板与 Context Retrieval v4
+
+### 目标
+
+- 借鉴 KnowFlow / PaiCLI / AgentWeave 的生产化经验，继续补齐 AgentHub 的附件安全边界、Adapter 路由可解释性、JDBC 最小持久化切换和 Context Retrieval hybrid explain 字段。
+
+### 主要变更
+
+- `AttachmentRecord` 增加 `storageKey`、`checksumSha256`、`visibility`、`ownerUserId`、`scanStatus`、`deletedAt`。
+- 新增 `AttachmentAccessGuard`，下载和读取前校验删除状态、扫描状态和会话归属。
+- 新增 `AttachmentScanService` / `NoopAttachmentScanService`，默认本地 no-op 扫描但保留生产化状态字段。
+- 新增 `AttachmentCleanupService` / `NoopAttachmentCleanupService`，先保留清理策略扩展点。
+- `LocalAttachmentStorageService` 返回 `storageKey`，`AttachmentApplicationService` 上传时计算 SHA-256 并记录 scan result。
+- memory repository 增加 `agenthub.persistence.mode=memory` 条件，JDBC repository 通过 `agenthub.persistence.mode=jdbc` 启用。
+- `AdapterRoutingDecision.describe()` 输出完整候选池分数。
+- `TaskRunPanel` 增加独立 Adapter Routing Scores 面板，展示 health、success rate、fallback penalty、preferred bonus、status、total score 和最终选择。
+- `Context Retrieval` 增加 `semanticScore`，并抽出 `ContextSemanticScoringService` / `HeuristicContextSemanticScoringService`，为后续 embedding backend 预留接口。
+- `ContextPanel` 展示 semantic score。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 附件扫描当前是 no-op local scan，不代表真实杀毒能力。
+- 附件清理当前是 no-op 扩展点，不会自动删除文件。
+- JDBC repository 是最小 profile 切换骨架，默认仍使用 memory；未配置 JDBC URL 时不会启用。
+- Context Retrieval v4 的 `semanticScore` 当前是 heuristic backend，不是 embedding / vector search。
+- Adapter Routing Scores 面板展示候选评分，但执行失败仍由现有 Registry fallback 到 MOCK。
+
+### 遗留问题
+
+- 尚未接入真实 antivirus / malware scanning。
+- 尚未实现生产级附件清理调度。
+- JDBC 模式需要真实数据库连接后继续做完整回归。
+- Context Retrieval 尚未接入 ES / pgvector / embedding service。
+
+### 下一步建议
+
+- 启动 backend / frontend 后跑完整 smoke test，确认附件上传、下载、Context explain 和 Adapter routing 面板端到端正常。
+- 如继续推进生产化，下一步优先做 JDBC profile 的本地 MySQL 初始化脚本和 smoke test profile，而不是直接引入对象存储或向量库。
+
+## Phase 72：SSE 实时通道与 KnowFlow 式运行状态快照
+
+### 目标
+
+- 在不引入 WebSocket / Redis / Kafka 的前提下，为 AgentHub Workspace 增加服务端推送能力。
+- 借鉴 KnowFlow 的 generation state 思路，为 TaskRun 提供可查询的运行状态快照，便于断线后恢复状态。
+
+### 主要变更
+
+- 新增 `RealtimeEvent` / `RealtimeEventPublisher` / `RealtimeEventStore` / `SseConnectionRegistry`。
+- 新增 SSE 接口：`GET /api/conversations/{conversationId}/events`。
+- 新增运行状态快照：`RealtimeRunState` / `RealtimeRunStateService`。
+- 新增状态查询接口：
+  - `GET /api/task-runs/{taskRunId}/realtime-state`
+  - `GET /api/conversations/{conversationId}/active-realtime-state`
+- Message、TaskRun、TaskStep、Artifact、Context、Handoff、Deployment、Approval、ActionAudit 的关键写入点会发布 realtime event。
+- Workspace 使用 `EventSource` 连接当前 conversation 的 SSE stream，收到事件后复用现有 REST loader 做轻量刷新。
+- 新增 `scripts/sse-smoke-test.mjs`，用于 API 级验证 SSE 事件和 realtime state。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/sse-smoke-test.mjs`
+- 手动测试：打开两个 `/workspace` 标签页，在一个标签页发送消息 / 运行 Demo Task / Deploy，另一个标签页应通过 SSE 自动刷新。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只做 SSE server push，不做 WebSocket 双向控制。
+- SSE event 只是刷新提示，前端仍以 REST API 返回的数据为权威状态。
+- 运行状态快照是内存 TTL 存储，不是 Redis / JDBC / 多节点共享状态。
+- 不做真实 LLM token streaming，不做任务取消，不做跨节点 event broker。
+
+### 遗留问题
+
+- WebSocket 控制面仍未实现，后续可用于 `CANCEL_RUN` / `STOP_GENERATION`。
+- SSE 当前是单实例内存事件总线，多实例部署需要 Redis pub/sub 或消息 broker。
+- TaskRun 仍是同步执行后批量发布事件，不是细粒度 token / step streaming。
+- `scripts/sse-smoke-test.mjs` 需要 backend 运行后手动执行，不会自动启动服务。
+
+### 下一步建议
+
+- 如果继续实时化，优先做 WebSocket control plane 的最小取消指令，而不是直接做完整双向聊天。
+- 若要接近生产部署，再把 `RealtimeEventStore` 和 `RealtimeRunStateService` 抽到 Redis / JDBC 实现。

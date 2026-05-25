@@ -1,6 +1,8 @@
 package com.agenthub.application.orchestrator;
 
 import com.agenthub.application.agent.AgentExecutorService;
+import com.agenthub.application.realtime.RealtimeEventPublisher;
+import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.domain.agent.AgentId;
 import com.agenthub.domain.artifact.Artifact;
@@ -32,6 +34,7 @@ public class AgentStepExecutor {
     private final IdGenerator idGenerator;
     private final ArtifactRepository artifactRepository;
     private final AdapterArtifactExtractor adapterArtifactExtractor;
+    private final RealtimeEventPublisher realtimeEventPublisher;
     private final String artifactGenerationMode;
 
     public AgentStepExecutor(
@@ -39,11 +42,13 @@ public class AgentStepExecutor {
             IdGenerator idGenerator,
             ArtifactRepository artifactRepository,
             AdapterArtifactExtractor adapterArtifactExtractor,
+            RealtimeEventPublisher realtimeEventPublisher,
             @Value("${agenthub.orchestrator.artifact-generation-mode:HYBRID_REAL}") String artifactGenerationMode) {
         this.agentExecutorService = agentExecutorService;
         this.idGenerator = idGenerator;
         this.artifactRepository = artifactRepository;
         this.adapterArtifactExtractor = adapterArtifactExtractor;
+        this.realtimeEventPublisher = realtimeEventPublisher;
         this.artifactGenerationMode = normalizeArtifactGenerationMode(artifactGenerationMode);
     }
 
@@ -162,6 +167,7 @@ public class AgentStepExecutor {
                     command.now(),
                     command.now());
             artifactRepository.save(adapterOutputArtifact);
+            publishArtifactEvent(adapterOutputArtifact, RealtimeEventType.ARTIFACT_CREATED);
             adapterArtifactIds.add(adapterOutputArtifact.getId());
         }
         if ("REAL_FIRST".equals(artifactGenerationMode) && !adapterArtifactIds.isEmpty()) {
@@ -176,25 +182,41 @@ public class AgentStepExecutor {
 
     private void archiveStaticFallbackArtifacts(List<ArtifactId> fallbackArtifactIds, Instant now) {
         for (ArtifactId fallbackArtifactId : fallbackArtifactIds) {
-            artifactRepository.findById(fallbackArtifactId).ifPresent(artifact -> artifactRepository.save(new Artifact(
-                    artifact.getId(),
-                    artifact.getConversationId(),
-                    artifact.getTaskRunId(),
-                    artifact.getParentArtifactId(),
-                    artifact.getRevisionInstruction(),
-                    archivedFallbackTitle(artifact.getType()),
-                    artifact.getType(),
-                    ArtifactStatus.ARCHIVED,
-                    artifact.getLanguage(),
-                    artifact.getContent(),
-                    artifact.getVersion(),
-                    ArtifactSourceKind.STATIC_TEMPLATE,
-                    artifact.getSourceAdapterType(),
-                    artifact.getSourceTaskStepId(),
-                    "REAL_FIRST_STATIC_FALLBACK",
-                    artifact.getCreatedAt(),
-                    now)));
+            artifactRepository.findById(fallbackArtifactId).ifPresent(artifact -> {
+                Artifact archivedArtifact = new Artifact(
+                        artifact.getId(),
+                        artifact.getConversationId(),
+                        artifact.getTaskRunId(),
+                        artifact.getParentArtifactId(),
+                        artifact.getRevisionInstruction(),
+                        archivedFallbackTitle(artifact.getType()),
+                        artifact.getType(),
+                        ArtifactStatus.ARCHIVED,
+                        artifact.getLanguage(),
+                        artifact.getContent(),
+                        artifact.getVersion(),
+                        ArtifactSourceKind.STATIC_TEMPLATE,
+                        artifact.getSourceAdapterType(),
+                        artifact.getSourceTaskStepId(),
+                        "REAL_FIRST_STATIC_FALLBACK",
+                        artifact.getCreatedAt(),
+                        now);
+                artifactRepository.save(archivedArtifact);
+                publishArtifactEvent(archivedArtifact, RealtimeEventType.ARTIFACT_UPDATED);
+            });
         }
+    }
+
+    private void publishArtifactEvent(Artifact artifact, RealtimeEventType eventType) {
+        realtimeEventPublisher.publish(
+                artifact.getConversationId(),
+                eventType,
+                "ARTIFACT",
+                artifact.getId().value(),
+                Map.of(
+                        "title", artifact.getTitle(),
+                        "type", artifact.getType().name(),
+                        "version", artifact.getVersion()));
     }
 
     private String archivedFallbackTitle(ArtifactType artifactType) {

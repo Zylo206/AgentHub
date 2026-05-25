@@ -33,6 +33,7 @@ public class ContextRetrievalService {
     private final MessageRepository messageRepository;
     private final ArtifactRepository artifactRepository;
     private final TaskRepository taskRepository;
+    private final ContextSemanticScoringService semanticScoringService;
     private final int defaultLimit;
 
     public ContextRetrievalService(
@@ -41,12 +42,14 @@ public class ContextRetrievalService {
             MessageRepository messageRepository,
             ArtifactRepository artifactRepository,
             TaskRepository taskRepository,
+            ContextSemanticScoringService semanticScoringService,
             @Value("${agenthub.context.retrieval.limit:8}") int defaultLimit) {
         this.contextRepository = contextRepository;
         this.memoryRepository = memoryRepository;
         this.messageRepository = messageRepository;
         this.artifactRepository = artifactRepository;
         this.taskRepository = taskRepository;
+        this.semanticScoringService = semanticScoringService;
         this.defaultLimit = defaultLimit;
     }
 
@@ -208,7 +211,7 @@ public class ContextRetrievalService {
             double importanceScore) {
         List<String> matchedTokens = matchedTokens(query, content);
         double keywordScore = matchedTokens.size() * 4.0;
-        double semanticScore = semanticSimilarityScore(query, content);
+        double semanticScore = semanticScoringService.score(query, content).score();
         return new ScoreBreakdown(
                 baseScore,
                 keywordScore,
@@ -217,28 +220,6 @@ public class ContextRetrievalService {
                 semanticScore,
                 baseScore + keywordScore + recencyScore + importanceScore + semanticScore,
                 matchedTokens);
-    }
-
-    private double semanticSimilarityScore(String query, String content) {
-        if (query == null || query.isBlank() || content == null || content.isBlank()) {
-            return 0.0;
-        }
-        Set<String> queryTokens = new LinkedHashSet<>();
-        for (String token : query.toLowerCase(Locale.ROOT).split("[^\\p{IsAlphabetic}\\p{IsDigit}]+")) {
-            if (token.length() >= 2) {
-                queryTokens.add(token);
-            }
-        }
-        if (queryTokens.isEmpty()) {
-            return 0.0;
-        }
-        String normalizedContent = content.toLowerCase(Locale.ROOT);
-        long softMatches = queryTokens.stream()
-                .filter(token -> normalizedContent.contains(token)
-                        || normalizedContent.contains(token.replace("login", "登录"))
-                        || normalizedContent.contains(token.replace("review", "检查")))
-                .count();
-        return Math.min(20.0, softMatches * 3.0);
     }
 
     private List<String> matchedTokens(String query, String content) {

@@ -6,6 +6,10 @@ import com.agenthub.application.audit.ActionAuditService;
 import com.agenthub.application.context.ContextRetrievalService;
 import com.agenthub.application.conversation.ConversationApplicationService;
 import com.agenthub.application.message.MessageApplicationService;
+import com.agenthub.application.realtime.RealtimeEvent;
+import com.agenthub.application.realtime.RealtimeEventPublisher;
+import com.agenthub.application.realtime.RealtimeEventType;
+import com.agenthub.application.realtime.RealtimeRunStateService;
 import com.agenthub.application.task.TaskApplicationService;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
@@ -80,6 +84,8 @@ public class OrchestratorService {
     private final ReviewDecisionEvaluator reviewDecisionEvaluator;
     private final ResultAggregator resultAggregator;
     private final ActionAuditService actionAuditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
+    private final RealtimeRunStateService realtimeRunStateService;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
     private final int memoryRetrievalLimit;
@@ -102,6 +108,8 @@ public class OrchestratorService {
             ReviewDecisionEvaluator reviewDecisionEvaluator,
             ResultAggregator resultAggregator,
             ActionAuditService actionAuditService,
+            RealtimeEventPublisher realtimeEventPublisher,
+            RealtimeRunStateService realtimeRunStateService,
             IdGenerator idGenerator,
             TimeProvider timeProvider,
             @Value("${agenthub.memory.retrieval.limit:6}") int memoryRetrievalLimit) {
@@ -122,6 +130,8 @@ public class OrchestratorService {
         this.reviewDecisionEvaluator = reviewDecisionEvaluator;
         this.resultAggregator = resultAggregator;
         this.actionAuditService = actionAuditService;
+        this.realtimeEventPublisher = realtimeEventPublisher;
+        this.realtimeRunStateService = realtimeRunStateService;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
         this.memoryRetrievalLimit = memoryRetrievalLimit;
@@ -225,6 +235,18 @@ public class OrchestratorService {
         taskRepository.saveTaskSpec(taskSpec);
 
         TaskRunId taskRunId = new TaskRunId(idGenerator.nextId("run"));
+        RealtimeEvent startEvent = realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.TASK_RUN_CREATED,
+                "TASK_RUN",
+                taskRunId.value(),
+                Map.of("sourceMessageId", sourceMessageId.value(), "status", "STREAMING"));
+        realtimeRunStateService.start(
+                conversationId,
+                taskRunId.value(),
+                sourceMessageId.value(),
+                startEvent.getEventId(),
+                now);
 
         Artifact codeArtifact = createArtifact(
                 conversationRef,
@@ -263,6 +285,10 @@ public class OrchestratorService {
         artifactRepository.save(readmeArtifact);
         artifactRepository.save(apiContractArtifact);
         artifactRepository.save(reviewArtifact);
+        publishArtifactCreated(codeArtifact);
+        publishArtifactCreated(readmeArtifact);
+        publishArtifactCreated(apiContractArtifact);
+        publishArtifactCreated(reviewArtifact);
 
         List<AgentStepExecutor.StepExecutionCommand> stepCommands = new ArrayList<>(List.of(
                 buildStepExecutionCommand(
@@ -362,8 +388,10 @@ public class OrchestratorService {
                     reviewArtifact.getContent() + "\n\n" + buildReviewDecisionMarkdown(reviewDecision),
                     now);
             artifactRepository.save(reviewArtifact);
+            publishArtifactUpdated(reviewArtifact);
             retryAdviceArtifact = createReviewRetryAdviceArtifact(conversationRef, taskRunId, reviewDecision, now);
             artifactRepository.save(retryAdviceArtifact);
+            publishArtifactCreated(retryAdviceArtifact);
         }
 
         TaskPlan taskPlan = new TaskPlan(
@@ -413,6 +441,30 @@ public class OrchestratorService {
                 now,
                 now);
         taskRepository.saveTaskRun(taskRun);
+        RealtimeEvent taskRunUpdatedEvent = realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.TASK_RUN_UPDATED,
+                "TASK_RUN",
+                taskRunId.value(),
+                Map.of("status", taskRun.getStatus().name(), "steps", taskRun.getSteps().size()));
+        taskRun.getSteps().forEach(step -> realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.TASK_STEP_UPDATED,
+                "TASK_STEP",
+                step.getId().value(),
+                Map.of(
+                        "taskRunId", taskRunId.value(),
+                        "status", step.getStatus().name(),
+                        "stepOrder", step.getStepOrder())));
+        realtimeRunStateService.complete(
+                conversationId,
+                taskRunId.value(),
+                sourceMessageId.value(),
+                taskRun.getStatus().name(),
+                taskRunUpdatedEvent.getEventId(),
+                taskRun.getResultSummary(),
+                buildRunStateResourceRefs(taskRun, demoArtifacts),
+                now);
 
         ContextSnapshot contextSnapshot = new ContextSnapshot(
                 new ContextSnapshotId(idGenerator.nextId("ctx")),
@@ -438,6 +490,12 @@ public class OrchestratorService {
                         + selectedAgentSummary,
                 now);
         contextRepository.saveContextSnapshot(contextSnapshot);
+        realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.CONTEXT_UPDATED,
+                "CONTEXT_SNAPSHOT",
+                contextSnapshot.getId().value(),
+                Map.of("taskRunId", taskRunId.value()));
 
         HandoffSummary frontendToBackend = new HandoffSummary(
                 idGenerator.nextId("handoff"),
@@ -482,6 +540,18 @@ public class OrchestratorService {
 
         contextRepository.saveHandoffSummary(frontendToBackend);
         contextRepository.saveHandoffSummary(backendToReviewer);
+        realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.HANDOFF_UPDATED,
+                "HANDOFF_SUMMARY",
+                frontendToBackend.getId(),
+                Map.of("taskRunId", taskRunId.value()));
+        realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.HANDOFF_UPDATED,
+                "HANDOFF_SUMMARY",
+                backendToReviewer.getId(),
+                Map.of("taskRunId", taskRunId.value()));
 
         appendDemoGroupChatMessages(
                 conversationId,
@@ -619,6 +689,7 @@ public class OrchestratorService {
                 now,
                 now);
         artifactRepository.save(revisedArtifact);
+        publishArtifactCreated(revisedArtifact);
 
         Artifact reviewArtifact = new Artifact(
                 new ArtifactId(idGenerator.nextId("artifact")),
@@ -635,6 +706,7 @@ public class OrchestratorService {
                 now,
                 now);
         artifactRepository.save(reviewArtifact);
+        publishArtifactCreated(reviewArtifact);
 
         TaskStep frontendRevisionStep = createAgentExecutedStep(
                 conversationId,
@@ -706,6 +778,30 @@ public class OrchestratorService {
                 now,
                 now);
         taskRepository.saveTaskRun(taskRun);
+        RealtimeEvent revisionTaskEvent = realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.TASK_RUN_UPDATED,
+                "TASK_RUN",
+                taskRunId.value(),
+                Map.of("status", taskRun.getStatus().name(), "steps", taskRun.getSteps().size()));
+        revisionSteps.forEach(step -> realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.TASK_STEP_UPDATED,
+                "TASK_STEP",
+                step.getId().value(),
+                Map.of(
+                        "taskRunId", taskRunId.value(),
+                        "status", step.getStatus().name(),
+                        "stepOrder", step.getStepOrder())));
+        realtimeRunStateService.complete(
+                conversationId,
+                taskRunId.value(),
+                revisionMessage.getId().value(),
+                taskRun.getStatus().name(),
+                revisionTaskEvent.getEventId(),
+                taskRun.getResultSummary(),
+                buildRunStateResourceRefs(taskRun, List.of(revisedArtifact, reviewArtifact)),
+                now);
 
         ContextSnapshot contextSnapshot = new ContextSnapshot(
                 new ContextSnapshotId(idGenerator.nextId("ctx")),
@@ -721,6 +817,12 @@ public class OrchestratorService {
                 "该 revision 快照关联原始产物、修改指令、修改后产物和新评审报告，用于展示第二轮以 Artifact 为中心的迭代。",
                 now);
         contextRepository.saveContextSnapshot(contextSnapshot);
+        realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.CONTEXT_UPDATED,
+                "CONTEXT_SNAPSHOT",
+                contextSnapshot.getId().value(),
+                Map.of("taskRunId", taskRunId.value()));
 
         HandoffSummary handoffSummary = new HandoffSummary(
                 idGenerator.nextId("handoff"),
@@ -739,6 +841,12 @@ public class OrchestratorService {
                 "前端构建 Agent 将修改后的 LoginPage.tsx 交接给评审 Agent，便于检查第二轮产物是否满足追问指令。",
                 now);
         contextRepository.saveHandoffSummary(handoffSummary);
+        realtimeEventPublisher.publish(
+                conversationRef,
+                RealtimeEventType.HANDOFF_UPDATED,
+                "HANDOFF_SUMMARY",
+                handoffSummary.getId(),
+                Map.of("taskRunId", taskRunId.value()));
 
         messageApplicationService.appendSystemMessage(
                 conversationId,
@@ -1432,6 +1540,34 @@ public class OrchestratorService {
 
     private List<ArtifactId> artifactIdsOf(List<Artifact> artifacts) {
         return artifacts.stream().map(Artifact::getId).toList();
+    }
+
+    private List<String> buildRunStateResourceRefs(TaskRun taskRun, List<Artifact> artifacts) {
+        List<String> refs = new ArrayList<>();
+        refs.add("taskRun:" + taskRun.getId().value());
+        taskRun.getSteps().forEach(step -> refs.add("taskStep:" + step.getId().value()));
+        artifacts.forEach(artifact -> refs.add("artifact:" + artifact.getId().value()));
+        return refs;
+    }
+
+    private void publishArtifactCreated(Artifact artifact) {
+        publishArtifactEvent(artifact, RealtimeEventType.ARTIFACT_CREATED);
+    }
+
+    private void publishArtifactUpdated(Artifact artifact) {
+        publishArtifactEvent(artifact, RealtimeEventType.ARTIFACT_UPDATED);
+    }
+
+    private void publishArtifactEvent(Artifact artifact, RealtimeEventType eventType) {
+        realtimeEventPublisher.publish(
+                artifact.getConversationId(),
+                eventType,
+                "ARTIFACT",
+                artifact.getId().value(),
+                Map.of(
+                        "title", artifact.getTitle(),
+                        "type", artifact.getType().name(),
+                        "version", artifact.getVersion()));
     }
 
     private void appendAdapterOutputArtifactMessages(

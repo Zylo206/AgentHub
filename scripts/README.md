@@ -113,6 +113,30 @@ These flags validate that matched task messages require approval before `orchest
 
 This is an API-level smoke test with real local attachment upload/download and an HTTP reachability check for the local preview page. It does not run browser E2E automation, parse DOM content, make real LLM calls, call real external Agents, or perform real deployment.
 
+## SSE Smoke Test
+
+`sse-smoke-test.mjs` verifies the realtime MVP channel:
+
+- opens `GET /api/conversations/{conversationId}/events`
+- sends a message
+- runs a demo task
+- expects `MESSAGE_CREATED`, `TASK_RUN_CREATED`, `TASK_RUN_UPDATED`, and `ARTIFACT_CREATED`
+- checks `/active-realtime-state` and `/task-runs/{taskRunId}/realtime-state`
+
+Run it after starting the backend:
+
+```powershell
+node scripts/sse-smoke-test.mjs
+```
+
+Override the backend URL:
+
+```powershell
+$env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"; node scripts/sse-smoke-test.mjs
+```
+
+This is an API-level SSE verification. It does not validate browser rendering, WebSocket control commands, real LLM token streaming, or multi-node event broadcasting.
+
 ## Browser E2E
 
 `e2e-browser.mjs` is a lightweight Playwright wrapper that seeds a browser-test conversation through the API, uploads a small real text attachment, then verifies the rendered Workspace, message attachment card, retrieved context explanation, Orchestrator explain panel, artifact preview, approval gate, deploy status card, and static preview page.

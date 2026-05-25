@@ -1,6 +1,8 @@
 package com.agenthub.application.artifact;
 
 import com.agenthub.application.audit.ActionAuditService;
+import com.agenthub.application.realtime.RealtimeEventPublisher;
+import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
 import com.agenthub.domain.artifact.Artifact;
@@ -23,6 +25,7 @@ public class ArtifactApplicationService {
     private final ArtifactRepository artifactRepository;
     private final ArtifactSnapshotRepository artifactSnapshotRepository;
     private final ActionAuditService actionAuditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
 
@@ -30,11 +33,13 @@ public class ArtifactApplicationService {
             ArtifactRepository artifactRepository,
             ArtifactSnapshotRepository artifactSnapshotRepository,
             ActionAuditService actionAuditService,
+            RealtimeEventPublisher realtimeEventPublisher,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.artifactRepository = artifactRepository;
         this.artifactSnapshotRepository = artifactSnapshotRepository;
         this.actionAuditService = actionAuditService;
+        this.realtimeEventPublisher = realtimeEventPublisher;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
@@ -85,6 +90,7 @@ public class ArtifactApplicationService {
                 now,
                 now);
         artifactRepository.save(restoredArtifact);
+        publishArtifactEvent(restoredArtifact, RealtimeEventType.ARTIFACT_CREATED);
         actionAuditService.record(
                 snapshot.getConversationId(),
                 "RESTORE_SNAPSHOT",
@@ -146,6 +152,7 @@ public class ArtifactApplicationService {
                 now);
 
         artifactRepository.save(appliedArtifact);
+        publishArtifactEvent(appliedArtifact, RealtimeEventType.ARTIFACT_CREATED);
         actionAuditService.record(
                 revisionArtifact.getConversationId(),
                 force ? "FORCE_APPLY_DIFF" : "APPLY_DIFF",
@@ -309,5 +316,17 @@ public class ArtifactApplicationService {
             int removed,
             int unchanged,
             int changed) {
+    }
+
+    private void publishArtifactEvent(Artifact artifact, RealtimeEventType eventType) {
+        realtimeEventPublisher.publish(
+                artifact.getConversationId(),
+                eventType,
+                "ARTIFACT",
+                artifact.getId().value(),
+                java.util.Map.of(
+                        "title", artifact.getTitle(),
+                        "type", artifact.getType().name(),
+                        "version", artifact.getVersion()));
     }
 }

@@ -2,6 +2,8 @@ package com.agenthub.application.deployment;
 
 import com.agenthub.application.audit.ActionAuditService;
 import com.agenthub.application.message.MessageApplicationService;
+import com.agenthub.application.realtime.RealtimeEventPublisher;
+import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
 import com.agenthub.domain.artifact.Artifact;
@@ -28,6 +30,7 @@ public class DeploymentApplicationService {
     private final DeploymentRepository deploymentRepository;
     private final MessageApplicationService messageApplicationService;
     private final ActionAuditService actionAuditService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
 
@@ -37,6 +40,7 @@ public class DeploymentApplicationService {
             DeploymentRepository deploymentRepository,
             MessageApplicationService messageApplicationService,
             ActionAuditService actionAuditService,
+            RealtimeEventPublisher realtimeEventPublisher,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.artifactRepository = artifactRepository;
@@ -44,6 +48,7 @@ public class DeploymentApplicationService {
         this.deploymentRepository = deploymentRepository;
         this.messageApplicationService = messageApplicationService;
         this.actionAuditService = actionAuditService;
+        this.realtimeEventPublisher = realtimeEventPublisher;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
@@ -82,6 +87,15 @@ public class DeploymentApplicationService {
 
         DeploymentRecord saved = deploymentRepository.save(deploymentRecord);
         appendDeployStatusMessage(saved);
+        realtimeEventPublisher.publish(
+                saved.getConversationId(),
+                RealtimeEventType.DEPLOYMENT_CREATED,
+                "DEPLOYMENT",
+                saved.getDeploymentId(),
+                java.util.Map.of(
+                        "artifactId", saved.getArtifactId().value(),
+                        "status", saved.getStatus().name(),
+                        "previewUrl", saved.getPreviewUrl()));
         actionAuditService.record(
                 artifact.getConversationId(),
                 "DEMO_DEPLOY",

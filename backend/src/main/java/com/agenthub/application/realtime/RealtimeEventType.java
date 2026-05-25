@@ -1,0 +1,16 @@
+package com.agenthub.application.realtime;
+
+public enum RealtimeEventType {
+    MESSAGE_CREATED,
+    TASK_RUN_CREATED,
+    TASK_RUN_UPDATED,
+    TASK_STEP_UPDATED,
+    ARTIFACT_CREATED,
+    ARTIFACT_UPDATED,
+    CONTEXT_UPDATED,
+    HANDOFF_UPDATED,
+    DEPLOYMENT_CREATED,
+    APPROVAL_UPDATED,
+    ACTION_AUDIT_CREATED,
+    ERROR
+}

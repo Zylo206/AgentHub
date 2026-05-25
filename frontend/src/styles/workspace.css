@@ -1761,6 +1761,74 @@
   background: linear-gradient(180deg, #ffffff, #f8fbff);
 }
 
+.adapter-routing-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: #fbfdff;
+}
+
+.adapter-routing-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.adapter-routing-panel__header strong {
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.adapter-routing-panel__header span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.adapter-routing-table {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.adapter-routing-table__row {
+  display: grid;
+  grid-template-columns: 56px 150px 120px repeat(5, minmax(96px, 1fr));
+  min-width: 920px;
+  border-top: 1px solid #edf2f7;
+}
+
+.adapter-routing-table__row:first-child {
+  border-top: 0;
+}
+
+.adapter-routing-table__row span,
+.adapter-routing-table__row strong {
+  padding: 8px 10px;
+  color: #475569;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.adapter-routing-table__row strong {
+  color: var(--text-main);
+}
+
+.adapter-routing-table__row--head span {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.adapter-routing-table__row--selected {
+  background: #eff6ff;
+}
+
 .orchestrator-explain-panel__header {
   display: flex;
   align-items: flex-start;
@@ -2260,6 +2328,25 @@
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.realtime-pill {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.realtime-pill--connecting {
+  border-color: rgba(245, 158, 11, 0.26);
+  background: rgba(255, 251, 235, 0.92);
+  color: var(--warning);
+}
+
+.realtime-pill--error,
+.realtime-pill--disconnected {
+  border-color: rgba(220, 38, 38, 0.2);
+  background: rgba(254, 242, 242, 0.92);
+  color: var(--danger);
 }
 
 .workspace-main__toolbar {

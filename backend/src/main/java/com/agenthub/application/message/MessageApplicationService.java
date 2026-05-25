@@ -1,6 +1,8 @@
 package com.agenthub.application.message;
 
 import com.agenthub.application.agent.AgentApplicationService;
+import com.agenthub.application.realtime.RealtimeEventPublisher;
+import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
 import com.agenthub.domain.artifact.ArtifactId;
@@ -21,16 +23,19 @@ public class MessageApplicationService {
 
     private final MessageRepository messageRepository;
     private final AgentApplicationService agentApplicationService;
+    private final RealtimeEventPublisher realtimeEventPublisher;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
 
     public MessageApplicationService(
             MessageRepository messageRepository,
             AgentApplicationService agentApplicationService,
+            RealtimeEventPublisher realtimeEventPublisher,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.messageRepository = messageRepository;
         this.agentApplicationService = agentApplicationService;
+        this.realtimeEventPublisher = realtimeEventPublisher;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
@@ -113,7 +118,9 @@ public class MessageApplicationService {
                 List.of(),
                 normalizedAttachments,
                 timeProvider.now());
-        return messageRepository.save(message);
+        Message saved = messageRepository.save(message);
+        publishMessageCreated(saved);
+        return saved;
     }
 
     public List<Message> listMessages(String conversationId) {
@@ -152,7 +159,9 @@ public class MessageApplicationService {
                 content,
                 artifactIds == null ? List.of() : artifactIds,
                 timeProvider.now());
-        return messageRepository.save(message);
+        Message saved = messageRepository.save(message);
+        publishMessageCreated(saved);
+        return saved;
     }
 
     public Message appendSystemMessage(
@@ -169,7 +178,9 @@ public class MessageApplicationService {
                 content,
                 artifactIds,
                 timeProvider.now());
-        return messageRepository.save(message);
+        Message saved = messageRepository.save(message);
+        publishMessageCreated(saved);
+        return saved;
     }
 
     public Message regenerateAgentReply(String conversationId, String messageId) {
@@ -206,7 +217,20 @@ public class MessageApplicationService {
                 regeneratedContent,
                 originalMessage.getArtifactIds(),
                 timeProvider.now());
-        return messageRepository.save(regeneratedMessage);
+        Message saved = messageRepository.save(regeneratedMessage);
+        publishMessageCreated(saved);
+        return saved;
+    }
+
+    private void publishMessageCreated(Message message) {
+        realtimeEventPublisher.publish(
+                message.getConversationId(),
+                RealtimeEventType.MESSAGE_CREATED,
+                "MESSAGE",
+                message.getId().value(),
+                java.util.Map.of(
+                        "senderType", message.getSenderType().name(),
+                        "messageType", message.getMessageType().name()));
     }
 
     private String normalizeTargetAgentId(String targetAgentId) {

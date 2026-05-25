@@ -98,6 +98,104 @@ function getStepAgentName(step: TaskStep, agentNameMap: Map<string | null, strin
   return agentNameMap.get(assignedAgentId) || step.assignedAgentName || assignedAgentId || "Agent";
 }
 
+interface ParsedAdapterCandidateScore {
+  adapterType: string;
+  totalScore: number;
+  healthScore: number;
+  successRateScore: number;
+  fallbackPenaltyScore: number;
+  preferredBonusScore: number;
+  status: string;
+}
+
+function parseAdapterCandidateScores(routingReason?: string | null): ParsedAdapterCandidateScore[] {
+  if (!routingReason) {
+    return [];
+  }
+
+  const match = routingReason.match(/candidates=\[(.*?)]/);
+  if (!match?.[1]) {
+    return [];
+  }
+
+  return match[1]
+    .split(";")
+    .map((rawCandidate) => rawCandidate.trim())
+    .map((rawCandidate) => {
+      const candidateMatch = rawCandidate.match(/^([A-Z_]+)\((.*)\)$/);
+      if (!candidateMatch) {
+        return null;
+      }
+      const values = Object.fromEntries(
+        candidateMatch[2].split(",").map((pair) => {
+          const [key, value] = pair.split("=");
+          return [key?.trim(), value?.trim()];
+        })
+      );
+
+      return {
+        adapterType: candidateMatch[1],
+        totalScore: Number(values.total ?? 0),
+        healthScore: Number(values.health ?? 0),
+        successRateScore: Number(values.successRate ?? 0),
+        fallbackPenaltyScore: Number(values.fallbackPenalty ?? 0),
+        preferredBonusScore: Number(values.preferredBonus ?? 0),
+        status: values.status ?? "-"
+      };
+    })
+    .filter((candidate): candidate is ParsedAdapterCandidateScore => Boolean(candidate));
+}
+
+function AdapterRoutingExplainPanel({ taskRun }: { taskRun: TaskRun }) {
+  const rows = taskRun.steps.flatMap((step) =>
+    parseAdapterCandidateScores(step.routingReason).map((candidate) => ({
+      stepOrder: step.stepOrder,
+      selectedAdapter: step.preferredAdapterType || step.adapterType || "-",
+      ...candidate
+    }))
+  );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="adapter-routing-panel" aria-label="Adapter routing candidate scores">
+      <div className="adapter-routing-panel__header">
+        <strong>Adapter Routing Scores</strong>
+        <span>{rows.length} candidates</span>
+      </div>
+      <div className="adapter-routing-table">
+        <div className="adapter-routing-table__row adapter-routing-table__row--head">
+          <span>Step</span>
+          <span>Adapter</span>
+          <span>Status</span>
+          <span>Total</span>
+          <span>Health</span>
+          <span>Success</span>
+          <span>Fallback penalty</span>
+          <span>Preferred bonus</span>
+        </div>
+        {rows.map((row) => (
+          <div
+            className={`adapter-routing-table__row ${row.adapterType === row.selectedAdapter ? "adapter-routing-table__row--selected" : ""}`}
+            key={`${row.stepOrder}-${row.adapterType}`}
+          >
+            <span>#{row.stepOrder}</span>
+            <strong>{row.adapterType}</strong>
+            <span>{displayStatus(row.status)}</span>
+            <span>{row.totalScore.toFixed(1)}</span>
+            <span>{row.healthScore.toFixed(1)}</span>
+            <span>{row.successRateScore.toFixed(1)}</span>
+            <span>{row.fallbackPenaltyScore.toFixed(1)}</span>
+            <span>{row.preferredBonusScore.toFixed(1)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function extractSummaryField(summary: string, label: string): string | null {
   const start = summary.indexOf(label);
   if (start < 0) {
@@ -376,6 +474,7 @@ export function TaskRunPanel({
                 producedArtifacts={producedArtifacts}
                 agentNameMap={agentNameMap}
               />
+              <AdapterRoutingExplainPanel taskRun={taskRun} />
               {revisionOrigin ? (
                 <div className="revision-origin task-run-card__revision">
                   <strong>产物修改任务</strong>

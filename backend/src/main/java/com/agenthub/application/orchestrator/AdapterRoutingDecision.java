@@ -37,7 +37,24 @@ public record AdapterRoutingDecision(
                         + selected.fallbackPenaltyScore()
                         + ", preferredBonus="
                         + selected.preferredBonusScore();
-        return reason + ", " + scoreSummary + ", fallbackPolicy=" + fallbackPolicy + ".";
+        String candidateSummary = candidateScores.stream()
+                .map(score -> score.adapterType()
+                        + "(total="
+                        + score.totalScore()
+                        + ",health="
+                        + score.healthScore()
+                        + ",successRate="
+                        + score.successRateScore()
+                        + ",fallbackPenalty="
+                        + score.fallbackPenaltyScore()
+                        + ",preferredBonus="
+                        + score.preferredBonusScore()
+                        + ",status="
+                        + score.status()
+                        + ")")
+                .reduce((left, right) -> left + "; " + right)
+                .orElse("none");
+        return reason + ", " + scoreSummary + ", candidates=[" + candidateSummary + "], fallbackPolicy=" + fallbackPolicy + ".";
     }
 
     public record AdapterCandidateScore(
