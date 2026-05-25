@@ -72,10 +72,47 @@ function parseAdapterArtifacts(content?: string | null): Array<{
 
   try {
     const payload = JSON.parse(stripJsonFence(content));
-    return Array.isArray(payload?.artifacts) ? payload.artifacts : [];
+    const artifacts: Record<string, unknown>[] = Array.isArray(payload?.artifacts)
+      ? payload.artifacts.filter((artifact: unknown): artifact is Record<string, unknown> => looksLikeAdapterArtifact(artifact))
+      : payload?.artifact
+        ? [payload.artifact]
+        : looksLikeAdapterArtifact(payload)
+          ? [payload]
+          : [];
+    return artifacts
+      .map((artifact: Record<string, unknown>) => normalizeAdapterArtifact(artifact))
+      .filter((artifact) => Boolean(artifact.content));
   } catch {
     return [];
   }
+}
+
+function looksLikeAdapterArtifact(payload: unknown): payload is Record<string, unknown> {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const candidate = payload as Record<string, unknown>;
+  return ["content", "body", "text", "markdown", "code"].some((key) => typeof candidate[key] === "string");
+}
+
+function firstStringValue(source: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function normalizeAdapterArtifact(artifact: Record<string, unknown>) {
+  return {
+    title: firstStringValue(artifact, ["title", "fileName", "filename", "name", "path"]),
+    type: firstStringValue(artifact, ["type", "artifactType", "kind"]),
+    language: firstStringValue(artifact, ["language", "lang", "extension"]),
+    summary: firstStringValue(artifact, ["summary", "description", "reason"]),
+    content: firstStringValue(artifact, ["content", "body", "text", "markdown", "code"])
+  };
 }
 
 export function AgentBuilderPage() {

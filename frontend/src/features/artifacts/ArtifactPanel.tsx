@@ -507,6 +507,7 @@ export function ArtifactPanel({
                   <p className="artifact-preview__line">
                     来源：{displayArtifactSourceKind(selectedArtifact.sourceKind)}
                     {selectedArtifact.sourceAdapterType ? ` / Adapter: ${selectedArtifact.sourceAdapterType}` : ""}
+                    {selectedArtifact.sourceTaskStepId ? ` / Step: ${selectedArtifact.sourceTaskStepId}` : ""}
                     {selectedArtifact.generationMode ? ` / Mode: ${selectedArtifact.generationMode}` : ""}
                   </p>
                 ) : null}

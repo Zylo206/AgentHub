@@ -168,7 +168,8 @@ public class ApprovalApplicationService {
 
     private void ensurePending(ApprovalRequest approvalRequest, Instant now) {
         if (approvalRequest.isExpired(now)) {
-            approvalRepository.save(approvalRequest.withStatus(ApprovalStatus.EXPIRED, now));
+            ApprovalRequest expired = approvalRepository.save(approvalRequest.withStatus(ApprovalStatus.EXPIRED, now));
+            publishApprovalUpdated(expired);
             throw new IllegalStateException("Approval request is expired: " + approvalRequest.getApprovalId());
         }
         if (approvalRequest.getStatus() != ApprovalStatus.PENDING) {

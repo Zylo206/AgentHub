@@ -24,19 +24,29 @@ public class AdapterArtifactExtractor {
         String normalizedContent = stripJsonCodeFence(content.trim());
         try {
             JsonNode root = objectMapper.readTree(normalizedContent);
+            List<AdapterArtifactSpec> specs = new ArrayList<>();
             JsonNode artifactsNode = root.path("artifacts");
             if (artifactsNode.isArray()) {
-                List<AdapterArtifactSpec> specs = new ArrayList<>();
                 for (JsonNode item : artifactsNode) {
                     AdapterArtifactSpec spec = parseSpec(item, context);
                     if (spec != null) {
                         specs.add(spec);
                     }
                 }
-                if (!specs.isEmpty()) {
-                    String assistantMessage = root.path("assistantMessage").asText(null);
-                    return new ExtractionResult(assistantMessage, specs, null);
+            } else if (root.has("artifact")) {
+                AdapterArtifactSpec spec = parseSpec(root.path("artifact"), context);
+                if (spec != null) {
+                    specs.add(spec);
                 }
+            } else if (looksLikeArtifactSpec(root)) {
+                AdapterArtifactSpec spec = parseSpec(root, context);
+                if (spec != null) {
+                    specs.add(spec);
+                }
+            }
+            if (!specs.isEmpty()) {
+                String assistantMessage = firstText(root, "assistantMessage", "message", "summary");
+                return new ExtractionResult(assistantMessage, specs, null);
             }
         } catch (Exception ignored) {
             // Plain text adapter output is still useful as a real artifact.
@@ -49,21 +59,46 @@ public class AdapterArtifactExtractor {
     }
 
     private AdapterArtifactSpec parseSpec(JsonNode item, ExtractionContext context) {
-        String rawContent = item.path("content").asText("");
-        if (rawContent.isBlank()) {
+        String rawContent = firstText(item, "content", "body", "text", "markdown", "code");
+        if (rawContent == null || rawContent.isBlank()) {
             return null;
         }
 
-        ArtifactType artifactType = parseType(item.path("type").asText(null), context);
-        String title = item.path("title").asText(null);
-        String language = item.path("language").asText(null);
-        String summary = item.path("summary").asText(null);
+        ArtifactType artifactType = parseType(firstText(item, "type", "artifactType", "kind"), context);
+        String title = firstText(item, "title", "fileName", "filename", "name", "path");
+        String language = firstText(item, "language", "lang", "extension");
+        String summary = firstText(item, "summary", "description", "reason");
         return new AdapterArtifactSpec(
                 title == null || title.isBlank() ? fallbackTitle(context, artifactType) : title.trim(),
                 artifactType,
                 language == null || language.isBlank() ? fallbackLanguage(artifactType) : language.trim(),
                 rawContent,
                 summary);
+    }
+
+    private boolean looksLikeArtifactSpec(JsonNode node) {
+        return node.has("content")
+                || node.has("body")
+                || node.has("text")
+                || node.has("markdown")
+                || node.has("code");
+    }
+
+    private String firstText(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            JsonNode value = node.path(fieldName);
+            if (!value.isMissingNode() && !value.isNull()) {
+                if (value.isTextual()) {
+                    String text = value.asText();
+                    if (!text.isBlank()) {
+                        return text;
+                    }
+                } else if (value.isNumber() || value.isBoolean()) {
+                    return value.asText();
+                }
+            }
+        }
+        return null;
     }
 
     private AdapterArtifactSpec fallbackSpec(String content, ExtractionContext context) {
@@ -134,8 +169,8 @@ public class AdapterArtifactExtractor {
             return normalizedSkill.contains("review")
                     || normalizedTask.contains("review")
                     || normalizedTask.contains("check")
-                    || normalizedTask.contains("检查")
-                    || normalizedTask.contains("评审");
+                    || normalizedTask.contains("\u68c0\u67e5")
+                    || normalizedTask.contains("\u8bc4\u5ba1");
         }
     }
 

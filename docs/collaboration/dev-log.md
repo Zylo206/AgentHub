@@ -2018,7 +2018,7 @@
 
 ### 目标
 
-- 借鉴 KnowFlow 的轻量上下文检索、PaiCLI 的执行快照 / 审计思路、AgentWeave 的 TaskGraph / ExecutionBatch 模型
+- 借鉴已有项目中的轻量上下文检索、执行快照 / 审计、TaskGraph / ExecutionBatch 模型
 - 将 pinned context / MemoryItem 从展示推进到可检索、可注入、可解释
 - 将 TaskRun 的并行调度信息结构化为 TaskGraph
 - 为 revision / apply-diff / deploy / restore 增加 Artifact safety snapshot 和 Action Audit
@@ -2476,7 +2476,7 @@
 ### 目标
 
 - 让现有 `OPENAI_COMPATIBLE` Adapter 可以通过环境变量启用并接入 DeepSeek OpenAI-style API
-- 参考 KnowFlow 的 DeepSeek 接入方式：配置 base URL、Bearer token、model，并调用 `/chat/completions`
+- 参考 OpenAI-compatible API 的通用接入方式：配置 base URL、Bearer token、model，并调用 `/chat/completions`
 - 保持真实 API key 不进入仓库，未配置或调用失败时继续 fallback 到 MOCK
 
 ### 主要变更
@@ -3171,7 +3171,7 @@
 
 ### 目标
 
-- 借鉴 KnowFlow / PaiCLI / AgentWeave 的生产化经验，继续补齐 AgentHub 的附件安全边界、Adapter 路由可解释性、JDBC 最小持久化切换和 Context Retrieval hybrid explain 字段。
+- 借鉴已有项目的生产化经验，继续补齐 AgentHub 的附件安全边界、Adapter 路由可解释性、JDBC 最小持久化切换和 Context Retrieval hybrid explain 字段。
 
 ### 主要变更
 
@@ -3212,12 +3212,12 @@
 - 启动 backend / frontend 后跑完整 smoke test，确认附件上传、下载、Context explain 和 Adapter routing 面板端到端正常。
 - 如继续推进生产化，下一步优先做 JDBC profile 的本地 MySQL 初始化脚本和 smoke test profile，而不是直接引入对象存储或向量库。
 
-## Phase 72：SSE 实时通道与 KnowFlow 式运行状态快照
+## Phase 72：SSE 实时通道与运行状态快照
 
 ### 目标
 
 - 在不引入 WebSocket / Redis / Kafka 的前提下，为 AgentHub Workspace 增加服务端推送能力。
-- 借鉴 KnowFlow 的 generation state 思路，为 TaskRun 提供可查询的运行状态快照，便于断线后恢复状态。
+- 借鉴通用 generation state 思路，为 TaskRun 提供可查询的运行状态快照，便于断线后恢复状态。
 
 ### 主要变更
 
@@ -3256,3 +3256,46 @@
 
 - 如果继续实时化，优先做 WebSocket control plane 的最小取消指令，而不是直接做完整双向聊天。
 - 若要接近生产部署，再把 `RealtimeEventStore` 和 `RealtimeRunStateService` 抽到 Redis / JDBC 实现。
+
+## Phase 73：SSE Smoke 验证与 Adapter 输出解析增强
+
+### 目标
+
+- 启动后端并验证 `scripts/sse-smoke-test.mjs`，确认 SSE event 与 realtime state 主链路可用。
+- 提升真实 / 半真实 Adapter 输出进入 Artifact 的兼容性，减少模型输出 JSON 结构轻微变化导致解析失败。
+
+### 主要变更
+
+- 已通过 `node scripts/sse-smoke-test.mjs` 验证 SSE 事件流，收到 `CONNECTED`、`MESSAGE_CREATED`、`TASK_RUN_CREATED`、`ARTIFACT_CREATED`、`TASK_RUN_UPDATED`，并成功查询 active realtime state 与 task run realtime state。
+- `AdapterArtifactExtractor` 支持更多 Adapter 输出形态：
+  - 根对象 `artifacts[]`
+  - 单个 `artifact`
+  - 根对象直接作为 artifact
+  - 字段别名：`fileName` / `filename` / `body` / `text` / `markdown` / `code` / `artifactType` / `kind`
+- `AgentBuilderPage` 的 Adapter 测试结果解析逻辑与后端对齐，测试面板可以识别同样的 JSON 输出约定。
+- `ArtifactPanel` 的 source metadata 增加 `sourceTaskStepId` 展示，便于追踪真实 Adapter Artifact 来自哪个 TaskStep。
+
+### 验证方式
+
+- `node scripts/sse-smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有引入真实 token streaming、WebSocket 双向控制或多节点事件总线。
+- Adapter 输出解析增强不保证外部模型一定返回高质量产物；无效 JSON 仍会降级为文本 Artifact 或走 Mock fallback。
+- JDBC 持久化和 Context Retrieval embedding / vector search 仍是后续增强项。
+
+### 遗留问题
+
+- CODE 类型真实 Adapter Artifact 的内容质量仍取决于模型输出契约，后续可继续减少 metadata wrapper 对代码内容的干扰。
+- 运行状态快照仍是单实例内存 TTL，不适合多节点生产部署。
+- Context Retrieval v4 当前是规则 / heuristic 语义分，不是真实 embedding 检索。
+
+### 下一步建议
+
+- 继续增强真实 Adapter 输出质量，优先让 `OPENAI_COMPATIBLE` 在 `REAL_FIRST` 模式下稳定输出主 Artifact。
+- 如果继续生产化实时能力，再做 WebSocket control plane 的取消 / 停止指令，而不是直接上完整双向聊天。

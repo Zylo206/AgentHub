@@ -170,7 +170,7 @@ The browser E2E requires backend and frontend to already be running. It does not
 
 ## OpenAI-compatible / DeepSeek Adapter
 
-AgentHub uses the same basic shape as KnowFlow's DeepSeek client: configure a base URL, send `Authorization: Bearer ...`, and call `/chat/completions`.
+AgentHub uses the standard OpenAI-compatible chat completions shape: configure a base URL, send `Authorization: Bearer ...`, and call `/chat/completions`.
 
 PowerShell example:
 
