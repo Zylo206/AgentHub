@@ -16,6 +16,8 @@ export interface Artifact {
   sourceAdapterType?: string | null;
   sourceTaskStepId?: string | null;
   generationMode?: string | null;
+  qualityStatus?: string | null;
+  qualityReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }

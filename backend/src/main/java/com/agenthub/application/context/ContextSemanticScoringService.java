@@ -4,6 +4,10 @@ public interface ContextSemanticScoringService {
 
     SemanticScore score(String query, String content);
 
+    default String backendName() {
+        return "HEURISTIC";
+    }
+
     record SemanticScore(double score, String backend, String explanation) {
 
         public SemanticScore {

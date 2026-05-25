@@ -225,13 +225,15 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
     }
 
     private JsonNode buildFixtureArtifactContract(AgentRequest request) {
-        String task = ((request.taskDescription() == null ? "" : request.taskDescription()) + "\n"
-                + (request.userInput() == null ? "" : request.userInput()) + "\n"
-                + String.valueOf(request.metadata().getOrDefault("requiredSkill", ""))).toLowerCase();
+        String taskDescription = (request.taskDescription() == null ? "" : request.taskDescription()).toLowerCase();
+        String requiredSkill = String.valueOf(request.metadata().getOrDefault("requiredSkill", "")).toLowerCase();
+        String userInput = (request.userInput() == null ? "" : request.userInput()).toLowerCase();
+        String routingSignal = requiredSkill + "\n" + taskDescription;
+        String fullTask = routingSignal + "\n" + userInput;
         var root = objectMapper.createObjectNode();
         var artifacts = root.putArray("artifacts");
 
-        if (containsAny(task, "review", "quality", "risk", "妫€鏌?", "璇勫")) {
+        if (containsAny(routingSignal, "review", "quality", "risk", "\u68c0\u67e5", "\u8bc4\u5ba1")) {
             boolean rejected = "REJECT".equals(fixtureReviewDecision) || "REJECTION".equals(fixtureReviewDecision);
             root.put("assistantMessage", rejected
                     ? "REJECTION: Fixture reviewer found acceptance blockers and requests revision."
@@ -265,7 +267,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
             return root;
         }
 
-        if (containsAny(task, "backend", "api", "contract", "data model", "鎺ュ彛")) {
+        if (containsAny(routingSignal, "backend", "api", "contract", "data model", "\u63a5\u53e3")) {
             root.put("assistantMessage", "Fixture backend worker produced a login API contract.");
             artifacts.addObject()
                     .put("title", "fixture-login-api-contract.json")
@@ -290,6 +292,21 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                                 "message": "Verification code is invalid or expired."
                               }
                             }
+                            """);
+            return root;
+        }
+
+        if (!containsAny(fullTask, "frontend", "react", "ui", "page", "\u9875\u9762", "\u524d\u7aef", "login", "\u767b\u5f55")) {
+            root.put("assistantMessage", "Fixture adapter produced a markdown task summary.");
+            artifacts.addObject()
+                    .put("title", "fixture-task-summary.md")
+                    .put("type", "MARKDOWN")
+                    .put("language", "md")
+                    .put("summary", "Fixture markdown artifact generated from the adapter contract.")
+                    .put("content", """
+                            # Fixture Task Summary
+
+                            The fixture adapter returned a generic markdown artifact because no specialist route was detected.
                             """);
             return root;
         }
@@ -357,7 +374,13 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         }
         builder.append("""
                 Output contract:
-                Return only JSON. Do not wrap it in markdown fences.
+                Return only valid JSON. Do not wrap it in markdown fences. Do not include extra commentary outside JSON.
+                AgentHub will parse this response directly into Artifacts.
+                The response is accepted as REAL_ADAPTER output only when every artifact has title, type, language, content, and summary.
+                For CODE artifacts, content must be complete raw source code only: no markdown, no prose, no metadata wrapper, no ``` fences.
+                For API_CONTRACT or DATA_MODEL artifacts, content must be valid JSON text or structured schema text.
+                For REVIEW_REPORT or MARKDOWN artifacts, content must contain useful markdown body text, not a one-line placeholder.
+                Empty content, error messages, or invalid JSON will be rejected and AgentHub will use static fallback artifacts.
                 Schema:
                 {
                   "assistantMessage": "short summary for AgentHub chat",
@@ -371,7 +394,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                     }
                   ]
                 }
-                Generate artifacts suitable for the current task step. If the task is review-oriented, produce a REVIEW_REPORT.
+                Generate at least one artifact suitable for the current task step. If the task is review-oriented, produce a REVIEW_REPORT. If the task asks for UI or React code, produce a CODE artifact with language "tsx".
                 """);
         return builder.toString();
     }

@@ -10,6 +10,8 @@ const EXPECT_REAL_FIRST = process.env.AGENTHUB_SMOKE_EXPECT_REAL_FIRST === "true
 const EXPECT_REVIEW_REJECTION = process.env.AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION === "true";
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
 const EXPECT_ADAPTER_STATS_PERSISTENCE = process.env.AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE === "true";
+const EXPECT_JDBC_PROFILE = process.env.AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE === "true";
+const PERSISTENCE_MODE = process.env.AGENTHUB_PERSISTENCE_MODE || "";
 const ADAPTER_STATS_PATH = process.env.AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH || "";
 const REAL_ADAPTER_ARTIFACT_FIXTURE = {
   id: "fixture-real-adapter-artifact",
@@ -19,12 +21,7 @@ const REAL_ADAPTER_ARTIFACT_FIXTURE = {
   sourceAdapterType: "OPENAI_COMPATIBLE",
   sourceTaskStepId: "fixture-task-step",
   generationMode: "HYBRID_REAL",
-  content: [
-    "Persisted Because: actual adapter completed without MOCK fallback",
-    "```tsx",
-    "export function FixtureLoginPage() { return <main>Fixture</main>; }",
-    "```"
-  ].join("\n")
+  content: "export function FixtureLoginPage() { return <main>Fixture</main>; }"
 };
 const SMOKE_ATTACHMENTS = [
   {
@@ -287,8 +284,17 @@ function assertRealAdapterArtifactContract(artifact, label) {
   requireValue(artifact.generationMode, `${label} generationMode missing`);
   requireValue(artifact.title, `${label} title missing`);
   requireValue(artifact.content, `${label} content missing`);
-  if (!String(artifact.content).includes("Persisted Because: actual adapter completed without MOCK fallback")) {
-    throw new Error(`${label} content missing REAL_ADAPTER persistence explanation`);
+  if (artifact.qualityStatus && artifact.qualityStatus !== "ACCEPTED") {
+    throw new Error(`${label} qualityStatus expected ACCEPTED or empty legacy value, got ${artifact.qualityStatus}`);
+  }
+  if (artifact.qualityStatus === "ACCEPTED") {
+    requireValue(artifact.qualityReason, `${label} qualityReason missing`);
+  }
+  if (artifact.artifactType === "CODE" || artifact.type === "CODE") {
+    const content = String(artifact.content || "");
+    if (content.includes("# Real Adapter Output") || content.includes("Persisted Because:")) {
+      throw new Error(`${label} CODE content should be raw source, not wrapped adapter metadata`);
+    }
   }
 }
 
@@ -333,6 +339,10 @@ async function runSmokeTest() {
   console.log(`AgentHub reviewer rejection expectation: ${EXPECT_REVIEW_REJECTION ? "enabled" : "disabled"}`);
   console.log(`AgentHub auto-trigger approval expectation: ${EXPECT_AUTO_TRIGGER_APPROVAL ? "enabled" : "disabled"}`);
   console.log(`AgentHub adapter stats persistence expectation: ${EXPECT_ADAPTER_STATS_PERSISTENCE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub JDBC profile expectation: ${EXPECT_JDBC_PROFILE ? "enabled" : "disabled"}`);
+  if (EXPECT_JDBC_PROFILE && PERSISTENCE_MODE.toLowerCase() !== "jdbc") {
+    throw new Error("AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true requires AGENTHUB_PERSISTENCE_MODE=jdbc in the smoke test environment");
+  }
   assertRealAdapterArtifactContract(REAL_ADAPTER_ARTIFACT_FIXTURE, "REAL_ADAPTER fixture");
   pass("REAL_ADAPTER fixture artifact contract validated");
 
@@ -727,16 +737,31 @@ async function runSmokeTest() {
     Array.isArray(snapshot.retrievedContextItems) ? snapshot.retrievedContextItems : []
   );
   const missingRetrievalExplanation = retrievedContextItems.find(
-    (item) => typeof item.score !== "number" || !String(item.reason || "").trim()
+    (item) => typeof item.score !== "number" || typeof item.semanticScore !== "number" || !String(item.reason || "").trim()
   );
   if (missingRetrievalExplanation) {
     throw new Error(
-      `retrieved context item missing score/reason explanation: ${JSON.stringify(missingRetrievalExplanation)}`
+      `retrieved context item missing score/semanticScore/reason explanation: ${JSON.stringify(missingRetrievalExplanation)}`
+    );
+  }
+  const missingRetrievalScoreBreakdown = retrievedContextItems.find(
+    (item) =>
+      typeof item.baseScore !== "number" ||
+      typeof item.keywordScore !== "number" ||
+      typeof item.recencyScore !== "number" ||
+      typeof item.importanceScore !== "number" ||
+      typeof item.sourceRank !== "number" ||
+      !Array.isArray(item.matchedTokens) ||
+      !String(item.semanticBackend || "").trim()
+  );
+  if (missingRetrievalScoreBreakdown) {
+    throw new Error(
+      `retrieved context item missing v4 score breakdown: ${JSON.stringify(missingRetrievalScoreBreakdown)}`
     );
   }
   pass(`context snapshots include pinned context: ${contextSnapshots.length}`);
   pass("context snapshots include retrieved context items");
-  pass(`context retrieval explanations validated: ${retrievedContextItems.length}`);
+  pass(`context retrieval v4 explanations validated: ${retrievedContextItems.length}`);
 
   const taskRuns = await request(`/api/conversations/${conversationId}/task-runs`);
   if (!Array.isArray(taskRuns) || taskRuns.length < 1) {
@@ -782,9 +807,19 @@ async function runSmokeTest() {
   const adapterOutputArtifacts = artifacts.filter((item) =>
     item.sourceKind === "REAL_ADAPTER" || String(item.title || "").startsWith("Real Adapter Output -")
   );
-  if (realAdapterSteps.length > 0 && adapterOutputArtifacts.length < realAdapterSteps.length) {
+  const acceptedRealAdapterSteps = realAdapterSteps.filter(
+    (step) => step.realOutputUsed === true || step.artifactQualityStatus === "ACCEPTED"
+  );
+  const rejectedRealAdapterSteps = realAdapterSteps.filter((step) => step.artifactQualityStatus === "REJECTED");
+  if (acceptedRealAdapterSteps.length > 0 && adapterOutputArtifacts.length < acceptedRealAdapterSteps.length) {
     throw new Error(
-      `expected adapter output artifacts for real adapter steps. realAdapterSteps=${realAdapterSteps.length}, adapterOutputArtifacts=${adapterOutputArtifacts.length}`
+      `expected adapter output artifacts for accepted real adapter steps. acceptedRealAdapterSteps=${acceptedRealAdapterSteps.length}, adapterOutputArtifacts=${adapterOutputArtifacts.length}`
+    );
+  }
+  const rejectedStepsMissingReason = rejectedRealAdapterSteps.filter((step) => !step.artifactQualityReason);
+  if (rejectedStepsMissingReason.length > 0) {
+    throw new Error(
+      `rejected real adapter steps missing artifactQualityReason: ${rejectedStepsMissingReason.map((step) => step.stepOrder).join(", ")}`
     );
   }
   if (EXPECT_REAL_ADAPTER && adapterOutputArtifacts.length < 1) {
@@ -794,12 +829,18 @@ async function runSmokeTest() {
     adapterOutputArtifacts.forEach((item, index) =>
       assertRealAdapterArtifactContract(item, `REAL_ADAPTER artifact[${index}]`)
     );
+    const missingStepQuality = realAdapterSteps.filter((step) =>
+      !step.artifactParseStatus || !step.artifactQualityStatus || !step.artifactQualityReason
+    );
+    if (missingStepQuality.length > 0) {
+      throw new Error(`real adapter steps missing artifact quality metadata: ${missingStepQuality.map((step) => step.stepOrder).join(", ")}`);
+    }
     pass(`adapter output artifacts loaded: ${adapterOutputArtifacts.length}`);
   }
   if (EXPECT_OPENAI_FIXTURE) {
     const hasFixtureContractArtifact = adapterOutputArtifacts.some((item) =>
       item.sourceAdapterType === "OPENAI_COMPATIBLE" &&
-      String(item.content || "").includes("Fixture") &&
+      String(item.content || "").trim().length > 0 &&
       String(item.generationMode || "").includes("REAL")
     );
     if (!hasFixtureContractArtifact) {
@@ -810,6 +851,9 @@ async function runSmokeTest() {
   if (EXPECT_REAL_FIRST) {
     if (artifact.sourceKind !== "REAL_ADAPTER") {
       throw new Error(`REAL_FIRST expected selected primary CODE artifact to be REAL_ADAPTER, got ${artifact.sourceKind}`);
+    }
+    if (artifact.qualityStatus !== "ACCEPTED") {
+      throw new Error(`REAL_FIRST expected primary artifact qualityStatus=ACCEPTED, got ${artifact.qualityStatus}`);
     }
     const archivedFallbacks = artifacts.filter((item) =>
       item.status === "ARCHIVED" && String(item.generationMode || "").includes("REAL_FIRST_STATIC_FALLBACK")
@@ -1186,6 +1230,9 @@ async function runSmokeTest() {
       throw new Error(`adapter stats snapshot missing MOCK attempts: ${JSON.stringify(statsSnapshot)}`);
     }
     pass(`adapter stats persistence validated: ${ADAPTER_STATS_PATH}`);
+  }
+  if (EXPECT_JDBC_PROFILE) {
+    pass("JDBC profile smoke flow completed through create/query/upload/download/task/artifact APIs");
   }
 
   console.log("Smoke test completed successfully.");

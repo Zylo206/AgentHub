@@ -240,6 +240,7 @@ export function ContextPanel({
                             {typeof item.recencyScore === "number" ? <span>recency {item.recencyScore.toFixed(1)}</span> : null}
                             {typeof item.importanceScore === "number" ? <span>importance {item.importanceScore.toFixed(1)}</span> : null}
                             {typeof item.semanticScore === "number" ? <span>semantic {item.semanticScore.toFixed(1)}</span> : null}
+                            {item.semanticBackend ? <span>semantic backend {item.semanticBackend}</span> : null}
                             <span>source {item.sourceType}:{item.sourceId}</span>
                             {item.windowPolicy ? <span>window {item.windowPolicy}</span> : null}
                             <span>injects into {resolveInjectionStepLabel(snapshot, item, taskRuns)}</span>
@@ -253,6 +254,9 @@ export function ContextPanel({
                             </div>
                           ) : null}
                           <p className="retrieved-context-item__reason">{item.reason || "No retrieval reason provided."}</p>
+                          {item.semanticExplanation ? (
+                            <p className="retrieved-context-item__reason">Semantic: {item.semanticExplanation}</p>
+                          ) : null}
                           <p className="retrieved-context-item__content">{item.content}</p>
                         </article>
                       ))}

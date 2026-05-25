@@ -3299,3 +3299,176 @@
 
 - 继续增强真实 Adapter 输出质量，优先让 `OPENAI_COMPATIBLE` 在 `REAL_FIRST` 模式下稳定输出主 Artifact。
 - 如果继续生产化实时能力，再做 WebSocket control plane 的取消 / 停止指令，而不是直接上完整双向聊天。
+
+## Phase 74：JDBC 初始化脚本与 Context Semantic Backend 标识
+
+### 目标
+
+- 为 JDBC profile 提供显式初始化 SQL 和本地验证入口，降低只依赖 repository 自动建表的交付风险。
+- 让 Context Retrieval 的 semantic scoring 不只展示分数，也展示当前 semantic backend 类型和 fallback 说明。
+
+### 主要变更
+
+- 新增 `backend/src/main/resources/schema-jdbc.sql`，覆盖当前 JDBC repository 已实现的核心表：Conversation、Message、AttachmentRecord、Artifact、TaskSpec、TaskRun、TaskStep。
+- 新增 `scripts/jdbc-smoke-test.mjs`，复用主 API smoke test，并强制开启 JDBC profile 期望标记。
+- `application.yml` 增加 `agenthub.context.semantic.backend` 配置，默认 `heuristic`。
+- `RetrievedContextItem` 增加 `semanticBackend` / `semanticExplanation`。
+- `ContextRetrievalService` 保留现有规则检索，同时把 `ContextSemanticScoringService` 的 backend / explanation 写入 retrieved context。
+- `ContextPanel` 展示 semantic backend 和 semantic explanation。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/jdbc-smoke-test.mjs`
+- JDBC profile 手动验证：先运行 `schema-jdbc.sql`，再以 `AGENTHUB_PERSISTENCE_MODE=jdbc` 启动 backend，执行 `node scripts/jdbc-smoke-test.mjs`。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 persistence 仍是 memory；JDBC 需要用户显式配置数据库连接。
+- `AGENTHUB_CONTEXT_SEMANTIC_BACKEND=embedding` 当前只会标识为 `EMBEDDING_DISABLED` 并回退 heuristic，不会调用外部 embedding 服务。
+- 本轮没有引入 ES / pgvector / Redis / Kafka / 对象存储。
+
+### 遗留问题
+
+- JDBC profile 仍需接真实数据库做完整端到端回归。
+- Context Retrieval 仍是规则检索 + heuristic semantic score，不是真实向量检索。
+- ContextSnapshot 本身仍未迁移到 JDBC repository。
+
+### 下一步建议
+
+- 给 JDBC profile 增加 CI 级临时数据库验证，避免 schema 与 repository 字段漂移。
+- 如果继续增强 Context Retrieval，下一步做可选 embedding provider adapter，但保持 heuristic fallback。
+
+## Phase 75：Smoke / SSE / REAL_FIRST 验证与文档边界同步
+
+### 目标
+
+- 强化 AgentHub API smoke 和 SSE smoke 的生产化验证边界。
+- 让 REAL_FIRST、JDBC profile、附件下载、SSE 状态恢复具备显式 opt-in 验收方式。
+- 同步 README、scripts 说明、technical design 和 demo checklist，明确当前未做 WebSocket / token streaming / multi-node / real deploy。
+
+### 主要变更
+
+- `scripts/smoke-test.mjs` 增加 `AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE`，用于在 backend 以 JDBC profile 启动时复用完整 API 主链路做验证。
+- `scripts/smoke-test.mjs` 对 Context Retrieval v4 增加 `semanticScore`、score breakdown、`semanticBackend`、`matchedTokens` 断言。
+- `scripts/sse-smoke-test.mjs` 解析 SSE `id`，并通过 `Last-Event-ID` 重连验证 retained event replay。
+- `scripts/sse-smoke-test.mjs` 验证 realtime state 中的 `lastEventId`，用于断线恢复对齐。
+- `scripts/README.md` 补充 REAL_FIRST、JDBC profile、SSE replay / recovery 的运行说明。
+- README、technical design、demo checklist 增加真实动态验证边界说明。
+
+### 验证方式
+
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- 如 backend 已启动，可运行 `node scripts/sse-smoke-test.mjs` 验证事件、replay 和 realtime state。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 smoke 仍不依赖真实 LLM、真实外部 Agent、真实数据库或真实部署。
+- REAL_FIRST 验证需要显式配置真实 / 半真实 Adapter，并开启 `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true`。
+- JDBC profile 验证需要 backend 已用 `AGENTHUB_PERSISTENCE_MODE=jdbc` 和 JDBC 连接环境变量启动。
+- SSE 当前仍是单节点 server push 和 REST reload 提示，不是 WebSocket control plane、真实 token streaming 或多节点事件总线。
+
+### 遗留问题
+
+- 尚未提供 CI 级临时数据库自动启动。
+- 尚未做 WebSocket 双向 cancel / stop run。
+- 尚未做真实 token streaming。
+- 尚未做多节点 realtime broker。
+
+### 下一步建议
+
+- 在 JDBC profile 稳定后增加临时数据库自动化验证。
+- 如果继续实时化，优先做 WebSocket control plane 的 cancel / stop run，而不是直接上 token streaming。
+
+## Phase 76：真实 Adapter 输出质量闭环与 REAL_FIRST 主产物收敛
+
+### 目标
+
+- 将 `REAL_FIRST / OPENAI_COMPATIBLE / REAL_ADAPTER Artifact` 从可选展示推进为可解释、可验证的真实动态产物链路。
+- 明确真实 Adapter 输出何时可成为主 Artifact，何时应回退静态模板。
+
+### 主要变更
+
+- 新增 `AdapterArtifactQualityEvaluator`，对 Adapter Artifact 输出做规则化质量检查。
+- `TaskStep` 记录 `realOutputUsed`、`artifactParseStatus`、`artifactQualityStatus`、`artifactQualityReason`。
+- `Artifact` 记录 `qualityStatus` / `qualityReason`，Artifact Studio 和 TaskRunPanel 展示质量状态。
+- `REAL_FIRST` 只在非 MOCK Adapter 输出合法 JSON Artifact 且质量通过时归档静态模板；不合格输出不会覆盖主产物。
+- OpenAI-compatible prompt contract v2 明确 JSON schema、CODE 原始源码要求和 fallback 边界。
+- JDBC schema / repository 同步新增 Artifact 与 TaskStep 质量字段。
+- smoke test 增加 REAL_ADAPTER quality metadata 与 REAL_FIRST 主产物断言。
+- Adapter Test Panel 增加前端侧 artifact parse / quality 摘要，便于手动判断真实 Adapter 响应是否满足 REAL_FIRST contract。
+- smoke test 放宽“真实 Adapter step 必须产物化”的断言，只要求已采纳的真实输出生成 REAL_ADAPTER Artifact；被质量拒绝的输出必须记录拒绝原因。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- 默认 memory 模式下运行 `node scripts/smoke-test.mjs`
+- 默认 memory 模式下运行 `node scripts/sse-smoke-test.mjs`
+- 使用临时端口和 OpenAI fixture 运行 `AGENTHUB_SMOKE_EXPECT_OPENAI_FIXTURE=true` + `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true` 的 smoke test。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有接真实外部 LLM，也不要求真实模型调用成功。
+- 默认 smoke 仍不依赖真实 API key。
+- 质量评估是规则化检查，不是模型质量评测或真实代码执行。
+- 不推进 MySQL、WebSocket、token streaming、多节点事件总线或真实部署平台。
+
+### 遗留问题
+
+- 真实 Adapter 输出质量仍取决于外部模型对 JSON contract 的遵循程度。
+- 质量评估暂未执行真实编译、测试、lint 或安全扫描。
+- 失败路径已可解释，但还没有独立 Adapter output quality dashboard。
+
+### 下一步建议
+
+- 为真实 Adapter Artifact 增加可选的代码 lint / JSON schema 校验。
+- 后续可增加独立 Adapter output quality dashboard，并接入更严格的 JSON Schema / lint 验证。
+
+## Phase 77：真实 OpenAI-compatible Adapter 端到端验证入口
+
+### 目标
+
+- 增加一个 opt-in 真实外部 LLM 验证脚本，把 `OPENAI_COMPATIBLE -> REAL_FIRST -> REAL_ADAPTER Artifact` 从 fixture 验证推进到真实 provider 可验收路径。
+- 保持默认 smoke 不依赖 API key，不把 fixture 验证误写成真实 provider 验证。
+
+### 主要变更
+
+- 新增 `scripts/real-adapter-smoke-test.mjs`。
+- 脚本要求显式配置 `AGENTHUB_OPENAI_ENABLED`、`AGENTHUB_OPENAI_BASE_URL`、`AGENTHUB_OPENAI_API_KEY`、`AGENTHUB_OPENAI_MODEL` 和 `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`。
+- 脚本拒绝 `AGENTHUB_OPENAI_FIXTURE_ENABLED=true`，避免把 fixture 当真实 LLM。
+- 脚本验证 `/api/adapters`、`POST /api/adapters/OPENAI_COMPATIBLE/execute`、demo-task、`REAL_ADAPTER` 主 Artifact、`qualityStatus=ACCEPTED` 和静态 fallback archived。
+- `scripts/README.md` 和 `README.md` 补充真实 provider 验证说明。
+
+### 验证方式
+
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- 默认环境不运行真实 provider smoke；只有启动 backend 时已配置真实 OpenAI-compatible provider 后再运行 `node scripts/real-adapter-smoke-test.mjs`。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 smoke 仍不依赖真实外部 LLM。
+- 本轮没有提交任何 API key，也不要求所有开发者必须有真实 provider。
+- 真实 provider smoke 只验证 OpenAI-compatible 链路，不代表 Codex / Claude Code / OpenCode 深度平台接入完成。
+- 不推进 MySQL、WebSocket、token streaming、多节点事件总线或真实部署平台。
+
+### 遗留问题
+
+- 真实 provider 输出质量仍依赖模型是否遵守 Artifact JSON contract。
+- 脚本只做端到端质量门禁，不做代码编译、lint、安全扫描或真实 UI E2E。
+- 真实 provider 验证需要用户本地手动启动 backend 并配置环境变量。
+
+### 下一步建议
+
+- 在真实 provider smoke 稳定后，再做 MySQL 端到端实库验证。
+- 若真实 Adapter 输出仍不稳定，优先补 JSON Schema 校验和更强 prompt contract，而不是先做 token streaming。

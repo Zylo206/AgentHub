@@ -115,6 +115,64 @@ function normalizeAdapterArtifact(artifact: Record<string, unknown>) {
   };
 }
 
+function evaluateAdapterTestQuality(content?: string | null) {
+  if (!content?.trim()) {
+    return {
+      parseStatus: "EMPTY",
+      qualityStatus: "REJECTED",
+      qualityReason: "Adapter response is empty.",
+      acceptedCount: 0,
+      rejectedCount: 0
+    };
+  }
+
+  try {
+    JSON.parse(stripJsonFence(content));
+  } catch {
+    return {
+      parseStatus: "FALLBACK_TEXT",
+      qualityStatus: "NOT_EVALUATED",
+      qualityReason: "Response is not artifact JSON. Backend may downgrade plain text, but REAL_FIRST will not promote it.",
+      acceptedCount: 0,
+      rejectedCount: 0
+    };
+  }
+
+  const artifacts = parseAdapterArtifacts(content);
+  if (artifacts.length === 0) {
+    return {
+      parseStatus: "INVALID_ARTIFACT_SCHEMA",
+      qualityStatus: "REJECTED",
+      qualityReason: "JSON parsed, but no artifacts[] with usable content were found.",
+      acceptedCount: 0,
+      rejectedCount: 0
+    };
+  }
+
+  const acceptedCount = artifacts.filter((artifact) => {
+    const contentLength = (artifact.content || "").trim().length;
+    const hasContractFields = Boolean(
+      artifact.title && artifact.type && artifact.language && artifact.summary && contentLength > 20
+    );
+    const isCodeFenceWrapped =
+      String(artifact.type || "").toUpperCase() === "CODE" &&
+      (artifact.content || "").trim().startsWith("```");
+    return hasContractFields && !isCodeFenceWrapped;
+  }).length;
+  const rejectedCount = artifacts.length - acceptedCount;
+
+  return {
+    parseStatus: "VALID_JSON_ARTIFACTS",
+    qualityStatus: acceptedCount > 0 ? "ACCEPTED" : "REJECTED",
+    qualityReason:
+      acceptedCount > 0
+        ? `Accepted ${acceptedCount} artifact(s); rejected ${rejectedCount}.`
+        : "Parsed artifacts failed contract checks: title/type/language/summary/content are required; CODE content must be raw source.",
+    acceptedCount,
+    rejectedCount
+  };
+}
+
 export function AgentBuilderPage() {
   const [adapterDescriptors, setAdapterDescriptors] = useState<AdapterDescriptor[]>([]);
   const [loadingAdapters, setLoadingAdapters] = useState(false);
@@ -173,6 +231,10 @@ export function AgentBuilderPage() {
     adapterOptions.find((descriptor) => descriptor.adapterType === adapterTestType) ?? null;
   const parsedAdapterArtifacts = useMemo(
     () => parseAdapterArtifacts(adapterTestResult?.content),
+    [adapterTestResult]
+  );
+  const adapterTestQualityReport = useMemo(
+    () => evaluateAdapterTestQuality(adapterTestResult?.content),
     [adapterTestResult]
   );
   const selectedCapabilityOptions = useMemo(() => {
@@ -511,6 +573,27 @@ export function AgentBuilderPage() {
                   <span>Fallback</span>
                   <strong>{adapterTestResult.fallbackUsed ? "已 fallback" : "未 fallback"}</strong>
                 </div>
+              </div>
+              <div className="adapter-test-result__grid">
+                <div>
+                  <span>Parse Status</span>
+                  <strong>{adapterTestQualityReport.parseStatus}</strong>
+                </div>
+                <div>
+                  <span>Quality Status</span>
+                  <strong>{adapterTestQualityReport.qualityStatus}</strong>
+                </div>
+                <div>
+                  <span>Accepted</span>
+                  <strong>{adapterTestQualityReport.acceptedCount}</strong>
+                </div>
+                <div>
+                  <span>Rejected</span>
+                  <strong>{adapterTestQualityReport.rejectedCount}</strong>
+                </div>
+              </div>
+              <div className="agent-builder-adapter-note">
+                Artifact contract check: {adapterTestQualityReport.qualityReason}
               </div>
               {adapterTestResult.errorMessage ? (
                 <div className="agent-builder-adapter-note agent-builder-adapter-note--warning">

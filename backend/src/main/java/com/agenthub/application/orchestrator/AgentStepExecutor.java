@@ -34,6 +34,7 @@ public class AgentStepExecutor {
     private final IdGenerator idGenerator;
     private final ArtifactRepository artifactRepository;
     private final AdapterArtifactExtractor adapterArtifactExtractor;
+    private final AdapterArtifactQualityEvaluator adapterArtifactQualityEvaluator;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final String artifactGenerationMode;
 
@@ -42,12 +43,14 @@ public class AgentStepExecutor {
             IdGenerator idGenerator,
             ArtifactRepository artifactRepository,
             AdapterArtifactExtractor adapterArtifactExtractor,
+            AdapterArtifactQualityEvaluator adapterArtifactQualityEvaluator,
             RealtimeEventPublisher realtimeEventPublisher,
             @Value("${agenthub.orchestrator.artifact-generation-mode:HYBRID_REAL}") String artifactGenerationMode) {
         this.agentExecutorService = agentExecutorService;
         this.idGenerator = idGenerator;
         this.artifactRepository = artifactRepository;
         this.adapterArtifactExtractor = adapterArtifactExtractor;
+        this.adapterArtifactQualityEvaluator = adapterArtifactQualityEvaluator;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.artifactGenerationMode = normalizeArtifactGenerationMode(artifactGenerationMode);
     }
@@ -77,8 +80,9 @@ public class AgentStepExecutor {
                                 "demoMode", true)));
 
         String adapterSummary = summarizeAdapterResponse(adapterResponse.content());
-        List<ArtifactId> producedArtifactIds = appendAdapterOutputArtifactIfReal(command, stepId, adapterResponse);
-        int realAdapterArtifactCount = producedArtifactIds.size() - command.producedArtifactIds().size();
+        AdapterArtifactAppendResult adapterArtifactResult = appendAdapterOutputArtifactIfReal(command, stepId, adapterResponse);
+        List<ArtifactId> producedArtifactIds = adapterArtifactResult.producedArtifactIds();
+        int realAdapterArtifactCount = adapterArtifactResult.adapterArtifactIds().size();
         String outputContent = command.baseOutputContent()
                 + "\n\nParallel scheduling: parallelGroupKey="
                 + command.parallelGroupKey()
@@ -93,7 +97,13 @@ public class AgentStepExecutor {
                         ? "Generated " + realAdapterArtifactCount + " artifact(s) from non-MOCK adapter output."
                         : "No real adapter artifact generated.")
                 + " generationMode="
-                + artifactGenerationMode;
+                + artifactGenerationMode
+                + ", parseStatus="
+                + nullSafe(adapterArtifactResult.parseStatus(), "NOT_ATTEMPTED")
+                + ", qualityStatus="
+                + nullSafe(adapterArtifactResult.qualityStatus(), "NOT_EVALUATED")
+                + ", qualityReason="
+                + nullSafe(adapterArtifactResult.qualityReason(), "No quality evaluation recorded.");
 
         return new TaskStep(
                 stepId,
@@ -112,6 +122,10 @@ public class AgentStepExecutor {
                 command.parallelGroupKey(),
                 command.dependsOnStepOrders(),
                 command.routingReason(),
+                realAdapterArtifactCount > 0,
+                adapterArtifactResult.parseStatus(),
+                adapterArtifactResult.qualityStatus(),
+                adapterArtifactResult.qualityReason(),
                 producedArtifactIds,
                 command.now(),
                 command.now());
@@ -130,13 +144,24 @@ public class AgentStepExecutor {
         return normalized.substring(0, 217) + "...";
     }
 
-    private List<ArtifactId> appendAdapterOutputArtifactIfReal(
+    private AdapterArtifactAppendResult appendAdapterOutputArtifactIfReal(
             StepExecutionCommand command,
             TaskStepId stepId,
             AgentResponse adapterResponse) {
         List<ArtifactId> producedArtifactIds = new ArrayList<>(command.producedArtifactIds());
         if (!shouldPersistAdapterOutput(adapterResponse) || "STATIC_TEMPLATE".equals(artifactGenerationMode)) {
-            return List.copyOf(producedArtifactIds);
+            String status = adapterResponse == null || adapterResponse.content() == null || adapterResponse.content().isBlank()
+                    ? "EMPTY"
+                    : "NOT_ATTEMPTED";
+            String reason = "STATIC_TEMPLATE".equals(artifactGenerationMode)
+                    ? "Artifact generation mode is STATIC_TEMPLATE."
+                    : "Adapter output was not persisted because adapter execution was MOCK, fallback, failed, or empty.";
+            return new AdapterArtifactAppendResult(
+                    List.copyOf(producedArtifactIds),
+                    List.of(),
+                    status,
+                    "NOT_EVALUATED",
+                    reason);
         }
 
         List<ArtifactId> adapterArtifactIds = new ArrayList<>();
@@ -147,7 +172,24 @@ public class AgentStepExecutor {
                         command.agentName(),
                         command.requiredSkill(),
                         command.taskDescription()));
-        for (AdapterArtifactExtractor.AdapterArtifactSpec spec : extractionResult.artifacts()) {
+        AdapterArtifactQualityEvaluator.QualityReport qualityReport =
+                adapterArtifactQualityEvaluator.evaluate(extractionResult);
+        boolean realFirstRequiresValidJson = "REAL_FIRST".equals(artifactGenerationMode)
+                && !"VALID_JSON_ARTIFACTS".equals(qualityReport.parseStatus());
+        if (realFirstRequiresValidJson || !qualityReport.hasAcceptedArtifacts()) {
+            return new AdapterArtifactAppendResult(
+                    List.copyOf(producedArtifactIds),
+                    List.of(),
+                    qualityReport.parseStatus(),
+                    qualityReport.qualityStatus(),
+                    qualityReport.qualityReason());
+        }
+
+        for (AdapterArtifactQualityEvaluator.ArtifactQuality artifactQuality : qualityReport.artifactQualities()) {
+            if (!"ACCEPTED".equals(artifactQuality.qualityStatus())) {
+                continue;
+            }
+            AdapterArtifactExtractor.AdapterArtifactSpec spec = artifactQuality.spec();
             Artifact adapterOutputArtifact = new Artifact(
                     new ArtifactId(idGenerator.nextId("artifact")),
                     new ConversationId(command.conversationId()),
@@ -164,20 +206,40 @@ public class AgentStepExecutor {
                     adapterResponse.actualAdapterType() == null ? null : adapterResponse.actualAdapterType().name(),
                     stepId.value(),
                     artifactGenerationMode,
+                    artifactQuality.qualityStatus(),
+                    artifactQuality.qualityReason(),
                     command.now(),
                     command.now());
             artifactRepository.save(adapterOutputArtifact);
             publishArtifactEvent(adapterOutputArtifact, RealtimeEventType.ARTIFACT_CREATED);
             adapterArtifactIds.add(adapterOutputArtifact.getId());
         }
+        if (adapterArtifactIds.isEmpty()) {
+            return new AdapterArtifactAppendResult(
+                    List.copyOf(producedArtifactIds),
+                    List.of(),
+                    qualityReport.parseStatus(),
+                    "REJECTED",
+                    "All extracted adapter artifacts failed quality checks.");
+        }
         if ("REAL_FIRST".equals(artifactGenerationMode) && !adapterArtifactIds.isEmpty()) {
             archiveStaticFallbackArtifacts(command.producedArtifactIds(), command.now());
             List<ArtifactId> realFirstArtifactIds = new ArrayList<>(adapterArtifactIds);
             realFirstArtifactIds.addAll(producedArtifactIds);
-            return List.copyOf(realFirstArtifactIds);
+            return new AdapterArtifactAppendResult(
+                    List.copyOf(realFirstArtifactIds),
+                    List.copyOf(adapterArtifactIds),
+                    qualityReport.parseStatus(),
+                    qualityReport.qualityStatus(),
+                    qualityReport.qualityReason());
         }
         producedArtifactIds.addAll(adapterArtifactIds);
-        return List.copyOf(producedArtifactIds);
+        return new AdapterArtifactAppendResult(
+                List.copyOf(producedArtifactIds),
+                List.copyOf(adapterArtifactIds),
+                qualityReport.parseStatus(),
+                qualityReport.qualityStatus(),
+                qualityReport.qualityReason());
     }
 
     private void archiveStaticFallbackArtifacts(List<ArtifactId> fallbackArtifactIds, Instant now) {
@@ -199,6 +261,8 @@ public class AgentStepExecutor {
                         artifact.getSourceAdapterType(),
                         artifact.getSourceTaskStepId(),
                         "REAL_FIRST_STATIC_FALLBACK",
+                        artifact.getQualityStatus(),
+                        artifact.getQualityReason(),
                         artifact.getCreatedAt(),
                         now);
                 artifactRepository.save(archivedArtifact);
@@ -247,35 +311,7 @@ public class AgentStepExecutor {
             AgentResponse adapterResponse,
             AdapterArtifactExtractor.AdapterArtifactSpec spec,
             AdapterArtifactExtractor.ExtractionResult extractionResult) {
-        return """
-                # Real Adapter Output
-
-                - Agent: %s
-                - TaskStep: %s
-                - Preferred Adapter: %s
-                - Actual Adapter: %s
-                - Status: %s
-                - Source Kind: REAL_ADAPTER
-                - Generation Mode: %s
-                - Persisted Because: actual adapter completed without MOCK fallback
-                - Artifact Summary: %s
-                - Extraction Fallback: %s
-
-                ## Response
-
-                %s
-                """.formatted(
-                command.agentName(),
-                stepId.value(),
-                adapterResponse.preferredAdapterType(),
-                adapterResponse.actualAdapterType(),
-                adapterResponse.status(),
-                artifactGenerationMode,
-                spec.summary() == null || spec.summary().isBlank() ? "N/A" : spec.summary(),
-                extractionResult.fallbackReason() == null || extractionResult.fallbackReason().isBlank()
-                        ? "none"
-                        : extractionResult.fallbackReason(),
-                spec.content());
+        return spec.content();
     }
 
     private String buildAdapterRevisionInstruction(
@@ -297,6 +333,23 @@ public class AgentStepExecutor {
             case "STATIC_TEMPLATE", "HYBRID_REAL", "REAL_FIRST" -> normalized;
             default -> "HYBRID_REAL";
         };
+    }
+
+    private String nullSafe(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private record AdapterArtifactAppendResult(
+            List<ArtifactId> producedArtifactIds,
+            List<ArtifactId> adapterArtifactIds,
+            String parseStatus,
+            String qualityStatus,
+            String qualityReason) {
+
+        private AdapterArtifactAppendResult {
+            producedArtifactIds = producedArtifactIds == null ? List.of() : List.copyOf(producedArtifactIds);
+            adapterArtifactIds = adapterArtifactIds == null ? List.of() : List.copyOf(adapterArtifactIds);
+        }
     }
 
     public record StepExecutionCommand(

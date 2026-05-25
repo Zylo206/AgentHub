@@ -50,9 +50,11 @@ async function request(path, init = {}) {
 
 function parseSseBlock(block) {
   const lines = block.split(/\r?\n/);
-  const event = { eventType: "message", data: "" };
+  const event = { eventId: "", eventType: "message", data: "" };
   for (const line of lines) {
-    if (line.startsWith("event:")) {
+    if (line.startsWith("id:")) {
+      event.eventId = line.slice("id:".length).trim();
+    } else if (line.startsWith("event:")) {
       event.eventType = line.slice("event:".length).trim();
     } else if (line.startsWith("data:")) {
       event.data += line.slice("data:".length).trim();
@@ -72,7 +74,7 @@ async function collectSseEvents(conversationId, expectedEventTypes, trigger) {
   }
 
   const seenEventTypes = new Set();
-  const eventLog = [];
+  const events = [];
   const decoder = new TextDecoder();
   const reader = response.body.getReader();
   let buffer = "";
@@ -92,7 +94,7 @@ async function collectSseEvents(conversationId, expectedEventTypes, trigger) {
           continue;
         }
         seenEventTypes.add(parsed.eventType);
-        eventLog.push(parsed.eventType);
+        events.push(parsed);
         if (expectedEventTypes.every((eventType) => seenEventTypes.has(eventType))) {
           controller.abort();
           return;
@@ -103,7 +105,7 @@ async function collectSseEvents(conversationId, expectedEventTypes, trigger) {
 
   await trigger();
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error(`Timed out waiting for SSE events. Seen: ${eventLog.join(", ")}`)), 10000);
+    setTimeout(() => reject(new Error(`Timed out waiting for SSE events. Seen: ${events.map((event) => event.eventType).join(", ")}`)), 10000);
   });
 
   try {
@@ -118,9 +120,73 @@ async function collectSseEvents(conversationId, expectedEventTypes, trigger) {
 
   const missing = expectedEventTypes.filter((eventType) => !seenEventTypes.has(eventType));
   if (missing.length > 0) {
-    throw new Error(`Missing SSE event types: ${missing.join(", ")}. Seen: ${eventLog.join(", ")}`);
+    throw new Error(`Missing SSE event types: ${missing.join(", ")}. Seen: ${events.map((event) => event.eventType).join(", ")}`);
   }
-  return eventLog;
+  return events;
+}
+
+async function collectReplayedSseEvents(conversationId, lastEventId, expectedEventTypes) {
+  const controller = new AbortController();
+  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events`, {
+    signal: controller.signal,
+    headers: {
+      Accept: "text/event-stream",
+      "Last-Event-ID": lastEventId
+    }
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`SSE replay stream failed: HTTP ${response.status}`);
+  }
+
+  const seenEventTypes = new Set();
+  const events = [];
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = "";
+
+  const readerPromise = (async () => {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || "";
+      for (const block of blocks) {
+        const parsed = parseSseBlock(block);
+        if (!parsed.eventType || parsed.eventType === "CONNECTED" || parsed.eventType === "HEARTBEAT") {
+          continue;
+        }
+        seenEventTypes.add(parsed.eventType);
+        events.push(parsed);
+        if (expectedEventTypes.every((eventType) => seenEventTypes.has(eventType))) {
+          controller.abort();
+          return;
+        }
+      }
+    }
+  })();
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Timed out waiting for replayed SSE events. Seen: ${events.map((event) => event.eventType).join(", ")}`)), 10000);
+  });
+
+  try {
+    await Promise.race([readerPromise, timeoutPromise]);
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      throw error;
+    }
+  } finally {
+    controller.abort();
+  }
+
+  const missing = expectedEventTypes.filter((eventType) => !seenEventTypes.has(eventType));
+  if (missing.length > 0) {
+    throw new Error(`Missing replayed SSE event types: ${missing.join(", ")}. Seen: ${events.map((event) => event.eventType).join(", ")}`);
+  }
+  return events;
 }
 
 async function runSseSmokeTest() {
@@ -144,7 +210,7 @@ async function runSseSmokeTest() {
 
   let messageId = null;
   let taskRunId = null;
-  const eventLog = await collectSseEvents(
+  const events = await collectSseEvents(
     conversationId,
     ["MESSAGE_CREATED", "TASK_RUN_CREATED", "TASK_RUN_UPDATED", "ARTIFACT_CREATED"],
     async () => {
@@ -160,7 +226,19 @@ async function runSseSmokeTest() {
       taskRunId = getIdValue(taskRun.id);
     }
   );
+  const eventLog = events.map((event) => event.eventType);
   pass(`SSE events received: ${eventLog.join(", ")}`);
+
+  const replayStartEvent = events.find((event) => event.eventId && event.eventType === "MESSAGE_CREATED");
+  if (!replayStartEvent) {
+    throw new Error("SSE events did not include an event id for Last-Event-ID replay verification");
+  }
+  const replayedEvents = await collectReplayedSseEvents(
+    conversationId,
+    replayStartEvent.eventId,
+    ["TASK_RUN_CREATED", "TASK_RUN_UPDATED", "ARTIFACT_CREATED"]
+  );
+  pass(`SSE Last-Event-ID replay loaded: ${replayedEvents.map((event) => event.eventType).join(", ")}`);
 
   const activeState = await request(`/api/conversations/${conversationId}/active-realtime-state`);
   if (!activeState || activeState.taskRunId !== taskRunId || !["COMPLETED", "BLOCKED"].includes(activeState.status)) {
@@ -169,10 +247,11 @@ async function runSseSmokeTest() {
   pass(`active realtime state loaded: ${activeState.status}`);
 
   const taskRunState = await request(`/api/task-runs/${taskRunId}/realtime-state`);
-  if (!taskRunState || taskRunState.sourceMessageId !== messageId) {
+  if (!taskRunState || taskRunState.sourceMessageId !== messageId || !taskRunState.lastEventId) {
     throw new Error(`task run realtime state invalid: ${JSON.stringify(taskRunState)}`);
   }
   pass(`task run realtime state loaded: ${taskRunState.taskRunId}`);
+  pass(`SSE recovery state validated: lastEventId=${taskRunState.lastEventId}`);
 
   console.log("SSE smoke test completed successfully.");
 }

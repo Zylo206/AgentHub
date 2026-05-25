@@ -191,6 +191,8 @@ public class ContextRetrievalService {
                 scores.recencyScore(),
                 scores.importanceScore(),
                 scores.semanticScore(),
+                scores.semanticBackend(),
+                scores.semanticExplanation(),
                 scores.matchedTokens(),
                 windowPolicy);
     }
@@ -211,14 +213,16 @@ public class ContextRetrievalService {
             double importanceScore) {
         List<String> matchedTokens = matchedTokens(query, content);
         double keywordScore = matchedTokens.size() * 4.0;
-        double semanticScore = semanticScoringService.score(query, content).score();
+        ContextSemanticScoringService.SemanticScore semanticScore = semanticScoringService.score(query, content);
         return new ScoreBreakdown(
                 baseScore,
                 keywordScore,
                 recencyScore,
                 importanceScore,
-                semanticScore,
-                baseScore + keywordScore + recencyScore + importanceScore + semanticScore,
+                semanticScore.score(),
+                semanticScore.backend(),
+                semanticScore.explanation(),
+                baseScore + keywordScore + recencyScore + importanceScore + semanticScore.score(),
                 matchedTokens);
     }
 
@@ -250,6 +254,8 @@ public class ContextRetrievalService {
             double recencyScore,
             double importanceScore,
             double semanticScore,
+            String semanticBackend,
+            String semanticExplanation,
             double totalScore,
             List<String> matchedTokens) {
     }

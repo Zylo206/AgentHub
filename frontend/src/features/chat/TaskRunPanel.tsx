@@ -571,6 +571,28 @@ export function TaskRunPanel({
                             </span>
                           ))}
                         </div>
+                        <div className="step-generated-artifacts">
+                          <span
+                            className={`artifact-source-badge ${
+                              step.realOutputUsed
+                                ? "artifact-source-badge--real-adapter"
+                                : "artifact-source-badge--static-template"
+                            }`}
+                          >
+                            Real output: {step.realOutputUsed ? "USED" : "NOT_USED"}
+                          </span>
+                          <span className="artifact-source-badge">
+                            Parse: {step.artifactParseStatus || "NOT_ATTEMPTED"}
+                          </span>
+                          <span className="artifact-source-badge">
+                            Quality: {step.artifactQualityStatus || "NOT_EVALUATED"}
+                          </span>
+                        </div>
+                        {step.artifactQualityReason ? (
+                          <div className="step-adapter-response">
+                            <strong>Artifact quality:</strong> {step.artifactQualityReason}
+                          </div>
+                        ) : null}
                         {step.adapterErrorMessage ? (
                           <div className="step-adapter-error">{step.adapterErrorMessage}</div>
                         ) : null}

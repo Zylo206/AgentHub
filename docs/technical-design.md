@@ -312,6 +312,8 @@ smoke test 是 API 级验证，不是浏览器 E2E。默认 smoke 只验证稳�
 - Codex / Claude Code / OpenCode 不是深度真实接入。
 - Tool Capability 不是真实 tool invocation。
 
+Current boundary update: memory remains the default persistence mode, while the JDBC profile has repository implementations and a fresh-initialization SQL file. SSE is implemented as a single-node server-push refresh channel. The project still does not implement WebSocket bidirectional control, real token streaming, a multi-node event bus, or a real external deployment platform. `REAL_FIRST` is opt-in and quality-gated: valid JSON artifacts from a non-MOCK Adapter can become the primary `REAL_ADAPTER` output, while invalid or low-quality output falls back to static templates.
+
 ## 12. Adapter Health Stats Persistence
 
 `AgentAdapterRegistry` 的路由画像不再只保存在进程内存中。当前实现使用轻量本地 JSON snapshot：
@@ -323,3 +325,11 @@ smoke test 是 API 级验证，不是浏览器 E2E。默认 smoke 只验证稳�
 Snapshot 记录每个 Adapter 的 `attempts / successes / fallbacks / failures`。应用启动时会加载历史 snapshot，Adapter 执行完成后写回完整 snapshot。写入失败只记录 warning，不影响 Adapter 执行、Mock fallback 或 Orchestrator 主链路。
 
 `AgentRouter` 继续通过 `AgentExecutorService.routeStats(...)` 读取同一份画像，并将 `historyScore` 与 `fallbackPenalty` 纳入路由评分。该持久化只服务本地 demo 和重启后的评分连续性，不接 MySQL，也不引入外部依赖。
+## 13. Realtime / REAL_FIRST / JDBC Verification Boundary
+
+- `REAL_FIRST` is an opt-in generation mode. When a non-MOCK Adapter succeeds and returns a valid Artifact JSON contract, the primary Artifact should use `sourceKind=REAL_ADAPTER`; static template Artifacts remain as archived fallback evidence.
+- `scripts/smoke-test.mjs` keeps the default path stable without API keys. `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true` enables the stricter real-output assertion.
+- JDBC persistence remains profile-based. The same smoke flow can be used as a JDBC profile check when the backend is launched with `AGENTHUB_PERSISTENCE_MODE=jdbc` and the script is run with `AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true`.
+- Context Retrieval v4 exposes score breakdown and `semanticScore`; the default semantic backend is still heuristic and not a vector database.
+- SSE is implemented as a single-node server-push refresh channel. `scripts/sse-smoke-test.mjs` verifies event delivery, `Last-Event-ID` replay, and realtime state recovery.
+- Not implemented in this layer: WebSocket bidirectional control, real LLM token streaming, multi-node event bus, or real external deployment.

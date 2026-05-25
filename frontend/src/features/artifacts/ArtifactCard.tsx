@@ -34,6 +34,11 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
           <span className={`artifact-card__tag artifact-source-badge artifact-source-badge--${artifact.sourceKind.toLowerCase().replace(/_/g, "-")}`}>
             {displayArtifactSourceKind(artifact.sourceKind)}
           </span>
+          {artifact.qualityStatus ? (
+            <span className="artifact-card__tag artifact-source-badge">
+              Quality: {artifact.qualityStatus}
+            </span>
+          ) : null}
         </div>
       ) : null}
       {isRevision ? (

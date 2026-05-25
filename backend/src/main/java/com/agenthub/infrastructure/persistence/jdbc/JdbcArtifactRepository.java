@@ -33,8 +33,8 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                 REPLACE INTO agenthub_artifacts
                 (id, conversation_id, task_run_id, parent_artifact_id, revision_instruction, title, type, status,
                  language, content, version, source_kind, source_adapter_type, source_task_step_id, generation_mode,
-                 created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 quality_status, quality_reason, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open();
                 var statement = connection.prepareStatement(sql)) {
@@ -53,8 +53,10 @@ public class JdbcArtifactRepository implements ArtifactRepository {
             statement.setString(13, artifact.getSourceAdapterType());
             statement.setString(14, artifact.getSourceTaskStepId());
             statement.setString(15, artifact.getGenerationMode());
-            statement.setTimestamp(16, JdbcSerializationSupport.timestamp(artifact.getCreatedAt()));
-            statement.setTimestamp(17, JdbcSerializationSupport.timestamp(artifact.getUpdatedAt()));
+            statement.setString(16, artifact.getQualityStatus());
+            statement.setString(17, artifact.getQualityReason());
+            statement.setTimestamp(18, JdbcSerializationSupport.timestamp(artifact.getCreatedAt()));
+            statement.setTimestamp(19, JdbcSerializationSupport.timestamp(artifact.getUpdatedAt()));
             statement.executeUpdate();
             return artifact;
         } catch (SQLException exception) {
@@ -112,8 +114,18 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                 resultSet.getString("source_adapter_type"),
                 resultSet.getString("source_task_step_id"),
                 resultSet.getString("generation_mode"),
+                readOptionalColumn(resultSet, "quality_status"),
+                readOptionalColumn(resultSet, "quality_reason"),
                 JdbcSerializationSupport.instant(resultSet.getTimestamp("created_at")),
                 JdbcSerializationSupport.instant(resultSet.getTimestamp("updated_at")));
+    }
+
+    private String readOptionalColumn(ResultSet resultSet, String columnName) {
+        try {
+            return resultSet.getString(columnName);
+        } catch (SQLException ignored) {
+            return null;
+        }
     }
 
     private void initSchema() {
@@ -136,6 +148,8 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                         source_adapter_type VARCHAR(64),
                         source_task_step_id VARCHAR(128),
                         generation_mode VARCHAR(64),
+                        quality_status VARCHAR(64),
+                        quality_reason TEXT,
                         created_at TIMESTAMP,
                         updated_at TIMESTAMP
                     )

@@ -26,6 +26,17 @@ public class ResultAggregator {
         long adapterOutputArtifactCount = artifacts.stream()
                 .filter(this::isAdapterOutputArtifact)
                 .count();
+        long staticFallbackArtifactCount = artifacts.stream()
+                .filter(artifact -> artifact.getGenerationMode() != null
+                        && artifact.getGenerationMode().contains("STATIC_FALLBACK"))
+                .count();
+        long acceptedRealArtifactCount = artifacts.stream()
+                .filter(this::isAdapterOutputArtifact)
+                .filter(artifact -> artifact.getQualityStatus() == null
+                        || "ACCEPTED".equals(artifact.getQualityStatus()))
+                .count();
+        String adapterQualitySummary = " RealArtifactAccepted=" + acceptedRealArtifactCount
+                + ", StaticFallback=" + staticFallbackArtifactCount + ".";
         String adapterOutputSummary = adapterOutputArtifactCount == 0
                 ? "未生成真实 Adapter 输出产物。"
                 : "真实 / 半真实 Adapter 输出产物数：" + adapterOutputArtifactCount + "。";
@@ -46,7 +57,8 @@ public class ResultAggregator {
                 + selectedAgentSource + " "
                 + selectedAgentSummary + " "
                 + fallbackSummary
-                + adapterOutputSummary;
+                + adapterOutputSummary
+                + adapterQualitySummary;
     }
 
     public String summarizeRevision(TaskSpec taskSpec, List<TaskStep> steps, List<Artifact> artifacts) {

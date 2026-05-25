@@ -91,6 +91,80 @@ $env:AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER="true"; node scripts/smoke-test.mjs
 
 Without this flag, the smoke test remains stable in the default Mock / fallback environment.
 
+## Real OpenAI-compatible Adapter Smoke Test
+
+`real-adapter-smoke-test.mjs` is an opt-in verification for a real OpenAI-compatible provider. It rejects fixture mode and fails fast when required real-provider environment variables are missing.
+
+Start the backend with the same real-provider configuration first:
+
+```powershell
+$env:AGENTHUB_OPENAI_ENABLED="true"
+$env:AGENTHUB_OPENAI_BASE_URL="<openai-compatible-base-url>"
+$env:AGENTHUB_OPENAI_API_KEY="<your-api-key>"
+$env:AGENTHUB_OPENAI_MODEL="<model>"
+$env:AGENTHUB_OPENAI_FIXTURE_ENABLED="false"
+$env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
+cd backend
+mvn spring-boot:run
+```
+
+Then run the real-provider smoke test from the repository root with the same environment variables available to the script:
+
+```powershell
+$env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
+$env:AGENTHUB_OPENAI_ENABLED="true"
+$env:AGENTHUB_OPENAI_BASE_URL="<openai-compatible-base-url>"
+$env:AGENTHUB_OPENAI_API_KEY="<your-api-key>"
+$env:AGENTHUB_OPENAI_MODEL="<model>"
+$env:AGENTHUB_OPENAI_FIXTURE_ENABLED="false"
+$env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
+node scripts/real-adapter-smoke-test.mjs
+```
+
+This script verifies `/api/adapters`, `POST /api/adapters/OPENAI_COMPATIBLE/execute`, and a `REAL_FIRST` demo-task run. It expects a non-MOCK `OPENAI_COMPATIBLE` response, valid raw artifact JSON, an accepted `REAL_ADAPTER` primary Artifact, and archived static fallback Artifacts. Do not commit API keys or local secrets.
+
+If you explicitly run the backend in `REAL_FIRST` mode and expect the primary generated Artifact to come from a real Adapter, enable the stricter REAL_FIRST check:
+
+```powershell
+$env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
+$env:AGENTHUB_SMOKE_EXPECT_REAL_FIRST="true"
+node scripts/smoke-test.mjs
+```
+
+This assertion expects the selected primary code Artifact to use `sourceKind=REAL_ADAPTER` and expects static template fallback Artifacts to be archived. Do not enable it unless `OPENAI_COMPATIBLE` or another non-MOCK Adapter is configured to return a valid Artifact JSON contract.
+
+If you run the backend with the JDBC persistence profile, reuse the same API smoke flow and enable the JDBC marker:
+
+```powershell
+$env:AGENTHUB_PERSISTENCE_MODE="jdbc"
+$env:AGENTHUB_JDBC_URL="<jdbc-url>"
+$env:AGENTHUB_JDBC_USERNAME="<username>"
+$env:AGENTHUB_JDBC_PASSWORD="<password>"
+$env:AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE="true"
+node scripts/smoke-test.mjs
+```
+
+The script cannot introspect the backend process mode directly; this flag asserts that the same create / query / upload / download / task / artifact flow succeeds while the backend is launched with JDBC configuration.
+
+The explicit schema file is available at `backend/src/main/resources/schema-jdbc.sql`. Run it against the target MySQL-compatible database before starting the backend if you want deterministic local setup instead of relying only on repository auto-create behavior.
+
+`schema-jdbc.sql` is a fresh-initialization schema, not a migration script. If you already have an older AgentHub JDBC database, recreate it for local validation or apply equivalent `ALTER TABLE` statements manually before running the JDBC smoke flow.
+
+You can also use the JDBC wrapper script after starting the backend in JDBC mode:
+
+```powershell
+$env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
+node scripts/jdbc-smoke-test.mjs
+```
+
+Context retrieval uses the heuristic semantic backend by default. To exercise the optional embedding backend switch without requiring an external provider, start the backend with:
+
+```powershell
+$env:AGENTHUB_CONTEXT_SEMANTIC_BACKEND="embedding"
+```
+
+In this build the backend reports `EMBEDDING_DISABLED` and falls back to heuristic semantic overlap; no external embedding service is required.
+
 The smoke test always validates a local REAL_ADAPTER artifact fixture contract and validates persisted REAL_ADAPTER artifacts when the backend produces them. It also creates an isolated custom `review` Agent to verify that Tool Capability routing can select an Agent for `QUALITY_REVIEW`. `REJECTION` remains opt-in so the default demo path stays stable. To verify the Reviewer rejection loop, run:
 
 ```powershell
@@ -122,6 +196,8 @@ This is an API-level smoke test with real local attachment upload/download and a
 - runs a demo task
 - expects `MESSAGE_CREATED`, `TASK_RUN_CREATED`, `TASK_RUN_UPDATED`, and `ARTIFACT_CREATED`
 - checks `/active-realtime-state` and `/task-runs/{taskRunId}/realtime-state`
+- reconnects with `Last-Event-ID` to verify retained event replay
+- checks that realtime state exposes `lastEventId` for recovery
 
 Run it after starting the backend:
 
@@ -135,7 +211,7 @@ Override the backend URL:
 $env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"; node scripts/sse-smoke-test.mjs
 ```
 
-This is an API-level SSE verification. It does not validate browser rendering, WebSocket control commands, real LLM token streaming, or multi-node event broadcasting.
+This is an API-level SSE verification. It does not validate browser rendering, WebSocket control commands, real LLM token streaming, multi-node event broadcasting, or real deployment.
 
 ## Browser E2E
 

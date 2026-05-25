@@ -80,6 +80,10 @@ export interface TaskStep {
   parallelGroupKey?: string | null;
   dependsOnStepOrders?: number[];
   routingReason?: string | null;
+  realOutputUsed?: boolean;
+  artifactParseStatus?: string | null;
+  artifactQualityStatus?: string | null;
+  artifactQualityReason?: string | null;
   producedArtifactIds: IdValue[];
   createdAt: string;
   updatedAt: string;

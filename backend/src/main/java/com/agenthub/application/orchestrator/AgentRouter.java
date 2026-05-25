@@ -92,20 +92,26 @@ public class AgentRouter {
     private RouteScores scoreAgent(Agent agent, String requiredSkill) {
         int capabilityScore = toolCapabilityRegistry.matchScore(agent, requiredSkill);
         AgentAdapterType preferredAdapterType = agentRoutingService.resolvePreferredAdapterForAgent(agent);
-        return scoreAdapter(capabilityScore, preferredAdapterType);
+        return scoreAdapter(capabilityScore, preferredAdapterType, agent.getRole() == AgentRole.CUSTOM ? 25 : 0);
     }
 
     private RouteScores scoreAdapter(int capabilityScore, AgentAdapterType preferredAdapterType) {
+        return scoreAdapter(capabilityScore, preferredAdapterType, 0);
+    }
+
+    private RouteScores scoreAdapter(int capabilityScore, AgentAdapterType preferredAdapterType, int customAgentBonus) {
         AdapterRoutingDecision adapterDecision = adapterRoutingService.route(preferredAdapterType);
         AdapterRoutingDecision.AdapterCandidateScore selectedScore = adapterDecision.selectedScore();
         int adapterCandidateScore = selectedScore == null ? 0 : (int) Math.round(selectedScore.totalScore());
         int totalScore = (int) Math.round(
                 capabilityScore * 0.55
-                        + adapterCandidateScore * 0.45);
+                        + adapterCandidateScore * 0.45
+                        + customAgentBonus);
         return new RouteScores(
                 adapterDecision.selectedAdapterType(),
                 capabilityScore,
                 adapterCandidateScore,
+                customAgentBonus,
                 adapterDecision.describe(),
                 Math.max(0, totalScore));
     }
@@ -153,6 +159,7 @@ public class AgentRouter {
             AgentAdapterType preferredAdapterType,
             int capabilityScore,
             int adapterCandidateScore,
+            int customAgentBonus,
             String adapterDecisionSummary,
             int totalScore) {
 
@@ -163,6 +170,8 @@ public class AgentRouter {
                     + capabilityScore
                     + ", adapterCandidateScore="
                     + adapterCandidateScore
+                    + ", customAgentBonus="
+                    + customAgentBonus
                     + ", selectedAdapter="
                     + preferredAdapterType
                     + ", preferredAdapter="

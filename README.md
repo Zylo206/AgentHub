@@ -1,5 +1,9 @@
 # AgentHub
 
+> Current implementation note: `REAL_FIRST` is now an opt-in quality-gated path. A non-MOCK Adapter response becomes the primary `REAL_ADAPTER` Artifact only when it returns valid artifact JSON and passes rule-based quality checks; otherwise static template fallback remains the stable path. JDBC is profile-based and schema-backed but not required by default. SSE is implemented as single-node server push; WebSocket control, token streaming, multi-node event bus, and real external deployment are still out of scope.
+
+> Real provider verification: `node scripts/real-adapter-smoke-test.mjs` is available as an opt-in OpenAI-compatible end-to-end check. It requires real provider environment variables, rejects fixture mode, and must not be run with committed API keys.
+
 AgentHub 是一个以 IM 聊天为核心交互范式的多 Agent 协作平台 MVP。当前项目已经从早期工程 Demo 进入 **MVP 增强后期**：用户可以在 Web Workspace 中创建会话、选择或 `@Agent`、运行 Orchestrator 编排、查看多 Agent 协作消息、迭代 Artifact、执行静态部署预览，并通过 smoke test 验证主链路。
 
 当前项目仍不是完整生产级多 Agent 平台。默认演示环境保留 Mock fallback 和静态模板兜底；真实 Adapter、LLM Planner、Deploy、Memory、Tool Capability 等能力均以 MVP / 半真实方式接入，并在界面和文档中明确边界。
@@ -175,3 +179,10 @@ $env:AGENTHUB_OPENAI_MODEL="deepseek-v4-flash"
 3. Adapter fixture / mock server：让真实输出契约可稳定测试。
 4. Reviewer REJECTION 闭环：协议消息进入 retry / revise 流程。
 5. Tool Capability UI 化：Agent Builder 中将 toolTags 变成明确能力选择。
+## Real Dynamic Verification Update
+
+- Default smoke remains stable without API keys, database setup, embedding services, or external deployment.
+- `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true` verifies that `REAL_FIRST` uses a `REAL_ADAPTER` primary Artifact when a non-MOCK Adapter successfully returns the Artifact JSON contract.
+- `AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true` marks the same API flow as a JDBC profile verification when the backend is launched with `AGENTHUB_PERSISTENCE_MODE=jdbc`.
+- `scripts/sse-smoke-test.mjs` verifies SSE events, `Last-Event-ID` replay, and realtime state recovery.
+- AgentHub currently does not implement WebSocket bidirectional control, real token streaming, a multi-node event bus, or real external deployment.

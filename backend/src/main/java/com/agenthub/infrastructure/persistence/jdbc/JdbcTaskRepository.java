@@ -135,8 +135,9 @@ public class JdbcTaskRepository implements TaskRepository {
                 (id, task_run_id, step_order, assigned_agent_id, task_description, status, input_context, output_content,
                  preferred_adapter_type, actual_adapter_type, adapter_status, adapter_response_summary,
                  adapter_error_message, parallel_group_key, depends_on_step_orders_json, routing_reason,
+                 real_output_used, artifact_parse_status, artifact_quality_status, artifact_quality_reason,
                  produced_artifact_ids_json, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open()) {
             try (var delete = connection.prepareStatement(deleteSql)) {
@@ -161,9 +162,13 @@ public class JdbcTaskRepository implements TaskRepository {
                     insert.setString(14, step.getParallelGroupKey());
                     insert.setString(15, JdbcSerializationSupport.toJson(step.getDependsOnStepOrders()));
                     insert.setString(16, step.getRoutingReason());
-                    insert.setString(17, JdbcSerializationSupport.artifactIdsJson(step.getProducedArtifactIds()));
-                    insert.setTimestamp(18, JdbcSerializationSupport.timestamp(step.getCreatedAt()));
-                    insert.setTimestamp(19, JdbcSerializationSupport.timestamp(step.getUpdatedAt()));
+                    insert.setBoolean(17, step.isRealOutputUsed());
+                    insert.setString(18, step.getArtifactParseStatus());
+                    insert.setString(19, step.getArtifactQualityStatus());
+                    insert.setString(20, step.getArtifactQualityReason());
+                    insert.setString(21, JdbcSerializationSupport.artifactIdsJson(step.getProducedArtifactIds()));
+                    insert.setTimestamp(22, JdbcSerializationSupport.timestamp(step.getCreatedAt()));
+                    insert.setTimestamp(23, JdbcSerializationSupport.timestamp(step.getUpdatedAt()));
                     insert.addBatch();
                 }
                 insert.executeBatch();
@@ -275,6 +280,10 @@ public class JdbcTaskRepository implements TaskRepository {
                             resultSet.getString("parallel_group_key"),
                             JdbcSerializationSupport.integerList(resultSet.getString("depends_on_step_orders_json")),
                             resultSet.getString("routing_reason"),
+                            readOptionalBoolean(resultSet, "real_output_used"),
+                            readOptionalColumn(resultSet, "artifact_parse_status"),
+                            readOptionalColumn(resultSet, "artifact_quality_status"),
+                            readOptionalColumn(resultSet, "artifact_quality_reason"),
                             JdbcSerializationSupport.artifactIds(resultSet.getString("produced_artifact_ids_json")),
                             JdbcSerializationSupport.instant(resultSet.getTimestamp("created_at")),
                             JdbcSerializationSupport.instant(resultSet.getTimestamp("updated_at"))));
@@ -344,6 +353,10 @@ public class JdbcTaskRepository implements TaskRepository {
                         parallel_group_key VARCHAR(128),
                         depends_on_step_orders_json TEXT,
                         routing_reason TEXT,
+                        real_output_used BOOLEAN,
+                        artifact_parse_status VARCHAR(64),
+                        artifact_quality_status VARCHAR(64),
+                        artifact_quality_reason TEXT,
                         produced_artifact_ids_json TEXT,
                         created_at TIMESTAMP,
                         updated_at TIMESTAMP
@@ -351,6 +364,22 @@ public class JdbcTaskRepository implements TaskRepository {
                     """);
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to initialize task schema", exception);
+        }
+    }
+
+    private String readOptionalColumn(ResultSet resultSet, String columnName) {
+        try {
+            return resultSet.getString(columnName);
+        } catch (SQLException ignored) {
+            return null;
+        }
+    }
+
+    private boolean readOptionalBoolean(ResultSet resultSet, String columnName) {
+        try {
+            return resultSet.getBoolean(columnName);
+        } catch (SQLException ignored) {
+            return false;
         }
     }
 }

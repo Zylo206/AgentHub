@@ -511,6 +511,12 @@ export function ArtifactPanel({
                     {selectedArtifact.generationMode ? ` / Mode: ${selectedArtifact.generationMode}` : ""}
                   </p>
                 ) : null}
+                {selectedArtifact.qualityStatus || selectedArtifact.qualityReason ? (
+                  <p className="artifact-preview__line">
+                    Quality: {selectedArtifact.qualityStatus || "UNKNOWN"}
+                    {selectedArtifact.qualityReason ? ` / ${selectedArtifact.qualityReason}` : ""}
+                  </p>
+                ) : null}
                 {selectedVersionEntry?.parentArtifact ? (
                   <p className="artifact-preview__line revision-origin">
                     基于 {selectedVersionEntry.parentArtifact.title} v{selectedVersionEntry.parentArtifact.version}

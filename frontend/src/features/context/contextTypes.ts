@@ -25,6 +25,8 @@ export interface RetrievedContextItem {
   recencyScore?: number;
   importanceScore?: number;
   semanticScore?: number;
+  semanticBackend?: string;
+  semanticExplanation?: string;
   matchedTokens?: string[];
   windowPolicy?: string;
   taskStepId?: IdValue | null;

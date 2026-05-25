@@ -307,3 +307,11 @@
    `$env:AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION="true"`
    `node scripts/smoke-test.mjs`
 10. 注意：该能力仍是规则化 Reviewer decision，不是真实静态分析或完整自动修复系统。
+## Addendum: Real Dynamic Verification
+
+- Default `node scripts/smoke-test.mjs` must remain stable without real API keys, JDBC, embedding services, or external deployment.
+- To validate `REAL_FIRST`, start backend with `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`, configure a non-MOCK Adapter that returns valid Artifact JSON, then run with `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true`.
+- To validate JDBC profile, start backend with `AGENTHUB_PERSISTENCE_MODE=jdbc` and JDBC connection environment variables, then run with `AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true`.
+- Attachment verification includes local upload, message association, and download content checks.
+- SSE verification uses `node scripts/sse-smoke-test.mjs` and must cover event delivery, `Last-Event-ID` replay, active realtime state, and task run realtime state.
+- Current boundaries: no WebSocket bidirectional control, no real token streaming, no multi-node event broker, and no real external deployment.

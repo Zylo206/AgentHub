@@ -14,6 +14,8 @@ public class RetrievedContextItem {
     private final double recencyScore;
     private final double importanceScore;
     private final double semanticScore;
+    private final String semanticBackend;
+    private final String semanticExplanation;
     private final java.util.List<String> matchedTokens;
     private final String windowPolicy;
 
@@ -24,7 +26,23 @@ public class RetrievedContextItem {
             String content,
             double score,
             String reason) {
-        this(sourceType, sourceId, title, content, score, reason, 0, score, 0, 0, 0, 0, java.util.List.of(), "LEGACY");
+        this(
+                sourceType,
+                sourceId,
+                title,
+                content,
+                score,
+                reason,
+                0,
+                score,
+                0,
+                0,
+                0,
+                0,
+                "HEURISTIC",
+                "Legacy retrieved context item did not record semantic backend details.",
+                java.util.List.of(),
+                "LEGACY");
     }
 
     public RetrievedContextItem(
@@ -40,6 +58,8 @@ public class RetrievedContextItem {
             double recencyScore,
             double importanceScore,
             double semanticScore,
+            String semanticBackend,
+            String semanticExplanation,
             java.util.List<String> matchedTokens,
             String windowPolicy) {
         this.sourceType = sourceType;
@@ -54,6 +74,10 @@ public class RetrievedContextItem {
         this.recencyScore = recencyScore;
         this.importanceScore = importanceScore;
         this.semanticScore = semanticScore;
+        this.semanticBackend = semanticBackend == null || semanticBackend.isBlank() ? "HEURISTIC" : semanticBackend;
+        this.semanticExplanation = semanticExplanation == null || semanticExplanation.isBlank()
+                ? "Semantic score was computed by the configured backend."
+                : semanticExplanation;
         this.matchedTokens = matchedTokens == null ? java.util.List.of() : java.util.List.copyOf(matchedTokens);
         this.windowPolicy = windowPolicy;
     }
@@ -72,6 +96,8 @@ public class RetrievedContextItem {
                 recencyScore,
                 importanceScore,
                 semanticScore,
+                semanticBackend,
+                semanticExplanation,
                 matchedTokens,
                 windowPolicy);
     }
@@ -122,6 +148,14 @@ public class RetrievedContextItem {
 
     public double getSemanticScore() {
         return semanticScore;
+    }
+
+    public String getSemanticBackend() {
+        return semanticBackend;
+    }
+
+    public String getSemanticExplanation() {
+        return semanticExplanation;
     }
 
     public java.util.List<String> getMatchedTokens() {
