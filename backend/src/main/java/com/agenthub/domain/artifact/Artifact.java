@@ -21,7 +21,9 @@ public class Artifact {
     private final String sourceAdapterType;
     private final String sourceTaskStepId;
     private final String generationMode;
+    private final String buildValidationStatus;
     private final String qualityStatus;
+    private final Integer qualityScore;
     private final String qualityReason;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -132,6 +134,8 @@ public class Artifact {
                 generationMode,
                 null,
                 null,
+                null,
+                null,
                 createdAt,
                 updatedAt);
     }
@@ -156,6 +160,52 @@ public class Artifact {
             String qualityReason,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                id,
+                conversationId,
+                taskRunId,
+                parentArtifactId,
+                revisionInstruction,
+                title,
+                type,
+                status,
+                language,
+                content,
+                version,
+                sourceKind,
+                sourceAdapterType,
+                sourceTaskStepId,
+                generationMode,
+                null,
+                qualityStatus,
+                null,
+                qualityReason,
+                createdAt,
+                updatedAt);
+    }
+
+    public Artifact(
+            ArtifactId id,
+            ConversationId conversationId,
+            TaskRunId taskRunId,
+            String parentArtifactId,
+            String revisionInstruction,
+            String title,
+            ArtifactType type,
+            ArtifactStatus status,
+            String language,
+            String content,
+            int version,
+            ArtifactSourceKind sourceKind,
+            String sourceAdapterType,
+            String sourceTaskStepId,
+            String generationMode,
+            String buildValidationStatus,
+            String qualityStatus,
+            Integer qualityScore,
+            String qualityReason,
+            Instant createdAt,
+            Instant updatedAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.taskRunId = taskRunId;
@@ -173,7 +223,9 @@ public class Artifact {
         this.generationMode = generationMode == null || generationMode.isBlank()
                 ? this.sourceKind.name()
                 : generationMode;
+        this.buildValidationStatus = buildValidationStatus;
         this.qualityStatus = qualityStatus;
+        this.qualityScore = qualityScore;
         this.qualityReason = qualityReason;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -247,8 +299,16 @@ public class Artifact {
         return generationMode;
     }
 
+    public String getBuildValidationStatus() {
+        return buildValidationStatus;
+    }
+
     public String getQualityStatus() {
         return qualityStatus;
+    }
+
+    public Integer getQualityScore() {
+        return qualityScore;
     }
 
     public String getQualityReason() {

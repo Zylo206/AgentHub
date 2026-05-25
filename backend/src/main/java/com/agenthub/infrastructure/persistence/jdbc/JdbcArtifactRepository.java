@@ -33,8 +33,8 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                 REPLACE INTO agenthub_artifacts
                 (id, conversation_id, task_run_id, parent_artifact_id, revision_instruction, title, type, status,
                  language, content, version, source_kind, source_adapter_type, source_task_step_id, generation_mode,
-                 quality_status, quality_reason, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 build_validation_status, quality_status, quality_score, quality_reason, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open();
                 var statement = connection.prepareStatement(sql)) {
@@ -53,10 +53,16 @@ public class JdbcArtifactRepository implements ArtifactRepository {
             statement.setString(13, artifact.getSourceAdapterType());
             statement.setString(14, artifact.getSourceTaskStepId());
             statement.setString(15, artifact.getGenerationMode());
-            statement.setString(16, artifact.getQualityStatus());
-            statement.setString(17, artifact.getQualityReason());
-            statement.setTimestamp(18, JdbcSerializationSupport.timestamp(artifact.getCreatedAt()));
-            statement.setTimestamp(19, JdbcSerializationSupport.timestamp(artifact.getUpdatedAt()));
+            statement.setString(16, artifact.getBuildValidationStatus());
+            statement.setString(17, artifact.getQualityStatus());
+            if (artifact.getQualityScore() == null) {
+                statement.setObject(18, null);
+            } else {
+                statement.setInt(18, artifact.getQualityScore());
+            }
+            statement.setString(19, artifact.getQualityReason());
+            statement.setTimestamp(20, JdbcSerializationSupport.timestamp(artifact.getCreatedAt()));
+            statement.setTimestamp(21, JdbcSerializationSupport.timestamp(artifact.getUpdatedAt()));
             statement.executeUpdate();
             return artifact;
         } catch (SQLException exception) {
@@ -114,7 +120,9 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                 resultSet.getString("source_adapter_type"),
                 resultSet.getString("source_task_step_id"),
                 resultSet.getString("generation_mode"),
+                readOptionalColumn(resultSet, "build_validation_status"),
                 readOptionalColumn(resultSet, "quality_status"),
+                readOptionalInteger(resultSet, "quality_score"),
                 readOptionalColumn(resultSet, "quality_reason"),
                 JdbcSerializationSupport.instant(resultSet.getTimestamp("created_at")),
                 JdbcSerializationSupport.instant(resultSet.getTimestamp("updated_at")));
@@ -123,6 +131,15 @@ public class JdbcArtifactRepository implements ArtifactRepository {
     private String readOptionalColumn(ResultSet resultSet, String columnName) {
         try {
             return resultSet.getString(columnName);
+        } catch (SQLException ignored) {
+            return null;
+        }
+    }
+
+    private Integer readOptionalInteger(ResultSet resultSet, String columnName) {
+        try {
+            int value = resultSet.getInt(columnName);
+            return resultSet.wasNull() ? null : value;
         } catch (SQLException ignored) {
             return null;
         }
@@ -148,7 +165,9 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                         source_adapter_type VARCHAR(64),
                         source_task_step_id VARCHAR(128),
                         generation_mode VARCHAR(64),
+                        build_validation_status VARCHAR(64),
                         quality_status VARCHAR(64),
+                        quality_score INT,
                         quality_reason TEXT,
                         created_at TIMESTAMP,
                         updated_at TIMESTAMP

@@ -1,6 +1,7 @@
 package com.agenthub.infrastructure.adapter;
 
 import com.agenthub.common.TimeProvider;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -8,9 +9,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -20,31 +23,43 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
 
     private final TimeProvider timeProvider;
     private final ObjectMapper objectMapper;
+    private final AdapterArtifactContractValidator artifactContractValidator;
     private final boolean enabled;
     private final String baseUrl;
     private final String apiKey;
     private final String model;
     private final int timeoutSeconds;
+    private final boolean jsonResponseFormatEnabled;
+    private final int maxRetries;
+    private final long retryBackoffMillis;
     private final boolean fixtureEnabled;
     private final String fixtureReviewDecision;
 
     public OpenAICompatibleAgentAdapter(
             TimeProvider timeProvider,
             ObjectMapper objectMapper,
+            AdapterArtifactContractValidator artifactContractValidator,
             @Value("${agenthub.adapters.openai-compatible.enabled:false}") boolean enabled,
             @Value("${agenthub.adapters.openai-compatible.base-url:}") String baseUrl,
             @Value("${agenthub.adapters.openai-compatible.api-key:}") String apiKey,
             @Value("${agenthub.adapters.openai-compatible.model:}") String model,
             @Value("${agenthub.adapters.openai-compatible.timeout-seconds:30}") int timeoutSeconds,
+            @Value("${agenthub.adapters.openai-compatible.json-response-format-enabled:false}") boolean jsonResponseFormatEnabled,
+            @Value("${agenthub.adapters.openai-compatible.max-retries:1}") int maxRetries,
+            @Value("${agenthub.adapters.openai-compatible.retry-backoff-millis:500}") long retryBackoffMillis,
             @Value("${agenthub.adapters.openai-compatible.fixture-enabled:false}") boolean fixtureEnabled,
             @Value("${agenthub.adapters.openai-compatible.fixture-review-decision:APPROVE}") String fixtureReviewDecision) {
         this.timeProvider = timeProvider;
         this.objectMapper = objectMapper;
+        this.artifactContractValidator = artifactContractValidator;
         this.enabled = enabled;
         this.baseUrl = baseUrl == null ? "" : baseUrl.trim();
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model == null ? "" : model.trim();
         this.timeoutSeconds = timeoutSeconds <= 0 ? 30 : timeoutSeconds;
+        this.jsonResponseFormatEnabled = jsonResponseFormatEnabled;
+        this.maxRetries = Math.max(0, Math.min(maxRetries, 3));
+        this.retryBackoffMillis = Math.max(0L, Math.min(retryBackoffMillis, 5_000L));
         this.fixtureEnabled = fixtureEnabled;
         this.fixtureReviewDecision = fixtureReviewDecision == null ? "APPROVE" : fixtureReviewDecision.trim().toUpperCase();
     }
@@ -129,58 +144,139 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         }
 
         try {
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(timeoutSeconds))
-                    .build();
-
-            String payload = objectMapper.writeValueAsString(buildPayload(request));
-            HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(buildChatCompletionsUrl(baseUrl)))
-                    .timeout(Duration.ofSeconds(timeoutSeconds))
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(payload))
-                    .build();
-
-            HttpResponse<String> httpResponse = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                return failedResponse(
-                        request,
-                        startedAt,
-                        "OpenAI Compatible adapter request failed with HTTP status " + httpResponse.statusCode() + ".");
-            }
-
-            String content = extractResponseContent(httpResponse.body());
-            if (content == null || content.isBlank()) {
-                return failedResponse(
-                        request,
-                        startedAt,
-                        "OpenAI Compatible adapter returned an empty message content.");
-            }
-
-            return new AgentResponse(
-                    request.requestId(),
-                    AgentAdapterType.OPENAI_COMPATIBLE,
-                    AgentAdapterType.OPENAI_COMPATIBLE,
-                    AgentAdapterType.OPENAI_COMPATIBLE,
-                    false,
-                    AgentExecutionStatus.COMPLETED,
-                    content,
-                    List.of("TEXT:openai-compatible-response"),
-                    null,
-                    startedAt,
-                    timeProvider.now());
-        } catch (IOException exception) {
-            return failedResponse(request, startedAt, "Failed to parse OpenAI Compatible adapter request or response.");
+            return executeProviderRequest(request, startedAt);
+        } catch (AdapterResponseException exception) {
+            return failedResponse(request, startedAt, exception.getMessage());
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return failedResponse(request, startedAt, "OpenAI Compatible adapter request was interrupted.");
         } catch (Exception exception) {
-            String message = exception.getMessage() == null || exception.getMessage().isBlank()
-                    ? exception.getClass().getSimpleName()
-                    : exception.getMessage();
+            String message = sanitizeDiagnosticMessage(exception);
             return failedResponse(request, startedAt, "OpenAI Compatible adapter error: " + message);
         }
+    }
+
+    private AgentResponse executeProviderRequest(AgentRequest request, Instant startedAt)
+            throws AdapterResponseException, InterruptedException {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(timeoutSeconds))
+                .build();
+        String payload = buildRequestPayload(request);
+        int totalAttempts = maxRetries + 1;
+        String lastRetryableFailure = "";
+
+        for (int attempt = 1; attempt <= totalAttempts; attempt++) {
+            try {
+                HttpResponse<String> httpResponse = client.send(
+                        buildHttpRequest(payload),
+                        HttpResponse.BodyHandlers.ofString());
+                if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+                    String errorMessage = describeProviderHttpError(httpResponse.statusCode(), httpResponse.body());
+                    if (isRetryableHttpStatus(httpResponse.statusCode()) && attempt < totalAttempts) {
+                        lastRetryableFailure = errorMessage;
+                        sleepBeforeRetry();
+                        continue;
+                    }
+                    return failedResponse(request, startedAt,
+                            withAttemptSummary(errorMessage, attempt, totalAttempts, lastRetryableFailure));
+                }
+
+                String content = extractResponseContent(httpResponse.body());
+                if (content == null || content.isBlank()) {
+                    return failedResponse(
+                            request,
+                            startedAt,
+                            withAttemptSummary(
+                                    "OpenAI Compatible adapter returned an empty message content.",
+                                    attempt,
+                                    totalAttempts,
+                                    lastRetryableFailure));
+                }
+                String artifactJson = normalizeAndValidateArtifactContract(content);
+
+                return new AgentResponse(
+                        request.requestId(),
+                        AgentAdapterType.OPENAI_COMPATIBLE,
+                        AgentAdapterType.OPENAI_COMPATIBLE,
+                        AgentAdapterType.OPENAI_COMPATIBLE,
+                        false,
+                        AgentExecutionStatus.COMPLETED,
+                        artifactJson,
+                        List.of("JSON:openai-compatible-artifact-contract"),
+                        null,
+                        startedAt,
+                        timeProvider.now());
+            } catch (HttpTimeoutException exception) {
+                String errorMessage = "OpenAI Compatible adapter request timed out after "
+                        + timeoutSeconds + " seconds.";
+                if (attempt < totalAttempts) {
+                    lastRetryableFailure = errorMessage;
+                    sleepBeforeRetry();
+                    continue;
+                }
+                return failedResponse(request, startedAt,
+                        withAttemptSummary(errorMessage, attempt, totalAttempts, lastRetryableFailure));
+            } catch (IOException exception) {
+                String errorMessage = "OpenAI Compatible adapter request I/O failed: "
+                        + sanitizeDiagnosticMessage(exception);
+                if (attempt < totalAttempts) {
+                    lastRetryableFailure = errorMessage;
+                    sleepBeforeRetry();
+                    continue;
+                }
+                return failedResponse(request, startedAt,
+                        withAttemptSummary(errorMessage, attempt, totalAttempts, lastRetryableFailure));
+            }
+        }
+
+        return failedResponse(request, startedAt,
+                withAttemptSummary(
+                        "OpenAI Compatible adapter exhausted retry attempts.",
+                        totalAttempts,
+                        totalAttempts,
+                        lastRetryableFailure));
+    }
+
+    private String buildRequestPayload(AgentRequest request) throws AdapterResponseException {
+        try {
+            return objectMapper.writeValueAsString(buildPayload(request));
+        } catch (JsonProcessingException exception) {
+            throw new AdapterResponseException("OpenAI Compatible adapter failed to serialize request payload.");
+        }
+    }
+
+    private HttpRequest buildHttpRequest(String payload) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(buildChatCompletionsUrl(baseUrl)))
+                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .build();
+    }
+
+    private boolean isRetryableHttpStatus(int statusCode) {
+        return statusCode == 429 || statusCode >= 500;
+    }
+
+    private void sleepBeforeRetry() throws InterruptedException {
+        if (retryBackoffMillis > 0) {
+            Thread.sleep(retryBackoffMillis);
+        }
+    }
+
+    private String withAttemptSummary(
+            String errorMessage,
+            int finalAttempt,
+            int totalAttempts,
+            String previousRetryableFailure) {
+        StringBuilder builder = new StringBuilder(sanitizeDiagnosticText(errorMessage));
+        builder.append(" Attempts: ").append(finalAttempt).append('/').append(totalAttempts).append('.');
+        if (previousRetryableFailure != null && !previousRetryableFailure.isBlank()) {
+            builder.append(" Previous retryable failure: ")
+                    .append(safeSnippet(previousRetryableFailure));
+        }
+        return builder.toString();
     }
 
     private JsonNode buildPayload(AgentRequest request) {
@@ -188,12 +284,15 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         root.put("model", model);
         root.put("temperature", 0.2);
         root.put("stream", false);
+        if (jsonResponseFormatEnabled) {
+            root.putObject("response_format").put("type", "json_object");
+        }
 
         var messages = root.putArray("messages");
 
         String systemPrompt = request.systemPrompt() == null || request.systemPrompt().isBlank()
-                ? "You are an AI specialist working inside the AgentHub demo platform."
-                : request.systemPrompt();
+                ? buildJsonOnlySystemPrompt("You are an AI specialist working inside the AgentHub demo platform.")
+                : buildJsonOnlySystemPrompt(request.systemPrompt());
         messages.addObject()
                 .put("role", "system")
                 .put("content", systemPrompt);
@@ -374,13 +473,15 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         }
         builder.append("""
                 Output contract:
-                Return only valid JSON. Do not wrap it in markdown fences. Do not include extra commentary outside JSON.
-                AgentHub will parse this response directly into Artifacts.
-                The response is accepted as REAL_ADAPTER output only when every artifact has title, type, language, content, and summary.
-                For CODE artifacts, content must be complete raw source code only: no markdown, no prose, no metadata wrapper, no ``` fences.
-                For API_CONTRACT or DATA_MODEL artifacts, content must be valid JSON text or structured schema text.
-                For REVIEW_REPORT or MARKDOWN artifacts, content must contain useful markdown body text, not a one-line placeholder.
-                Empty content, error messages, or invalid JSON will be rejected and AgentHub will use static fallback artifacts.
+                You are in JSON-only artifact contract mode.
+                Return exactly one valid JSON object and nothing else. Do not wrap the response in markdown fences.
+                Do not include prose before or after the JSON object. Do not return a JSON string; return a JSON object.
+                AgentHub will parse this response directly into Artifacts and will fall back to MOCK if parsing fails.
+                The response is accepted as REAL_ADAPTER output only when every artifact has non-empty title, type, language, content, and summary.
+                For CODE artifacts, content must be a JSON string containing complete raw source code only. Escape newlines as needed for JSON. Do not put markdown fences, prose, or metadata wrappers inside content.
+                For API_CONTRACT or DATA_MODEL artifacts, content must be a JSON string containing valid JSON text or structured schema text.
+                For REVIEW_REPORT or MARKDOWN artifacts, content must be a JSON string containing useful markdown body text, not a one-line placeholder.
+                Empty content, provider error messages, plain text, markdown-only replies, invalid JSON, or missing artifacts will be rejected and AgentHub will use static fallback artifacts.
                 Schema:
                 {
                   "assistantMessage": "short summary for AgentHub chat",
@@ -410,11 +511,25 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         return normalized + "/chat/completions";
     }
 
-    private String extractResponseContent(String responseBody) throws IOException {
-        JsonNode root = objectMapper.readTree(responseBody);
-        JsonNode contentNode = root.path("choices").path(0).path("message").path("content");
+    private String extractResponseContent(String responseBody) throws AdapterResponseException {
+        if (responseBody == null || responseBody.isBlank()) {
+            throw new AdapterResponseException("OpenAI Compatible provider returned an empty HTTP response body.");
+        }
+
+        JsonNode root = readProviderJson(responseBody);
+        JsonNode choicesNode = root.path("choices");
+        if (!choicesNode.isArray() || choicesNode.isEmpty()) {
+            throw new AdapterResponseException(
+                    "OpenAI Compatible provider JSON response did not contain any choices.");
+        }
+
+        JsonNode firstChoice = choicesNode.path(0);
+        JsonNode contentNode = firstChoice.path("message").path("content");
         if (contentNode.isMissingNode() || contentNode.isNull()) {
-            return null;
+            String finishReason = firstChoice.path("finish_reason").asText("");
+            throw new AdapterResponseException(
+                    "OpenAI Compatible provider response choice did not include message.content"
+                            + (finishReason.isBlank() ? "." : " (finish_reason=" + finishReason + ")."));
         }
         if (contentNode.isTextual()) {
             return contentNode.asText();
@@ -433,6 +548,124 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         return contentNode.toString();
     }
 
+    private JsonNode readProviderJson(String responseBody) throws AdapterResponseException {
+        try {
+            return objectMapper.readTree(responseBody);
+        } catch (JsonProcessingException exception) {
+            throw new AdapterResponseException(
+                    "OpenAI Compatible provider returned non-JSON HTTP response body: "
+                            + safeSnippet(responseBody));
+        }
+    }
+
+    private String normalizeAndValidateArtifactContract(String content) throws AdapterResponseException {
+        AdapterArtifactContractValidator.ValidationResult validationResult =
+                artifactContractValidator.validate(content);
+        if (!validationResult.valid()) {
+            throw new AdapterResponseException(
+                    "OpenAI Compatible adapter message content failed artifact JSON schema validation: "
+                            + validationResult.errorMessage());
+        }
+        return validationResult.normalizedJson();
+    }
+
+    private String buildJsonOnlySystemPrompt(String basePrompt) {
+        return basePrompt.strip() + """
+
+                Critical output rule:
+                Return only the AgentHub artifact JSON object requested by the user message.
+                No markdown fences, no explanation outside JSON, no tool transcript, no plain-text answer.
+                """;
+    }
+
+    private String describeProviderHttpError(int statusCode, String responseBody) {
+        String providerDetail = extractProviderErrorDetail(responseBody);
+        return "OpenAI Compatible adapter request failed with HTTP status " + statusCode
+                + (providerDetail.isBlank() ? "." : ": " + providerDetail);
+    }
+
+    private String extractProviderErrorDetail(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return "provider returned an empty error body.";
+        }
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode errorNode = root.path("error");
+            if (errorNode.isObject()) {
+                List<String> parts = new ArrayList<>();
+                addProviderErrorPart(parts, "type", errorNode.path("type"));
+                addProviderErrorPart(parts, "code", errorNode.path("code"));
+                addProviderErrorPart(parts, "message", errorNode.path("message"));
+                if (!parts.isEmpty()) {
+                    return sanitizeDiagnosticText(String.join(", ", parts));
+                }
+            }
+            String message = firstProviderText(root, "message", "error_description", "detail");
+            if (!message.isBlank()) {
+                return sanitizeDiagnosticText(message);
+            }
+        } catch (JsonProcessingException ignored) {
+            // Fall through to a bounded sanitized body snippet.
+        }
+        return "provider error body snippet: " + safeSnippet(responseBody);
+    }
+
+    private void addProviderErrorPart(List<String> parts, String label, JsonNode value) {
+        if (value.isTextual() && !value.asText().isBlank()) {
+            parts.add(label + "=" + value.asText());
+        } else if (value.isNumber() || value.isBoolean()) {
+            parts.add(label + "=" + value.asText());
+        }
+    }
+
+    private String firstProviderText(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            JsonNode value = node.path(fieldName);
+            if (value.isTextual() && !value.asText().isBlank()) {
+                return value.asText();
+            }
+        }
+        Iterator<JsonNode> values = node.elements();
+        while (values.hasNext()) {
+            JsonNode value = values.next();
+            if (value.isTextual() && !value.asText().isBlank()) {
+                return value.asText();
+            }
+        }
+        return "";
+    }
+
+    private String sanitizeDiagnosticMessage(Exception exception) {
+        String message = exception.getMessage() == null || exception.getMessage().isBlank()
+                ? exception.getClass().getSimpleName()
+                : exception.getMessage();
+        return sanitizeDiagnosticText(message);
+    }
+
+    private String safeSnippet(String value) {
+        String sanitized = sanitizeDiagnosticText(value)
+                .replace("\r", " ")
+                .replace("\n", " ")
+                .trim();
+        if (sanitized.length() <= 500) {
+            return sanitized;
+        }
+        return sanitized.substring(0, 500) + "...";
+    }
+
+    private String sanitizeDiagnosticText(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String sanitized = value;
+        if (!apiKey.isBlank()) {
+            sanitized = sanitized.replace(apiKey, "[REDACTED_API_KEY]");
+        }
+        sanitized = sanitized.replaceAll("(?i)bearer\\s+[A-Za-z0-9._~+/=-]+", "Bearer [REDACTED]");
+        sanitized = sanitized.replaceAll("(?i)(api[_-]?key[\"'\\s:=]+)[^\\s,\"'}]+", "$1[REDACTED]");
+        return sanitized;
+    }
+
     private AgentResponse failedResponse(AgentRequest request, Instant startedAt, String errorMessage) {
         return new AgentResponse(
                 request.requestId(),
@@ -446,5 +679,11 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                 errorMessage,
                 startedAt,
                 timeProvider.now());
+    }
+
+    private static class AdapterResponseException extends Exception {
+        private AdapterResponseException(String message) {
+            super(message);
+        }
     }
 }

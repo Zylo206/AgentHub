@@ -26,7 +26,9 @@ public class TaskStep {
     private final String routingReason;
     private final boolean realOutputUsed;
     private final String artifactParseStatus;
+    private final String artifactBuildValidationStatus;
     private final String artifactQualityStatus;
+    private final Integer artifactQualityScore;
     private final String artifactQualityReason;
     private final List<ArtifactId> producedArtifactIds;
     private final Instant createdAt;
@@ -145,6 +147,60 @@ public class TaskStep {
             List<ArtifactId> producedArtifactIds,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                id,
+                taskRunId,
+                stepOrder,
+                assignedAgentId,
+                taskDescription,
+                status,
+                inputContext,
+                outputContent,
+                preferredAdapterType,
+                actualAdapterType,
+                adapterStatus,
+                adapterResponseSummary,
+                adapterErrorMessage,
+                parallelGroupKey,
+                dependsOnStepOrders,
+                routingReason,
+                realOutputUsed,
+                artifactParseStatus,
+                null,
+                artifactQualityStatus,
+                null,
+                artifactQualityReason,
+                producedArtifactIds,
+                createdAt,
+                updatedAt);
+    }
+
+    public TaskStep(
+            TaskStepId id,
+            TaskRunId taskRunId,
+            int stepOrder,
+            AgentId assignedAgentId,
+            String taskDescription,
+            TaskStepStatus status,
+            String inputContext,
+            String outputContent,
+            String preferredAdapterType,
+            String actualAdapterType,
+            String adapterStatus,
+            String adapterResponseSummary,
+            String adapterErrorMessage,
+            String parallelGroupKey,
+            List<Integer> dependsOnStepOrders,
+            String routingReason,
+            boolean realOutputUsed,
+            String artifactParseStatus,
+            String artifactBuildValidationStatus,
+            String artifactQualityStatus,
+            Integer artifactQualityScore,
+            String artifactQualityReason,
+            List<ArtifactId> producedArtifactIds,
+            Instant createdAt,
+            Instant updatedAt) {
         this.id = id;
         this.taskRunId = taskRunId;
         this.stepOrder = stepOrder;
@@ -164,7 +220,9 @@ public class TaskStep {
         this.routingReason = routingReason;
         this.realOutputUsed = realOutputUsed;
         this.artifactParseStatus = artifactParseStatus;
+        this.artifactBuildValidationStatus = artifactBuildValidationStatus;
         this.artifactQualityStatus = artifactQualityStatus;
+        this.artifactQualityScore = artifactQualityScore;
         this.artifactQualityReason = artifactQualityReason;
         this.producedArtifactIds = List.copyOf(producedArtifactIds);
         this.createdAt = createdAt;
@@ -278,8 +336,16 @@ public class TaskStep {
         return artifactParseStatus;
     }
 
+    public String getArtifactBuildValidationStatus() {
+        return artifactBuildValidationStatus;
+    }
+
     public String getArtifactQualityStatus() {
         return artifactQualityStatus;
+    }
+
+    public Integer getArtifactQualityScore() {
+        return artifactQualityScore;
     }
 
     public String getArtifactQualityReason() {

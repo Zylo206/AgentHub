@@ -1,6 +1,16 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
+const FRONTEND_DIR = path.join(REPO_ROOT, "frontend");
+const CODE_BUILD_DIR = path.join(FRONTEND_DIR, ".vite", "agenthub-real-adapter-smoke");
 const REQUIRED_ENV = [
   "AGENTHUB_OPENAI_ENABLED",
   "AGENTHUB_OPENAI_BASE_URL",
@@ -12,6 +22,9 @@ const STRICT_MODE = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_STRICT === "true";
 const EXPECT_BUILD_VALIDATION = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_BUILD_VALIDATION === "true";
 const EXPECT_QUALITY_SCORE = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_SCORE === "true";
 const EXPECT_QUALITY_REASON = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_REASON === "true";
+const EXPECT_EXECUTE_JSON_CONTRACT = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_EXECUTE_JSON_CONTRACT === "true";
+const EXPECT_REAL_FIRST_ARTIFACT = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_REAL_FIRST_ARTIFACT === "true";
+const EXPECT_CODE_BUILD = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD === "true";
 
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
@@ -69,6 +82,120 @@ function assertRequiredEnvironment() {
     throw new Error("AGENTHUB_ARTIFACT_GENERATION_MODE must be REAL_FIRST for this smoke test.");
   }
   return true;
+}
+
+function isFixtureBackedOpenAiAdapter(adapter) {
+  const description = String(adapter?.description || "").toLowerCase();
+  const failureReason = String(adapter?.failureReason || "").toLowerCase();
+  return description.includes("fixture") || failureReason.includes("fixture");
+}
+
+function assertAdapterExecutionResponseContract(response) {
+  if (!response || typeof response !== "object") {
+    throw new Error("adapter execute response is not an object");
+  }
+  if (response.actualAdapterType !== "OPENAI_COMPATIBLE") {
+    throw new Error(`expected actualAdapterType=OPENAI_COMPATIBLE, got ${response.actualAdapterType}`);
+  }
+  if (response.status !== "COMPLETED") {
+    throw new Error(`adapter execution expected COMPLETED, got ${response.status}: ${response.errorMessage || ""}`);
+  }
+  if (response.fallbackUsed) {
+    throw new Error(`adapter execution used fallback: ${response.errorMessage || "no reason"}`);
+  }
+  if (typeof response.content !== "string" || !response.content.trim()) {
+    throw new Error("adapter execution response content is empty");
+  }
+  if (!Array.isArray(response.producedArtifactHints)) {
+    throw new Error("adapter execution response missing producedArtifactHints[]");
+  }
+}
+
+function extensionForArtifact(artifact) {
+  const title = String(artifact?.title || "").trim();
+  const titleExtension = path.extname(title).replace(".", "").toLowerCase();
+  if (["ts", "tsx", "js", "jsx"].includes(titleExtension)) {
+    return titleExtension;
+  }
+  const language = String(artifact?.language || "").trim().toLowerCase();
+  if (["ts", "tsx", "js", "jsx"].includes(language)) {
+    return language;
+  }
+  return "tsx";
+}
+
+function safeArtifactBaseName(artifact) {
+  const rawTitle = String(artifact?.title || "RealAdapterArtifact").replace(/\.[^.]+$/, "");
+  const sanitized = rawTitle.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
+  return sanitized || "RealAdapterArtifact";
+}
+
+function tscCommand() {
+  const localTscJs = path.join(FRONTEND_DIR, "node_modules", "typescript", "bin", "tsc");
+  if (existsSync(localTscJs)) {
+    return {
+      command: process.execPath,
+      baseArgs: [localTscJs]
+    };
+  }
+  const executable = process.platform === "win32" ? "tsc.cmd" : "tsc";
+  const local = path.join(FRONTEND_DIR, "node_modules", ".bin", executable);
+  return {
+    command: existsSync(local) ? local : executable,
+    baseArgs: []
+  };
+}
+
+async function verifyCodeArtifactBuild(artifact) {
+  await rm(CODE_BUILD_DIR, { recursive: true, force: true });
+  const srcDir = path.join(CODE_BUILD_DIR, "src");
+  await mkdir(srcDir, { recursive: true });
+  try {
+    const extension = extensionForArtifact(artifact);
+    const fileName = `${safeArtifactBaseName(artifact)}.${extension}`;
+    const artifactPath = path.join(srcDir, fileName);
+    const content = String(artifact.content || "");
+    if (!content.trim()) {
+      throw new Error(`CODE artifact ${artifact.title} has empty content`);
+    }
+    if (content.trim().startsWith("```")) {
+      throw new Error(`CODE artifact ${artifact.title} is Markdown fenced, expected raw source`);
+    }
+    await writeFile(artifactPath, content, "utf8");
+    await writeFile(path.join(CODE_BUILD_DIR, "tsconfig.json"), JSON.stringify({
+      compilerOptions: {
+        target: "ES2020",
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        jsx: "react-jsx",
+        strict: false,
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+        skipLibCheck: true,
+        noEmit: true,
+        types: ["react", "react-dom"]
+      },
+      include: ["src/**/*"]
+    }, null, 2), "utf8");
+
+    const tsc = tscCommand();
+    const result = spawnSync(tsc.command, [...tsc.baseArgs, "--project", path.join(CODE_BUILD_DIR, "tsconfig.json"), "--noEmit"], {
+      cwd: FRONTEND_DIR,
+      encoding: "utf8",
+      shell: false
+    });
+    if (result.error) {
+      throw new Error(`TypeScript build check could not start for ${artifact.title}: ${result.error.message}`);
+    }
+    if (result.status !== 0) {
+      const output = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
+      const diagnostic = output || `tsc exited with status=${result.status}, signal=${result.signal || "none"}, command=${tsc.command}`;
+      throw new Error(`TypeScript build check failed for ${artifact.title}: ${diagnostic.slice(0, 1200)}`);
+    }
+    pass(`CODE artifact TypeScript build check passed: ${artifact.title}`);
+  } finally {
+    await rm(CODE_BUILD_DIR, { recursive: true, force: true });
+  }
 }
 
 async function request(path, init = {}) {
@@ -164,11 +291,18 @@ async function assertOpenAiAdapterAvailable() {
     warn(`OPENAI_COMPATIBLE is not AVAILABLE (${openai.status}), skipping real adapter assertions.`);
     return false;
   }
-  if (String(openai.description || "").toLowerCase().includes("fixture")) {
+  if (isFixtureBackedOpenAiAdapter(openai)) {
     if (STRICT_MODE) {
-      throw new Error("OPENAI_COMPATIBLE appears to be fixture-backed; this script requires a real provider.");
+      throw new Error("OPENAI_COMPATIBLE is fixture-backed; real provider is required for this smoke test.");
     }
-    warn("OPENAI_COMPATIBLE appears to be fixture-backed; skipping real provider-only assertions.");
+    warn("OPENAI_COMPATIBLE is fixture-backed; this is not real provider output and will be skipped.");
+    return false;
+  }
+  if (openai.placeholder === true) {
+    if (STRICT_MODE) {
+      throw new Error("OPENAI_COMPATIBLE is placeholder-backed; this script requires real provider output.");
+    }
+    warn("OPENAI_COMPATIBLE is placeholder-backed; skipping strict real-provider assertions.");
     return false;
   }
   pass("OPENAI_COMPATIBLE adapter available");
@@ -197,17 +331,27 @@ async function executeOpenAiAdapter() {
     })
   });
 
-  if (response.actualAdapterType !== "OPENAI_COMPATIBLE") {
-    throw new Error(`expected actualAdapterType=OPENAI_COMPATIBLE, got ${response.actualAdapterType}`);
-  }
-  if (response.fallbackUsed) {
-    throw new Error(`adapter execution used fallback: ${response.errorMessage || "no reason"}`);
-  }
-  if (response.status !== "COMPLETED") {
-    throw new Error(`adapter execution expected COMPLETED, got ${response.status}: ${response.errorMessage || ""}`);
+  if (EXPECT_EXECUTE_JSON_CONTRACT) {
+    assertAdapterExecutionResponseContract(response);
+  } else {
+    if (response.actualAdapterType !== "OPENAI_COMPATIBLE") {
+      throw new Error(`expected actualAdapterType=OPENAI_COMPATIBLE, got ${response.actualAdapterType}`);
+    }
+    if (response.fallbackUsed) {
+      throw new Error(`adapter execution used fallback: ${response.errorMessage || "no reason"}`);
+    }
+    if (response.status !== "COMPLETED") {
+      throw new Error(`adapter execution expected COMPLETED, got ${response.status}: ${response.errorMessage || ""}`);
+    }
+    if (typeof response.content !== "string" || !response.content.trim()) {
+      throw new Error("adapter response content is empty");
+    }
   }
   parseArtifactJson(response.content);
   pass("OPENAI_COMPATIBLE execute returned valid artifact JSON");
+  if (EXPECT_EXECUTE_JSON_CONTRACT) {
+    pass("OPENAI_COMPATIBLE execute response contract validated");
+  }
 }
 
 async function createOpenAiAgent(name, toolTags) {
@@ -278,6 +422,12 @@ async function runDemoTaskWithRealAdapter() {
         .join(" | ")}`
     );
   }
+  if (EXPECT_BUILD_VALIDATION || EXPECT_QUALITY_SCORE || EXPECT_QUALITY_REASON) {
+    if (!acceptedRealStep.artifactParseStatus) {
+      throw new Error(`accepted real step missing artifactParseStatus: ${acceptedRealStep.stepOrder}`);
+    }
+    pass(`accepted real step parse status: ${acceptedRealStep.artifactParseStatus}`);
+  }
   if (EXPECT_BUILD_VALIDATION && !acceptedRealStep.artifactBuildValidationStatus) {
     throw new Error(`accepted real step missing artifactBuildValidationStatus: ${acceptedRealStep.stepOrder}`);
   }
@@ -309,8 +459,20 @@ async function runDemoTaskWithRealAdapter() {
   if (EXPECT_QUALITY_REASON && !String(acceptedPrimary.qualityReason || "").trim()) {
     throw new Error("accepted REAL_ADAPTER artifact missing qualityReason");
   }
+  if (EXPECT_CODE_BUILD) {
+    const acceptedCodeArtifact = realArtifacts.find(
+      (artifact) => artifact.type === "CODE" && artifact.qualityStatus === "ACCEPTED"
+    );
+    if (!acceptedCodeArtifact) {
+      throw new Error("AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD=true but no accepted REAL_ADAPTER CODE artifact was produced.");
+    }
+    await verifyCodeArtifactBuild(acceptedCodeArtifact);
+  }
   if (!acceptedPrimary.sourceAdapterType || acceptedPrimary.sourceAdapterType !== "OPENAI_COMPATIBLE") {
     throw new Error(`expected sourceAdapterType=OPENAI_COMPATIBLE, got ${acceptedPrimary.sourceAdapterType}`);
+  }
+  if (EXPECT_REAL_FIRST_ARTIFACT && !String(acceptedPrimary.generationMode || "").includes("REAL_FIRST")) {
+    throw new Error(`expected REAL_FIRST primary artifact; got generationMode=${acceptedPrimary.generationMode || "UNKNOWN"}`);
   }
   if (String(acceptedPrimary.content || "").includes("# Real Adapter Output") || String(acceptedPrimary.content || "").includes("Persisted Because:")) {
     throw new Error("REAL_ADAPTER primary artifact content is wrapped with adapter metadata");
@@ -322,6 +484,9 @@ async function runDemoTaskWithRealAdapter() {
     throw new Error("REAL_FIRST expected static template fallback artifacts to be archived");
   }
   pass(`REAL_FIRST accepted primary artifact: ${acceptedPrimary.title}`);
+  if (EXPECT_REAL_FIRST_ARTIFACT) {
+    pass(`REAL_FIRST primary artifact generationMode: ${acceptedPrimary.generationMode}`);
+  }
   if (EXPECT_BUILD_VALIDATION) {
     pass(`accepted primary artifact build validation: ${acceptedPrimary.buildValidationStatus}`);
   }
@@ -337,13 +502,19 @@ async function runDemoTaskWithRealAdapter() {
 async function run() {
   console.log(`AgentHub real adapter smoke target: ${API_BASE}`);
   console.log(`AgentHub real adapter strict mode: ${STRICT_MODE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real adapter execute JSON contract assertion: ${EXPECT_EXECUTE_JSON_CONTRACT ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real adapter REAL_FIRST artifact assertion: ${EXPECT_REAL_FIRST_ARTIFACT ? "enabled" : "disabled"}`);
   console.log(`AgentHub real build validation assertion: ${EXPECT_BUILD_VALIDATION ? "enabled" : "disabled"}`);
   console.log(`AgentHub real quality score assertion: ${EXPECT_QUALITY_SCORE ? "enabled" : "disabled"}`);
   console.log(`AgentHub real quality reason assertion: ${EXPECT_QUALITY_REASON ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real CODE TypeScript build assertion: ${EXPECT_CODE_BUILD ? "enabled" : "disabled"}`);
 
   const canRun = assertRequiredEnvironment();
   if (!canRun) {
     warn("required real-provider env is not configured. this smoke script is skipped in non-real mode.");
+    if (!STRICT_MODE) {
+      warn("Non-strict mode: fixture or config-only environments are treated as explicit skip signals.");
+    }
     return;
   }
 

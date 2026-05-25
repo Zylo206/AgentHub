@@ -3519,3 +3519,151 @@
 - 增加可选真实 build/lint 验证脚本，但默认仍不阻塞无 Node 项目结构的 Demo。
 - 将 retry / revise advice 接入显式用户确认流，允许用户一键创建修复 TaskRun。
 - 后续在真实 provider 链路稳定后再推进持久化实库验证。
+
+## Phase 79：OpenAI-compatible 深度稳定化与 REAL_ADAPTER 观测字段贯通
+
+### 目标
+
+- 优先打磨 OpenAI-compatible 真实输出链路，作为真实 Agent 深度接入的第一阶段。
+- 收紧真实 provider 输出的 JSON Artifact contract，增强失败诊断，并把构建校验 / 质量分数贯通到 Artifact、TaskStep 和 JDBC schema。
+- 明确本轮不同时铺开 Claude Code / Codex / OpenCode 深度接入。
+
+### 主要变更
+
+- `OpenAICompatibleAgentAdapter` 增强 JSON-only prompt、Artifact contract 校验、provider HTTP 错误解析、超时 / I/O / 非 JSON 响应诊断和敏感信息脱敏。
+- 新增可选 `AGENTHUB_OPENAI_JSON_RESPONSE_FORMAT_ENABLED` / `agenthub.adapters.openai-compatible.json-response-format-enabled`，仅显式开启时向兼容 provider 发送 JSON response format。
+- `AgentStepExecutor` 将 `buildValidationStatus`、`qualityScore`、`qualityReason` 写入 TaskStep 输出摘要，并在 REAL_FIRST 下保留静态 fallback 的 archived 状态。
+- `Artifact` / `TaskStep` 增加构建校验与质量分数字段，前端和 smoke 可直接读取。
+- JDBC Artifact / TaskStep repository 与 `schema-jdbc.sql` 同步新增 build validation 和 quality score 字段。
+- `real-adapter-smoke-test.mjs` 增加 opt-in 断言：真实执行 JSON contract、REAL_FIRST 主产物、build validation、quality score、quality reason。
+- `.env.example` 补充 OpenAI-compatible JSON response format 配置项。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `node scripts/real-adapter-smoke-test.mjs` 在未配置真实 provider 时保持 opt-in skip；真实 provider 验证仍需用户本地显式配置。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 smoke 仍不依赖真实外部 LLM。
+- 本轮没有提交任何 API key，也不要求真实 provider 必须可用。
+- 构建校验仍是轻量规则化校验，没有执行真实 `npm build`、lint、测试或浏览器渲染。
+- Codex / Claude Code / OpenCode 仍是 CLI 探测型 Adapter，本轮没有做深度平台接入。
+- 不推进 MySQL 实库验证、WebSocket 双向控制、token streaming、多节点事件总线或真实部署平台。
+
+### 遗留问题
+
+- OpenAI-compatible 的真实产物质量仍取决于 provider 对 JSON contract 的遵循程度。
+- `response_format=json_object` 并非所有 OpenAI-compatible provider 都支持，因此默认关闭。
+- 质量门禁仍是规则化，不是完整 JSON Schema validator、编译器、静态分析器或安全扫描。
+- 真实 provider 端到端验证需要本地启动 backend 并配置真实环境变量。
+
+### 下一步建议
+
+- 在真实 provider 验证稳定后，为 OpenAI-compatible 增加更严格 JSON Schema 校验和可选真实 lint/build 验证。
+- 再考虑 MySQL 实库验证或 WebSocket control plane；Claude/Codex/OpenCode 深度接入应等 OpenAI-compatible 链路稳定后再做。
+
+## Phase 80：OpenAI-compatible 瞬时失败重试与后续边界确认
+
+### 目标
+
+- 继续优先稳定 OpenAI-compatible 真实 provider 链路，不同时铺开 Claude / Codex / OpenCode 深度接入。
+- 为真实 provider 的瞬时失败增加最小可配置 retry，降低 429 / 5xx / timeout / I/O 抖动导致的误 fallback。
+- 明确 MySQL/JDBC 验证 sprint 和 WebSocket cancel / stop run 都是后续项，不在本轮扩大实现面。
+
+### 主要变更
+
+- `OpenAICompatibleAgentAdapter` 增加可配置 retry：
+  - `agenthub.adapters.openai-compatible.max-retries`
+  - `agenthub.adapters.openai-compatible.retry-backoff-millis`
+  - 对应环境变量 `AGENTHUB_OPENAI_MAX_RETRIES`、`AGENTHUB_OPENAI_RETRY_BACKOFF_MILLIS`
+- retry 只覆盖 transient failure：HTTP 429、HTTP 5xx、`HttpTimeoutException`、`IOException`。
+- JSON contract 错误、空 content、缺少 artifact 字段等模型输出质量问题不重试，继续返回明确失败原因并走现有 fallback。
+- retry 失败信息包含 attempts 摘要，并继续脱敏 API key / Bearer / api_key。
+- `.env.example` 和 `application.yml` 同步新增 retry 配置项。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- 使用真实 OpenAI-compatible provider 临时启动 backend，并运行 `node scripts/real-adapter-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有做 Claude / Codex / OpenCode 深度平台接入。
+- retry 不保证 provider 一定成功，只减少瞬时失败；最终失败仍由 Adapter Registry fallback 到 MOCK。
+- MySQL/JDBC 仍保持 profile 骨架和后续验证 sprint，不切默认持久化。
+- SSE 仍是当前 MVP 的实时刷新通道；WebSocket cancel / stop run、token streaming、多节点事件总线仍后置。
+
+### 遗留问题
+
+- OpenAI-compatible 仍需要更严格 JSON Schema validator 和可选真实 lint/build 验证。
+- MySQL/JDBC 还缺实库 create/query/update 断言和部分 repository 的 JDBC 覆盖。
+- WebSocket cancel / stop run 需要先补 TaskRun 可取消状态机、取消 API、审计和 realtime 事件。
+
+### 下一步建议
+
+- 短期继续围绕 OpenAI-compatible 做真实输出质量和 schema 稳定化。
+- 等真实输出链路稳定后，再开 MySQL/JDBC 验证 sprint。
+- SSE 足够当前 MVP；WebSocket control plane 可在 TaskRun 取消语义设计完成后推进。
+
+## Phase 81：OpenAI-compatible JSON Schema Validator 与可选真实 CODE 编译验证
+
+### 目标
+
+- 继续稳定 `OPENAI_COMPATIBLE -> REAL_FIRST -> REAL_ADAPTER Artifact` 链路。
+- 将真实 provider 输出从“可解析 JSON”收紧为“必须满足 AgentHub Artifact contract 的 raw JSON”。
+- 增加 opt-in 的真实 CODE Artifact TypeScript 编译 smoke，不影响默认 Demo 和无真实 provider 环境。
+
+### 主要变更
+
+- 新增 `AdapterArtifactContractValidator`，统一校验 OpenAI-compatible 输出 contract：
+  - root 必须是 JSON object。
+  - `assistantMessage` 必须是非空字符串。
+  - `artifacts[]` 必须非空。
+  - 每个 Artifact 必须包含非空 `title`、`type`、`language`、`content`、`summary`。
+  - `type` 必须是 AgentHub 支持的 Artifact 类型。
+  - 根响应和 CODE content 都不能使用 Markdown fence。
+  - 明显 provider error / exception / unauthorized / rate limit 内容会被拒绝。
+- `OpenAICompatibleAgentAdapter` 改为调用统一 validator；schema / contract 错误不 retry，继续返回明确失败原因并走现有 fallback。
+- `real-adapter-smoke-test.mjs` 增加 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD=true`：
+  - 将 accepted `REAL_ADAPTER` CODE Artifact 写入 `frontend/.vite/agenthub-real-adapter-smoke/` 临时目录。
+  - 生成临时 `tsconfig.json`。
+  - 调用 frontend 本地 TypeScript compiler 执行 `tsc --noEmit`。
+  - 验证结束后清理临时目录。
+- `.env.example` 和 `scripts/README.md` 补充可选 CODE build check 说明。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `node scripts/real-adapter-smoke-test.mjs` 在未配置真实 provider 时仍保持 opt-in skip。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 smoke 仍不依赖真实外部 LLM。
+- 可选 CODE 编译 smoke 只在显式设置 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD=true` 时运行。
+- CODE 编译只做 TypeScript / TSX 编译检查，不做 ESLint、unit test、Vite full build、浏览器渲染或安全扫描。
+- 本轮不推进 Claude / Codex / OpenCode 深度接入，不推进 MySQL 实库验证、WebSocket 双向控制、token streaming、多节点事件总线或真实部署平台。
+
+### 遗留问题
+
+- 真实 provider 生成的代码质量仍受模型输出稳定性影响。
+- CODE build check 是脚本级验证，结果不会写回业务数据库或 Artifact 记录。
+- 当前 validator 是 Java 代码实现的 contract validator，不是外部 JSON Schema 库。
+
+### 下一步建议
+
+- 使用真实 OpenAI-compatible provider 跑 strict real-adapter smoke，并在需要时开启 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD=true`。
+- 如果真实 provider 输出不稳定，继续加强 prompt contract 和 artifact quality gate。
+- 等真实输出链路稳定后，再推进 MySQL/JDBC 实库验证或 WebSocket cancel / stop run。

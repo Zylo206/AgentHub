@@ -135,9 +135,10 @@ public class JdbcTaskRepository implements TaskRepository {
                 (id, task_run_id, step_order, assigned_agent_id, task_description, status, input_context, output_content,
                  preferred_adapter_type, actual_adapter_type, adapter_status, adapter_response_summary,
                  adapter_error_message, parallel_group_key, depends_on_step_orders_json, routing_reason,
-                 real_output_used, artifact_parse_status, artifact_quality_status, artifact_quality_reason,
+                 real_output_used, artifact_parse_status, artifact_build_validation_status,
+                 artifact_quality_status, artifact_quality_score, artifact_quality_reason,
                  produced_artifact_ids_json, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open()) {
             try (var delete = connection.prepareStatement(deleteSql)) {
@@ -164,11 +165,17 @@ public class JdbcTaskRepository implements TaskRepository {
                     insert.setString(16, step.getRoutingReason());
                     insert.setBoolean(17, step.isRealOutputUsed());
                     insert.setString(18, step.getArtifactParseStatus());
-                    insert.setString(19, step.getArtifactQualityStatus());
-                    insert.setString(20, step.getArtifactQualityReason());
-                    insert.setString(21, JdbcSerializationSupport.artifactIdsJson(step.getProducedArtifactIds()));
-                    insert.setTimestamp(22, JdbcSerializationSupport.timestamp(step.getCreatedAt()));
-                    insert.setTimestamp(23, JdbcSerializationSupport.timestamp(step.getUpdatedAt()));
+                    insert.setString(19, step.getArtifactBuildValidationStatus());
+                    insert.setString(20, step.getArtifactQualityStatus());
+                    if (step.getArtifactQualityScore() == null) {
+                        insert.setObject(21, null);
+                    } else {
+                        insert.setInt(21, step.getArtifactQualityScore());
+                    }
+                    insert.setString(22, step.getArtifactQualityReason());
+                    insert.setString(23, JdbcSerializationSupport.artifactIdsJson(step.getProducedArtifactIds()));
+                    insert.setTimestamp(24, JdbcSerializationSupport.timestamp(step.getCreatedAt()));
+                    insert.setTimestamp(25, JdbcSerializationSupport.timestamp(step.getUpdatedAt()));
                     insert.addBatch();
                 }
                 insert.executeBatch();
@@ -282,7 +289,9 @@ public class JdbcTaskRepository implements TaskRepository {
                             resultSet.getString("routing_reason"),
                             readOptionalBoolean(resultSet, "real_output_used"),
                             readOptionalColumn(resultSet, "artifact_parse_status"),
+                            readOptionalColumn(resultSet, "artifact_build_validation_status"),
                             readOptionalColumn(resultSet, "artifact_quality_status"),
+                            readOptionalInteger(resultSet, "artifact_quality_score"),
                             readOptionalColumn(resultSet, "artifact_quality_reason"),
                             JdbcSerializationSupport.artifactIds(resultSet.getString("produced_artifact_ids_json")),
                             JdbcSerializationSupport.instant(resultSet.getTimestamp("created_at")),
@@ -355,7 +364,9 @@ public class JdbcTaskRepository implements TaskRepository {
                         routing_reason TEXT,
                         real_output_used BOOLEAN,
                         artifact_parse_status VARCHAR(64),
+                        artifact_build_validation_status VARCHAR(64),
                         artifact_quality_status VARCHAR(64),
+                        artifact_quality_score INT,
                         artifact_quality_reason TEXT,
                         produced_artifact_ids_json TEXT,
                         created_at TIMESTAMP,
@@ -380,6 +391,15 @@ public class JdbcTaskRepository implements TaskRepository {
             return resultSet.getBoolean(columnName);
         } catch (SQLException ignored) {
             return false;
+        }
+    }
+
+    private Integer readOptionalInteger(ResultSet resultSet, String columnName) {
+        try {
+            int value = resultSet.getInt(columnName);
+            return resultSet.wasNull() ? null : value;
+        } catch (SQLException ignored) {
+            return null;
         }
     }
 }

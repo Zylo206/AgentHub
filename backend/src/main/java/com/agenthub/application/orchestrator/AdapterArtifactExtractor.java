@@ -140,11 +140,18 @@ public class AdapterArtifactExtractor {
     }
 
     private String stripJsonCodeFence(String content) {
-        if (content.startsWith("```json")) {
-            return trimClosingFence(content.substring("```json".length()));
+        if (!content.startsWith("```")) {
+            return content;
         }
-        if (content.startsWith("```")) {
-            return trimClosingFence(content.substring("```".length()));
+
+        int firstLineEnd = content.indexOf('\n');
+        if (firstLineEnd < 0) {
+            return content;
+        }
+
+        String openingFence = content.substring(0, firstLineEnd).trim().toLowerCase();
+        if (openingFence.equals("```") || openingFence.equals("```json")) {
+            return trimClosingFence(content.substring(firstLineEnd + 1));
         }
         return content;
     }

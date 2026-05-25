@@ -100,8 +100,12 @@ public class AgentStepExecutor {
                 + artifactGenerationMode
                 + ", parseStatus="
                 + nullSafe(adapterArtifactResult.parseStatus(), "NOT_ATTEMPTED")
+                + ", buildValidationStatus="
+                + nullSafe(adapterArtifactResult.buildValidationStatus(), "NOT_EVALUATED")
                 + ", qualityStatus="
                 + nullSafe(adapterArtifactResult.qualityStatus(), "NOT_EVALUATED")
+                + ", qualityScore="
+                + (adapterArtifactResult.qualityScore() == null ? "N/A" : adapterArtifactResult.qualityScore())
                 + ", qualityReason="
                 + nullSafe(adapterArtifactResult.qualityReason(), "No quality evaluation recorded.");
 
@@ -123,9 +127,11 @@ public class AgentStepExecutor {
                 command.dependsOnStepOrders(),
                 command.routingReason(),
                 realAdapterArtifactCount > 0,
-                adapterArtifactResult.parseStatus(),
-                adapterArtifactResult.qualityStatus(),
-                adapterArtifactResult.qualityReason(),
+                nullSafe(adapterArtifactResult.parseStatus(), "NOT_ATTEMPTED"),
+                nullSafe(adapterArtifactResult.buildValidationStatus(), "NOT_EVALUATED"),
+                nullSafe(adapterArtifactResult.qualityStatus(), "NOT_EVALUATED"),
+                adapterArtifactResult.qualityScore(),
+                nullSafe(adapterArtifactResult.qualityReason(), "No quality evaluation recorded."),
                 producedArtifactIds,
                 command.now(),
                 command.now());
@@ -161,6 +167,8 @@ public class AgentStepExecutor {
                     List.of(),
                     status,
                     "NOT_EVALUATED",
+                    "NOT_EVALUATED",
+                    null,
                     reason);
         }
 
@@ -183,7 +191,9 @@ public class AgentStepExecutor {
                     List.copyOf(producedArtifactIds),
                     List.of(),
                     qualityReport.parseStatus(),
+                    qualityReport.buildValidationStatus(),
                     "REJECTED",
+                    qualityReport.qualityScore(),
                     buildStepQualityReason(qualityReport));
         }
 
@@ -211,7 +221,9 @@ public class AgentStepExecutor {
                     adapterResponse.actualAdapterType() == null ? null : adapterResponse.actualAdapterType().name(),
                     stepId.value(),
                     artifactGenerationMode,
+                    artifactQuality.buildValidationStatus(),
                     artifactQuality.qualityStatus(),
+                    artifactQuality.qualityScore(),
                     buildArtifactQualityReason(artifactQuality),
                     command.now(),
                     command.now());
@@ -224,7 +236,9 @@ public class AgentStepExecutor {
                     List.copyOf(producedArtifactIds),
                     List.of(),
                     qualityReport.parseStatus(),
+                    qualityReport.buildValidationStatus(),
                     "REJECTED",
+                    qualityReport.qualityScore(),
                     "All extracted adapter artifacts failed quality/build checks. "
                             + buildStepQualityReason(qualityReport));
         }
@@ -236,7 +250,9 @@ public class AgentStepExecutor {
                     List.copyOf(realFirstArtifactIds),
                     List.copyOf(adapterArtifactIds),
                     qualityReport.parseStatus(),
+                    qualityReport.buildValidationStatus(),
                     qualityReport.qualityStatus(),
+                    qualityReport.qualityScore(),
                     buildStepQualityReason(qualityReport));
         }
         producedArtifactIds.addAll(adapterArtifactIds);
@@ -244,7 +260,9 @@ public class AgentStepExecutor {
                 List.copyOf(producedArtifactIds),
                 List.copyOf(adapterArtifactIds),
                 qualityReport.parseStatus(),
+                qualityReport.buildValidationStatus(),
                 qualityReport.qualityStatus(),
+                qualityReport.qualityScore(),
                 buildStepQualityReason(qualityReport));
     }
 
@@ -280,7 +298,9 @@ public class AgentStepExecutor {
                         artifact.getSourceAdapterType(),
                         artifact.getSourceTaskStepId(),
                         "REAL_FIRST_STATIC_FALLBACK",
+                        artifact.getBuildValidationStatus(),
                         artifact.getQualityStatus(),
+                        artifact.getQualityScore(),
                         artifact.getQualityReason(),
                         artifact.getCreatedAt(),
                         now);
@@ -362,7 +382,9 @@ public class AgentStepExecutor {
             List<ArtifactId> producedArtifactIds,
             List<ArtifactId> adapterArtifactIds,
             String parseStatus,
+            String buildValidationStatus,
             String qualityStatus,
+            Integer qualityScore,
             String qualityReason) {
 
         private AdapterArtifactAppendResult {

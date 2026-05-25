@@ -59,6 +59,9 @@ agenthub:
       api-key: ${AGENTHUB_OPENAI_API_KEY:}
       model: ${AGENTHUB_OPENAI_MODEL:}
       timeout-seconds: 30
+      json-response-format-enabled: ${AGENTHUB_OPENAI_JSON_RESPONSE_FORMAT_ENABLED:false}
+      max-retries: ${AGENTHUB_OPENAI_MAX_RETRIES:1}
+      retry-backoff-millis: ${AGENTHUB_OPENAI_RETRY_BACKOFF_MILLIS:500}
       fixture-enabled: ${AGENTHUB_OPENAI_FIXTURE_ENABLED:false}
       fixture-review-decision: ${AGENTHUB_OPENAI_FIXTURE_REVIEW_DECISION:APPROVE}
     codex:

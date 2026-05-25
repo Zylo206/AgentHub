@@ -137,8 +137,15 @@ Optional stricter real-provider assertions:
 $env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_BUILD_VALIDATION="true"   # assert artifact build validation status
 $env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_SCORE="true"     # assert artifact quality score
 $env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_REASON="true"    # assert artifact quality reason
+$env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD="true"        # compile accepted REAL_ADAPTER CODE with frontend TypeScript
 $env:AGENTHUB_REAL_ADAPTER_SMOKE_STRICT="true"                   # enforce fixture / missing-env fail-fast
 ```
+
+The optional CODE build check writes the accepted `REAL_ADAPTER` code artifact to
+`frontend/.vite/agenthub-real-adapter-smoke/`, runs the local frontend TypeScript compiler
+with `--noEmit`, and removes the temporary directory afterwards. It is intentionally opt-in:
+default smoke tests do not require a real provider, do not run TypeScript compilation against
+generated artifacts, and do not treat fixture output as a real provider result.
 
 If you explicitly run the backend in `REAL_FIRST` mode and expect the primary generated Artifact to come from a real Adapter, enable the stricter REAL_FIRST check:
 
