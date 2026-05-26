@@ -253,6 +253,15 @@ async function runSseSmokeTest() {
   pass(`task run realtime state loaded: ${taskRunState.taskRunId}`);
   pass(`SSE recovery state validated: lastEventId=${taskRunState.lastEventId}`);
 
+  const controlResult = await request(`/api/task-runs/${taskRunId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason: "SSE smoke validates REST fallback for realtime control plane." })
+  });
+  if (!controlResult || controlResult.accepted !== false || !String(controlResult.message || "").includes("terminal")) {
+    throw new Error(`completed task run cancel should be rejected as terminal: ${JSON.stringify(controlResult)}`);
+  }
+  pass("realtime control REST cancel rejected terminal TaskRun as expected");
+
   console.log("SSE smoke test completed successfully.");
 }
 

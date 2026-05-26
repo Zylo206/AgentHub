@@ -3667,3 +3667,104 @@
 - 使用真实 OpenAI-compatible provider 跑 strict real-adapter smoke，并在需要时开启 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD=true`。
 - 如果真实 provider 输出不稳定，继续加强 prompt contract 和 artifact quality gate。
 - 等真实输出链路稳定后，再推进 MySQL/JDBC 实库验证或 WebSocket cancel / stop run。
+
+## Phase 82：实时 Control Plane MVP 与生产化能力核对
+
+### 目标
+
+- 在现有 SSE 实时刷新能力基础上，补一个最小 WebSocket control plane，为后续 cancel / stop run 打基础。
+- 保留 REST fallback，便于 smoke test 和本地验证，不把 WebSocket 作为唯一控制入口。
+- 核对 REAL_FIRST、JDBC、Context Retrieval、附件、Adapter stats、E2E 等生产化能力边界，避免把半成品能力包装成完整生产系统。
+
+### 主要变更
+
+- 新增 WebSocket endpoint：`/api/realtime/control`。
+- 新增支持命令：
+  - `PING`
+  - `CANCEL_RUN`
+  - `STOP_RUN`
+- 新增 REST fallback：
+  - `POST /api/task-runs/{taskRunId}/cancel`
+  - `POST /api/task-runs/{taskRunId}/stop`
+- 新增 `RealtimeControlService`：
+  - 校验 TaskRun 是否存在。
+  - 终态 TaskRun 拒绝 cancel / stop。
+  - 非终态 TaskRun 可标记为 `CANCELLED`。
+  - 发布 `CONTROL_COMMAND_RECEIVED` / `CONTROL_COMMAND_REJECTED` 和 `TASK_RUN_UPDATED` realtime event。
+  - 更新 `RealtimeRunState`，方便 SSE 恢复状态读取。
+- `sse-smoke-test.mjs` 增加 REST fallback 断言：已完成 TaskRun 的 cancel 应被明确拒绝。
+- `scripts/README.md` 增加 Realtime Control Plane 使用说明和边界说明。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `node --check scripts/sse-smoke-test.mjs`
+- 后续可在 backend 启动后运行 `node scripts/sse-smoke-test.mjs` 验证 SSE + control REST fallback。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是 control-plane MVP，不是完整 WebSocket 聊天系统。
+- 不做真实 token streaming。
+- 不做多节点事件总线。
+- 不做真实 in-flight Java 任务线程中断；当前 cancel / stop 是状态控制和事件通知。
+- JDBC profile 仍缺 ContextRepository 的 JDBC 实现；Context Retrieval 的 embedding backend 仍是可插拔接口和 heuristic fallback。
+
+### 遗留问题
+
+- WebSocket control 尚未接入前端按钮，也未覆盖真实长任务中断。
+- JDBC 模式下 ContextSnapshot / PinnedContext / HandoffSummary 仍需补 JDBC repository。
+- Adapter 输出质量统计已有 route stats 和 artifact quality 字段，但还缺独立质量趋势面板。
+- 附件 scan / cleanup 仍是接口和 no-op 实现，尚未接真实扫描器或调度策略。
+- 浏览器 E2E 已有基础脚本，但还需要持续扩展 auto-trigger、rejection、apply diff、restore 和附件流程。
+
+### 下一步建议
+
+- 优先补 `JdbcContextRepository`，让 JDBC profile 不再混用内存 context。
+- 将 WebSocket control plane 接入 Workspace 的 stop/cancel 操作，并记录 ActionAuditLog。
+- 为 Adapter artifact parse failure / quality failure 增加独立统计面板。
+
+## Phase 83：JDBC Context、Realtime Control UI 与 Adapter Quality Dashboard
+
+### 目标
+
+- 补齐 JDBC profile 下的 ContextSnapshot / PinnedContext / HandoffSummary 持久化覆盖。
+- 将实时 control plane 接入 Workspace，让 TaskRun 可见 Stop / Cancel 控制入口，并通过 ActionAuditLog 记录控制命令。
+- 增加 Adapter quality dashboard，集中展示 parse failure、quality failure、build failure、success rate 和 fallback rate。
+- 扩展 browser E2E 对 approval、restore、attachment、rejection 的覆盖入口。
+
+### 主要变更
+
+- 新增 `JdbcContextRepository`，并将 `InMemoryContextRepository` 限定为 `agenthub.persistence.mode=memory`。
+- `schema-jdbc.sql` 增加 context snapshot、pinned context、handoff summary 表。
+- Workspace SSE 监听增加 `CONTROL_COMMAND_RECEIVED` / `CONTROL_COMMAND_REJECTED`，收到 control 事件后刷新任务和审计数据。
+- TaskRunPanel 增加 `Stop Run` / `Cancel Run` 按钮；终态 TaskRun 禁用控制并显示提示。
+- 新增 `AdapterQualityDashboard`，基于 adapter descriptors 和当前 TaskStep 质量字段展示质量统计。
+- `e2e-browser.mjs` 增加 Adapter quality dashboard、Stop / Cancel 控件、approval affected summary、restore approval、ActionAudit panel 和可选 REJECTION 场景断言。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- WebSocket control 仍是 control-plane MVP，不是真实 token streaming 或完整双向聊天。
+- Cancel / Stop 当前以状态控制、事件通知和审计为主，不保证中断已经完成的同步任务线程。
+- Adapter quality dashboard 展示的是当前 route stats 和 TaskStep 质量信号，不是外部 APM 或长期统计仓库。
+- Browser E2E 仍要求前后端已启动，不负责启动服务。
+
+### 遗留问题
+
+- JDBC profile 仍需真实数据库端到端验证。
+- WebSocket cancel / stop 仍需接入真正长任务执行器的中断语义。
+- Adapter quality trend 目前是当前会话/当前 descriptors 级展示，后续可接持久化统计。
+- 附件 scan / cleanup 仍是接口和 no-op 实现，尚未接真实扫描或调度。
+
+### 下一步建议
+
+- 在真实数据库环境跑 JDBC smoke，验证 ContextSnapshot / PinnedContext / HandoffSummary 不再回落内存。
+- 为 Adapter quality stats 增加后端聚合 DTO，避免前端只能从当前 TaskRun 派生。
+- 如果进入真实长任务执行阶段，再把 WebSocket stop/cancel 连接到执行器 cancellation token。

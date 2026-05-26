@@ -9,6 +9,7 @@ const HEADLESS = process.env.AGENTHUB_E2E_HEADLESS !== "false";
 const SLOW_MO = Number(process.env.AGENTHUB_E2E_SLOW_MO || 0);
 const BROWSER_CHANNEL = process.env.AGENTHUB_E2E_BROWSER_CHANNEL || "msedge";
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
+const EXPECT_REJECTION = process.env.AGENTHUB_E2E_EXPECT_REJECTION === "true";
 const TEST_TITLE = `E2E Browser Conversation ${Date.now()}`;
 const TEST_PROMPT = [
   "Browser E2E: generate a React login preview, include verification-code login,",
@@ -228,6 +229,21 @@ async function seedE2eData() {
     })
   });
   const messageId = requireValue(getIdValue(message.id), "messageId missing");
+  await request(`/api/conversations/${conversationId}/messages/${messageId}/pin`, { method: "POST" });
+  const memory = await request(`/api/conversations/${conversationId}/messages/${messageId}/memory`, {
+    method: "POST",
+    body: JSON.stringify({ category: "PROJECT_FACT" })
+  });
+  if (memory.memoryId) {
+    await request(`/api/memories/${memory.memoryId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        category: "DECISION",
+        importance: 8,
+        content: "Browser E2E memory: keep verification code login visible and use a blue primary button."
+      })
+    });
+  }
   const taskRun = await runOrchestratorFromMessageWithOptionalApproval(conversationId, messageId);
   if (taskRun.status !== "COMPLETED") {
     throw new Error(`orchestrator-run status expected COMPLETED, got ${taskRun.status}`);
@@ -254,6 +270,32 @@ async function seedE2eData() {
     artifactId,
     previewUrl: resolvePreviewUrl(deployment.previewUrl)
   };
+}
+
+async function seedOptionalRejectionScenario() {
+  const conversation = await request("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({ title: `E2E Rejection Conversation ${Date.now()}`, type: "GROUP" })
+  });
+  const conversationId = requireValue(getIdValue(conversation.id), "rejection conversationId missing");
+  const message = await request(`/api/conversations/${conversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      content: `${TEST_PROMPT}\nReviewer instruction: decision: reject because blocker risk must trigger retry/revise.`
+    })
+  });
+  const messageId = requireValue(getIdValue(message.id), "rejection messageId missing");
+  const taskRun = await runOrchestratorFromMessageWithOptionalApproval(conversationId, messageId);
+  if (taskRun.status !== "BLOCKED") {
+    throw new Error(`rejection task expected BLOCKED, got ${taskRun.status}`);
+  }
+
+  const messages = await request(`/api/conversations/${conversationId}/messages`);
+  const rejectionMessages = messages.filter((item) => item.messageType === "REJECTION");
+  if (rejectionMessages.length === 0) {
+    throw new Error("rejection scenario did not emit REJECTION protocol messages");
+  }
+  pass(`optional rejection scenario covered: ${rejectionMessages.length} REJECTION messages`);
 }
 
 async function waitForVisible(page, selector, label, timeout = 20000) {
@@ -289,6 +331,9 @@ async function runBrowserE2e() {
     await waitForVisible(page, ".message-stream", "message stream");
     await waitForVisible(page, ".message-attachment-card", "message attachment card");
     await page.getByText("browser-e2e-brief.md").first().waitFor({ state: "visible", timeout: 10000 });
+    await waitForVisible(page, ".adapter-quality-dashboard", "adapter quality dashboard");
+    await page.getByRole("button", { name: "Stop Run" }).first().waitFor({ state: "visible", timeout: 10000 });
+    await page.getByRole("button", { name: "Cancel Run" }).first().waitFor({ state: "visible", timeout: 10000 });
     if (EXPECT_AUTO_TRIGGER_APPROVAL) {
       await waitForVisible(page, ".message-auto-trigger", "message auto-trigger card");
     }
@@ -302,8 +347,15 @@ async function runBrowserE2e() {
 
     await page.getByRole("button", { name: "Deploy Selected Artifact" }).click();
     await waitForVisible(page, ".approval-gate", "approval gate");
+    await waitForVisible(page, ".approval-gate__affected", "approval affected summary");
     await page.getByRole("button", { name: "Approve Deploy" }).click();
     await waitForVisible(page, ".deploy-status-card", "deploy status card");
+    await page.getByRole("button", { name: /Restore Snapshot/ }).first().click();
+    await waitForVisible(page, ".approval-gate", "restore approval gate");
+    await waitForVisible(page, ".approval-gate__affected", "restore affected summary");
+    await page.getByRole("button", { name: "Approve Restore" }).click();
+    await waitForVisible(page, ".action-audit-panel", "action audit panel");
+    await page.locator(".action-audit-panel__toggle").click();
 
     await page.goto(seeded.previewUrl, { waitUntil: "domcontentloaded" });
     await waitForVisible(page, ".preview-page__card", "preview page card");
@@ -314,6 +366,10 @@ async function runBrowserE2e() {
     }
   } finally {
     await browser.close();
+  }
+
+  if (EXPECT_REJECTION) {
+    await seedOptionalRejectionScenario();
   }
 
   pass("browser E2E completed");

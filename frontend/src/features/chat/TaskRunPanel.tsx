@@ -13,6 +13,8 @@ interface TaskRunPanelProps {
   selectedTaskRunId: string | null;
   selectedTaskStepId: string | null;
   onSelectStep: (taskRunId: string, step: TaskStep) => void;
+  onCancelTaskRun?: (taskRunId: string) => Promise<void>;
+  onStopTaskRun?: (taskRunId: string) => Promise<void>;
 }
 
 function summarizeAdapterResponse(responseSummary?: string): string | null {
@@ -431,7 +433,9 @@ export function TaskRunPanel({
   loading,
   selectedTaskRunId,
   selectedTaskStepId,
-  onSelectStep
+  onSelectStep,
+  onCancelTaskRun,
+  onStopTaskRun
 }: TaskRunPanelProps) {
   const agentNameMap = new Map(agents.map((agent) => [getIdValue(agent.id), agent.name]));
 
@@ -475,6 +479,8 @@ export function TaskRunPanel({
           const revisionOrigin = getRevisionOrigin(artifacts, taskRun);
           const activeTaskSpec = getTaskSpecForRun(taskSpecs, taskRun);
           const producedArtifacts = getProducedArtifactsForRun(artifacts, taskRun);
+          const taskRunId = getIdValue(taskRun.id);
+          const canControlRun = ["PENDING", "RUNNING"].includes(taskRun.status);
 
           return (
             <section
@@ -489,6 +495,29 @@ export function TaskRunPanel({
                 <span className={`status-pill status-pill--${normalizeStatusClass(taskRun.status)}`}>
                   {displayStatus(taskRun.status)}
                 </span>
+              </div>
+              <div className="task-run-control-row">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!canControlRun || !onStopTaskRun}
+                  onClick={() => {
+                    void onStopTaskRun?.(taskRunId);
+                  }}
+                >
+                  Stop Run
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!canControlRun || !onCancelTaskRun}
+                  onClick={() => {
+                    void onCancelTaskRun?.(taskRunId);
+                  }}
+                >
+                  Cancel Run
+                </button>
+                {!canControlRun ? <span className="task-run-control-row__hint">Control disabled for terminal runs.</span> : null}
               </div>
               <div className="task-run-card__goal">
                 {taskRun.taskPlan?.goal || "暂无任务计划目标。"}

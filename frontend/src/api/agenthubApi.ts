@@ -322,6 +322,30 @@ export function getActiveRealtimeState(conversationId: string): Promise<Realtime
   return request<RealtimeRunState | null>(`/api/conversations/${conversationId}/active-realtime-state`);
 }
 
+export interface RealtimeControlResult {
+  accepted: boolean;
+  action: string;
+  taskRunId: string;
+  conversationId: string;
+  previousStatus: string;
+  status: string;
+  message: string;
+}
+
+export function cancelTaskRun(taskRunId: string, reason: string): Promise<RealtimeControlResult> {
+  return request<RealtimeControlResult>(`/api/task-runs/${taskRunId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason })
+  });
+}
+
+export function stopTaskRun(taskRunId: string, reason: string): Promise<RealtimeControlResult> {
+  return request<RealtimeControlResult>(`/api/task-runs/${taskRunId}/stop`, {
+    method: "POST",
+    body: JSON.stringify({ reason })
+  });
+}
+
 export function getContextSnapshotsByConversation(conversationId: string): Promise<ContextSnapshot[]> {
   return request<ContextSnapshot[]>(`/api/conversations/${conversationId}/context-snapshots`);
 }

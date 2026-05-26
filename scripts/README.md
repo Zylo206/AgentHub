@@ -222,6 +222,7 @@ This is an API-level smoke test with real local attachment upload/download and a
 - checks `/active-realtime-state` and `/task-runs/{taskRunId}/realtime-state`
 - reconnects with `Last-Event-ID` to verify retained event replay
 - checks that realtime state exposes `lastEventId` for recovery
+- verifies the realtime control REST fallback rejects cancel on terminal TaskRuns
 
 Run it after starting the backend:
 
@@ -235,11 +236,34 @@ Override the backend URL:
 $env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"; node scripts/sse-smoke-test.mjs
 ```
 
-This is an API-level SSE verification. It does not validate browser rendering, WebSocket control commands, real LLM token streaming, multi-node event broadcasting, or real deployment.
+## Realtime Control Plane
+
+AgentHub exposes a minimal WebSocket control endpoint for future run-control flows:
+
+- `ws://127.0.0.1:8080/api/realtime/control`
+- Supported commands: `PING`, `CANCEL_RUN`, `STOP_RUN`
+- Payload example:
+
+```json
+{
+  "action": "CANCEL_RUN",
+  "taskRunId": "run_xxx",
+  "reason": "user requested stop"
+}
+```
+
+REST fallback endpoints are also available for local verification:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8080/api/task-runs/run_xxx/cancel" -ContentType "application/json" -Body '{"reason":"manual stop"}'
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8080/api/task-runs/run_xxx/stop" -ContentType "application/json" -Body '{"reason":"manual stop"}'
+```
+
+This is a control-plane MVP. It does not implement token streaming, full bidirectional chat, multi-node event broadcasting, or true in-flight Java thread interruption.
 
 ## Browser E2E
 
-`e2e-browser.mjs` is a lightweight Playwright wrapper that seeds a browser-test conversation through the API, uploads a small real text attachment, then verifies the rendered Workspace, message attachment card, retrieved context explanation, Orchestrator explain panel, artifact preview, approval gate, deploy status card, and static preview page.
+`e2e-browser.mjs` is a lightweight Playwright wrapper that seeds a browser-test conversation through the API, uploads a small real text attachment, then verifies the rendered Workspace, message attachment card, Adapter quality dashboard, retrieved context explanation, Orchestrator explain panel, Stop / Cancel run controls, artifact preview, approval affected summary, restore approval flow, Action Audit panel, deploy status card, and static preview page.
 
 The wrapper can use `playwright-core`, `playwright`, or `@playwright/test` from the frontend package. The lightest path is `playwright-core` plus the local Microsoft Edge browser channel:
 
@@ -263,6 +287,7 @@ $env:AGENTHUB_FRONTEND_BASE_URL="http://127.0.0.1:5173"
 $env:AGENTHUB_E2E_BROWSER_CHANNEL="msedge"
 $env:AGENTHUB_E2E_HEADLESS="false"
 $env:AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL="true"
+$env:AGENTHUB_E2E_EXPECT_REJECTION="true" # optional API-seeded REJECTION protocol assertion
 node scripts/e2e-browser.mjs
 ```
 

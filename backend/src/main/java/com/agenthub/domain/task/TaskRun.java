@@ -137,4 +137,19 @@ public class TaskRun {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+
+    public TaskRun withStatus(TaskRunStatus nextStatus, String nextResultSummary, Instant now) {
+        return new TaskRun(
+                id,
+                conversationId,
+                taskSpecId,
+                nextStatus,
+                taskPlan,
+                steps,
+                taskGraph,
+                orchestratorDecisionLog,
+                nextResultSummary == null || nextResultSummary.isBlank() ? resultSummary : nextResultSummary,
+                createdAt,
+                now);
+    }
 }

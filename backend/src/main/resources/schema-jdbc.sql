@@ -142,3 +142,43 @@ CREATE TABLE IF NOT EXISTS agenthub_task_steps (
     updated_at TIMESTAMP NULL,
     INDEX idx_agenthub_task_steps_run_order (task_run_id, step_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_context_snapshots (
+    id VARCHAR(128) PRIMARY KEY,
+    conversation_id VARCHAR(128) NOT NULL,
+    task_run_id VARCHAR(128) NOT NULL,
+    included_message_ids_json TEXT,
+    included_artifact_ids_json TEXT,
+    pinned_context_items_json TEXT,
+    retrieved_context_items_json LONGTEXT,
+    summary TEXT,
+    created_at TIMESTAMP NULL,
+    INDEX idx_agenthub_context_snapshots_conversation_created (conversation_id, created_at),
+    INDEX idx_agenthub_context_snapshots_task_run_created (task_run_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_pinned_contexts (
+    id VARCHAR(128) PRIMARY KEY,
+    conversation_id VARCHAR(128) NOT NULL,
+    content LONGTEXT,
+    source_type VARCHAR(128),
+    source_id VARCHAR(128),
+    created_at TIMESTAMP NULL,
+    UNIQUE KEY uq_agenthub_pinned_context_source (conversation_id, source_type, source_id),
+    INDEX idx_agenthub_pinned_contexts_conversation_created (conversation_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_handoff_summaries (
+    id VARCHAR(128) PRIMARY KEY,
+    task_run_id VARCHAR(128) NOT NULL,
+    source_step_id VARCHAR(128),
+    target_step_id VARCHAR(128),
+    source_agent_id VARCHAR(128),
+    target_agent_id VARCHAR(128),
+    passed_artifact_ids_json TEXT,
+    key_decisions_json TEXT,
+    open_issues_json TEXT,
+    summary TEXT,
+    created_at TIMESTAMP NULL,
+    INDEX idx_agenthub_handoff_summaries_task_run_created (task_run_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

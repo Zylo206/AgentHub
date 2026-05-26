@@ -3,6 +3,7 @@ import {
   createConversation,
   approveApprovalRequest,
   cancelApprovalRequest,
+  cancelTaskRun,
   createApprovalRequest,
   createDemoArtifactRevision,
   createDemoDeployment,
@@ -34,10 +35,12 @@ import {
   restoreArtifactSnapshotWithApproval,
   saveMessageAsMemory,
   sendMessage,
+  stopTaskRun,
   uploadConversationAttachment,
   unpinContext
 } from "../../api/agenthubApi";
 import { AgentList } from "../../features/agents/AgentList";
+import { AdapterQualityDashboard } from "../../features/agents/AdapterQualityDashboard";
 import { AdapterRoutingPanel } from "../../features/agents/AdapterRoutingPanel";
 import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel";
@@ -447,7 +450,9 @@ export function WorkspacePage() {
           "HANDOFF_UPDATED",
           "DEPLOYMENT_CREATED",
           "APPROVAL_UPDATED",
-          "ACTION_AUDIT_CREATED"
+          "ACTION_AUDIT_CREATED",
+          "CONTROL_COMMAND_RECEIVED",
+          "CONTROL_COMMAND_REJECTED"
         ].includes(event.type)
       ) {
         setRealtimeStatus("CONNECTED");
@@ -474,6 +479,8 @@ export function WorkspacePage() {
       "DEPLOYMENT_CREATED",
       "APPROVAL_UPDATED",
       "ACTION_AUDIT_CREATED",
+      "CONTROL_COMMAND_RECEIVED",
+      "CONTROL_COMMAND_REJECTED",
       "ERROR"
     ].forEach((eventType) => eventSource.addEventListener(eventType, handleRealtimeEvent));
 
@@ -1092,6 +1099,38 @@ export function WorkspacePage() {
     setActionAudits(await getActionAuditsByConversation(currentConversationId));
   }
 
+  async function handleCancelTaskRun(taskRunId: string) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setOperationMessage(null);
+    try {
+      const result = await cancelTaskRun(taskRunId, "Workspace user requested cancel.");
+      await loadConversationData(currentConversationId);
+      setOperationMessage(result.message || `Cancel result: ${result.status}`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleStopTaskRun(taskRunId: string) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setOperationMessage(null);
+    try {
+      const result = await stopTaskRun(taskRunId, "Workspace user requested stop.");
+      await loadConversationData(currentConversationId);
+      setOperationMessage(result.message || `Stop result: ${result.status}`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
   function handleSelectTaskStep(taskRunId: string, step: TaskStep) {
     setSelectedTaskRunId(taskRunId);
     setSelectedTaskStepId(getIdValue(step.id));
@@ -1282,6 +1321,7 @@ export function WorkspacePage() {
             onRefreshOrchestratorSuggestion={handleRefreshOrchestratorSuggestion}
           />
           <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
+          <AdapterQualityDashboard adapterDescriptors={adapterDescriptors} taskRuns={taskRuns} />
           <TaskRunPanel
             agents={agents}
             artifacts={artifacts}
@@ -1291,6 +1331,8 @@ export function WorkspacePage() {
             selectedTaskRunId={selectedTaskRunId}
             selectedTaskStepId={selectedTaskStepId}
             onSelectStep={handleSelectTaskStep}
+            onCancelTaskRun={handleCancelTaskRun}
+            onStopTaskRun={handleStopTaskRun}
           />
           <ContextPanel
             taskSpec={activeTaskSpec}
