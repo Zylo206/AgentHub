@@ -32,8 +32,18 @@ agenthub:
   context:
     retrieval:
       limit: ${AGENTHUB_CONTEXT_RETRIEVAL_LIMIT:8}
+    search:
+      fulltext-enabled: ${AGENTHUB_CONTEXT_SEARCH_FULLTEXT_ENABLED:false}
+      message-window: ${AGENTHUB_CONTEXT_SEARCH_MESSAGE_WINDOW:50}
+      artifact-window: ${AGENTHUB_CONTEXT_SEARCH_ARTIFACT_WINDOW:50}
+      attachment-window: ${AGENTHUB_CONTEXT_SEARCH_ATTACHMENT_WINDOW:30}
+      task-run-window: ${AGENTHUB_CONTEXT_SEARCH_TASK_RUN_WINDOW:20}
+      grep-limit: ${AGENTHUB_CONTEXT_SEARCH_GREP_LIMIT:20}
+      read-max-chars: ${AGENTHUB_CONTEXT_SEARCH_READ_MAX_CHARS:4000}
     semantic:
       backend: ${AGENTHUB_CONTEXT_SEMANTIC_BACKEND:heuristic}
+      embedding:
+        provider: ${AGENTHUB_CONTEXT_EMBEDDING_PROVIDER:disabled}
   orchestrator:
     artifact-generation-mode: ${AGENTHUB_ARTIFACT_GENERATION_MODE:HYBRID_REAL}
     step-delay-millis: ${AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS:0}

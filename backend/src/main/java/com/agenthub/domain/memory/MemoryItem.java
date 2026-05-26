@@ -12,6 +12,7 @@ public class MemoryItem {
     private final String scope;
     private final String category;
     private final String content;
+    private final String embeddingJson;
     private final int importance;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -29,6 +30,34 @@ public class MemoryItem {
             Instant createdAt,
             Instant updatedAt,
             Instant lastUsedAt) {
+        this(
+                memoryId,
+                conversationId,
+                sourceType,
+                sourceId,
+                scope,
+                category,
+                content,
+                null,
+                importance,
+                createdAt,
+                updatedAt,
+                lastUsedAt);
+    }
+
+    public MemoryItem(
+            String memoryId,
+            ConversationId conversationId,
+            String sourceType,
+            String sourceId,
+            String scope,
+            String category,
+            String content,
+            String embeddingJson,
+            int importance,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant lastUsedAt) {
         this.memoryId = memoryId;
         this.conversationId = conversationId;
         this.sourceType = sourceType;
@@ -36,6 +65,7 @@ public class MemoryItem {
         this.scope = scope;
         this.category = category;
         this.content = content;
+        this.embeddingJson = embeddingJson;
         this.importance = importance;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -70,6 +100,10 @@ public class MemoryItem {
         return content;
     }
 
+    public String getEmbeddingJson() {
+        return embeddingJson;
+    }
+
     public int getImportance() {
         return importance;
     }
@@ -100,6 +134,7 @@ public class MemoryItem {
                 scope,
                 category,
                 content,
+                embeddingJson,
                 importance,
                 createdAt,
                 updatedAt,
@@ -115,6 +150,23 @@ public class MemoryItem {
                 scope,
                 category,
                 content,
+                embeddingJson,
+                importance,
+                createdAt,
+                updatedAt,
+                lastUsedAt);
+    }
+
+    public MemoryItem withEmbeddingJson(String embeddingJson, Instant updatedAt) {
+        return new MemoryItem(
+                memoryId,
+                conversationId,
+                sourceType,
+                sourceId,
+                scope,
+                category,
+                content,
+                embeddingJson,
                 importance,
                 createdAt,
                 updatedAt,

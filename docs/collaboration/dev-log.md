@@ -4064,3 +4064,91 @@
 
 - 保持 memory 默认稳定，后续仅在需要验证持久化时启用 JDBC profile。
 - 若继续推进生产化，优先补真实 Adapter 输出质量指标的长期趋势和真实慢 Adapter 下的 Stop / Cancel 观察。
+
+## Phase 90：Context Search v1 与 DB-backed Agentic Search
+
+### 目标
+
+- 将 Context Retrieval 从直接拉取仓储列表后内存筛选，整理为 List / Grep / Read 三段式 DB-backed Agentic Search。
+- 保留现有 RetrievedContextItem explain 输出，继续支持 heuristic semantic scoring 和可插拔 embedding 边界。
+
+### 主要变更
+
+- 新增 ContextSearchService、ContextSearchCandidate、ContextSearchResult、ContextSearchSourceType。
+- ContextRetrievalService 改为消费 ContextSearchService 结果，再做 base / keyword / recency / importance / semantic 评分。
+- Message、Artifact、Attachment、TaskRun repository 增加 recent/search 默认方法。
+- JDBC repository 覆盖 recent/search 方法，使用 conversation filter + LIKE + LIMIT 下推候选过滤和关键词搜索。
+- Context Search 覆盖 pinned context、MemoryItem、recent Message、Artifact、Attachment contentPreview、previous TaskRun summary。
+- application.yml、.env.example、scripts/README.md 增加 Context Search 配置说明。
+- 重写 docs/spec/context-memory-spec.md，明确当前是 DB-backed Agentic Search，不是向量数据库 RAG。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/jdbc-smoke-test.mjs`
+- `node scripts/smoke-test.mjs`
+  - 后端主链路通过到 Deploy / Approval / Context Retrieval / Artifact / Audit。
+  - 最终失败在 frontend preview reachability：`http://127.0.0.1:5173/preview/...` 不可访问，原因是本轮未启动 frontend dev server。
+- JDBC create / restart verify 本轮未重新执行；本次变更保留 memory 默认路径，并为 JDBC profile 增加搜索下推方法。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮不引入 ES / OpenSearch / pgvector / Milvus。
+- 本轮不实现真实 embedding provider。
+- `AGENTHUB_CONTEXT_SEMANTIC_BACKEND=embedding` 仍表示 embedding backend 边界存在，但当前构建 fallback 到 heuristic 并报告 `EMBEDDING_DISABLED`。
+- MySQL 是业务权威数据源，不是专业向量数据库。
+
+### 遗留问题
+
+- 需要在真实 JDBC profile 下补跑包含 retrieved context 的 smoke / restart verify。
+- 如果数据量增大，可评估 MySQL FULLTEXT；当前 v1 只使用 LIKE + scoped window。
+- ContextPanel 可以后续进一步展示 List / Grep / Read 阶段摘要，但现有 sourceType、score breakdown、matchedTokens、windowPolicy 已可解释。
+
+### 下一步建议
+
+- 启动 frontend 后重新运行默认 smoke，确认 preview reachability 也通过。
+- 如需更细验证，可在 JDBC profile 下重新跑 `scripts/jdbc-smoke-test.mjs`，确认 retrieved context 持久化和 DB-backed search 行为。
+- 若继续推进检索能力，优先做 MySQL FULLTEXT opt-in 验证，而不是直接引入重型向量库。
+
+## Phase 91：FULLTEXT Opt-in、Context Search UI 与 Embedding 存储骨架
+
+### 目标
+
+- 在不替代默认 LIKE 检索的前提下，为 JDBC search 增加 MySQL FULLTEXT opt-in。
+- 让 ContextPanel 更明确展示 List / Grep / Read 检索阶段。
+- 增加 embedding provider 接口和 `embeddingJson` 存储骨架，但不接真实 embedding 服务。
+
+### 主要变更
+
+- JDBC Message / Artifact / Attachment / TaskRun search 支持 `AGENTHUB_CONTEXT_SEARCH_FULLTEXT_ENABLED=true` 时使用 `MATCH ... AGAINST`。
+- `schema-jdbc.sql` 增加可选 FULLTEXT index，并保留默认 LIKE 路径。
+- ContextPanel 增加 `List -> Grep -> Read`、`List -> Read fallback`、`Search stage unknown` 展示。
+- 新增 EmbeddingProvider / DisabledEmbeddingProvider。
+- MemoryItem 增加 `embeddingJson` 字段，InMemoryMemoryRepository 持久化该字段。
+- 新增 JdbcMemoryRepository 和 `agenthub_memory_items.embedding_json` schema。
+- application.yml、.env.example、scripts README、context-memory spec、next plan 同步配置和边界。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `git diff --check`
+- 本轮未重启 backend，因此没有用当前代码重新跑 `node scripts/smoke-test.mjs`；上一轮 smoke 失败点是 frontend preview server 未启动。
+
+### 静态 / Mock / Placeholder 部分
+
+- FULLTEXT 是 opt-in；默认仍是 scoped LIKE + LIMIT。
+- FULLTEXT 中文效果取决于 MySQL parser，不代表完整中文搜索生产方案。
+- Embedding provider 当前为 disabled skeleton，不调用外部服务。
+- `embeddingJson` 是存储边界，不代表已实现向量召回或 cosine ranking。
+
+### 遗留问题
+
+- 需要在真实 MySQL profile 下单独验证 FULLTEXT enabled 的 MATCH AGAINST 路径。
+- 需要启动前后端后重跑默认 smoke，确认 ContextPanel 与 preview reachability。
+- 真实 embedding provider、向量相似度、MySQL FULLTEXT parser 优化继续后置。
+
+### 下一步建议
+
+- 如果继续推进检索生产化，先做 MySQL FULLTEXT opt-in 的实库验证脚本，再考虑真实 embedding provider。

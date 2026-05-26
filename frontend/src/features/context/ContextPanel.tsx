@@ -93,6 +93,55 @@ function resolveInjectionMode(
   return matchedSteps.length > 0 ? "inputContext fallback" : "unmatched";
 }
 
+type ContextSearchStage = "LIST_GREP_READ" | "LIST_READ_FALLBACK" | "UNKNOWN";
+
+function resolveContextSearchStage(item: RetrievedContextItem): ContextSearchStage {
+  const reasonMatch = item.reason?.match(/Search stage:\s*([A-Z_]+)/i);
+  const reasonStage = reasonMatch?.[1]?.toUpperCase();
+  if (reasonStage === "LIST_GREP_READ" || reasonStage === "LIST_READ_FALLBACK") {
+    return reasonStage;
+  }
+
+  const windowPolicy = item.windowPolicy?.toUpperCase() || "";
+  if (windowPolicy.startsWith("GREP_")) {
+    return "LIST_GREP_READ";
+  }
+
+  if (windowPolicy.startsWith("LIST_")) {
+    return "LIST_READ_FALLBACK";
+  }
+
+  if (item.matchedTokens?.length) {
+    return "LIST_GREP_READ";
+  }
+
+  return "UNKNOWN";
+}
+
+function getContextSearchStageLabel(stage: ContextSearchStage): string {
+  if (stage === "LIST_GREP_READ") {
+    return "List -> Grep -> Read";
+  }
+
+  if (stage === "LIST_READ_FALLBACK") {
+    return "List -> Read fallback";
+  }
+
+  return "Search stage unknown";
+}
+
+function getContextSearchStageDetail(stage: ContextSearchStage): string {
+  if (stage === "LIST_GREP_READ") {
+    return "Exact keyword hit before read";
+  }
+
+  if (stage === "LIST_READ_FALLBACK") {
+    return "Candidate read without exact keyword hit";
+  }
+
+  return "Older snapshot without stage metadata";
+}
+
 export function ContextPanel({
   taskSpec,
   taskRuns,
@@ -223,43 +272,55 @@ export function ContextPanel({
                   <div className="context-list-block">
                     <span className="context-list-block__label">Retrieved Context</span>
                     <div className="retrieved-context-list">
-                      {snapshot.retrievedContextItems.map((item, index) => (
-                        <article
-                          className="retrieved-context-item"
-                          key={`${formatId(snapshot.id)}-retrieved-${index}-${item.sourceType}-${item.sourceId}`}
-                        >
-                          <div className="retrieved-context-item__topline">
-                            <strong>{item.title || item.sourceId}</strong>
-                            <span>{item.sourceType}</span>
-                          </div>
-                          <div className="retrieved-context-item__meta">
-                            {item.sourceRank ? <span>rank #{item.sourceRank}</span> : null}
-                            <span>score {Number.isFinite(item.score) ? item.score.toFixed(2) : "-"}</span>
-                            {typeof item.baseScore === "number" ? <span>base {item.baseScore.toFixed(1)}</span> : null}
-                            {typeof item.keywordScore === "number" ? <span>keyword {item.keywordScore.toFixed(1)}</span> : null}
-                            {typeof item.recencyScore === "number" ? <span>recency {item.recencyScore.toFixed(1)}</span> : null}
-                            {typeof item.importanceScore === "number" ? <span>importance {item.importanceScore.toFixed(1)}</span> : null}
-                            {typeof item.semanticScore === "number" ? <span>semantic {item.semanticScore.toFixed(1)}</span> : null}
-                            {item.semanticBackend ? <span>semantic backend {item.semanticBackend}</span> : null}
-                            <span>source {item.sourceType}:{item.sourceId}</span>
-                            {item.windowPolicy ? <span>window {item.windowPolicy}</span> : null}
-                            <span>injects into {resolveInjectionStepLabel(snapshot, item, taskRuns)}</span>
-                            <span>match {resolveInjectionMode(snapshot, item, taskRuns)}</span>
-                          </div>
-                          {item.matchedTokens?.length ? (
-                            <div className="retrieved-context-item__tokens">
-                              {item.matchedTokens.map((token) => (
-                                <span key={`${item.sourceType}-${item.sourceId}-${token}`}>{token}</span>
-                              ))}
+                      {snapshot.retrievedContextItems.map((item, index) => {
+                        const searchStage = resolveContextSearchStage(item);
+
+                        return (
+                          <article
+                            className="retrieved-context-item"
+                            key={`${formatId(snapshot.id)}-retrieved-${index}-${item.sourceType}-${item.sourceId}`}
+                          >
+                            <div className="retrieved-context-item__topline">
+                              <strong>{item.title || item.sourceId}</strong>
+                              <span>{item.sourceType}</span>
                             </div>
-                          ) : null}
-                          <p className="retrieved-context-item__reason">{item.reason || "No retrieval reason provided."}</p>
-                          {item.semanticExplanation ? (
-                            <p className="retrieved-context-item__reason">Semantic: {item.semanticExplanation}</p>
-                          ) : null}
-                          <p className="retrieved-context-item__content">{item.content}</p>
-                        </article>
-                      ))}
+                            <div className="retrieved-context-item__stage-row">
+                              <span
+                                className={`retrieved-context-item__stage-chip retrieved-context-item__stage-chip--${searchStage.toLowerCase()}`}
+                              >
+                                {getContextSearchStageLabel(searchStage)}
+                              </span>
+                              <span>{getContextSearchStageDetail(searchStage)}</span>
+                              {item.windowPolicy ? <span>window {item.windowPolicy}</span> : null}
+                              {item.semanticBackend ? <span>semantic {item.semanticBackend}</span> : null}
+                            </div>
+                            <div className="retrieved-context-item__meta">
+                              {item.sourceRank ? <span>rank #{item.sourceRank}</span> : null}
+                              <span>score {Number.isFinite(item.score) ? item.score.toFixed(2) : "-"}</span>
+                              {typeof item.baseScore === "number" ? <span>base {item.baseScore.toFixed(1)}</span> : null}
+                              {typeof item.keywordScore === "number" ? <span>keyword {item.keywordScore.toFixed(1)}</span> : null}
+                              {typeof item.recencyScore === "number" ? <span>recency {item.recencyScore.toFixed(1)}</span> : null}
+                              {typeof item.importanceScore === "number" ? <span>importance {item.importanceScore.toFixed(1)}</span> : null}
+                              {typeof item.semanticScore === "number" ? <span>semantic {item.semanticScore.toFixed(1)}</span> : null}
+                              <span>source {item.sourceType}:{item.sourceId}</span>
+                              <span>injects into {resolveInjectionStepLabel(snapshot, item, taskRuns)}</span>
+                              <span>match {resolveInjectionMode(snapshot, item, taskRuns)}</span>
+                            </div>
+                            {item.matchedTokens?.length ? (
+                              <div className="retrieved-context-item__tokens">
+                                {item.matchedTokens.map((token) => (
+                                  <span key={`${item.sourceType}-${item.sourceId}-${token}`}>{token}</span>
+                                ))}
+                              </div>
+                            ) : null}
+                            <p className="retrieved-context-item__reason">{item.reason || "No retrieval reason provided."}</p>
+                            {item.semanticExplanation ? (
+                              <p className="retrieved-context-item__reason">Semantic: {item.semanticExplanation}</p>
+                            ) : null}
+                            <p className="retrieved-context-item__content">{item.content}</p>
+                          </article>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (

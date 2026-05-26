@@ -15,9 +15,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@ConditionalOnProperty(name = "agenthub.persistence.mode", havingValue = "memory", matchIfMissing = true)
 public class InMemoryMemoryRepository implements MemoryRepository {
 
     private final ConcurrentHashMap<String, MemoryItem> storage = new ConcurrentHashMap<>();
@@ -176,6 +178,7 @@ public class InMemoryMemoryRepository implements MemoryRepository {
             String scope,
             String category,
             String content,
+            String embeddingJson,
             int importance,
             Instant createdAt,
             Instant updatedAt,
@@ -190,6 +193,7 @@ public class InMemoryMemoryRepository implements MemoryRepository {
                     memoryItem.getScope(),
                     memoryItem.getCategory(),
                     memoryItem.getContent(),
+                    memoryItem.getEmbeddingJson(),
                     memoryItem.getImportance(),
                     memoryItem.getCreatedAt(),
                     memoryItem.getUpdatedAt(),
@@ -205,6 +209,7 @@ public class InMemoryMemoryRepository implements MemoryRepository {
                     scope,
                     category,
                     content,
+                    embeddingJson,
                     importance,
                     createdAt,
                     updatedAt,

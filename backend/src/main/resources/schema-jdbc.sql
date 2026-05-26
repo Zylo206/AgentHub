@@ -1,6 +1,8 @@
 -- AgentHub JDBC profile schema.
 -- This file mirrors the lightweight JDBC repositories and is safe to run repeatedly.
 -- Target dialect: MySQL 8+ / MariaDB compatible.
+-- Context Search defaults to LIKE. FULLTEXT indexes below are optional and are
+-- only required when AGENTHUB_CONTEXT_SEARCH_FULLTEXT_ENABLED=true.
 
 CREATE TABLE IF NOT EXISTS agenthub_conversations (
     id VARCHAR(128) PRIMARY KEY,
@@ -27,7 +29,8 @@ CREATE TABLE IF NOT EXISTS agenthub_messages (
     artifact_ids_json TEXT,
     attachments_json TEXT,
     created_at TIMESTAMP NULL,
-    INDEX idx_agenthub_messages_conversation_created (conversation_id, created_at)
+    INDEX idx_agenthub_messages_conversation_created (conversation_id, created_at),
+    FULLTEXT KEY ft_agenthub_messages_content (content)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS agenthub_attachments (
@@ -47,7 +50,8 @@ CREATE TABLE IF NOT EXISTS agenthub_attachments (
     created_at TIMESTAMP NULL,
     deleted_at TIMESTAMP NULL,
     INDEX idx_agenthub_attachments_conversation_created (conversation_id, created_at),
-    INDEX idx_agenthub_attachments_message_created (message_id, created_at)
+    INDEX idx_agenthub_attachments_message_created (message_id, created_at),
+    FULLTEXT KEY ft_agenthub_attachments_file_preview (file_name, content_preview)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS agenthub_artifacts (
@@ -73,7 +77,8 @@ CREATE TABLE IF NOT EXISTS agenthub_artifacts (
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL,
     INDEX idx_agenthub_artifacts_conversation_created (conversation_id, created_at),
-    INDEX idx_agenthub_artifacts_task_run_created (task_run_id, created_at)
+    INDEX idx_agenthub_artifacts_task_run_created (task_run_id, created_at),
+    FULLTEXT KEY ft_agenthub_artifacts_title_content (title, content)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS agenthub_task_specs (
@@ -111,7 +116,8 @@ CREATE TABLE IF NOT EXISTS agenthub_task_runs (
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL,
     INDEX idx_agenthub_task_runs_conversation_created (conversation_id, created_at),
-    INDEX idx_agenthub_task_runs_task_spec (task_spec_id)
+    INDEX idx_agenthub_task_runs_task_spec (task_spec_id),
+    FULLTEXT KEY ft_agenthub_task_runs_result_decision (result_summary, decision_summary)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS agenthub_task_steps (
@@ -166,6 +172,24 @@ CREATE TABLE IF NOT EXISTS agenthub_pinned_contexts (
     created_at TIMESTAMP NULL,
     UNIQUE KEY uq_agenthub_pinned_context_source (conversation_id, source_type, source_id),
     INDEX idx_agenthub_pinned_contexts_conversation_created (conversation_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_memory_items (
+    memory_id VARCHAR(128) PRIMARY KEY,
+    conversation_id VARCHAR(128) NOT NULL,
+    source_type VARCHAR(128),
+    source_id VARCHAR(128),
+    scope VARCHAR(64),
+    category VARCHAR(128),
+    content LONGTEXT,
+    embedding_json LONGTEXT,
+    importance INT,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    last_used_at TIMESTAMP NULL,
+    UNIQUE KEY uq_agenthub_memory_source (conversation_id, source_type, source_id),
+    INDEX idx_agenthub_memory_conversation_updated (conversation_id, updated_at),
+    INDEX idx_agenthub_memory_scope_updated (scope, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS agenthub_handoff_summaries (

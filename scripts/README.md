@@ -195,13 +195,28 @@ node scripts/jdbc-smoke-test.mjs
 
 This query-only mode verifies Conversation, Message, Attachment metadata and download, TaskRun, Artifact, PinnedContext, ContextSnapshot, and HandoffSummary records after restart. It still does not make JDBC the default profile.
 
-Context retrieval uses the heuristic semantic backend by default. To exercise the optional embedding backend switch without requiring an external provider, start the backend with:
+Context retrieval uses DB-backed Agentic Search by default: the backend lists scoped candidates, greps exact keywords across Message / Artifact / Memory / Attachment preview / TaskRun summary sources, then reads authoritative snippets before scoring them. The heuristic semantic backend remains the default. To exercise the optional embedding backend switch without requiring an external provider, start the backend with:
 
 ```powershell
 $env:AGENTHUB_CONTEXT_SEMANTIC_BACKEND="embedding"
 ```
 
 In this build the backend reports `EMBEDDING_DISABLED` and falls back to heuristic semantic overlap; no external embedding service is required.
+
+Optional context search window controls:
+
+```powershell
+$env:AGENTHUB_CONTEXT_SEARCH_FULLTEXT_ENABLED="false"
+$env:AGENTHUB_CONTEXT_SEARCH_MESSAGE_WINDOW="50"
+$env:AGENTHUB_CONTEXT_SEARCH_ARTIFACT_WINDOW="50"
+$env:AGENTHUB_CONTEXT_SEARCH_ATTACHMENT_WINDOW="30"
+$env:AGENTHUB_CONTEXT_SEARCH_TASK_RUN_WINDOW="20"
+$env:AGENTHUB_CONTEXT_SEARCH_GREP_LIMIT="20"
+$env:AGENTHUB_CONTEXT_SEARCH_READ_MAX_CHARS="4000"
+$env:AGENTHUB_CONTEXT_EMBEDDING_PROVIDER="disabled"
+```
+
+`AGENTHUB_CONTEXT_SEARCH_FULLTEXT_ENABLED=true` is only for JDBC/MySQL profiles with the optional FULLTEXT indexes from `schema-jdbc.sql`. The default remains scoped `LIKE + LIMIT`; FULLTEXT is not required for memory mode or default smoke tests.
 
 The smoke test always validates a local REAL_ADAPTER artifact fixture contract and validates persisted REAL_ADAPTER artifacts when the backend produces them. It also creates an isolated custom `review` Agent to verify that Tool Capability routing can select an Agent for `QUALITY_REVIEW`. `REJECTION` remains opt-in so the default demo path stays stable. To verify the Reviewer rejection loop, run:
 

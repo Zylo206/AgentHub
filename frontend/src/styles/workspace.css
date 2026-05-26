@@ -3535,6 +3535,7 @@
 
 .retrieved-context-item__topline,
 .retrieved-context-item__meta,
+.retrieved-context-item__stage-row,
 .message-attachment-card__header,
 .message-attachment-card__meta,
 .chat-attachment-composer__header {
@@ -3553,12 +3554,38 @@
 
 .retrieved-context-item__topline span,
 .retrieved-context-item__meta span,
+.retrieved-context-item__stage-row span,
 .message-attachment-card__header span,
 .message-attachment-card__meta span,
 .chat-attachment-composer__header span {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.retrieved-context-item__stage-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.retrieved-context-item__stage-chip {
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8 !important;
+  padding: 3px 9px;
+}
+
+.retrieved-context-item__stage-chip--list_grep_read {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d !important;
+}
+
+.retrieved-context-item__stage-chip--list_read_fallback {
+  border-color: rgba(245, 158, 11, 0.26);
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309 !important;
 }
 
 .retrieved-context-item__reason,

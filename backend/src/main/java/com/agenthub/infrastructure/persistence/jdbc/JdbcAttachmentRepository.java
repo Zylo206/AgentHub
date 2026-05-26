@@ -6,8 +6,11 @@ import com.agenthub.domain.conversation.ConversationId;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
@@ -16,9 +19,13 @@ import org.springframework.stereotype.Repository;
 public class JdbcAttachmentRepository implements AttachmentRepository {
 
     private final JdbcConnectionFactory connectionFactory;
+    private final boolean fulltextEnabled;
 
-    public JdbcAttachmentRepository(JdbcConnectionFactory connectionFactory) {
+    public JdbcAttachmentRepository(
+            JdbcConnectionFactory connectionFactory,
+            @Value("${agenthub.context.search.fulltext-enabled:false}") boolean fulltextEnabled) {
         this.connectionFactory = connectionFactory;
+        this.fulltextEnabled = fulltextEnabled;
         initSchema();
     }
 
@@ -69,6 +76,46 @@ public class JdbcAttachmentRepository implements AttachmentRepository {
         return queryMany("SELECT * FROM agenthub_attachments WHERE message_id = ? ORDER BY created_at", messageId);
     }
 
+    @Override
+    public List<AttachmentRecord> findRecentByConversationId(ConversationId conversationId, int limit) {
+        List<AttachmentRecord> records = queryMany(
+                "SELECT * FROM agenthub_attachments WHERE conversation_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ?",
+                conversationId.value(),
+                Math.max(0, limit));
+        Collections.reverse(records);
+        return records;
+    }
+
+    @Override
+    public List<AttachmentRecord> searchByConversationId(ConversationId conversationId, List<String> keywords, int limit) {
+        List<String> normalizedKeywords = normalizeKeywords(keywords);
+        if (normalizedKeywords.isEmpty()) {
+            return List.of();
+        }
+        if (fulltextEnabled) {
+            String sql = """
+                    SELECT * FROM agenthub_attachments
+                    WHERE conversation_id = ? AND deleted_at IS NULL
+                      AND MATCH(file_name, content_preview) AGAINST (? IN NATURAL LANGUAGE MODE)
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """;
+            List<AttachmentRecord> records = queryMany(
+                    sql,
+                    conversationId.value(),
+                    toFulltextQuery(normalizedKeywords),
+                    Math.max(0, limit));
+            Collections.reverse(records);
+            return records;
+        }
+        String where = likeWhere("LOWER(CONCAT(COALESCE(file_name, ''), ' ', COALESCE(content_preview, '')))", normalizedKeywords.size());
+        String sql = "SELECT * FROM agenthub_attachments WHERE conversation_id = ? AND deleted_at IS NULL AND (" + where
+                + ") ORDER BY created_at DESC LIMIT ?";
+        List<AttachmentRecord> records = queryMany(sql, conversationId.value(), normalizedKeywords, Math.max(0, limit));
+        Collections.reverse(records);
+        return records;
+    }
+
     private Optional<AttachmentRecord> queryOne(String sql, String value) {
         List<AttachmentRecord> records = queryMany(sql, value);
         return records.stream().findFirst();
@@ -88,6 +135,83 @@ public class JdbcAttachmentRepository implements AttachmentRepository {
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to query attachments", exception);
         }
+    }
+
+    private List<AttachmentRecord> queryMany(String sql, String value, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, value);
+            statement.setInt(2, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<AttachmentRecord> records = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    records.add(map(resultSet));
+                }
+                return records;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to query attachments", exception);
+        }
+    }
+
+    private List<AttachmentRecord> queryMany(String sql, String conversationId, List<String> keywords, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, conversationId);
+            int index = 2;
+            for (String keyword : keywords) {
+                statement.setString(index++, "%" + keyword + "%");
+            }
+            statement.setInt(index, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<AttachmentRecord> records = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    records.add(map(resultSet));
+                }
+                return records;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search attachments", exception);
+        }
+    }
+
+    private List<AttachmentRecord> queryMany(String sql, String conversationId, String fulltextQuery, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, conversationId);
+            statement.setString(2, fulltextQuery);
+            statement.setInt(3, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<AttachmentRecord> records = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    records.add(map(resultSet));
+                }
+                return records;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to fulltext search attachments", exception);
+        }
+    }
+
+    private String likeWhere(String columnExpression, int keywordCount) {
+        return java.util.stream.IntStream.range(0, keywordCount)
+                .mapToObj(index -> columnExpression + " LIKE ?")
+                .collect(java.util.stream.Collectors.joining(" OR "));
+    }
+
+    private List<String> normalizeKeywords(List<String> keywords) {
+        if (keywords == null) {
+            return List.of();
+        }
+        return keywords.stream()
+                .filter(keyword -> keyword != null && !keyword.isBlank())
+                .map(keyword -> keyword.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private String toFulltextQuery(List<String> keywords) {
+        return String.join(" ", keywords);
     }
 
     private AttachmentRecord map(ResultSet resultSet) throws SQLException {

@@ -11,8 +11,11 @@ import com.agenthub.domain.task.TaskRunId;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
@@ -21,9 +24,13 @@ import org.springframework.stereotype.Repository;
 public class JdbcArtifactRepository implements ArtifactRepository {
 
     private final JdbcConnectionFactory connectionFactory;
+    private final boolean fulltextEnabled;
 
-    public JdbcArtifactRepository(JdbcConnectionFactory connectionFactory) {
+    public JdbcArtifactRepository(
+            JdbcConnectionFactory connectionFactory,
+            @Value("${agenthub.context.search.fulltext-enabled:false}") boolean fulltextEnabled) {
         this.connectionFactory = connectionFactory;
+        this.fulltextEnabled = fulltextEnabled;
         initSchema();
     }
 
@@ -86,6 +93,45 @@ public class JdbcArtifactRepository implements ArtifactRepository {
         return queryMany("SELECT * FROM agenthub_artifacts WHERE task_run_id = ? ORDER BY created_at", taskRunId.value());
     }
 
+    @Override
+    public List<Artifact> findRecentByConversationId(ConversationId conversationId, int limit) {
+        List<Artifact> artifacts = queryMany(
+                "SELECT * FROM agenthub_artifacts WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?",
+                conversationId.value(),
+                Math.max(0, limit));
+        Collections.reverse(artifacts);
+        return artifacts;
+    }
+
+    @Override
+    public List<Artifact> searchByConversationId(ConversationId conversationId, List<String> keywords, int limit) {
+        List<String> normalizedKeywords = normalizeKeywords(keywords);
+        if (normalizedKeywords.isEmpty()) {
+            return List.of();
+        }
+        if (fulltextEnabled) {
+            String sql = """
+                    SELECT * FROM agenthub_artifacts
+                    WHERE conversation_id = ? AND MATCH(title, content) AGAINST (? IN NATURAL LANGUAGE MODE)
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """;
+            List<Artifact> artifacts = queryMany(
+                    sql,
+                    conversationId.value(),
+                    toFulltextQuery(normalizedKeywords),
+                    Math.max(0, limit));
+            Collections.reverse(artifacts);
+            return artifacts;
+        }
+        String where = likeWhere("LOWER(CONCAT(COALESCE(title, ''), ' ', COALESCE(content, '')))", normalizedKeywords.size());
+        String sql = "SELECT * FROM agenthub_artifacts WHERE conversation_id = ? AND (" + where
+                + ") ORDER BY created_at DESC LIMIT ?";
+        List<Artifact> artifacts = queryMany(sql, conversationId.value(), normalizedKeywords, Math.max(0, limit));
+        Collections.reverse(artifacts);
+        return artifacts;
+    }
+
     private List<Artifact> queryMany(String sql, String value) {
         try (Connection connection = connectionFactory.open();
                 var statement = connection.prepareStatement(sql)) {
@@ -100,6 +146,83 @@ public class JdbcArtifactRepository implements ArtifactRepository {
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to query artifacts", exception);
         }
+    }
+
+    private List<Artifact> queryMany(String sql, String value, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, value);
+            statement.setInt(2, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<Artifact> artifacts = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    artifacts.add(map(resultSet));
+                }
+                return artifacts;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to query artifacts", exception);
+        }
+    }
+
+    private List<Artifact> queryMany(String sql, String conversationId, List<String> keywords, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, conversationId);
+            int index = 2;
+            for (String keyword : keywords) {
+                statement.setString(index++, "%" + keyword + "%");
+            }
+            statement.setInt(index, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<Artifact> artifacts = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    artifacts.add(map(resultSet));
+                }
+                return artifacts;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search artifacts", exception);
+        }
+    }
+
+    private List<Artifact> queryMany(String sql, String conversationId, String fulltextQuery, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, conversationId);
+            statement.setString(2, fulltextQuery);
+            statement.setInt(3, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<Artifact> artifacts = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    artifacts.add(map(resultSet));
+                }
+                return artifacts;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to fulltext search artifacts", exception);
+        }
+    }
+
+    private String likeWhere(String columnExpression, int keywordCount) {
+        return java.util.stream.IntStream.range(0, keywordCount)
+                .mapToObj(index -> columnExpression + " LIKE ?")
+                .collect(java.util.stream.Collectors.joining(" OR "));
+    }
+
+    private List<String> normalizeKeywords(List<String> keywords) {
+        if (keywords == null) {
+            return List.of();
+        }
+        return keywords.stream()
+                .filter(keyword -> keyword != null && !keyword.isBlank())
+                .map(keyword -> keyword.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private String toFulltextQuery(List<String> keywords) {
+        return String.join(" ", keywords);
     }
 
     private Artifact map(ResultSet resultSet) throws SQLException {

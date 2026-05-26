@@ -38,6 +38,10 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 
 5. **Keep plans and docs synchronized**
    - P0 specs for multi-agent chat, artifact lifecycle, adapter output, context/memory, and approval/audit are now captured under `docs/spec/`.
+   - `Done`: Context Retrieval now uses DB-backed Agentic Search as the default retrieval shape: List / Grep / Read, with heuristic semantic scoring and optional embedding boundary retained.
+   - `Done`: JDBC search has a MySQL FULLTEXT opt-in switch while keeping LIKE as the default.
+   - `Done`: ContextPanel displays List / Grep / Read retrieval stage chips.
+   - `Done`: MemoryItem has an embedding provider/storage skeleton via `embeddingJson`; real embedding provider remains deferred.
    - Keep future spec changes aligned with the focused plans and `docs/collaboration/dev-log.md`.
    - Do not describe Mock / fixture / static / half-real behavior as full production capability.
 

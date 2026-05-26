@@ -19,9 +19,12 @@ import com.agenthub.domain.task.TaskStepStatus;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
@@ -30,9 +33,13 @@ import org.springframework.stereotype.Repository;
 public class JdbcTaskRepository implements TaskRepository {
 
     private final JdbcConnectionFactory connectionFactory;
+    private final boolean fulltextEnabled;
 
-    public JdbcTaskRepository(JdbcConnectionFactory connectionFactory) {
+    public JdbcTaskRepository(
+            JdbcConnectionFactory connectionFactory,
+            @Value("${agenthub.context.search.fulltext-enabled:false}") boolean fulltextEnabled) {
         this.connectionFactory = connectionFactory;
+        this.fulltextEnabled = fulltextEnabled;
         initSchema();
     }
 
@@ -94,6 +101,46 @@ public class JdbcTaskRepository implements TaskRepository {
     @Override
     public List<TaskRun> findTaskRunsByConversationId(ConversationId conversationId) {
         return queryRuns("SELECT * FROM agenthub_task_runs WHERE conversation_id = ? ORDER BY created_at", conversationId.value());
+    }
+
+    @Override
+    public List<TaskRun> findRecentTaskRunsByConversationId(ConversationId conversationId, int limit) {
+        List<TaskRun> taskRuns = queryRuns(
+                "SELECT * FROM agenthub_task_runs WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?",
+                conversationId.value(),
+                Math.max(0, limit));
+        Collections.reverse(taskRuns);
+        return taskRuns;
+    }
+
+    @Override
+    public List<TaskRun> searchTaskRunsByConversationId(ConversationId conversationId, List<String> keywords, int limit) {
+        List<String> normalizedKeywords = normalizeKeywords(keywords);
+        if (normalizedKeywords.isEmpty()) {
+            return List.of();
+        }
+        if (fulltextEnabled) {
+            String sql = """
+                    SELECT * FROM agenthub_task_runs
+                    WHERE conversation_id = ?
+                      AND MATCH(result_summary, decision_summary) AGAINST (? IN NATURAL LANGUAGE MODE)
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """;
+            List<TaskRun> taskRuns = queryRuns(
+                    sql,
+                    conversationId.value(),
+                    toFulltextQuery(normalizedKeywords),
+                    Math.max(0, limit));
+            Collections.reverse(taskRuns);
+            return taskRuns;
+        }
+        String where = likeWhere("LOWER(CONCAT(COALESCE(result_summary, ''), ' ', COALESCE(decision_summary, '')))", normalizedKeywords.size());
+        String sql = "SELECT * FROM agenthub_task_runs WHERE conversation_id = ? AND (" + where
+                + ") ORDER BY created_at DESC LIMIT ?";
+        List<TaskRun> taskRuns = queryRuns(sql, conversationId.value(), normalizedKeywords, Math.max(0, limit));
+        Collections.reverse(taskRuns);
+        return taskRuns;
     }
 
     private void saveRun(TaskRun taskRun) {
@@ -215,6 +262,83 @@ public class JdbcTaskRepository implements TaskRepository {
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to query task runs", exception);
         }
+    }
+
+    private List<TaskRun> queryRuns(String sql, String value, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, value);
+            statement.setInt(2, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<TaskRun> runs = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    runs.add(mapRun(resultSet));
+                }
+                return runs;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to query task runs", exception);
+        }
+    }
+
+    private List<TaskRun> queryRuns(String sql, String conversationId, List<String> keywords, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, conversationId);
+            int index = 2;
+            for (String keyword : keywords) {
+                statement.setString(index++, "%" + keyword + "%");
+            }
+            statement.setInt(index, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<TaskRun> runs = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    runs.add(mapRun(resultSet));
+                }
+                return runs;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search task runs", exception);
+        }
+    }
+
+    private List<TaskRun> queryRuns(String sql, String conversationId, String fulltextQuery, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, conversationId);
+            statement.setString(2, fulltextQuery);
+            statement.setInt(3, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<TaskRun> runs = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    runs.add(mapRun(resultSet));
+                }
+                return runs;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to fulltext search task runs", exception);
+        }
+    }
+
+    private String likeWhere(String columnExpression, int keywordCount) {
+        return java.util.stream.IntStream.range(0, keywordCount)
+                .mapToObj(index -> columnExpression + " LIKE ?")
+                .collect(java.util.stream.Collectors.joining(" OR "));
+    }
+
+    private List<String> normalizeKeywords(List<String> keywords) {
+        if (keywords == null) {
+            return List.of();
+        }
+        return keywords.stream()
+                .filter(keyword -> keyword != null && !keyword.isBlank())
+                .map(keyword -> keyword.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private String toFulltextQuery(List<String> keywords) {
+        return String.join(" ", keywords);
     }
 
     private TaskSpec mapSpec(ResultSet resultSet) throws SQLException {
