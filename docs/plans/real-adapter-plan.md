@@ -19,6 +19,9 @@
 - `Done` `AdapterArtifactQualityEvaluator` 记录 parse / quality / build validation 结果。
 - `Done` `real-adapter-smoke-test.mjs` 可 opt-in 验证真实 provider。
 - `Done` 可选 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD=true` 对 CODE Artifact 做 TypeScript 编译检查。
+- `Done` Adapter Quality Dashboard 后端 / 前端统计口径已区分 fallback text、parse failure、quality failure 和 build failure。
+- `Done` ArtifactPanel 已展示 REAL_FIRST 静态 fallback / archived Artifact 的 fallback reason，避免把静态兜底误认为真实主产物。
+- `Done` REAL_FIRST 接受合格真实输出时，静态模板 Artifact 只作为 archived fallback 保留，不覆盖 `REAL_ADAPTER` 主产物。
 
 ## 活跃计划
 
@@ -26,8 +29,8 @@
 
 - 继续强化 prompt contract，减少 provider 输出 wrapper、fence、解释性文字和空内容。
 - 继续观察真实 provider 的 `parse failure`、`quality failure`、`build failure`。
-- 将质量失败原因反馈到 TaskRunPanel、ArtifactPanel、Adapter Quality Dashboard。
-- 让静态 fallback 明确标记为 fallback / archived，不能覆盖合格真实主产物。
+- 继续将质量失败原因反馈到 TaskRunPanel、ArtifactPanel、Adapter Quality Dashboard。
+- 继续观察真实 provider 在 REAL_FIRST 下的 accepted / parse failure / quality failure / build failure / fallback 分布。
 
 ### P0：失败分类
 

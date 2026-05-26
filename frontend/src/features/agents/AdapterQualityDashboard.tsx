@@ -32,7 +32,7 @@ function isParseFailure(status?: string | null): boolean {
     return false;
   }
 
-  return !["VALID_JSON_ARTIFACTS", "TEXT_FALLBACK", "NOT_ATTEMPTED", "SKIPPED"].includes(status);
+  return !["VALID_JSON_ARTIFACTS", "TEXT_FALLBACK", "FALLBACK_TEXT", "NOT_ATTEMPTED", "SKIPPED", "EMPTY"].includes(status);
 }
 
 function isQualityFailure(status?: string | null): boolean {
@@ -40,7 +40,7 @@ function isQualityFailure(status?: string | null): boolean {
 }
 
 function isBuildFailure(status?: string | null): boolean {
-  return Boolean(status && status !== "PASSED" && status !== "NOT_EVALUATED" && status !== "SKIPPED");
+  return status === "FAILED";
 }
 
 function formatRate(value: number | null): string {

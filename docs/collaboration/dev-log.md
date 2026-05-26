@@ -3876,3 +3876,45 @@
 
 - 后续开发前先检查 `docs/plans/active-roadmap.md`。
 - 完成新能力后同时更新 `dev-log.md` 和对应专题计划，避免计划再次散落。
+
+## Phase 86：REAL_ADAPTER 输出质量贯通与 REAL_FIRST 主产物规则收敛
+
+### 目标
+
+- 让 `OPENAI_COMPATIBLE -> REAL_FIRST -> REAL_ADAPTER Artifact` 链路的质量状态更可解释。
+- 确保真实 Adapter 输出合格时优先成为主 Artifact，静态模板只作为 fallback / archived Artifact 保留。
+- 同步计划、spec 和 dev-log，避免真实 / 半真实 / 静态能力边界漂移。
+
+### 主要变更
+
+- 修正 Adapter quality metrics 的分类口径：
+  - `FALLBACK_TEXT` / `TEXT_FALLBACK` 不再被误计为 parse failure。
+  - build failure 只统计明确的 `FAILED`，不把 `WARN`、`NOT_APPLICABLE`、`NOT_EVALUATED` 或 `SKIPPED` 误计为失败。
+- 同步前端 Adapter Quality Dashboard 的统计口径，保持与后端一致。
+- ArtifactPanel 增加 fallback reason 展示，用于说明 REAL_FIRST 接受真实产物后静态模板为何被 archived / fallback。
+- 更新 `docs/plans/next.md`、`docs/plans/real-adapter-plan.md` 和 `docs/spec/adapter-output-spec.md`。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- 本轮不强制重跑真实外部 provider；真实 provider smoke 仍是 opt-in，避免默认验证依赖外部 API key。
+
+### 静态 / Mock / Placeholder 部分
+
+- `REAL_ADAPTER` 表示通过当前 JSON contract、quality evaluator 和可选 build validation，不代表代码已经达到生产级质量。
+- 静态模板仍保留为 fallback / archived Artifact，用于无 key、provider 失败或质量拒绝时保持 demo 稳定。
+- Adapter Quality Dashboard 记录的是当前后端聚合指标，不是外部 APM 或多节点指标系统。
+
+### 遗留问题
+
+- 真实 provider 仍需要持续观察 parse failure、quality failure、build failure 和 fallback 分布。
+- 真实 Adapter 输出质量仍依赖 prompt contract、schema validator 和模型能力。
+- MySQL/JDBC 实库验证、Stop/Cancel 更强执行语义、token streaming 和多节点事件总线继续后置。
+
+### 下一步建议
+
+- 先执行一次默认 build / smoke 验证。
+- 再用 opt-in 真实 provider smoke 观察 REAL_FIRST 主产物质量。
+- 如真实输出稳定，再进入 JDBC / MySQL 实库验证 sprint。

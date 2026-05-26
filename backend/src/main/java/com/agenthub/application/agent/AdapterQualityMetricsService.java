@@ -91,16 +91,12 @@ public class AdapterQualityMetricsService {
         if (status == null || status.isBlank()) {
             return false;
         }
-        return !List.of("VALID_JSON_ARTIFACTS", "TEXT_FALLBACK", "NOT_ATTEMPTED", "SKIPPED", "EMPTY")
+        return !List.of("VALID_JSON_ARTIFACTS", "TEXT_FALLBACK", "FALLBACK_TEXT", "NOT_ATTEMPTED", "SKIPPED", "EMPTY")
                 .contains(status);
     }
 
     private boolean isBuildFailure(String status) {
-        return status != null
-                && !status.isBlank()
-                && !"PASSED".equals(status)
-                && !"NOT_EVALUATED".equals(status)
-                && !"SKIPPED".equals(status);
+        return "FAILED".equals(status);
     }
 
     private boolean isQualityFailure(String status) {

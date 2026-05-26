@@ -124,6 +124,30 @@ function formatQualityScore(score: number | null | undefined): string {
   return score.toFixed(2);
 }
 
+function getArtifactFallbackReason(artifact: Artifact): string | null {
+  if (artifact.sourceKind === "REAL_ADAPTER") {
+    return null;
+  }
+
+  if (artifact.generationMode === "REAL_FIRST_STATIC_FALLBACK" || artifact.status === "ARCHIVED") {
+    return "Archived static fallback because REAL_FIRST accepted a valid real adapter artifact.";
+  }
+
+  if (artifact.qualityReason) {
+    return artifact.qualityReason;
+  }
+
+  if (artifact.sourceKind === "STATIC_TEMPLATE") {
+    return "Static template artifact kept as the stable fallback path.";
+  }
+
+  if (artifact.sourceKind === "MOCK_FALLBACK") {
+    return "Mock fallback artifact created because the preferred adapter did not produce an accepted real artifact.";
+  }
+
+  return null;
+}
+
 function renderArtifactContent(artifact: Artifact) {
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
     return (
@@ -186,6 +210,7 @@ export function ArtifactPanel({
   const versionEntries = getVersionHistoryEntries(allArtifacts, selectedArtifact);
   const selectedVersionEntry =
     versionEntries.find((entry) => entry.artifactId === selectedArtifactId) ?? null;
+  const selectedArtifactFallbackReason = selectedArtifact ? getArtifactFallbackReason(selectedArtifact) : null;
 
   function buildBaseArtifactAffectedItems(artifact: Artifact): string[] {
     return [
@@ -538,6 +563,9 @@ export function ArtifactPanel({
                   <p className="artifact-preview__line">Build validation: {formatBuildValidationValue(selectedArtifact)}</p>
                 ) : null}
                 <p className="artifact-preview__line">Code quality score: {formatQualityScore(selectedArtifact.qualityScore)}</p>
+                {selectedArtifactFallbackReason ? (
+                  <p className="artifact-preview__line">Fallback reason: {selectedArtifactFallbackReason}</p>
+                ) : null}
                 {selectedArtifact.qualityReason ? (
                   <p className="artifact-preview__line">Quality reason: {selectedArtifact.qualityReason}</p>
                 ) : null}
