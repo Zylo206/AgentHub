@@ -3832,3 +3832,47 @@
 - 先用真实 OpenAI-compatible provider 继续观察 REAL_FIRST 质量指标，确认 parse / quality / build failure 是否下降。
 - 再安排 MySQL/JDBC 实库验证 sprint，只验证 schema、repository、create/query/update/restart 主链路。
 - 等真实长任务和真实 adapter 稳定后，再评估 token streaming。
+
+## Phase 85：Plan Mode 计划项目化与 docs/plans 拆分
+
+### 目标
+
+- 将之前 Plan Mode 和 `dev-log.md` Phase 40-84 中的路线沉淀为独立计划文档。
+- 避免重要计划只留在对话上下文或混在逐轮开发日志里。
+- 为后续从半真实能力切到真实动态能力提供更清晰的路线入口。
+
+### 主要变更
+
+- 新增 `docs/plans/index.md`，说明计划目录用途、来源范围、状态约定和文件地图。
+- 新增 `docs/plans/active-roadmap.md`，整理当前建议继续推进的真实 Adapter、JDBC、Stop/Cancel、文档同步等活跃任务。
+- 新增 `docs/plans/completed-roadmap.md`，归档 Phase 40-84 已完成能力。
+- 新增 `docs/plans/deferred-roadmap.md`，明确 token streaming、多节点事件总线、真实部署、多端等后置能力。
+- 新增专题计划：
+  - `docs/plans/real-adapter-plan.md`
+  - `docs/plans/persistence-plan.md`
+  - `docs/plans/realtime-plan.md`
+  - `docs/plans/orchestrator-plan.md`
+  - `docs/plans/productionization-plan.md`
+
+### 验证方式
+
+- 手动检查 `docs/plans/` 文件结构和内容。
+- 本轮为文档重组，没有修改后端或前端业务代码。
+- 未执行 backend / frontend build；构建不受本轮文档变更影响。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮不新增业务能力，只整理路线和边界。
+- `docs/plans` 是计划与项目管理文档，不代表所有后置能力已经实现。
+- 已完成、活跃、暂缓能力仍以当前代码和验证结果为准。
+
+### 遗留问题
+
+- 后续每轮 Plan Mode 的关键计划仍需要主动写入 `docs/plans` 或对应专题文档。
+- 旧文档中的路线表可能仍有少量重复，需要在后续 V1.0 文档维护中继续去重。
+- MySQL 实库验证、token streaming、多节点事件总线、真实部署等仍按 `deferred-roadmap.md` 或 `active-roadmap.md` 的优先级推进。
+
+### 下一步建议
+
+- 后续开发前先检查 `docs/plans/active-roadmap.md`。
+- 完成新能力后同时更新 `dev-log.md` 和对应专题计划，避免计划再次散落。
