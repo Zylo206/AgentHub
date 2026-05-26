@@ -55,10 +55,7 @@ public class TaskGraph {
                     Long durationMs = startedAt == null || completedAt == null
                             ? null
                             : Math.max(0, Duration.between(startedAt, completedAt).toMillis());
-                    String batchStatus = entry.getValue().stream()
-                            .allMatch(step -> step.getStatus() == TaskStepStatus.COMPLETED)
-                            ? "COMPLETED"
-                            : "FAILED";
+                    String batchStatus = resolveBatchStatus(entry.getValue());
                     return new ExecutionBatch(
                             entry.getKey(),
                             stepOrders,
@@ -91,6 +88,25 @@ public class TaskGraph {
                 .map(Map.Entry::getKey)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static String resolveBatchStatus(List<TaskStep> steps) {
+        if (steps.stream().anyMatch(step -> "STOPPED".equals(step.getAdapterStatus()))) {
+            return "STOPPED";
+        }
+        if (steps.stream().anyMatch(step -> "CANCELLED".equals(step.getAdapterStatus()))) {
+            return "CANCELLED";
+        }
+        if (steps.stream().anyMatch(step -> step.getStatus() == TaskStepStatus.FAILED)) {
+            return "FAILED";
+        }
+        if (steps.stream().allMatch(step -> step.getStatus() == TaskStepStatus.SKIPPED)) {
+            return "SKIPPED";
+        }
+        if (steps.stream().allMatch(step -> step.getStatus() == TaskStepStatus.COMPLETED)) {
+            return "COMPLETED";
+        }
+        return "PARTIAL";
     }
 
     public String getGraphType() {

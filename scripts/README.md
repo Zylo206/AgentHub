@@ -189,10 +189,11 @@ For restart verification, copy the conversation / taskRun / artifact ids from th
 $env:AGENTHUB_JDBC_VERIFY_CONVERSATION_ID="<conv_id>"
 $env:AGENTHUB_JDBC_VERIFY_TASK_RUN_ID="<run_id>"
 $env:AGENTHUB_JDBC_VERIFY_ARTIFACT_ID="<artifact_id>"
+$env:AGENTHUB_JDBC_VERIFY_ATTACHMENT_ID="<attachment_id>" # optional; first attachment is used if omitted
 node scripts/jdbc-smoke-test.mjs
 ```
 
-This query-only mode verifies Conversation, Message, TaskRun, Artifact, and ContextSnapshot records after restart. It still does not make JDBC the default profile.
+This query-only mode verifies Conversation, Message, Attachment metadata and download, TaskRun, Artifact, PinnedContext, ContextSnapshot, and HandoffSummary records after restart. It still does not make JDBC the default profile.
 
 Context retrieval uses the heuristic semantic backend by default. To exercise the optional embedding backend switch without requiring an external provider, start the backend with:
 
@@ -260,6 +261,17 @@ node scripts/sse-smoke-test.mjs
 
 The active cancel check waits for `TASK_RUN_CREATED`, sends `CANCEL_RUN` while the run is still executing, and expects the final TaskRun to become `CANCELLED`. Without the delay, a local demo task may complete before cancel is sent, so this assertion is disabled by default.
 
+To verify active stop semantics, use the same artificial step delay and enable the stop check:
+
+```powershell
+$env:AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS="3000"
+# start backend in another terminal
+$env:AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_STOP="true"
+node scripts/sse-smoke-test.mjs
+```
+
+The active stop check sends `STOP_RUN` while the run is executing and expects the final TaskRun to become `STOPPED`. Both active checks assert that at least one step is skipped or has its adapter result discarded.
+
 ## Realtime Control Plane
 
 AgentHub exposes a minimal WebSocket control endpoint for future run-control flows:
@@ -285,7 +297,7 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8080/api/task-runs/run_xxx
 
 This is a control-plane MVP. It does not implement token streaming, full bidirectional chat, multi-node event broadcasting, or true in-flight Java thread interruption.
 
-The current cancel semantics are execution-aware for Orchestrator steps: new steps check a cancellation token before adapter execution, and completed non-streaming adapter results are discarded if cancellation was requested during the call. Java HTTP calls that are already in flight are not forcibly interrupted.
+The current control semantics are execution-aware for Orchestrator steps: `CANCEL_RUN` ends the run as `CANCELLED`, `STOP_RUN` ends it as `STOPPED`, new steps check a control token before adapter execution, and completed non-streaming adapter results are discarded if a control command was requested during the call. Java HTTP calls that are already in flight are not forcibly interrupted.
 
 ## Browser E2E
 

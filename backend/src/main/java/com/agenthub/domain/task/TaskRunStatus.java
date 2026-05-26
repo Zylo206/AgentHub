@@ -6,5 +6,6 @@ public enum TaskRunStatus {
     COMPLETED,
     FAILED,
     BLOCKED,
+    STOPPED,
     CANCELLED
 }

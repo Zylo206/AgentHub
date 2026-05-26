@@ -449,7 +449,7 @@ public class OrchestratorService {
                 conversationRef,
                 taskSpec.getId(),
                 cancellationRequested
-                        ? TaskRunStatus.CANCELLED
+                        ? controlStatus(taskRunId.value())
                         : (reviewDecision.rejected() ? TaskRunStatus.BLOCKED : TaskRunStatus.COMPLETED),
                 taskPlan,
                 demoSteps,
@@ -463,9 +463,10 @@ public class OrchestratorService {
                 now,
                 now);
         if (cancellationRequested) {
+            TaskRunStatus controlStatus = controlStatus(taskRunId.value());
             taskRun = taskRun.withStatus(
-                    TaskRunStatus.CANCELLED,
-                    "TaskRun was cancelled by realtime control. Completed artifacts were preserved and later steps were skipped. "
+                    controlStatus,
+                    controlSummary(taskRunId.value(), controlStatus)
                             + selectedAgentResolution.sourceDescription() + " " + selectedAgentSummary + " " + resultSummary,
                     now);
         }
@@ -998,6 +999,24 @@ public class OrchestratorService {
                 || executedSteps.stream()
                         .anyMatch(step -> step.getStatus() == TaskStepStatus.SKIPPED
                                 && "CANCELLED".equals(step.getAdapterStatus()));
+    }
+
+    private TaskRunStatus controlStatus(String taskRunId) {
+        return runCancellationRegistry.find(taskRunId)
+                .map(token -> "STOP_RUN".equals(token.getAction()) ? TaskRunStatus.STOPPED : TaskRunStatus.CANCELLED)
+                .orElse(TaskRunStatus.CANCELLED);
+    }
+
+    private String controlSummary(String taskRunId, TaskRunStatus status) {
+        String actionSummary = runCancellationRegistry.find(taskRunId)
+                .map(RunCancellationRegistry.RunCancellationToken::summary)
+                .orElse("CANCEL_RUN requested.");
+        if (status == TaskRunStatus.STOPPED) {
+            return "TaskRun was stopped by realtime control. Completed artifacts were preserved and later steps were skipped. "
+                    + actionSummary + " ";
+        }
+        return "TaskRun was cancelled by realtime control. Completed artifacts were preserved and adapter results after cancellation were discarded. "
+                + actionSummary + " ";
     }
 
     private TaskStep findExecutedStep(List<TaskStep> steps, int stepOrder) {

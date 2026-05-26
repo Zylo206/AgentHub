@@ -1,12 +1,13 @@
 # Persistence Plan
 
-本计划记录 AgentHub 从 memory repository 走向 JDBC / MySQL 验证的路线。当前原则是不默认切换 MySQL，先完成真实数据库验证 sprint。
+This plan tracks AgentHub's path from the default in-memory repositories toward verified JDBC / MySQL persistence. The current principle is not to switch MySQL on by default; verify the JDBC profile first and keep the memory profile stable.
 
-## 当前状态
+## Current Status
 
-- `Done` 默认 persistence mode 仍为 `memory`，保证本地开发和 demo 稳定。
-- `Done` 已有 JDBC profile 和 `schema-jdbc.sql`。
-- `Done` JDBC 覆盖核心对象骨架：
+- `Done`: Default persistence mode remains `memory` for local development and demo stability.
+- `Done`: JDBC profile exists behind `agenthub.persistence.mode=jdbc`.
+- `Done`: `backend/src/main/resources/schema-jdbc.sql` covers the current lightweight JDBC repositories.
+- `Done`: JDBC repository coverage includes:
   - Conversation
   - Message
   - AttachmentRecord
@@ -17,51 +18,70 @@
   - ContextSnapshot
   - PinnedContext
   - HandoffSummary
-- `Done` `JdbcContextRepository` 已补齐，避免 JDBC profile 下 context 混用内存。
-- `Done` `scripts/jdbc-smoke-test.mjs` 支持基础验证和 restart verify 参数。
+- `Done`: `JdbcContextRepository` is implemented, so JDBC profile no longer mixes context data with in-memory repositories.
+- `Done`: `scripts/jdbc-smoke-test.mjs` supports create-mode smoke and restart verification mode.
+- `Done`: Restart verification covers Attachment metadata / download, PinnedContext, ContextSnapshot, and HandoffSummary.
+- `Done`: Local MySQL-compatible create / restart verification passed on port `18087` using the JDBC profile.
 
-## 活跃计划
+## Verified MySQL Sprint
 
-### P0：MySQL 实库验证 sprint
+The real database verification sprint confirmed that the JDBC schema and repositories work across backend restart for the core MVP objects.
 
-目标不是默认切换数据库，而是确认 JDBC schema 和 repository 主链路真实可用。
+Verified flow:
 
-验收范围：
+- Initialize schema in a local MySQL-compatible database.
+- Start backend with `AGENTHUB_PERSISTENCE_MODE=jdbc`.
+- Create Conversation.
+- Upload Attachment.
+- Send Message.
+- Pin Context.
+- Run Demo Task.
+- Query TaskRun / TaskStep.
+- Query Artifact.
+- Query ContextSnapshot / PinnedContext / HandoffSummary.
+- Restart backend with the same JDBC database and attachment storage directory.
+- Re-query the persisted objects and download the persisted attachment.
 
-- 初始化 schema。
-- 创建 Conversation。
-- 上传 Attachment。
-- 发送 Message。
-- Pin Context。
-- Run Demo Task。
-- 查询 TaskRun / TaskStep。
-- 查询 Artifact。
-- 查询 ContextSnapshot / PinnedContext / HandoffSummary。
-- 重启 backend。
-- 再次查询关键对象，确认不是内存态。
+Observed restart verify result:
 
-### P1：Repository 行为一致性
+- Conversation persisted after restart.
+- Messages persisted after restart.
+- Attachment metadata persisted and attachment download returned HTTP 200 after restart.
+- PinnedContext persisted after restart.
+- Artifacts persisted after restart.
+- TaskRuns persisted after restart.
+- Conversation and TaskRun ContextSnapshot persisted after restart.
+- HandoffSummary persisted after restart.
 
-- memory 与 JDBC 的 DTO 返回结构保持一致。
-- ID 序列化格式保持兼容。
-- 失败信息明确区分 schema 缺失、连接失败、SQL 错误和数据不存在。
+## Active Follow-up
 
-### P1：迁移策略
+- Keep `memory` as the default mode.
+- Do not treat the current schema as a production migration system.
+- Keep JDBC verification opt-in and environment-driven.
+- If new domain objects become part of the main flow, update both `schema-jdbc.sql` and `jdbc-smoke-test.mjs`.
 
-- 当前不引入 Flyway / Liquibase / MyBatis。
-- 后续如进入长期维护，再引入 migration system。
-- 附件仍可保留本地文件系统，数据库只保存 metadata。
+## P1 Repository Consistency
 
-## 配置边界
+- Keep memory and JDBC DTO shapes consistent.
+- Keep ID serialization compatible across both profiles.
+- Make failure messages distinguish missing schema, connection failure, SQL error, and missing data.
 
-- 默认：`agenthub.persistence.mode=memory`。
-- 可选：`agenthub.persistence.mode=jdbc`。
-- JDBC 连接信息必须来自环境变量或本地配置，不写入仓库。
-- 未提供 JDBC 连接时，不应影响 memory 模式启动。
+## P1 Migration Strategy
 
-## 暂缓
+- Do not introduce Flyway / Liquibase / MyBatis migration in the current MVP phase.
+- If AgentHub enters long-term maintenance, add a migration system before changing the schema repeatedly.
+- Attachment binary storage can remain local filesystem for now; the database stores metadata and storage keys.
 
-- 默认切换 MySQL。
-- 全量生产 migration system。
-- 多租户 schema。
-- 对象存储迁移。
+## Configuration Boundary
+
+- Default: `agenthub.persistence.mode=memory`.
+- Optional: `agenthub.persistence.mode=jdbc`.
+- JDBC connection information must come from environment variables or local runtime configuration, not committed docs or source files.
+- Missing JDBC configuration must not affect memory mode startup.
+
+## Deferred
+
+- Default MySQL switch.
+- Production migration framework.
+- Multi-tenant schemas.
+- Object storage migration.

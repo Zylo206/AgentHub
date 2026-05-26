@@ -6,6 +6,7 @@ const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").
 const VERIFY_CONVERSATION_ID = process.env.AGENTHUB_JDBC_VERIFY_CONVERSATION_ID || "";
 const VERIFY_TASK_RUN_ID = process.env.AGENTHUB_JDBC_VERIFY_TASK_RUN_ID || "";
 const VERIFY_ARTIFACT_ID = process.env.AGENTHUB_JDBC_VERIFY_ARTIFACT_ID || "";
+const VERIFY_ATTACHMENT_ID = process.env.AGENTHUB_JDBC_VERIFY_ATTACHMENT_ID || "";
 
 function pass(message) {
   console.log(`[PASS] ${message}`);
@@ -66,6 +67,9 @@ async function runVerifyMode() {
   if (!VERIFY_CONVERSATION_ID) {
     throw new Error("AGENTHUB_JDBC_VERIFY_CONVERSATION_ID is required in verify mode");
   }
+  if (!VERIFY_TASK_RUN_ID) {
+    throw new Error("AGENTHUB_JDBC_VERIFY_TASK_RUN_ID is required to verify TaskRun, ContextSnapshot, and Handoff persistence");
+  }
 
   const conversation = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}`);
   if (getIdValue(conversation.id) !== VERIFY_CONVERSATION_ID) {
@@ -78,6 +82,28 @@ async function runVerifyMode() {
     throw new Error("messages were not loaded after restart");
   }
   pass(`messages persisted after restart: ${messages.length}`);
+
+  const attachments = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/attachments`);
+  if (!Array.isArray(attachments) || attachments.length === 0) {
+    throw new Error("attachments were not loaded after restart");
+  }
+  const attachmentToVerify = VERIFY_ATTACHMENT_ID
+    ? attachments.find((attachment) => attachment.attachmentId === VERIFY_ATTACHMENT_ID)
+    : attachments[0];
+  if (!attachmentToVerify?.attachmentId) {
+    throw new Error(`attachment ${VERIFY_ATTACHMENT_ID || "(first attachment)"} was not loaded after restart`);
+  }
+  const attachmentDownload = await fetch(`${API_BASE}/api/attachments/${attachmentToVerify.attachmentId}/download`);
+  if (attachmentDownload.status !== 200) {
+    throw new Error(`attachment download failed after restart: HTTP ${attachmentDownload.status}`);
+  }
+  pass(`attachments persisted and downloadable after restart: ${attachments.length}`);
+
+  const pinnedContexts = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/pinned-contexts`);
+  if (!Array.isArray(pinnedContexts) || pinnedContexts.length === 0) {
+    throw new Error("pinned contexts were not loaded after restart");
+  }
+  pass(`pinned contexts persisted after restart: ${pinnedContexts.length}`);
 
   const artifacts = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/artifacts`);
   if (!Array.isArray(artifacts) || artifacts.length === 0) {
@@ -97,13 +123,23 @@ async function runVerifyMode() {
   }
   pass(`task runs persisted after restart: ${taskRuns.length}`);
 
-  if (VERIFY_TASK_RUN_ID) {
-    const snapshots = await request(`/api/task-runs/${VERIFY_TASK_RUN_ID}/context-snapshots`);
-    if (!Array.isArray(snapshots) || snapshots.length === 0) {
-      throw new Error(`context snapshots for ${VERIFY_TASK_RUN_ID} were not loaded after restart`);
-    }
-    pass(`context snapshots persisted after restart: ${snapshots.length}`);
+  const conversationSnapshots = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/context-snapshots`);
+  if (!Array.isArray(conversationSnapshots) || conversationSnapshots.length === 0) {
+    throw new Error("conversation context snapshots were not loaded after restart");
   }
+  pass(`conversation context snapshots persisted after restart: ${conversationSnapshots.length}`);
+
+  const snapshots = await request(`/api/task-runs/${VERIFY_TASK_RUN_ID}/context-snapshots`);
+  if (!Array.isArray(snapshots) || snapshots.length === 0) {
+    throw new Error(`context snapshots for ${VERIFY_TASK_RUN_ID} were not loaded after restart`);
+  }
+  pass(`task run context snapshots persisted after restart: ${snapshots.length}`);
+
+  const handoffSummaries = await request(`/api/task-runs/${VERIFY_TASK_RUN_ID}/handoff-summaries`);
+  if (!Array.isArray(handoffSummaries) || handoffSummaries.length === 0) {
+    throw new Error(`handoff summaries for ${VERIFY_TASK_RUN_ID} were not loaded after restart`);
+  }
+  pass(`handoff summaries persisted after restart: ${handoffSummaries.length}`);
 
   console.log("JDBC restart verification completed successfully.");
 }
@@ -123,6 +159,7 @@ function runCreateMode() {
   console.log("  AGENTHUB_JDBC_VERIFY_CONVERSATION_ID=<conv_id>");
   console.log("  AGENTHUB_JDBC_VERIFY_TASK_RUN_ID=<run_id>");
   console.log("  AGENTHUB_JDBC_VERIFY_ARTIFACT_ID=<artifact_id>");
+  console.log("  AGENTHUB_JDBC_VERIFY_ATTACHMENT_ID=<attachment_id> (optional; first attachment is used if omitted)");
 
   const child = spawn(process.execPath, ["scripts/smoke-test.mjs"], {
     stdio: "inherit",

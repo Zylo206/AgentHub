@@ -1,15 +1,15 @@
 # Realtime Plan
 
-本计划记录 AgentHub 实时能力路线。当前核心是 SSE 实时刷新 + Run State Snapshot + WebSocket control plane MVP；真实 token streaming 和多节点事件总线后置。
+This plan tracks AgentHub realtime capability. The current implementation is SSE refresh + run-state snapshot + WebSocket control-plane MVP. Real token streaming and a multi-node event bus remain deferred.
 
-## 当前状态
+## Current Status
 
-- `Done` SSE endpoint：conversation 级事件流。
-- `Done` RealtimeEvent、RealtimeEventPublisher、RealtimeEventStore。
-- `Done` SseConnectionRegistry。
-- `Done` Last-Event-ID 补偿与 heartbeat。
-- `Done` RealtimeRunState 与 active realtime state。
-- `Done` 事件接入点：
+- `Done`: Conversation-level SSE endpoint.
+- `Done`: `RealtimeEvent`, `RealtimeEventPublisher`, and `RealtimeEventStore`.
+- `Done`: `SseConnectionRegistry`.
+- `Done`: Last-Event-ID replay and heartbeat.
+- `Done`: `RealtimeRunState` and active realtime state APIs.
+- `Done`: Event publishing for:
   - message created
   - task run created / updated
   - task step updated
@@ -18,41 +18,46 @@
   - approval / audit updated
   - deployment created
   - error
-- `Done` WebSocket control endpoint MVP。
-- `Done` REST fallback：cancel / stop run。
-- `Done` RunCancellationRegistry 和 execution-level cancel token 基础。
-- `Done` Workspace EventSource 集成，收到事件后刷新对应 panel。
+- `Done`: WebSocket control endpoint MVP.
+- `Done`: REST fallback for cancel / stop run.
+- `Done`: `RunCancellationRegistry` and execution-level control token foundation.
+- `Done`: Workspace `EventSource` integration, refreshing panels after relevant events.
+- `Done`: `CANCEL_RUN` and `STOP_RUN` now have distinct terminal states:
+  - `CANCEL_RUN` -> `CANCELLED`
+  - `STOP_RUN` -> `STOPPED`
+- `Done`: Agent steps check the control token before delay, after delay, before adapter execution, and after adapter execution.
+- `Done`: Non-streaming adapter results are discarded when the control token is observed after the adapter returns.
+- `Done`: `scripts/sse-smoke-test.mjs` supports opt-in active cancel and active stop checks.
+- `Done`: Local step-delay backend verification passed for both active `CANCEL_RUN` and active `STOP_RUN`.
 
-## 活跃计划
+## Active Follow-up
 
-### P0：Stop / Cancel 语义继续收敛
+### P0: Keep Stop / Cancel Semantics Stable
 
-- 区分 `STOP_RUN` 和 `CANCEL_RUN`。
-- `STOP_RUN`：停止后续 step，保留已完成 partial output。
-- `CANCEL_RUN`：取消整个 run，后续结果丢弃。
-- 对运行中 long task 做 opt-in 验证。
-- ActionAuditLog 记录 command accepted / rejected / consumed。
-- SSE 事件同步刷新 TaskRunPanel 和 Realtime State。
+- Continue observing `STOP_RUN` and `CANCEL_RUN` with slower real adapters or long-running tasks.
+- `STOP_RUN`: stop later steps, keep already completed partial output, final state is `STOPPED`.
+- `CANCEL_RUN`: cancel the run, discard later results, final state is `CANCELLED`.
+- Keep ActionAuditLog, RealtimeRunState, TaskRunPanel, and SSE events synchronized.
 
-### P1：Token streaming 评估
+### P1: Token Streaming Assessment
 
-只有在真实 Adapter 输出质量稳定后再做。
+Only evaluate token streaming after real Adapter output quality is stable.
 
-未来边界：
+Future boundary:
 
-- 优先只做 OpenAI-compatible streaming。
-- stream chunk 用于 progress / temporary message，不直接替代最终 Artifact contract。
-- 最终仍必须聚合为完整 JSON contract，并通过 validator 与 quality gate。
+- Start with OpenAI-compatible streaming only.
+- Streaming chunks should drive progress / temporary messages, not replace the final Artifact contract.
+- The final result must still aggregate into a complete JSON Artifact contract and pass validator plus quality gates.
 
-## 暂缓
+## Deferred
 
-- 多节点事件总线。
-- Redis / Kafka / broker。
-- token 级持久化。
-- 完整双向聊天 WebSocket。
+- Multi-node event bus.
+- Redis / Kafka / broker.
+- Token-level persistence.
+- Full bidirectional chat WebSocket.
 
-## 边界
+## Boundary
 
-- SSE 事件是刷新提示，不是唯一数据源。
-- REST API 仍是权威数据来源。
-- 当前 cancel token 不能强杀已经在执行中的非流式 HTTP 调用线程，但可以丢弃完成后的结果并阻止后续 step。
+- SSE events are refresh hints, not the only source of truth.
+- REST APIs remain the authoritative data source.
+- The current control token cannot forcibly kill a non-streaming HTTP call already executing in Java, but it can discard the returned result and prevent later steps.

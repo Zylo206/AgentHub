@@ -22,13 +22,18 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 
 3. **Run a JDBC / MySQL real database verification sprint**
    - Do not switch MySQL on by default.
-   - Verify only schema, repositories, create/query/update/restart paths.
+   - `Done`: `jdbc-smoke-test.mjs` now verifies restart persistence for Conversation, Message, Attachment download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary.
+   - `Done`: local MySQL-compatible create / restart verify passed with the JDBC profile on port `18087`.
+   - `Done`: restart verification confirmed Conversation, Message, Attachment metadata + download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary persisted after backend restart.
+   - `Boundary`: this validates schema and repository create/query/update/restart paths; it does not make MySQL the default runtime.
    - The memory profile must remain the default stable path.
 
 4. **Converge Stop / Cancel execution semantics**
    - Build on the existing control plane and cancellation token.
-   - Clarify STOP versus CANCEL behavior.
-   - Verify later steps do not run after cancel and non-streaming adapter results can be discarded.
+   - `Done`: `CANCEL_RUN` ends as `CANCELLED`; `STOP_RUN` ends as `STOPPED`.
+   - `Done`: Orchestrator steps check the control token before delay, before adapter execution, and after adapter execution; late adapter results are discarded.
+   - `Done`: opt-in SSE smoke with artificial step delay verified active cancel and active stop behavior locally.
+   - `Boundary`: non-streaming Java HTTP calls already in flight are not forcibly interrupted; results are discarded when the control token is observed.
    - Keep ActionAuditLog, RealtimeRunState, and TaskRunPanel in sync.
 
 5. **Keep plans and docs synchronized**

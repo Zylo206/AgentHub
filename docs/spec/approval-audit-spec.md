@@ -14,6 +14,7 @@
 - affected artifact / diff preview 摘要。
 - risk level 展示。
 - Workspace Audit Timeline。
+- Realtime control commands 的审计记录：`STOP_RUN` / `CANCEL_RUN` accepted 或 rejected。
 
 ## 非目标
 
@@ -32,6 +33,7 @@
 - 操作会写入 ActionAuditLog。
 - Workspace 可展示 Action Audit 时间线。
 - Approval Gate 展示 affected artifact 和 diff preview 摘要。
+- Realtime control plane 会对 `STOP_RUN` / `CANCEL_RUN` 写入 ActionAuditLog；terminal TaskRun 的控制命令会被拒绝并记录 rejected。
 
 ## 核心模型
 
@@ -93,6 +95,7 @@
 - Audit Timeline 能展示 created、approved、cancelled、consumed、rejected 等关键状态。
 - Deploy / Apply / Restore 成功后应能追溯对应 approvalId。
 - 失败原因必须可读，不能只返回通用 500。
+- `STOP_RUN` 应将运行中的 TaskRun 收敛为 `STOPPED`，`CANCEL_RUN` 应收敛为 `CANCELLED`，并写入 ActionAuditLog。
 
 ## Fallback / Boundary
 

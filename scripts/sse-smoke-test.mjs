@@ -3,6 +3,7 @@
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const DEMO_PROMPT = "SSE smoke: generate a React login page and review it.";
 const EXPECT_ACTIVE_CANCEL = process.env.AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL === "true";
+const EXPECT_ACTIVE_STOP = process.env.AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_STOP === "true";
 
 function pass(message) {
   console.log(`[PASS] ${message}`);
@@ -236,29 +237,29 @@ async function waitForSseEvent(conversationId, expectedEventType, trigger) {
   }
 }
 
-async function runActiveCancelSmoke() {
+async function runActiveControlSmoke({ action, endpoint, expectedStatus, title, prompt, reason }) {
   const conversation = await request("/api/conversations", {
     method: "POST",
-    body: JSON.stringify({ title: "SSE Active Cancel Smoke", type: "GROUP" })
+    body: JSON.stringify({ title, type: "GROUP" })
   });
   const conversationId = getIdValue(conversation.id);
   if (!conversationId) {
-    throw new Error("active cancel conversationId missing");
+    throw new Error(`active ${action} conversationId missing`);
   }
 
   const message = await request(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ content: "Active cancel smoke: run a slow multi-agent task." })
+    body: JSON.stringify({ content: prompt })
   });
   const messageId = getIdValue(message.id);
   if (!messageId) {
-    throw new Error("active cancel messageId missing");
+    throw new Error(`active ${action} messageId missing`);
   }
 
   const { event, triggerPromise } = await waitForSseEvent(conversationId, "TASK_RUN_CREATED", () =>
     request(`/api/conversations/${conversationId}/demo-task`, {
       method: "POST",
-      body: JSON.stringify({ messageId, userInput: "Active cancel smoke: run a slow multi-agent task." })
+      body: JSON.stringify({ messageId, userInput: prompt })
     })
   );
   let taskRunId = event.resourceId;
@@ -273,21 +274,30 @@ async function runActiveCancelSmoke() {
     throw new Error(`TASK_RUN_CREATED did not include resourceId: ${JSON.stringify(event)}`);
   }
 
-  const controlResult = await request(`/api/task-runs/${taskRunId}/cancel`, {
+  const controlResult = await request(`/api/task-runs/${taskRunId}/${endpoint}`, {
     method: "POST",
-    body: JSON.stringify({ reason: "SSE active cancel smoke requested during execution." })
+    body: JSON.stringify({ reason })
   });
   if (!controlResult?.accepted) {
-    throw new Error(`active cancel was not accepted: ${JSON.stringify(controlResult)}`);
+    throw new Error(`active ${action} was not accepted: ${JSON.stringify(controlResult)}`);
   }
-  pass(`active cancel accepted for running taskRun: ${taskRunId}`);
+  if (controlResult.action !== action) {
+    throw new Error(`active ${action} returned unexpected action: ${JSON.stringify(controlResult)}`);
+  }
+  pass(`active ${action} accepted for running taskRun: ${taskRunId}`);
 
   await triggerPromise.catch(() => null);
   const taskRun = await request(`/api/task-runs/${taskRunId}`);
-  if (taskRun?.status !== "CANCELLED") {
-    throw new Error(`taskRun was not cancelled after active cancel: ${JSON.stringify(taskRun)}`);
+  if (taskRun?.status !== expectedStatus) {
+    throw new Error(`taskRun status expected ${expectedStatus} after active ${action}: ${JSON.stringify(taskRun)}`);
   }
-  pass("active cancel marked TaskRun CANCELLED");
+  const skippedSteps = (taskRun.steps || []).filter((step) =>
+    step.status === "SKIPPED" || step.adapterStatus === "CANCELLED" || step.adapterStatus === "STOPPED"
+  );
+  if (skippedSteps.length < 1) {
+    throw new Error(`active ${action} did not skip or discard any step result: ${JSON.stringify(taskRun.steps || [])}`);
+  }
+  pass(`active ${action} marked TaskRun ${expectedStatus} and skipped/discarded ${skippedSteps.length} step(s)`);
 }
 
 async function runSseSmokeTest() {
@@ -364,7 +374,25 @@ async function runSseSmokeTest() {
   pass("realtime control REST cancel rejected terminal TaskRun as expected");
 
   if (EXPECT_ACTIVE_CANCEL) {
-    await runActiveCancelSmoke();
+    await runActiveControlSmoke({
+      action: "CANCEL_RUN",
+      endpoint: "cancel",
+      expectedStatus: "CANCELLED",
+      title: "SSE Active Cancel Smoke",
+      prompt: "Active cancel smoke: run a slow multi-agent task.",
+      reason: "SSE active cancel smoke requested during execution."
+    });
+  }
+
+  if (EXPECT_ACTIVE_STOP) {
+    await runActiveControlSmoke({
+      action: "STOP_RUN",
+      endpoint: "stop",
+      expectedStatus: "STOPPED",
+      title: "SSE Active Stop Smoke",
+      prompt: "Active stop smoke: run a slow multi-agent task.",
+      reason: "SSE active stop smoke requested during execution."
+    });
   }
 
   console.log("SSE smoke test completed successfully.");

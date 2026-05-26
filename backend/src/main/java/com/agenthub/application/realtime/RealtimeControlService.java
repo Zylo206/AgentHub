@@ -41,7 +41,7 @@ public class RealtimeControlService {
     }
 
     public ControlResult stopRun(String taskRunId, String reason) {
-        return applyControl(taskRunId, "STOP_RUN", TaskRunStatus.CANCELLED, reason);
+        return applyControl(taskRunId, "STOP_RUN", TaskRunStatus.STOPPED, reason);
     }
 
     private ControlResult applyControl(
@@ -157,6 +157,7 @@ public class RealtimeControlService {
         return status == TaskRunStatus.COMPLETED
                 || status == TaskRunStatus.FAILED
                 || status == TaskRunStatus.BLOCKED
+                || status == TaskRunStatus.STOPPED
                 || status == TaskRunStatus.CANCELLED;
     }
 

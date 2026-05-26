@@ -69,11 +69,11 @@ public class AgentStepExecutor {
     public TaskStep execute(StepExecutionCommand command) {
         TaskStepId stepId = new TaskStepId(idGenerator.nextId("step"));
         if (isCancellationRequested(command)) {
-            return cancelledStep(command, stepId, "Step skipped before adapter execution because run cancellation was requested.");
+            return cancelledStep(command, stepId, controlReason(command, "Step skipped before adapter execution."));
         }
         applyOptionalStepDelay(command, stepId);
         if (isCancellationRequested(command)) {
-            return cancelledStep(command, stepId, "Step skipped after configured delay because run cancellation was requested.");
+            return cancelledStep(command, stepId, controlReason(command, "Step skipped after configured delay."));
         }
         AgentResponse adapterResponse = agentExecutorService.execute(
                 command.preferredAdapterType(),
@@ -97,7 +97,7 @@ public class AgentStepExecutor {
                                 "artifactGenerationMode", artifactGenerationMode,
                                 "demoMode", true)));
         if (isCancellationRequested(command)) {
-            return cancelledStep(command, stepId, "Step result discarded because run cancellation was requested after adapter execution.");
+            return cancelledStep(command, stepId, controlReason(command, "Step result discarded after adapter execution."));
         }
 
         String adapterSummary = summarizeAdapterResponse(adapterResponse.content());
@@ -181,7 +181,16 @@ public class AgentStepExecutor {
                 && runCancellationRegistry.isCancellationRequested(command.taskRunId().value());
     }
 
+    private String controlReason(StepExecutionCommand command, String prefix) {
+        return runCancellationRegistry.find(command.taskRunId().value())
+                .map(token -> prefix + " " + token.summary())
+                .orElse(prefix + " CANCEL_RUN requested.");
+    }
+
     private TaskStep cancelledStep(StepExecutionCommand command, TaskStepId stepId, String reason) {
+        String adapterStatus = runCancellationRegistry.find(command.taskRunId().value())
+                .map(token -> "STOP_RUN".equals(token.getAction()) ? "STOPPED" : "CANCELLED")
+                .orElse("CANCELLED");
         return new TaskStep(
                 stepId,
                 command.taskRunId(),
@@ -193,7 +202,7 @@ public class AgentStepExecutor {
                 command.baseOutputContent() + "\n\nCancellation:\n" + reason,
                 command.preferredAdapterType().name(),
                 null,
-                "CANCELLED",
+                adapterStatus,
                 null,
                 reason,
                 command.parallelGroupKey(),

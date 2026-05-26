@@ -3918,3 +3918,149 @@
 - 先执行一次默认 build / smoke 验证。
 - 再用 opt-in 真实 provider smoke 观察 REAL_FIRST 主产物质量。
 - 如真实输出稳定，再进入 JDBC / MySQL 实库验证 sprint。
+
+## Phase 87：JDBC Restart Verify 与 Stop / Cancel 执行语义收敛
+
+### 目标
+
+- 不默认切换 MySQL，但让 JDBC profile 的实库验证脚本覆盖重启后的关键对象查询。
+- 将 realtime control plane 从“只改状态”推进为更清晰的执行语义：`STOP_RUN` 与 `CANCEL_RUN` 有不同终态，并影响 Orchestrator step 执行链路。
+- 同步计划、spec 和脚本文档，保持 Done / Active / Boundary 清晰。
+
+### 主要变更
+
+- `scripts/jdbc-smoke-test.mjs` 的 restart verify 模式新增：
+  - Attachment metadata 查询与 download 验证。
+  - PinnedContext 查询。
+  - Conversation / TaskRun 级 ContextSnapshot 查询。
+  - HandoffSummary 查询。
+- `TaskRunStatus` 增加 `STOPPED`。
+- `RealtimeControlService` 区分控制命令：
+  - `CANCEL_RUN` -> `CANCELLED`
+  - `STOP_RUN` -> `STOPPED`
+- `AgentStepExecutor` 在 step delay 前后、adapter 执行前后检查 control token；如果控制命令已到达，则跳过 step 或丢弃 adapter 返回结果。
+- `TaskGraph` batch status 可反映 `CANCELLED` / `SKIPPED` / `PARTIAL`，避免把 skipped control path 统一误标为 failed。
+- `scripts/sse-smoke-test.mjs` 新增 opt-in `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_STOP=true`，并加强 active cancel / stop 对 skipped/discarded step 的断言。
+- 前端状态展示补充 `STOPPED` 标签。
+- 更新 `scripts/README.md`、`docs/plans/next.md`、`docs/plans/persistence-plan.md`、`docs/plans/realtime-plan.md`、`docs/spec/approval-audit-spec.md`。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/jdbc-smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- 本轮未连接真实 MySQL 执行端到端实库验证；需要提供 JDBC 连接后按 `scripts/README.md` 运行 create / restart verify。
+- active cancel / stop 需要后端以 `AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS` 启动后 opt-in 运行，本轮只完成脚本和代码路径。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 persistence mode 仍是 `memory`，本轮不把 MySQL 设为默认。
+- JDBC restart verify 是实库验证入口，不是完整生产 migration system。
+- Stop / Cancel 不能强杀已经在执行中的非流式 Java HTTP 调用线程，但会在 adapter 返回后丢弃结果并阻止后续 step。
+- SSE / WebSocket control plane 仍不是 token streaming，也不是多节点事件总线。
+
+### 遗留问题
+
+- 仍需在真实 MySQL-compatible 数据库上跑一次 `schema-jdbc.sql` + `jdbc-smoke-test.mjs` create/restart verify。
+- Stop 与 Cancel 的真实长任务行为还需要用人工 step delay 或真实慢 adapter 做端到端验证。
+- TaskGraph / TaskRun 的控制语义已收敛，但未来如引入 token streaming，需要重新定义中途停止的 chunk 聚合策略。
+
+### 下一步建议
+
+- 有 MySQL 环境后优先跑 JDBC 实库验证 sprint，不默认切换生产配置。
+- 用 `AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS` 启动后端，分别跑 active cancel 与 active stop smoke。
+- 若上述两项通过，再继续推进真实 Adapter 输出观察或 MySQL 仓储覆盖率补强。
+
+## Phase 88：Step-delay SSE Active Control 验证与 MySQL 实库阻塞记录
+
+### 目标
+
+- 在真实运行中的 demo-task 上验证 active `CANCEL_RUN` 和 active `STOP_RUN`。
+- 尝试推进 JDBC / MySQL 实库验证前置检查，确认当前机器是否具备 MySQL 环境。
+- 同步计划文档，避免把未执行的 MySQL 实库验证写成已完成。
+
+### 主要变更
+
+- 使用独立 backend 端口和 `AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS=3000` 启动后端。
+- 运行 `scripts/sse-smoke-test.mjs` 的两个 opt-in 路径：
+  - `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL=true`
+  - `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_STOP=true`
+- 验证结束后停止临时 backend，并清理临时日志。
+- 检查 MySQL / JDBC 本地环境：
+  - `AGENTHUB_JDBC_URL` / `AGENTHUB_JDBC_USERNAME` / `AGENTHUB_JDBC_PASSWORD` 未设置。
+  - 未找到 `mysql` 客户端。
+  - Docker CLI 存在，但 Docker daemon 未运行，无法临时启动 MySQL 容器。
+- 更新 `docs/plans/next.md`、`docs/plans/persistence-plan.md`、`docs/plans/realtime-plan.md`。
+
+### 验证方式
+
+- `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL=true node scripts/sse-smoke-test.mjs`
+  - 通过：active `CANCEL_RUN` 被接受，TaskRun 最终为 `CANCELLED`，3 个 step 被 skipped / discarded。
+- `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_STOP=true node scripts/sse-smoke-test.mjs`
+  - 通过：active `STOP_RUN` 被接受，TaskRun 最终为 `STOPPED`，3 个 step 被 skipped / discarded。
+- MySQL / JDBC 实库验证未执行：当前机器没有可用 JDBC env、mysql client 或运行中的 Docker daemon。
+
+### 静态 / Mock / Placeholder 部分
+
+- Active control 验证使用本地 step delay 模拟慢任务，不是真实慢外部 Adapter。
+- Stop / Cancel 仍不能强杀已经在执行中的非流式 Java HTTP 调用线程，只能在返回后丢弃结果并阻止后续 step。
+- JDBC / MySQL 实库验证仍是 Active / Blocked，不是 Done。
+- 默认 persistence mode 仍是 `memory`。
+
+### 遗留问题
+
+- 需要提供真实 MySQL-compatible 数据库连接后，运行 `schema-jdbc.sql` 和 `scripts/jdbc-smoke-test.mjs` create / restart verify。
+- 需要在真实慢 Adapter 场景下继续观察 Stop / Cancel 的结果丢弃语义。
+- 如果未来引入 token streaming，需要重新定义 stop / cancel 对 streaming chunk 和最终 Artifact contract 的影响。
+
+### 下一步建议
+
+- 准备 MySQL 环境变量后优先完成 JDBC 实库验证。
+- 若暂不推进 MySQL，则继续真实 Adapter 输出质量观察或补 JDBC 仓储覆盖率。
+
+## Phase 89：MySQL JDBC 实库 Create / Restart Verify
+
+### 目标
+
+- 在不默认切换 MySQL 的前提下，使用本机 MySQL-compatible 服务验证 JDBC profile 的真实 create / query / restart 主链路。
+- 确认 Conversation、Message、Attachment、Artifact、TaskRun、ContextSnapshot、PinnedContext、HandoffSummary 在 backend 重启后仍可查询。
+- 同步计划文档，避免继续把 MySQL 实库验证标记为 blocked。
+
+### 主要变更
+
+- 初始化独立验证库并执行 `backend/src/main/resources/schema-jdbc.sql`。
+- 使用 `AGENTHUB_PERSISTENCE_MODE=jdbc` 在独立端口启动 backend。
+- 运行 `scripts/jdbc-smoke-test.mjs` create-mode 主链路。
+- 重启同一 JDBC profile backend 后，运行 `scripts/jdbc-smoke-test.mjs` restart verify。
+- 清理本轮临时 backend / frontend 进程、临时启动脚本、日志和上传目录。
+- 更新 `docs/plans/next.md` 与 `docs/plans/persistence-plan.md`。
+- 顺手修正 `docs/plans/realtime-plan.md` 的编码可读性，并保留 Stop / Cancel 当前边界。
+
+### 验证方式
+
+- `node scripts/jdbc-smoke-test.mjs`
+  - 通过：create-mode 完成 Conversation、Attachment upload/download、Message、Pin Context、Memory、Demo Task、Artifact、Approval、Deploy、Preview 等 JDBC profile 主链路。
+- `node scripts/jdbc-smoke-test.mjs` restart verify
+  - 通过：重启 backend 后 Conversation、Message、Attachment download、PinnedContext、Artifact、TaskRun、ContextSnapshot、HandoffSummary 均可查询。
+- 已复用上一轮验证结果：
+  - `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL=true node scripts/sse-smoke-test.mjs`
+  - `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_STOP=true node scripts/sse-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 persistence mode 仍是 `memory`，本轮不把 MySQL 设为默认。
+- 本轮验证的是 schema 与 lightweight JDBC repositories，不是完整生产 migration system。
+- Attachment binary 仍使用本地文件系统，数据库保存 metadata / storage key。
+- Stop / Cancel 仍不能强杀已经在执行中的非流式 Java HTTP 调用线程，只能在返回后丢弃结果并阻止后续 step。
+
+### 遗留问题
+
+- JDBC schema 仍缺生产级 migration 体系，后续如频繁改 schema 需要引入迁移方案。
+- MySQL profile 仍是 opt-in，不覆盖所有生产级数据治理需求。
+- Token streaming、多节点事件总线和真实部署平台继续后置。
+
+### 下一步建议
+
+- 保持 memory 默认稳定，后续仅在需要验证持久化时启用 JDBC profile。
+- 若继续推进生产化，优先补真实 Adapter 输出质量指标的长期趋势和真实慢 Adapter 下的 Stop / Cancel 观察。

@@ -30,6 +30,7 @@ export function displayStatus(value?: string | null): string {
     COMPLETED: "已完成",
     FAILED: "失败",
     BLOCKED: "阻塞",
+    STOPPED: "已停止",
     APPROVED: "已批准",
     CANCELLED: "已取消",
     CONSUMED: "已消费",
