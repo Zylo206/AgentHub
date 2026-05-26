@@ -152,6 +152,26 @@ export function getAdapters(): Promise<AdapterDescriptor[]> {
   return request<AdapterDescriptor[]>("/api/adapters");
 }
 
+export interface AdapterQualityMetrics {
+  adapterType: string;
+  attempts: number;
+  successes: number;
+  fallbacks: number;
+  realOutputAccepted: number;
+  parseFailures: number;
+  qualityFailures: number;
+  buildFailures: number;
+  successRate: number;
+  fallbackRate: number;
+  lastQualityStatus?: string | null;
+  lastQualityReason?: string | null;
+  updatedAt?: string | null;
+}
+
+export function getAdapterQualityMetrics(): Promise<AdapterQualityMetrics[]> {
+  return request<AdapterQualityMetrics[]>("/api/adapters/quality-metrics");
+}
+
 export interface ExecuteAdapterRequest {
   conversationId: string;
   taskRunId?: string | null;

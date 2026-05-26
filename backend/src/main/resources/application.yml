@@ -36,6 +36,7 @@ agenthub:
       backend: ${AGENTHUB_CONTEXT_SEMANTIC_BACKEND:heuristic}
   orchestrator:
     artifact-generation-mode: ${AGENTHUB_ARTIFACT_GENERATION_MODE:HYBRID_REAL}
+    step-delay-millis: ${AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS:0}
     auto-trigger:
       enabled: ${AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_ENABLED:false}
       require-approval: ${AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_REQUIRE_APPROVAL:true}
@@ -53,6 +54,10 @@ agenthub:
       persistence:
         enabled: ${AGENTHUB_ADAPTER_STATS_PERSISTENCE_ENABLED:true}
         path: ${AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH:./.agenthub/adapter-route-stats.json}
+    quality:
+      persistence:
+        enabled: ${AGENTHUB_ADAPTER_QUALITY_PERSISTENCE_ENABLED:true}
+        path: ${AGENTHUB_ADAPTER_QUALITY_PERSISTENCE_PATH:./.agenthub/adapter-quality-metrics.json}
     openai-compatible:
       enabled: ${AGENTHUB_OPENAI_ENABLED:false}
       base-url: ${AGENTHUB_OPENAI_BASE_URL:}

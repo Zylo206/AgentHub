@@ -1,8 +1,10 @@
 package com.agenthub.application.orchestrator;
 
 import com.agenthub.application.agent.AgentExecutorService;
+import com.agenthub.application.agent.AdapterQualityMetricsService;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
+import com.agenthub.application.realtime.RunCancellationRegistry;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.domain.agent.AgentId;
 import com.agenthub.domain.artifact.Artifact;
@@ -35,8 +37,11 @@ public class AgentStepExecutor {
     private final ArtifactRepository artifactRepository;
     private final AdapterArtifactExtractor adapterArtifactExtractor;
     private final AdapterArtifactQualityEvaluator adapterArtifactQualityEvaluator;
+    private final AdapterQualityMetricsService adapterQualityMetricsService;
     private final RealtimeEventPublisher realtimeEventPublisher;
+    private final RunCancellationRegistry runCancellationRegistry;
     private final String artifactGenerationMode;
+    private final long stepDelayMillis;
 
     public AgentStepExecutor(
             AgentExecutorService agentExecutorService,
@@ -44,19 +49,32 @@ public class AgentStepExecutor {
             ArtifactRepository artifactRepository,
             AdapterArtifactExtractor adapterArtifactExtractor,
             AdapterArtifactQualityEvaluator adapterArtifactQualityEvaluator,
+            AdapterQualityMetricsService adapterQualityMetricsService,
             RealtimeEventPublisher realtimeEventPublisher,
-            @Value("${agenthub.orchestrator.artifact-generation-mode:HYBRID_REAL}") String artifactGenerationMode) {
+            RunCancellationRegistry runCancellationRegistry,
+            @Value("${agenthub.orchestrator.artifact-generation-mode:HYBRID_REAL}") String artifactGenerationMode,
+            @Value("${agenthub.orchestrator.step-delay-millis:0}") long stepDelayMillis) {
         this.agentExecutorService = agentExecutorService;
         this.idGenerator = idGenerator;
         this.artifactRepository = artifactRepository;
         this.adapterArtifactExtractor = adapterArtifactExtractor;
         this.adapterArtifactQualityEvaluator = adapterArtifactQualityEvaluator;
+        this.adapterQualityMetricsService = adapterQualityMetricsService;
         this.realtimeEventPublisher = realtimeEventPublisher;
+        this.runCancellationRegistry = runCancellationRegistry;
         this.artifactGenerationMode = normalizeArtifactGenerationMode(artifactGenerationMode);
+        this.stepDelayMillis = Math.max(0, stepDelayMillis);
     }
 
     public TaskStep execute(StepExecutionCommand command) {
         TaskStepId stepId = new TaskStepId(idGenerator.nextId("step"));
+        if (isCancellationRequested(command)) {
+            return cancelledStep(command, stepId, "Step skipped before adapter execution because run cancellation was requested.");
+        }
+        applyOptionalStepDelay(command, stepId);
+        if (isCancellationRequested(command)) {
+            return cancelledStep(command, stepId, "Step skipped after configured delay because run cancellation was requested.");
+        }
         AgentResponse adapterResponse = agentExecutorService.execute(
                 command.preferredAdapterType(),
                 new AgentRequest(
@@ -78,9 +96,13 @@ public class AgentStepExecutor {
                                 "dependsOnStepOrders", command.dependsOnStepOrders(),
                                 "artifactGenerationMode", artifactGenerationMode,
                                 "demoMode", true)));
+        if (isCancellationRequested(command)) {
+            return cancelledStep(command, stepId, "Step result discarded because run cancellation was requested after adapter execution.");
+        }
 
         String adapterSummary = summarizeAdapterResponse(adapterResponse.content());
         AdapterArtifactAppendResult adapterArtifactResult = appendAdapterOutputArtifactIfReal(command, stepId, adapterResponse);
+        recordAdapterQualityObservation(command, adapterResponse, adapterArtifactResult);
         List<ArtifactId> producedArtifactIds = adapterArtifactResult.producedArtifactIds();
         int realAdapterArtifactCount = adapterArtifactResult.adapterArtifactIds().size();
         String outputContent = command.baseOutputContent()
@@ -135,6 +157,78 @@ public class AgentStepExecutor {
                 producedArtifactIds,
                 command.now(),
                 command.now());
+    }
+
+    private void applyOptionalStepDelay(StepExecutionCommand command, TaskStepId stepId) {
+        if (stepDelayMillis <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(stepDelayMillis);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            runCancellationRegistry.request(
+                    command.conversationId(),
+                    command.taskRunId().value(),
+                    "CANCEL_RUN",
+                    "Step thread was interrupted before adapter execution.");
+        }
+    }
+
+    private boolean isCancellationRequested(StepExecutionCommand command) {
+        return command != null
+                && command.taskRunId() != null
+                && runCancellationRegistry.isCancellationRequested(command.taskRunId().value());
+    }
+
+    private TaskStep cancelledStep(StepExecutionCommand command, TaskStepId stepId, String reason) {
+        return new TaskStep(
+                stepId,
+                command.taskRunId(),
+                command.stepOrder(),
+                new AgentId(command.agentId()),
+                command.taskDescription(),
+                TaskStepStatus.SKIPPED,
+                command.inputContext(),
+                command.baseOutputContent() + "\n\nCancellation:\n" + reason,
+                command.preferredAdapterType().name(),
+                null,
+                "CANCELLED",
+                null,
+                reason,
+                command.parallelGroupKey(),
+                command.dependsOnStepOrders(),
+                command.routingReason(),
+                false,
+                "SKIPPED",
+                "SKIPPED",
+                "SKIPPED",
+                null,
+                reason,
+                List.of(),
+                command.now(),
+                command.now());
+    }
+
+    private void recordAdapterQualityObservation(
+            StepExecutionCommand command,
+            AgentResponse adapterResponse,
+            AdapterArtifactAppendResult adapterArtifactResult) {
+        AgentAdapterType adapterType = command.preferredAdapterType();
+        boolean adapterExecutionSucceeded = adapterResponse != null
+                && adapterResponse.status() == AgentExecutionStatus.COMPLETED
+                && !adapterResponse.fallbackUsed();
+        boolean fallbackUsed = adapterResponse != null && adapterResponse.fallbackUsed();
+        boolean realOutputAccepted = adapterArtifactResult != null && !adapterArtifactResult.adapterArtifactIds().isEmpty();
+        adapterQualityMetricsService.record(new AdapterQualityMetricsService.QualityObservation(
+                adapterType,
+                adapterExecutionSucceeded,
+                fallbackUsed,
+                realOutputAccepted,
+                adapterArtifactResult == null ? null : adapterArtifactResult.parseStatus(),
+                adapterArtifactResult == null ? null : adapterArtifactResult.buildValidationStatus(),
+                adapterArtifactResult == null ? null : adapterArtifactResult.qualityStatus(),
+                adapterArtifactResult == null ? null : adapterArtifactResult.qualityReason()));
     }
 
     private String summarizeAdapterResponse(String responseContent) {

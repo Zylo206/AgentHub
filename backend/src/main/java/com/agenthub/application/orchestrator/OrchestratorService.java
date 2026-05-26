@@ -10,6 +10,7 @@ import com.agenthub.application.realtime.RealtimeEvent;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.application.realtime.RealtimeRunStateService;
+import com.agenthub.application.realtime.RunCancellationRegistry;
 import com.agenthub.application.task.TaskApplicationService;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
@@ -86,6 +87,7 @@ public class OrchestratorService {
     private final ActionAuditService actionAuditService;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final RealtimeRunStateService realtimeRunStateService;
+    private final RunCancellationRegistry runCancellationRegistry;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
     private final int memoryRetrievalLimit;
@@ -110,6 +112,7 @@ public class OrchestratorService {
             ActionAuditService actionAuditService,
             RealtimeEventPublisher realtimeEventPublisher,
             RealtimeRunStateService realtimeRunStateService,
+            RunCancellationRegistry runCancellationRegistry,
             IdGenerator idGenerator,
             TimeProvider timeProvider,
             @Value("${agenthub.memory.retrieval.limit:6}") int memoryRetrievalLimit) {
@@ -132,6 +135,7 @@ public class OrchestratorService {
         this.actionAuditService = actionAuditService;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.realtimeRunStateService = realtimeRunStateService;
+        this.runCancellationRegistry = runCancellationRegistry;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
         this.memoryRetrievalLimit = memoryRetrievalLimit;
@@ -247,6 +251,17 @@ public class OrchestratorService {
                 sourceMessageId.value(),
                 startEvent.getEventId(),
                 now);
+        runCancellationRegistry.register(conversationId, taskRunId.value());
+        taskRepository.saveTaskRun(new TaskRun(
+                taskRunId,
+                conversationRef,
+                taskSpec.getId(),
+                TaskRunStatus.RUNNING,
+                new TaskPlan("Orchestrator run is executing.", List.of()),
+                List.of(),
+                "Orchestrator run is executing.",
+                now,
+                now));
 
         Artifact codeArtifact = createArtifact(
                 conversationRef,
@@ -372,14 +387,19 @@ public class OrchestratorService {
                 pinnedInputContext,
                 now));
         List<TaskStep> executedSteps = executeStepCommandsWithParallelGroups(stepCommands);
+        boolean cancellationRequested = isRunCancellationObserved(taskRunId.value(), executedSteps);
         TaskStep frontendStep = findExecutedStep(executedSteps, 1);
         TaskStep backendStep = findExecutedStep(executedSteps, 2);
         TaskStep reviewStep = findExecutedStep(executedSteps, 3);
-        ReviewDecision reviewDecision = reviewDecisionEvaluator.evaluate(
-                userInput,
-                reviewStep,
-                reviewArtifact,
-                List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId()));
+        ReviewDecision reviewDecision = cancellationRequested
+                ? ReviewDecision.approved(
+                        List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId()),
+                        "CANCELLED_RUN")
+                : reviewDecisionEvaluator.evaluate(
+                        userInput,
+                        reviewStep,
+                        reviewArtifact,
+                        List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId()));
         Artifact retryAdviceArtifact = null;
         if (reviewDecision.rejected()) {
             reviewArtifact = withArtifactStatus(
@@ -428,7 +448,9 @@ public class OrchestratorService {
                 taskRunId,
                 conversationRef,
                 taskSpec.getId(),
-                reviewDecision.rejected() ? TaskRunStatus.BLOCKED : TaskRunStatus.COMPLETED,
+                cancellationRequested
+                        ? TaskRunStatus.CANCELLED
+                        : (reviewDecision.rejected() ? TaskRunStatus.BLOCKED : TaskRunStatus.COMPLETED),
                 taskPlan,
                 demoSteps,
                 taskGraph,
@@ -440,6 +462,13 @@ public class OrchestratorService {
                         + selectedAgentSummary + " " + resultSummary,
                 now,
                 now);
+        if (cancellationRequested) {
+            taskRun = taskRun.withStatus(
+                    TaskRunStatus.CANCELLED,
+                    "TaskRun was cancelled by realtime control. Completed artifacts were preserved and later steps were skipped. "
+                            + selectedAgentResolution.sourceDescription() + " " + selectedAgentSummary + " " + resultSummary,
+                    now);
+        }
         taskRepository.saveTaskRun(taskRun);
         RealtimeEvent taskRunUpdatedEvent = realtimeEventPublisher.publish(
                 conversationRef,
@@ -465,6 +494,7 @@ public class OrchestratorService {
                 taskRun.getResultSummary(),
                 buildRunStateResourceRefs(taskRun, demoArtifacts),
                 now);
+        runCancellationRegistry.clear(taskRunId.value());
 
         ContextSnapshot contextSnapshot = new ContextSnapshot(
                 new ContextSnapshotId(idGenerator.nextId("ctx")),
@@ -961,6 +991,13 @@ public class OrchestratorService {
 
     private TaskStep executeStepCommand(AgentStepExecutor.StepExecutionCommand command) {
         return agentStepExecutor.execute(command);
+    }
+
+    private boolean isRunCancellationObserved(String taskRunId, List<TaskStep> executedSteps) {
+        return runCancellationRegistry.isCancellationRequested(taskRunId)
+                || executedSteps.stream()
+                        .anyMatch(step -> step.getStatus() == TaskStepStatus.SKIPPED
+                                && "CANCELLED".equals(step.getAdapterStatus()));
     }
 
     private TaskStep findExecutedStep(List<TaskStep> steps, int stepOrder) {

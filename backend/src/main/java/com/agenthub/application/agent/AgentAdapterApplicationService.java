@@ -16,14 +16,17 @@ import org.springframework.stereotype.Service;
 public class AgentAdapterApplicationService {
 
     private final AgentExecutorService agentExecutorService;
+    private final AdapterQualityMetricsService adapterQualityMetricsService;
     private final IdGenerator idGenerator;
     private final AgentAdapterType defaultAdapterType;
 
     public AgentAdapterApplicationService(
             AgentExecutorService agentExecutorService,
+            AdapterQualityMetricsService adapterQualityMetricsService,
             IdGenerator idGenerator,
             @Value("${agenthub.adapters.default-type:MOCK}") String defaultAdapterType) {
         this.agentExecutorService = agentExecutorService;
+        this.adapterQualityMetricsService = adapterQualityMetricsService;
         this.idGenerator = idGenerator;
         this.defaultAdapterType = parseAdapterType(defaultAdapterType);
     }
@@ -48,6 +51,10 @@ public class AgentAdapterApplicationService {
                             stats.successRate());
                 })
                 .toList();
+    }
+
+    public List<AdapterQualityMetricsService.AdapterQualityMetricsView> listQualityMetrics() {
+        return adapterQualityMetricsService.listMetrics();
     }
 
     public AgentResponse execute(String adapterType, ExecuteAgentAdapterCommand command) {

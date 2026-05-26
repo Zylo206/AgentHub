@@ -11,6 +11,7 @@ import {
   createDemoTask,
   getActionAuditsByConversation,
   getActiveRealtimeState,
+  getAdapterQualityMetrics,
   getAdapters,
   getAgents,
   getArtifact,
@@ -39,6 +40,7 @@ import {
   uploadConversationAttachment,
   unpinContext
 } from "../../api/agenthubApi";
+import type { AdapterQualityMetrics } from "../../api/agenthubApi";
 import { AgentList } from "../../features/agents/AgentList";
 import { AdapterQualityDashboard } from "../../features/agents/AdapterQualityDashboard";
 import { AdapterRoutingPanel } from "../../features/agents/AdapterRoutingPanel";
@@ -94,6 +96,7 @@ function findTaskStep(taskRuns: TaskRun[], taskRunId: string | null, taskStepId:
 export function WorkspacePage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [adapterDescriptors, setAdapterDescriptors] = useState<AdapterDescriptor[]>([]);
+  const [adapterQualityMetrics, setAdapterQualityMetrics] = useState<AdapterQualityMetrics[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -229,15 +232,17 @@ export function WorkspacePage() {
     setLoadingConversations(true);
 
     try {
-      const [agentData, conversationData, adapterData] = await Promise.all([
+      const [agentData, conversationData, adapterData, qualityMetricData] = await Promise.all([
         getAgents(),
         getConversations(),
-        getAdapters().catch(() => [])
+        getAdapters().catch(() => []),
+        getAdapterQualityMetrics().catch(() => [])
       ]);
       const firstConversationId = getIdValue(conversationData[0]?.id) || null;
 
       setAgents(agentData);
       setAdapterDescriptors(adapterData);
+      setAdapterQualityMetrics(qualityMetricData);
       setSelectedAgent((previous) => {
         if (!previous) {
           return null;
@@ -298,7 +303,8 @@ export function WorkspacePage() {
         actionAuditData,
         approvalRequestData,
         pinnedContextData,
-        memoryData
+        memoryData,
+        qualityMetricData
       ] = await Promise.all([
         getMessages(conversationId),
         getTaskSpecsByConversation(conversationId),
@@ -309,7 +315,8 @@ export function WorkspacePage() {
         getActionAuditsByConversation(conversationId),
         getApprovalRequestsByConversation(conversationId),
         getPinnedContextsByConversation(conversationId),
-        getMemoriesByConversation(conversationId)
+        getMemoriesByConversation(conversationId),
+        getAdapterQualityMetrics().catch(() => [])
       ]);
 
       setMessages(messageData);
@@ -322,6 +329,7 @@ export function WorkspacePage() {
       setApprovalRequests(approvalRequestData);
       setPinnedContexts(pinnedContextData);
       setMemories(memoryData);
+      setAdapterQualityMetrics(qualityMetricData);
       void loadMessageTriggerSuggestions(conversationId, messageData);
       setShowAllArtifacts(true);
       setSelectedTaskStepId(null);
@@ -1321,7 +1329,11 @@ export function WorkspacePage() {
             onRefreshOrchestratorSuggestion={handleRefreshOrchestratorSuggestion}
           />
           <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
-          <AdapterQualityDashboard adapterDescriptors={adapterDescriptors} taskRuns={taskRuns} />
+          <AdapterQualityDashboard
+            adapterDescriptors={adapterDescriptors}
+            taskRuns={taskRuns}
+            qualityMetrics={adapterQualityMetrics}
+          />
           <TaskRunPanel
             agents={agents}
             artifacts={artifacts}

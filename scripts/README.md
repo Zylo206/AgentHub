@@ -157,6 +157,8 @@ node scripts/smoke-test.mjs
 
 This assertion expects the selected primary code Artifact to use `sourceKind=REAL_ADAPTER` and expects static template fallback Artifacts to be archived. Do not enable it unless `OPENAI_COMPATIBLE` or another non-MOCK Adapter is configured to return a valid Artifact JSON contract.
 
+Adapter quality metrics are exposed through `GET /api/adapters/quality-metrics` and persisted by default to `.agenthub/adapter-quality-metrics.json`. The Workspace Adapter Quality Dashboard uses this backend aggregate instead of only deriving counts from the currently selected TaskRun.
+
 If you run the backend with the JDBC persistence profile, reuse the same API smoke flow and enable the JDBC marker:
 
 ```powershell
@@ -180,6 +182,17 @@ You can also use the JDBC wrapper script after starting the backend in JDBC mode
 $env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
 node scripts/jdbc-smoke-test.mjs
 ```
+
+For restart verification, copy the conversation / taskRun / artifact ids from the first run output, restart the backend with the same JDBC database, then run:
+
+```powershell
+$env:AGENTHUB_JDBC_VERIFY_CONVERSATION_ID="<conv_id>"
+$env:AGENTHUB_JDBC_VERIFY_TASK_RUN_ID="<run_id>"
+$env:AGENTHUB_JDBC_VERIFY_ARTIFACT_ID="<artifact_id>"
+node scripts/jdbc-smoke-test.mjs
+```
+
+This query-only mode verifies Conversation, Message, TaskRun, Artifact, and ContextSnapshot records after restart. It still does not make JDBC the default profile.
 
 Context retrieval uses the heuristic semantic backend by default. To exercise the optional embedding backend switch without requiring an external provider, start the backend with:
 
@@ -236,6 +249,17 @@ Override the backend URL:
 $env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"; node scripts/sse-smoke-test.mjs
 ```
 
+To verify active cancellation semantics, start the backend with an artificial step delay and run the opt-in cancel check:
+
+```powershell
+$env:AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS="3000"
+# start backend in another terminal
+$env:AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL="true"
+node scripts/sse-smoke-test.mjs
+```
+
+The active cancel check waits for `TASK_RUN_CREATED`, sends `CANCEL_RUN` while the run is still executing, and expects the final TaskRun to become `CANCELLED`. Without the delay, a local demo task may complete before cancel is sent, so this assertion is disabled by default.
+
 ## Realtime Control Plane
 
 AgentHub exposes a minimal WebSocket control endpoint for future run-control flows:
@@ -260,6 +284,8 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8080/api/task-runs/run_xxx
 ```
 
 This is a control-plane MVP. It does not implement token streaming, full bidirectional chat, multi-node event broadcasting, or true in-flight Java thread interruption.
+
+The current cancel semantics are execution-aware for Orchestrator steps: new steps check a cancellation token before adapter execution, and completed non-streaming adapter results are discarded if cancellation was requested during the call. Java HTTP calls that are already in flight are not forcibly interrupted.
 
 ## Browser E2E
 

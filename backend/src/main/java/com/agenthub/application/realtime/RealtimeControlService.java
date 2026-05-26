@@ -17,6 +17,7 @@ public class RealtimeControlService {
     private final TaskRepository taskRepository;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final RealtimeRunStateService realtimeRunStateService;
+    private final RunCancellationRegistry runCancellationRegistry;
     private final ActionAuditService actionAuditService;
     private final TimeProvider timeProvider;
 
@@ -24,11 +25,13 @@ public class RealtimeControlService {
             TaskRepository taskRepository,
             RealtimeEventPublisher realtimeEventPublisher,
             RealtimeRunStateService realtimeRunStateService,
+            RunCancellationRegistry runCancellationRegistry,
             ActionAuditService actionAuditService,
             TimeProvider timeProvider) {
         this.taskRepository = taskRepository;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.realtimeRunStateService = realtimeRunStateService;
+        this.runCancellationRegistry = runCancellationRegistry;
         this.actionAuditService = actionAuditService;
         this.timeProvider = timeProvider;
     }
@@ -71,6 +74,11 @@ public class RealtimeControlService {
 
         String summary = "Realtime control command " + action + " accepted."
                 + (reason == null || reason.isBlank() ? "" : " Reason: " + reason);
+        runCancellationRegistry.request(
+                taskRun.getConversationId().value(),
+                taskRun.getId().value(),
+                action,
+                reason);
         TaskRun updated = taskRepository.saveTaskRun(taskRun.withStatus(targetStatus, summary, now));
         RealtimeEvent event = realtimeEventPublisher.publish(
                 updated.getConversationId(),

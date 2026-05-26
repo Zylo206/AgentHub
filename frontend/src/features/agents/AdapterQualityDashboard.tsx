@@ -1,9 +1,11 @@
+import type { AdapterQualityMetrics } from "../../api/agenthubApi";
 import type { TaskRun, TaskStep } from "../chat/chatTypes";
 import type { AdapterDescriptor } from "./agentTypes";
 
 interface AdapterQualityDashboardProps {
   adapterDescriptors: AdapterDescriptor[];
   taskRuns: TaskRun[];
+  qualityMetrics: AdapterQualityMetrics[];
 }
 
 interface AdapterQualityRow {
@@ -16,6 +18,9 @@ interface AdapterQualityRow {
   parseFailures: number;
   qualityFailures: number;
   buildFailures: number;
+  realOutputAccepted: number;
+  lastQualityStatus?: string | null;
+  lastQualityReason?: string | null;
 }
 
 function getStepAdapterType(step: TaskStep): string {
@@ -46,7 +51,11 @@ function formatRate(value: number | null): string {
   return `${Math.round(value * 100)}%`;
 }
 
-function buildRows(adapterDescriptors: AdapterDescriptor[], taskRuns: TaskRun[]): AdapterQualityRow[] {
+function buildRows(
+  adapterDescriptors: AdapterDescriptor[],
+  taskRuns: TaskRun[],
+  qualityMetrics: AdapterQualityMetrics[]
+): AdapterQualityRow[] {
   const byAdapter = new Map<string, AdapterQualityRow>();
 
   adapterDescriptors.forEach((descriptor) => {
@@ -59,12 +68,49 @@ function buildRows(adapterDescriptors: AdapterDescriptor[], taskRuns: TaskRun[])
       observedSteps: 0,
       parseFailures: 0,
       qualityFailures: 0,
-      buildFailures: 0
+      buildFailures: 0,
+      realOutputAccepted: 0,
+      lastQualityStatus: null,
+      lastQualityReason: null
     });
   });
 
+  qualityMetrics.forEach((metrics) => {
+    const row =
+      byAdapter.get(metrics.adapterType) ??
+      {
+        adapterType: metrics.adapterType,
+        status: "OBSERVED",
+        routeAttempts: 0,
+        successRate: null,
+        fallbackRate: null,
+        observedSteps: 0,
+        parseFailures: 0,
+        qualityFailures: 0,
+        buildFailures: 0,
+        realOutputAccepted: 0,
+        lastQualityStatus: null,
+        lastQualityReason: null
+      };
+
+    row.observedSteps = Math.max(row.observedSteps, metrics.attempts);
+    row.parseFailures = Math.max(row.parseFailures, metrics.parseFailures);
+    row.qualityFailures = Math.max(row.qualityFailures, metrics.qualityFailures);
+    row.buildFailures = Math.max(row.buildFailures, metrics.buildFailures);
+    row.realOutputAccepted = metrics.realOutputAccepted;
+    row.successRate = metrics.successRate;
+    row.fallbackRate = metrics.fallbackRate;
+    row.lastQualityStatus = metrics.lastQualityStatus;
+    row.lastQualityReason = metrics.lastQualityReason;
+    byAdapter.set(metrics.adapterType, row);
+  });
+
+  const metricAdapterTypes = new Set(qualityMetrics.map((metrics) => metrics.adapterType));
   taskRuns.flatMap((taskRun) => taskRun.steps).forEach((step) => {
     const adapterType = getStepAdapterType(step);
+    if (metricAdapterTypes.has(adapterType)) {
+      return;
+    }
     const row =
       byAdapter.get(adapterType) ??
       {
@@ -76,7 +122,10 @@ function buildRows(adapterDescriptors: AdapterDescriptor[], taskRuns: TaskRun[])
         observedSteps: 0,
         parseFailures: 0,
         qualityFailures: 0,
-        buildFailures: 0
+        buildFailures: 0,
+        realOutputAccepted: 0,
+        lastQualityStatus: null,
+        lastQualityReason: null
       };
 
     row.observedSteps += 1;
@@ -98,8 +147,12 @@ function buildRows(adapterDescriptors: AdapterDescriptor[], taskRuns: TaskRun[])
   });
 }
 
-export function AdapterQualityDashboard({ adapterDescriptors, taskRuns }: AdapterQualityDashboardProps) {
-  const rows = buildRows(adapterDescriptors, taskRuns);
+export function AdapterQualityDashboard({
+  adapterDescriptors,
+  taskRuns,
+  qualityMetrics
+}: AdapterQualityDashboardProps) {
+  const rows = buildRows(adapterDescriptors, taskRuns, qualityMetrics);
 
   if (rows.length === 0) {
     return (
@@ -130,9 +183,11 @@ export function AdapterQualityDashboard({ adapterDescriptors, taskRuns }: Adapte
           <span>Success</span>
           <span>Fallback</span>
           <span>Observed steps</span>
+          <span>Real accepted</span>
           <span>Parse failures</span>
           <span>Quality failures</span>
           <span>Build failures</span>
+          <span>Last reason</span>
         </div>
         {rows.map((row) => (
           <div className="adapter-quality-table__row" key={row.adapterType}>
@@ -142,9 +197,11 @@ export function AdapterQualityDashboard({ adapterDescriptors, taskRuns }: Adapte
             <span>{formatRate(row.successRate)}</span>
             <span>{formatRate(row.fallbackRate)}</span>
             <span>{row.observedSteps}</span>
+            <span>{row.realOutputAccepted}</span>
             <span>{row.parseFailures}</span>
             <span>{row.qualityFailures}</span>
             <span>{row.buildFailures}</span>
+            <span title={row.lastQualityReason || ""}>{row.lastQualityStatus || "N/A"}</span>
           </div>
         ))}
       </div>

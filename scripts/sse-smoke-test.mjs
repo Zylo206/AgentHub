@@ -2,6 +2,7 @@
 
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const DEMO_PROMPT = "SSE smoke: generate a React login page and review it.";
+const EXPECT_ACTIVE_CANCEL = process.env.AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL === "true";
 
 function pass(message) {
   console.log(`[PASS] ${message}`);
@@ -189,6 +190,106 @@ async function collectReplayedSseEvents(conversationId, lastEventId, expectedEve
   return events;
 }
 
+async function waitForSseEvent(conversationId, expectedEventType, trigger) {
+  const controller = new AbortController();
+  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events`, {
+    signal: controller.signal,
+    headers: { Accept: "text/event-stream" }
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`SSE stream failed: HTTP ${response.status}`);
+  }
+
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = "";
+  const readerPromise = (async () => {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || "";
+      for (const block of blocks) {
+        const parsed = parseSseBlock(block);
+        if (parsed.eventType === expectedEventType) {
+          controller.abort();
+          return parsed;
+        }
+      }
+    }
+    throw new Error(`SSE stream closed before ${expectedEventType}`);
+  })();
+
+  const triggerPromise = trigger();
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Timed out waiting for ${expectedEventType}`)), 10000);
+  });
+
+  try {
+    const event = await Promise.race([readerPromise, timeoutPromise]);
+    return { event, triggerPromise };
+  } finally {
+    controller.abort();
+  }
+}
+
+async function runActiveCancelSmoke() {
+  const conversation = await request("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({ title: "SSE Active Cancel Smoke", type: "GROUP" })
+  });
+  const conversationId = getIdValue(conversation.id);
+  if (!conversationId) {
+    throw new Error("active cancel conversationId missing");
+  }
+
+  const message = await request(`/api/conversations/${conversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ content: "Active cancel smoke: run a slow multi-agent task." })
+  });
+  const messageId = getIdValue(message.id);
+  if (!messageId) {
+    throw new Error("active cancel messageId missing");
+  }
+
+  const { event, triggerPromise } = await waitForSseEvent(conversationId, "TASK_RUN_CREATED", () =>
+    request(`/api/conversations/${conversationId}/demo-task`, {
+      method: "POST",
+      body: JSON.stringify({ messageId, userInput: "Active cancel smoke: run a slow multi-agent task." })
+    })
+  );
+  let taskRunId = event.resourceId;
+  if (!taskRunId && event.data) {
+    try {
+      taskRunId = JSON.parse(event.data).resourceId;
+    } catch {
+      taskRunId = "";
+    }
+  }
+  if (!taskRunId) {
+    throw new Error(`TASK_RUN_CREATED did not include resourceId: ${JSON.stringify(event)}`);
+  }
+
+  const controlResult = await request(`/api/task-runs/${taskRunId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason: "SSE active cancel smoke requested during execution." })
+  });
+  if (!controlResult?.accepted) {
+    throw new Error(`active cancel was not accepted: ${JSON.stringify(controlResult)}`);
+  }
+  pass(`active cancel accepted for running taskRun: ${taskRunId}`);
+
+  await triggerPromise.catch(() => null);
+  const taskRun = await request(`/api/task-runs/${taskRunId}`);
+  if (taskRun?.status !== "CANCELLED") {
+    throw new Error(`taskRun was not cancelled after active cancel: ${JSON.stringify(taskRun)}`);
+  }
+  pass("active cancel marked TaskRun CANCELLED");
+}
+
 async function runSseSmokeTest() {
   console.log(`AgentHub SSE smoke test target: ${API_BASE}`);
 
@@ -261,6 +362,10 @@ async function runSseSmokeTest() {
     throw new Error(`completed task run cancel should be rejected as terminal: ${JSON.stringify(controlResult)}`);
   }
   pass("realtime control REST cancel rejected terminal TaskRun as expected");
+
+  if (EXPECT_ACTIVE_CANCEL) {
+    await runActiveCancelSmoke();
+  }
 
   console.log("SSE smoke test completed successfully.");
 }

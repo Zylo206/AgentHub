@@ -3768,3 +3768,67 @@
 - 在真实数据库环境跑 JDBC smoke，验证 ContextSnapshot / PinnedContext / HandoffSummary 不再回落内存。
 - 为 Adapter quality stats 增加后端聚合 DTO，避免前端只能从当前 TaskRun 派生。
 - 如果进入真实长任务执行阶段，再把 WebSocket stop/cancel 连接到执行器 cancellation token。
+
+## Phase 84：Adapter Quality Metrics、JDBC Restart Verify 与执行级 Cancel Token
+
+### 目标
+
+- 继续收敛真实 Adapter 输出质量闭环，让质量统计从前端派生升级为后端聚合指标。
+- 补强 JDBC smoke 的重启后查询验证入口，为后续 MySQL 实库 sprint 做准备。
+- 将 Stop / Cancel 从 control-plane MVP 推进到执行级 cancellation token 语义。
+
+### 主要变更
+
+- 新增 `AdapterQualityMetricsService`：
+  - 记录 adapter attempts、successes、fallbacks、realOutputAccepted。
+  - 记录 parse failure、quality failure、build failure。
+  - 默认持久化到 `.agenthub/adapter-quality-metrics.json`。
+- 新增 `GET /api/adapters/quality-metrics`。
+- Workspace `AdapterQualityDashboard` 改为读取后端聚合指标，并继续兼容当前 TaskStep 派生信号。
+- 新增 `RunCancellationRegistry`：
+  - TaskRun 创建后注册 cancellation token。
+  - `CANCEL_RUN` / `STOP_RUN` 接受后写入 token。
+  - `AgentStepExecutor` 在 adapter 调用前后检查 token。
+  - cancellation 请求后，后续 step 跳过，非流式 adapter 返回结果会被丢弃。
+- Orchestrator 在 `TASK_RUN_CREATED` 后立即保存 `RUNNING` TaskRun 快照，让运行中 control command 能命中 taskRunId。
+- `scripts/jdbc-smoke-test.mjs` 增加重启验证模式：
+  - `AGENTHUB_JDBC_VERIFY_CONVERSATION_ID`
+  - `AGENTHUB_JDBC_VERIFY_TASK_RUN_ID`
+  - `AGENTHUB_JDBC_VERIFY_ARTIFACT_ID`
+- `scripts/sse-smoke-test.mjs` 增加 opt-in active cancel 验证：
+  - `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL=true`
+  - 配合 `AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS` 验证运行中 cancel。
+- `.env.example` 和 `scripts/README.md` 同步新增配置与验证说明。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `node --check scripts/jdbc-smoke-test.mjs`
+- `node scripts/smoke-test.mjs`
+- `node scripts/sse-smoke-test.mjs`
+- `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL=true node scripts/sse-smoke-test.mjs`，需后端以 `AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS` 启动。
+- 手动检查 `GET /api/adapters/quality-metrics`。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 smoke 仍不依赖真实外部 LLM。
+- Adapter quality metrics 是本地文件聚合，不是外部 APM 或多节点指标系统。
+- JDBC restart verify 仍要求用户自行启动真实 JDBC backend，本轮不默认切换 MySQL。
+- Cancel token 能阻止后续 step 并丢弃非流式 adapter 完成后的结果，但不强杀已经在执行中的 Java HTTP 调用线程。
+- 本轮仍不做 token streaming、多节点事件总线或真实部署平台。
+
+### 遗留问题
+
+- JDBC 尚未在本轮连接真实 MySQL 跑端到端 create / restart / query。
+- Adapter quality metrics 仍是本地文件持久化，后续可迁移到 JDBC。
+- Stop 与 Cancel 的语义差异仍偏轻量，未来可让 STOP 保留 partial run，CANCEL 更严格终止。
+- 真实 token streaming 和多节点事件广播继续后置。
+
+### 下一步建议
+
+- 先用真实 OpenAI-compatible provider 继续观察 REAL_FIRST 质量指标，确认 parse / quality / build failure 是否下降。
+- 再安排 MySQL/JDBC 实库验证 sprint，只验证 schema、repository、create/query/update/restart 主链路。
+- 等真实长任务和真实 adapter 稳定后，再评估 token streaming。

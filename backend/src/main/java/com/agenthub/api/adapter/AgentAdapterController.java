@@ -29,6 +29,11 @@ public class AgentAdapterController {
         return ApiResponse.success(agentAdapterApplicationService.listAdapters());
     }
 
+    @GetMapping("/quality-metrics")
+    public ApiResponse<?> listQualityMetrics() {
+        return ApiResponse.success(agentAdapterApplicationService.listQualityMetrics());
+    }
+
     @PostMapping("/{adapterType}/execute")
     public ApiResponse<?> execute(
             @PathVariable("adapterType") String adapterType,
