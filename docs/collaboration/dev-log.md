@@ -4152,3 +4152,50 @@
 ### 下一步建议
 
 - 如果继续推进检索生产化，先做 MySQL FULLTEXT opt-in 的实库验证脚本，再考虑真实 embedding provider。
+
+## Phase 92：JDBC / Stop-Cancel / Browser E2E 验证收敛
+
+### 目标
+
+对当前半生产能力做并行验证收敛：JDBC/MySQL create + restart verify、Stop / Cancel 慢任务执行语义、Browser E2E 核心 UI 流程，并修复验证过程中发现的阻塞问题。
+
+### 主要变更
+
+- 修复 DisabledEmbeddingProvider 默认 Bean 未注册的问题，确保非默认端口、JDBC profile、延迟后端都能启动。
+- 修复 `scripts/smoke-test.mjs` 的 REJECTION opt-in 断言：默认 MOCK / 静态路径下，retry / revise 闭环应由 ReviewDecision、REJECTION 消息和 advice Artifact 表达，不强制要求 real Adapter quality rejection。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `node scripts/smoke-test.mjs`
+- `AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION=true node scripts/smoke-test.mjs`
+- `node scripts/sse-smoke-test.mjs`
+- MySQL `agenthub_jdbc_verify` 初始化 schema。
+- JDBC profile create/query/update smoke：通过。
+- JDBC profile restart verify：通过，确认 Conversation、Message、Attachment download、Artifact、TaskRun、PinnedContext、ContextSnapshot、HandoffSummary 重启后仍可查询。
+- Delayed backend active cancel smoke：通过，`CANCEL_RUN` 进入 `CANCELLED`，并跳过 / 丢弃后续 step。
+- Delayed backend active stop smoke：通过，`STOP_RUN` 进入 `STOPPED`，并跳过 / 丢弃后续 step。
+- Browser E2E 基础流：通过。
+- Browser E2E rejection opt-in：通过。
+
+### 静态 / Mock / Placeholder 部分
+
+- JDBC/MySQL 仍不是默认运行模式；默认仍保持 memory profile。
+- Stop / Cancel 对非流式 HTTP 调用不做线程级硬中断；控制 token 生效后会停止后续 step 或丢弃 late result。
+- Browser E2E 只覆盖本地核心 UI 流程，不代表完整跨浏览器兼容矩阵。
+- REJECTION v1 仍是规则化 / opt-in 验证，不是真实静态分析或完整 QA 引擎。
+
+### 遗留问题
+
+- MySQL 仍缺 migration 体系和生产级连接池治理验证。
+- FULLTEXT opt-in 已有代码与 schema，但本轮未单独开启 `AGENTHUB_CONTEXT_SEARCH_FULLTEXT_ENABLED=true` 跑专项验证。
+- WebSocket 仍是 control-plane MVP，不包含 token streaming 或多节点事件总线。
+
+### 下一步建议
+
+- 单独验证 MySQL FULLTEXT opt-in 的 MATCH AGAINST 路径。
+- 继续收敛真实 OpenAI-compatible provider 的 REAL_FIRST 输出质量样本。
+- 视需要补浏览器 E2E 的 trace / screenshot failure artifact，但默认不要留下临时文件。
