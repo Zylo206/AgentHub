@@ -4426,3 +4426,89 @@
 
 - 扩展 `scripts/e2e-browser.mjs` 覆盖 streaming preview、Stop / Cancel 后 discarded 状态。
 - 如果真实 provider streaming 稳定，再把 stream duration、chunk count、fallback reason 纳入 Adapter quality dashboard。
+
+## Phase 98：Codex Adapter v1 Smoke 与文档入口
+
+### 目标
+
+- 为生产化 Codex Adapter v1 补充 opt-in 验证脚本和配置文档。
+- 明确 Codex 接入目标是 headless / Artifact-only，不是 Codex Desktop GUI 自动化。
+
+### 主要变更
+
+- 新增 `scripts/codex-smoke-test.mjs`，验证 `CODEX=AVAILABLE`、`POST /api/adapters/CODEX/execute`、Codex custom Agent、demo-task、`REAL_FIRST`、`REAL_ADAPTER`、`sourceAdapterType=CODEX` 和 `qualityStatus=ACCEPTED`。
+- `codex-smoke-test.mjs` 支持 `AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING=true`，在后端支持时断言 `ADAPTER_STREAM_CHUNK`。
+- `.env.example` 补充 Codex Artifact-only、streaming、work dir、fixture 和 smoke 相关环境变量。
+- `scripts/README.md` 增加 Codex Adapter Smoke Test 运行说明。
+- `docs/plans/next.md` 将 Codex Adapter v1 标记为当前 Active 生产化任务，并写明边界。
+
+### 验证方式
+
+- `node --check scripts/codex-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只补 Codex 验证脚本和文档入口，不修改后端业务实现。
+- 默认 smoke 不依赖 Codex。
+- Codex smoke 是 opt-in，只有后端实际暴露 `CODEX=AVAILABLE` 且产出通过 Artifact contract / quality gate 时才通过。
+- 本轮不代表 Codex Desktop GUI、workspace-write、真实 patch apply 或 OpenCode 深度接入已完成。
+
+### 遗留问题
+
+- Codex 专用后端 Adapter、runner、prompt builder、stream parser 由实现 worker 负责，本轮只定义验证入口和文档边界。
+- 真实 Codex CLI 能力、命令形态、streaming 支持和认证状态仍需在本机 PowerShell 环境实测。
+- Codex fixture 不能被当作真实 provider 验证。
+
+### 下一步建议
+
+- 完成 `CodexAgentAdapter` / `CodexCommandRunner` / `CodexArtifactPromptBuilder` 后，用 `node scripts/codex-smoke-test.mjs` 做 opt-in 验收。
+- 如果 Codex CLI 支持 streaming，再开启 `AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING=true` 验证 chunk 到 SSE 的链路。
+
+## Phase 99：Codex Artifact-only Headless Adapter v1
+
+### 目标
+
+- 将 `CODEX` 从通用 CLI args-template 探测升级为专用 Artifact-only headless Adapter v1。
+- 复用现有 REAL_FIRST、Artifact JSON contract、quality evaluator、Mock fallback 和 SSE streaming preview 链路。
+
+### 主要变更
+
+- 本机 PowerShell 能力探测确认 `codex-cli 0.134.0` 可用，`codex exec` 支持 stdin、`--cd`、`--sandbox read-only`、`--json`、`--output-schema`、`--output-last-message`。
+- 新增 `CodexAgentAdapter`，直接实现 `AgentAdapter`，不再依赖通用 `CliAgentAdapterSupport` 执行模板。
+- 新增 `CodexCommandRunner`，使用 `ProcessBuilder` 调用 `codex exec`，prompt 通过 stdin 传入，request 工作目录隔离到 `.agenthub/codex-runs/{requestId}`。
+- `CodexCommandRunner` 在执行结束后 best-effort 清理 request 目录，避免 prompt / schema / final-message 临时文件长期留在仓库工作区。
+- 新增 `CodexArtifactPromptBuilder`，统一构造 AgentHub Artifact JSON contract prompt 和 JSON Schema 文件。
+- Codex 输出成功前必须通过 `AdapterArtifactContractValidator`；失败、超时、非 0 exit、contract invalid 均返回 failed，由 `AgentAdapterRegistry` 继续 fallback 到 MOCK。
+- 支持 `AGENTHUB_CODEX_FIXTURE_ENABLED=true` 的本地 contract fixture，不伪装为真实 Codex provider。
+- 支持 `AGENTHUB_CODEX_STREAMING_ENABLED=true` 时解析 `codex exec --json` 事件并发布 `ADAPTER_STREAM_CHUNK` / `TASK_STEP_STREAM_CHUNK`，最终 Artifact 仍来自完整输出文件并通过 contract 校验。
+- `application.yml`、`.env.example`、`scripts/README.md`、`docs/plans/next.md` 同步 Codex v1 配置和 opt-in smoke 说明。
+- 自检时移除 Codex v1 不再使用的 `args-template` 配置，避免把 Codex v1 误解为旧的通用 CLI template wrapper。
+
+### 验证方式
+
+- `codex --version`
+- `codex --help`
+- `codex exec --help`
+- `cd backend && mvn -q -DskipTests package`
+- `node --check scripts/codex-smoke-test.mjs`
+- `git diff --check`
+- Codex fixture smoke：临时 backend 端口 `18095`，`AGENTHUB_CODEX_FIXTURE_ENABLED=true`，`node scripts/codex-smoke-test.mjs` 通过。
+- 真实 Codex CLI smoke：临时 backend 端口 `18096`，`AGENTHUB_CODEX_FIXTURE_ENABLED=false`，`AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`，`node scripts/codex-smoke-test.mjs` 通过。
+
+### 静态 / Mock / Placeholder 部分
+
+- Codex Adapter v1 默认关闭，默认 smoke 不依赖 Codex。
+- Fixture 模式只验证本地 contract，不代表真实 Codex provider 输出。
+- 本轮不是 Codex Desktop GUI 自动化，不做 workspace-write，不做真实 patch apply。
+- Streaming chunk 只用于实时预览；最终 REAL_ADAPTER Artifact 仍必须通过完整 JSON contract、quality evaluator 和 REAL_FIRST 链路。
+
+### 遗留问题
+
+- 真实 Codex 输出质量和 fallback pattern 仍需在更多任务类型下继续观察。
+- 本轮未开启 `AGENTHUB_CODEX_STREAMING_ENABLED=true` 跑真实 streaming smoke。
+- OpenCode 仍是通用 CLI 探测型 Adapter，未做深度接入。
+
+### 下一步建议
+
+- 用 `AGENTHUB_CODEX_ENABLED=true`、`AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST` 启动 backend 后运行 `node scripts/codex-smoke-test.mjs`。
+- 如果真实 Codex streaming 稳定，再开启 `AGENTHUB_CODEX_STREAMING_ENABLED=true` 和 `AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING=true` 验证 SSE chunk。

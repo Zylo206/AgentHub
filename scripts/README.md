@@ -197,6 +197,40 @@ node scripts/claude-code-smoke-test.mjs
 
 This is not an interactive Claude Code terminal and does not allow Claude Code to directly edit the AgentHub workspace. Workspace-write mode remains out of scope for this v1 adapter.
 
+## Codex Adapter Smoke Test
+
+`codex-smoke-test.mjs` verifies the production Codex Adapter v1 contract. It is opt-in and is not part of the default smoke path. The backend must expose `CODEX=AVAILABLE`, `POST /api/adapters/CODEX/execute` must return AgentHub Artifact JSON, and a `REAL_FIRST` demo-task run must produce at least one accepted `CODEX / REAL_ADAPTER` Artifact.
+
+Backend setup:
+
+```powershell
+$env:AGENTHUB_CODEX_ENABLED="true"
+$env:AGENTHUB_CODEX_COMMAND="codex"
+$env:AGENTHUB_CODEX_ARTIFACT_ONLY="true"
+$env:AGENTHUB_CODEX_FIXTURE_ENABLED="false"
+$env:AGENTHUB_CODEX_STREAMING_ENABLED="false"
+$env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
+cd backend
+mvn spring-boot:run
+```
+
+Then run:
+
+```powershell
+$env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
+node scripts/codex-smoke-test.mjs
+```
+
+Streaming is also opt-in and only passes when the backend Codex Adapter publishes `ADAPTER_STREAM_CHUNK` events:
+
+```powershell
+$env:AGENTHUB_CODEX_STREAMING_ENABLED="true"
+$env:AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING="true"
+node scripts/codex-smoke-test.mjs
+```
+
+This is not Codex Desktop GUI automation. The intended production boundary is headless / Artifact-only execution: Codex output must pass the AgentHub Artifact JSON contract, quality evaluation, optional build validation, and REAL_FIRST selection before it can become a primary Artifact. Default smoke tests must not require Codex.
+
 If you explicitly run the backend in `REAL_FIRST` mode and expect the primary generated Artifact to come from a real Adapter, enable the stricter REAL_FIRST check:
 
 ```powershell

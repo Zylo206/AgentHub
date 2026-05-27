@@ -83,8 +83,12 @@ agenthub:
     codex:
       enabled: ${AGENTHUB_CODEX_ENABLED:false}
       command: ${AGENTHUB_CODEX_COMMAND:codex}
-      args-template: ${AGENTHUB_CODEX_ARGS_TEMPLATE:}
-      timeout-seconds: 30
+      model: ${AGENTHUB_CODEX_MODEL:}
+      timeout-seconds: ${AGENTHUB_CODEX_TIMEOUT_SECONDS:120}
+      streaming-enabled: ${AGENTHUB_CODEX_STREAMING_ENABLED:false}
+      artifact-only: ${AGENTHUB_CODEX_ARTIFACT_ONLY:true}
+      work-dir: ${AGENTHUB_CODEX_WORK_DIR:.agenthub/codex-runs}
+      fixture-enabled: ${AGENTHUB_CODEX_FIXTURE_ENABLED:false}
     claude-code:
       enabled: ${AGENTHUB_CLAUDE_CODE_ENABLED:false}
       command: ${AGENTHUB_CLAUDE_CODE_COMMAND:claude}

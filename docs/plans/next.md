@@ -40,7 +40,19 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Boundary`: fixture mode is not real Claude Code provider output; real CLI mode still requires local `claude` install and authentication.
    - `Boundary`: v1 is Artifact-only and does not allow Claude Code to modify the AgentHub workspace.
 
-5. **Run a JDBC / MySQL real database verification sprint**
+5. **Productize Codex Adapter v1**
+   - `Done`: the old generic CLI-probe path has been replaced with a dedicated Artifact-only Codex adapter implementation.
+   - `Done`: local Codex CLI capability discovery confirmed `codex-cli 0.134.0` and `codex exec` support for stdin, `--cd`, `--sandbox read-only`, `--json`, `--output-schema`, and `--output-last-message`.
+   - `Done`: `CodexAgentAdapter`, `CodexCommandRunner`, and `CodexArtifactPromptBuilder` use ProcessBuilder, isolated `.agenthub/codex-runs/{requestId}` workspaces, Artifact JSON schema prompting, contract validation, fixture mode, and optional SSE stream chunk publication.
+   - `Done`: `scripts/codex-smoke-test.mjs` now defines the opt-in verification contract for `CODEX=AVAILABLE`, direct adapter execute, custom Codex Agent demo-task, `REAL_FIRST`, `REAL_ADAPTER`, `sourceAdapterType=CODEX`, and `qualityStatus=ACCEPTED`.
+   - `Done`: `.env.example` and `scripts/README.md` document Codex opt-in configuration and smoke usage.
+   - `Done`: fixture smoke passed on port `18095` with `AGENTHUB_CODEX_FIXTURE_ENABLED=true`.
+   - `Done`: real local Codex CLI smoke passed on port `18096` with `AGENTHUB_CODEX_FIXTURE_ENABLED=false` and `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`.
+   - `Active`: if Codex streaming is needed, run `AGENTHUB_CODEX_STREAMING_ENABLED=true` and `AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING=true` opt-in verification.
+   - `Boundary`: this is not Codex Desktop GUI automation; the intended integration is headless / Artifact-only execution with fallback.
+   - `Boundary`: default smoke must not require Codex, and Codex output must not bypass Artifact contract validation or quality gates.
+
+6. **Run a JDBC / MySQL real database verification sprint**
    - Do not switch MySQL on by default.
    - `Done`: `jdbc-smoke-test.mjs` now verifies restart persistence for Conversation, Message, Attachment download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary.
    - `Done`: local MySQL-compatible create / restart verify passed with the JDBC profile on port `18087`.
@@ -48,7 +60,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Boundary`: this validates schema and repository create/query/update/restart paths; it does not make MySQL the default runtime.
    - The memory profile must remain the default stable path.
 
-6. **Converge Stop / Cancel execution semantics**
+7. **Converge Stop / Cancel execution semantics**
    - Build on the existing control plane and cancellation token.
    - `Done`: `CANCEL_RUN` ends as `CANCELLED`; `STOP_RUN` ends as `STOPPED`.
    - `Done`: Orchestrator steps check the control token before delay, before adapter execution, and after adapter execution; late adapter results are discarded.
@@ -56,7 +68,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Boundary`: non-streaming Java HTTP calls already in flight are not forcibly interrupted; results are discarded when the control token is observed.
    - Keep ActionAuditLog, RealtimeRunState, and TaskRunPanel in sync.
 
-7. **Keep plans and docs synchronized**
+8. **Keep plans and docs synchronized**
    - P0 specs for multi-agent chat, artifact lifecycle, adapter output, context/memory, and approval/audit are now captured under `docs/spec/`.
    - `Done`: Context Retrieval now uses DB-backed Agentic Search as the default retrieval shape: List / Grep / Read, with heuristic semantic scoring and optional embedding boundary retained.
    - `Done`: JDBC search has a MySQL FULLTEXT opt-in switch while keeping LIKE as the default.
@@ -72,7 +84,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 - No real Vercel / Netlify / Docker / Kubernetes deployment.
 - No multi-node event bus.
 - No full multi-provider token streaming or token-level persistence.
-- No simultaneous deep Codex / OpenCode platform integrations.
+- No simultaneous deep OpenCode platform integration.
 - No Claude Code workspace-write mode.
 - No default MySQL switch.
 
