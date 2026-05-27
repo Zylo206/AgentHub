@@ -1,6 +1,6 @@
 import type { Artifact } from "../artifacts/artifactTypes";
 import type { Agent } from "../agents/agentTypes";
-import type { TaskRun, TaskSpec, TaskStep } from "./chatTypes";
+import type { StreamingPreviewState, TaskRun, TaskSpec, TaskStep } from "./chatTypes";
 import { formatId, getIdValue } from "../../utils/id";
 import { displayArtifactSourceKind, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
@@ -12,7 +12,7 @@ interface TaskRunPanelProps {
   loading: boolean;
   selectedTaskRunId: string | null;
   selectedTaskStepId: string | null;
-  streamingChunksByStepId?: Record<string, string>;
+  streamingPreviewsByStepId?: Record<string, StreamingPreviewState>;
   onSelectStep: (taskRunId: string, step: TaskStep) => void;
   onCancelTaskRun?: (taskRunId: string) => Promise<void>;
   onStopTaskRun?: (taskRunId: string) => Promise<void>;
@@ -434,7 +434,7 @@ export function TaskRunPanel({
   loading,
   selectedTaskRunId,
   selectedTaskStepId,
-  streamingChunksByStepId = {},
+  streamingPreviewsByStepId = {},
   onSelectStep,
   onCancelTaskRun,
   onStopTaskRun
@@ -565,7 +565,7 @@ export function TaskRunPanel({
                   const qualityScore = formatQualityScore(step.artifactQualityScore);
                   const buildValidationStatus = formatBuildValidationValue(step.artifactBuildValidationStatus);
                   const reviewRetryReviseState = getReviewRetryReviseLabel(step);
-                  const streamingPreview = streamingChunksByStepId[stepId] || "";
+                  const streamingPreview = streamingPreviewsByStepId[stepId] || null;
 
                   return (
                     <button
@@ -613,8 +613,25 @@ export function TaskRunPanel({
                           </div>
                         ) : null}
                         {streamingPreview ? (
-                          <div className="step-streaming-preview">
-                            <strong>生成中：</strong> {summarizeAdapterResponse(streamingPreview)}
+                          <div className={`step-streaming-preview step-streaming-preview--${streamingPreview.status.toLowerCase()}`}>
+                            <div className="step-streaming-preview__header">
+                              <strong>
+                                {streamingPreview.status === "STREAMING"
+                                  ? "Streaming"
+                                  : streamingPreview.status === "DISCARDED"
+                                    ? "Discarded partial output"
+                                    : "Partial output"}
+                              </strong>
+                              <span>
+                                {streamingPreview.adapterType || "Adapter"} / {streamingPreview.chunkCount} chunk{streamingPreview.chunkCount === 1 ? "" : "s"}
+                              </span>
+                            </div>
+                            <div>{summarizeAdapterResponse(streamingPreview.content)}</div>
+                            {streamingPreview.finishReason ? (
+                              <small>{streamingPreview.finishReason}</small>
+                            ) : (
+                              <small>Preview only; final output is persisted after Artifact validation.</small>
+                            )}
                           </div>
                         ) : null}
                         <div className="step-generated-artifacts">

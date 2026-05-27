@@ -7,6 +7,16 @@
   overflow: hidden;
 }
 
+.message-bubble--streaming-discarded {
+  border-left-color: #dc2626;
+  background: #fff1f2;
+}
+
+.message-bubble--streaming-partial {
+  border-left-color: #d97706;
+  background: #fffbeb;
+}
+
 .adapter-routing-panel {
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -642,6 +652,23 @@
   background: #eef5ff;
 }
 
+.message-bubble--streaming-discarded {
+  border-left-color: #dc2626;
+  background: #fff1f2;
+}
+
+.message-bubble--streaming-partial {
+  border-left-color: #d97706;
+  background: #fffbeb;
+}
+
+.message-stream__preview-meta {
+  margin-top: 8px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .message-row {
   display: flex;
 }
@@ -1119,6 +1146,32 @@
   font-size: 12px;
   line-height: 1.5;
   padding: 8px 10px;
+}
+
+.step-streaming-preview--discarded {
+  color: #991b1b;
+  background: #fff1f2;
+  border-color: rgba(220, 38, 38, 0.24);
+}
+
+.step-streaming-preview--partial {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: rgba(217, 119, 6, 0.24);
+}
+
+.step-streaming-preview__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.step-streaming-preview small {
+  display: block;
+  margin-top: 4px;
+  color: inherit;
+  opacity: 0.76;
 }
 
 .step-adapter-error {

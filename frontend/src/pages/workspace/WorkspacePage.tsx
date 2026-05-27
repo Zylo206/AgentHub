@@ -59,6 +59,7 @@ import type {
   LightweightAttachment,
   Message,
   OrchestratorTriggerSuggestion,
+  StreamingPreviewState,
   TaskRun,
   TaskSpec,
   TaskStep
@@ -93,6 +94,13 @@ interface ParsedStreamingChunkPayload {
   taskStepId: string;
   adapterType?: string;
   chunk: string;
+}
+
+interface ParsedControlPayload {
+  taskRunId: string;
+  action?: string;
+  status?: string;
+  reason?: string;
 }
 
 function normalizeStreamingPayload(raw: string): ParsedStreamingChunkPayload | null {
@@ -136,17 +144,127 @@ function appendStreamingChunk(previous: string, nextChunk: string): string {
   return `${previous || ""}${nextChunk}`.slice(-STREAMING_PREVIEW_MAX_LENGTH);
 }
 
-function pruneStreamingStateByActiveSteps(taskRuns: TaskRun[], state: Record<string, string>): Record<string, string> {
-  const activeStepIds = new Set(
-    taskRuns.flatMap((taskRun) =>
-      taskRun.steps.filter((step) => isStreamingStepStatus(step.status)).map((step) => getIdValue(step.id))
-    )
-  );
+function appendStreamingPreview(
+  previous: StreamingPreviewState | undefined,
+  payload: ParsedStreamingChunkPayload
+): StreamingPreviewState {
+  return {
+    taskRunId: payload.taskRunId || previous?.taskRunId || "",
+    taskStepId: payload.taskStepId,
+    adapterType: payload.adapterType || previous?.adapterType,
+    content: appendStreamingChunk(previous?.content || "", payload.chunk),
+    chunkCount: (previous?.chunkCount ?? 0) + 1,
+    status: "STREAMING",
+    updatedAt: new Date().toISOString()
+  };
+}
 
-  const next: Record<string, string> = {};
+function getStepStreamingTerminalStatus(taskRun: TaskRun, step: TaskStep): "ACTIVE" | "COMPLETE" | "PARTIAL" | "DISCARDED" {
+  const runStatus = (taskRun.status || "").toUpperCase();
+  const stepStatus = (step.status || "").toUpperCase();
+  const adapterStatus = (step.adapterStatus || "").toUpperCase();
+
+  if (["CANCELLED", "STOPPED"].includes(runStatus) || ["CANCELLED", "STOPPED"].includes(adapterStatus)) {
+    return "DISCARDED";
+  }
+
+  if (stepStatus === "SKIPPED") {
+    return "DISCARDED";
+  }
+
+  if (isStreamingStepStatus(step.status)) {
+    return "ACTIVE";
+  }
+
+  if (["FAILED", "REJECTED", "BLOCKED", "TIMED_OUT", "ABORTED"].includes(stepStatus)) {
+    return "PARTIAL";
+  }
+
+  return "COMPLETE";
+}
+
+function reconcileStreamingStateByTaskRuns(
+  taskRuns: TaskRun[],
+  state: Record<string, StreamingPreviewState>
+): Record<string, StreamingPreviewState> {
+  const stepIndex = new Map<string, { taskRun: TaskRun; step: TaskStep }>();
+  taskRuns.forEach((taskRun) => {
+    taskRun.steps.forEach((step) => {
+      stepIndex.set(getIdValue(step.id), { taskRun, step });
+    });
+  });
+
+  const next: Record<string, StreamingPreviewState> = {};
   Object.entries(state).forEach(([stepId, chunk]) => {
-    if (activeStepIds.has(stepId) && chunk) {
+    if (!chunk.content) {
+      return;
+    }
+
+    const indexedStep = stepIndex.get(stepId);
+    if (!indexedStep) {
       next[stepId] = chunk;
+      return;
+    }
+
+    const terminalStatus = getStepStreamingTerminalStatus(indexedStep.taskRun, indexedStep.step);
+    if (terminalStatus === "ACTIVE") {
+      next[stepId] = { ...chunk, status: "STREAMING" };
+    } else if (terminalStatus === "DISCARDED") {
+      next[stepId] = {
+        ...chunk,
+        status: "DISCARDED",
+        finishReason: `${indexedStep.taskRun.status}: partial streaming output was discarded and not persisted.`
+      };
+    } else if (terminalStatus === "PARTIAL") {
+      next[stepId] = {
+        ...chunk,
+        status: "PARTIAL",
+        finishReason: `${indexedStep.step.status}: partial streaming output was not promoted to final Artifact.`
+      };
+    }
+  });
+  return next;
+}
+
+function normalizeControlPayload(raw: string): ParsedControlPayload | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      resourceId?: unknown;
+      payload?: Record<string, unknown>;
+      action?: unknown;
+      status?: unknown;
+      reason?: unknown;
+    };
+    const payload = (parsed.payload ?? parsed) as Record<string, unknown>;
+    const taskRunId = String(payload.taskRunId ?? parsed.resourceId ?? "");
+    if (!taskRunId) {
+      return null;
+    }
+    return {
+      taskRunId,
+      action: typeof payload.action === "string" ? payload.action : undefined,
+      status: typeof payload.status === "string" ? payload.status : undefined,
+      reason: typeof payload.reason === "string" ? payload.reason : undefined
+    };
+  } catch {
+    return null;
+  }
+}
+
+function markStreamingPreviewsForTaskRun(
+  state: Record<string, StreamingPreviewState>,
+  control: ParsedControlPayload
+): Record<string, StreamingPreviewState> {
+  const next = { ...state };
+  Object.entries(next).forEach(([stepId, preview]) => {
+    if (preview.taskRunId === control.taskRunId && preview.content) {
+      next[stepId] = {
+        ...preview,
+        status: "DISCARDED",
+        finishReason:
+          `${control.action || "CONTROL"} accepted: partial output discarded before final persistence.`
+          + (control.reason ? ` Reason: ${control.reason}` : "")
+      };
     }
   });
   return next;
@@ -207,7 +325,7 @@ export function WorkspacePage() {
     "DISCONNECTED"
   );
   const [activeRealtimeRunSummary, setActiveRealtimeRunSummary] = useState<string | null>(null);
-  const [streamingChunksByStepId, setStreamingChunksByStepId] = useState<Record<string, string>>({});
+  const [streamingPreviewsByStepId, setStreamingPreviewsByStepId] = useState<Record<string, StreamingPreviewState>>({});
   const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
   const [quoteMode, setQuoteMode] = useState<"quote" | "reply">("quote");
 
@@ -410,7 +528,7 @@ export function WorkspacePage() {
       setPinnedContexts(pinnedContextData);
       setMemories(memoryData);
       setAdapterQualityMetrics(qualityMetricData);
-      setStreamingChunksByStepId((previous) => pruneStreamingStateByActiveSteps(taskRunData, previous));
+      setStreamingPreviewsByStepId((previous) => reconcileStreamingStateByTaskRuns(taskRunData, previous));
       void loadMessageTriggerSuggestions(conversationId, messageData);
       setShowAllArtifacts(true);
       setSelectedTaskStepId(null);
@@ -466,7 +584,7 @@ export function WorkspacePage() {
       setMemories([]);
       setContextSnapshots([]);
       setHandoffSummaries([]);
-      setStreamingChunksByStepId({});
+      setStreamingPreviewsByStepId({});
       setSelectedArtifactId(null);
       setSelectedArtifact(null);
       setSelectedTaskRunId(null);
@@ -533,9 +651,9 @@ export function WorkspacePage() {
         try {
           const streamPayload = normalizeStreamingPayload(event.data);
           if (streamPayload) {
-            setStreamingChunksByStepId((previous) => ({
+            setStreamingPreviewsByStepId((previous) => ({
               ...previous,
-              [streamPayload.taskStepId]: appendStreamingChunk(previous[streamPayload.taskStepId], streamPayload.chunk)
+              [streamPayload.taskStepId]: appendStreamingPreview(previous[streamPayload.taskStepId], streamPayload)
             }));
             return;
           }
@@ -562,6 +680,12 @@ export function WorkspacePage() {
         ].includes(event.type)
       ) {
         setRealtimeStatus("CONNECTED");
+        if (event.type === "CONTROL_COMMAND_RECEIVED") {
+          const controlPayload = normalizeControlPayload(event.data);
+          if (controlPayload) {
+            setStreamingPreviewsByStepId((previous) => markStreamingPreviewsForTaskRun(previous, controlPayload));
+          }
+        }
         scheduleRefresh();
         return;
       }
@@ -1417,7 +1541,7 @@ export function WorkspacePage() {
             triggerSuggestionsByMessageId={triggerSuggestionsByMessageId}
             approvalByMessageId={approvalByMessageId}
             autoTriggerRunningMessageId={autoTriggerRunningMessageId}
-            streamingChunksByStepId={streamingChunksByStepId}
+            streamingPreviewsByStepId={streamingPreviewsByStepId}
             onSelectArtifact={setSelectedArtifactId}
             onToggleMessagePin={handleToggleMessagePin}
             onSaveMessageAsMemory={handleSaveMessageAsMemory}
@@ -1443,7 +1567,7 @@ export function WorkspacePage() {
             loading={loadingTaskRuns}
             selectedTaskRunId={selectedTaskRunId}
             selectedTaskStepId={selectedTaskStepId}
-            streamingChunksByStepId={streamingChunksByStepId}
+            streamingPreviewsByStepId={streamingPreviewsByStepId}
             onSelectStep={handleSelectTaskStep}
             onCancelTaskRun={handleCancelTaskRun}
             onStopTaskRun={handleStopTaskRun}

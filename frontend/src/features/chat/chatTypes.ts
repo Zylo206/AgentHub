@@ -138,6 +138,19 @@ export interface TaskRun {
   updatedAt: string;
 }
 
+export type StreamingPreviewStatus = "STREAMING" | "PARTIAL" | "DISCARDED";
+
+export interface StreamingPreviewState {
+  taskRunId: string;
+  taskStepId: string;
+  adapterType?: string;
+  content: string;
+  chunkCount: number;
+  status: StreamingPreviewStatus;
+  updatedAt: string;
+  finishReason?: string;
+}
+
 export interface OrchestratorTriggerSuggestion {
   enabled: boolean;
   mode: string;

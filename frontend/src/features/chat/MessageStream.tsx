@@ -3,7 +3,7 @@ import type { Agent } from "../agents/agentTypes";
 import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { PinnedContext } from "../context/contextTypes";
 import { MessageBubble } from "./MessageBubble";
-import type { Message, OrchestratorTriggerSuggestion } from "./chatTypes";
+import type { Message, OrchestratorTriggerSuggestion, StreamingPreviewState } from "./chatTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole } from "../../utils/displayLabels";
 
@@ -27,16 +27,16 @@ interface MessageStreamProps {
   onRegenerateAgentReply: (message: Message) => void;
   onConfirmOrchestratorTrigger: (message: Message) => void;
   onRefreshOrchestratorSuggestion: (message: Message) => void;
-  streamingChunksByStepId?: Record<string, string>;
+  streamingPreviewsByStepId?: Record<string, StreamingPreviewState>;
 }
 
 function resolveSenderLabel(message: Message, agents: Agent[]): string {
   if (message.senderType === "USER") {
-    return "你";
+    return "You";
   }
 
   if (message.senderType === "SYSTEM") {
-    return "系统";
+    return "System";
   }
 
   const matchedAgent = agents.find((agent) => getIdValue(agent.id) === message.senderId);
@@ -69,10 +69,10 @@ function getBuiltInAgentLabel(senderId?: string | null): string | null {
 
 function getBuiltInAgentRoleLabel(senderId?: string | null): string | null {
   const labels: Record<string, string> = {
-    agent_orchestrator: "主控 Agent",
-    agent_frontend_builder: "前端构建 Agent",
-    agent_backend_worker: "后端协作 Agent",
-    agent_reviewer: "评审 Agent"
+    agent_orchestrator: "Orchestrator",
+    agent_frontend_builder: "Frontend Builder",
+    agent_backend_worker: "Backend Worker",
+    agent_reviewer: "Reviewer"
   };
 
   return senderId ? labels[senderId] || null : null;
@@ -85,7 +85,7 @@ function resolveAgentStepLabel(message: Message): string | null {
 
   const match = String(message.content || "").match(/TaskStep\s*(\d+)/i);
   if (!match) {
-    return message.senderId === "agent_orchestrator" ? "群聊协调" : null;
+    return message.senderId === "agent_orchestrator" ? "Group orchestration" : null;
   }
 
   return `TaskStep ${match[1]}`;
@@ -104,9 +104,20 @@ function resolveTargetAgentLabel(message: Message, agents: Agent[]): string | nu
     : null;
 }
 
-function getLatestStreamingChunk(streamingChunksByStepId: Record<string, string> = {}): string {
-  const chunks = Object.values(streamingChunksByStepId).filter((chunk) => typeof chunk === "string" && chunk.trim());
-  return chunks.length === 0 ? "" : chunks[chunks.length - 1];
+function getStreamingPreviews(streamingPreviewsByStepId: Record<string, StreamingPreviewState> = {}): StreamingPreviewState[] {
+  return Object.values(streamingPreviewsByStepId)
+    .filter((preview) => preview.content.trim())
+    .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
+}
+
+function getStreamingStatusLabel(status: StreamingPreviewState["status"]): string {
+  if (status === "DISCARDED") {
+    return "Discarded partial output";
+  }
+  if (status === "PARTIAL") {
+    return "Partial output";
+  }
+  return "Generating";
 }
 
 export function MessageStream({
@@ -129,7 +140,7 @@ export function MessageStream({
   onRegenerateAgentReply,
   onConfirmOrchestratorTrigger,
   onRefreshOrchestratorSuggestion,
-  streamingChunksByStepId = {}
+  streamingPreviewsByStepId = {}
 }: MessageStreamProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(() => new Set());
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -137,17 +148,14 @@ export function MessageStream({
 
   const repliesByMessageId = useMemo(() => {
     const grouped = new Map<string, Message[]>();
-
     messages.forEach((message) => {
       if (!message.replyToMessageId) {
         return;
       }
-
       const existing = grouped.get(message.replyToMessageId) ?? [];
       existing.push(message);
       grouped.set(message.replyToMessageId, existing);
     });
-
     return grouped;
   }, [messages]);
 
@@ -175,34 +183,21 @@ export function MessageStream({
   }
 
   if (loading) {
-    return <div className="panel-empty">正在加载消息...</div>;
+    return <div className="panel-empty">Loading messages...</div>;
   }
 
   if (messages.length === 0) {
     return (
       <div className="panel-empty">
-        暂无消息。发送一条任务描述后开始 AgentHub 工作流。
+        No messages yet. Send a task prompt to start the AgentHub workflow.
       </div>
     );
   }
 
-  const streamingPreview = getLatestStreamingChunk(streamingChunksByStepId);
+  const streamingPreviews = getStreamingPreviews(streamingPreviewsByStepId);
 
   return (
     <div className="message-stream">
-      {streamingPreview ? (
-        <div className="message-stream__status-row">
-          <div className="message-bubble message-bubble--system message-bubble--streaming">
-            <div className="message-bubble__header">
-              <span className="message-bubble__sender">
-                <span>生成中</span>
-              </span>
-              <span>流式预览</span>
-            </div>
-            <div className="message-stream__preview-content">{streamingPreview}</div>
-          </div>
-        </div>
-      ) : null}
       {messages.map((message) => {
         const messageId = getIdValue(message.id);
         const replyMessages = repliesByMessageId.get(messageId) ?? [];
@@ -255,6 +250,25 @@ export function MessageStream({
           </div>
         );
       })}
+      {streamingPreviews.map((preview) => (
+        <div className="message-stream__status-row" key={preview.taskStepId}>
+          <div className={`message-bubble message-bubble--system message-bubble--streaming message-bubble--streaming-${preview.status.toLowerCase()}`}>
+            <div className="message-bubble__header">
+              <span className="message-bubble__sender">
+                <span>{getStreamingStatusLabel(preview.status)}</span>
+                <span className="message-agent-step">{preview.taskStepId}</span>
+              </span>
+              <span>{preview.adapterType || "Adapter stream"}</span>
+            </div>
+            <div className="message-stream__preview-content">{preview.content}</div>
+            <div className="message-stream__preview-meta">
+              {preview.chunkCount} chunk{preview.chunkCount === 1 ? "" : "s"}
+              {preview.finishReason ? ` / ${preview.finishReason}` : ""}
+              {preview.status === "STREAMING" ? " / not persisted until final Artifact validation passes" : ""}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

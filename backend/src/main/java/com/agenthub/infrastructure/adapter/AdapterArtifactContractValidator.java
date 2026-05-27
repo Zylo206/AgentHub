@@ -112,13 +112,20 @@ public class AdapterArtifactContractValidator {
     }
 
     private boolean looksLikeProviderError(String content) {
-        String normalized = content.toLowerCase(Locale.ROOT);
-        return normalized.contains("error:")
-                || normalized.contains("exception")
-                || normalized.contains("traceback")
-                || normalized.contains("api key")
-                || normalized.contains("unauthorized")
-                || normalized.contains("rate limit");
+        String normalized = content == null ? "" : content.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return false;
+        }
+        return normalized.startsWith("error:")
+                || normalized.startsWith("exception:")
+                || normalized.startsWith("traceback")
+                || normalized.startsWith("api key")
+                || normalized.startsWith("unauthorized")
+                || normalized.startsWith("rate limit")
+                || normalized.contains("api key is missing")
+                || normalized.contains("invalid api key")
+                || normalized.contains("authentication failed")
+                || normalized.contains("rate limit exceeded");
     }
 
     private String safeSnippet(String value) {

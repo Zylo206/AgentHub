@@ -158,10 +158,23 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
         }
 
         try {
-            ExecutionResult result = streamingEnabled
-                    ? executeStreamingWithFallback(request)
-                    : executeNonStreaming(request);
-            String artifactJson = normalizeAndValidateArtifactContract(result.content());
+            ExecutionResult result;
+            String artifactJson;
+            if (streamingEnabled) {
+                try {
+                    result = executeStreaming(request);
+                    artifactJson = normalizeAndValidateArtifactContract(result.content());
+                } catch (AdapterResponseException exception) {
+                    if (isCancellationRequested(request)) {
+                        throw exception;
+                    }
+                    result = executeNonStreaming(request);
+                    artifactJson = normalizeAndValidateArtifactContract(result.content());
+                }
+            } else {
+                result = executeNonStreaming(request);
+                artifactJson = normalizeAndValidateArtifactContract(result.content());
+            }
             return new AgentResponse(
                     request.requestId(),
                     AgentAdapterType.CLAUDE_CODE,
@@ -195,18 +208,6 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                     startedAt,
                     "Claude Code headless adapter failed.",
                     sanitizeDiagnosticText(exception.getMessage()));
-        }
-    }
-
-    private ExecutionResult executeStreamingWithFallback(AgentRequest request)
-            throws AdapterResponseException, InterruptedException {
-        try {
-            return executeStreaming(request);
-        } catch (AdapterResponseException exception) {
-            if (isCancellationRequested(request)) {
-                throw exception;
-            }
-            return executeNonStreaming(request);
         }
     }
 
@@ -347,6 +348,9 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
         commandLine.add("-p");
         commandLine.add("--output-format");
         commandLine.add(streaming ? "stream-json" : "json");
+        if (streaming) {
+            commandLine.add("--verbose");
+        }
         commandLine.add("--input-format");
         commandLine.add("text");
         commandLine.add("--max-turns");
@@ -391,7 +395,6 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
 
     private List<String> commandCandidates(String commandName) {
         List<String> candidates = new ArrayList<>();
-        candidates.add(commandName);
         if (isWindows() && !commandName.contains(".")) {
             String pathExt = System.getenv("PATHEXT");
             String[] extensions = pathExt == null || pathExt.isBlank()
@@ -404,6 +407,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 }
             }
         }
+        candidates.add(commandName);
         return candidates;
     }
 

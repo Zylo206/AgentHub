@@ -4341,3 +4341,88 @@
 - 在已登录 Claude Code CLI 的机器上跑 `scripts/claude-code-smoke-test.mjs` 的真实模式。
 - 如果真实输出稳定，再把 Adapter quality dashboard 增加 Claude Code parse / quality / stream 指标趋势。
 - 暂不同时深接 Codex / OpenCode，避免多平台接入面过大。
+
+## Phase 96：真实 Claude Code CLI 验证与 Windows 执行兼容修复
+
+### 目标
+
+- 使用本机真实 Claude Code CLI 验证 `CLAUDE_CODE -> REAL_FIRST -> REAL_ADAPTER Artifact` 链路。
+- 修复真实 Windows 环境下 CLI shim、`stream-json` 参数和 Artifact contract 误判问题。
+
+### 主要变更
+
+- `ClaudeCodeAgentAdapter` 在 Windows 下优先解析 `.cmd/.exe/.bat`，避免 Java `ProcessBuilder` 命中 npm 的无扩展 shim 后报 `CreateProcess error=193`。
+- Claude Code `stream-json` 模式补充 `--verbose`，符合本机 Claude Code 2.1.143 的 CLI 要求。
+- Claude Code streaming 最终输出如果未通过 Artifact contract，会回退非流式执行；取消状态仍不会接受 late result。
+- `AdapterArtifactContractValidator` 收紧 provider error 判定，避免合法代码或评审正文里出现 `exception` 等词时被误判为 provider error。
+- `docs/plans/next.md` 同步真实 Claude Code CLI 验证结果和边界。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- 非沙箱 PowerShell 验证：`claude --version` 返回 `2.1.143 (Claude Code)`。
+- 直接运行 Claude Code `stream-json`，确认 `--output-format stream-json` 需要 `--verbose`。
+- 以 `AGENTHUB_CLAUDE_CODE_ENABLED=true`、`AGENTHUB_CLAUDE_CODE_FIXTURE_ENABLED=false`、`AGENTHUB_CLAUDE_CODE_STREAMING_ENABLED=true`、`AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST` 启动临时后端端口 `18094`。
+- `AGENTHUB_API_BASE_URL=http://127.0.0.1:18094 AGENTHUB_CLAUDE_CODE_SMOKE_EXPECT_STREAMING=true node scripts/claude-code-smoke-test.mjs`
+  - 通过：`CLAUDE_CODE` adapter available。
+  - 通过：adapter execute returned artifact JSON。
+  - 通过：demo task completed。
+  - 通过：observed `ADAPTER_STREAM_CHUNK`。
+  - 通过：created `CLAUDE_CODE / REAL_ADAPTER` Artifact。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮验证使用本机真实 Claude Code CLI，但仍保持默认 `CLAUDE_CODE` disabled，不影响无 Claude 环境。
+- v1 仍是 Artifact-only headless 模式，不允许 Claude Code 直接修改 AgentHub workspace。
+- streaming chunk 只用于执行体验；最终 Artifact 仍必须通过 JSON contract、quality evaluator、build validation 和 REAL_FIRST 规则。
+- 不代表 Codex / OpenCode 也已深度接入。
+
+### 遗留问题
+
+- 真实 Claude Code 输出质量仍会随模型和本机登录状态波动，必须继续保留 MOCK fallback。
+- Claude Code workspace-write、真实 patch apply by Claude Code、交互式终端均未实现。
+- Claude Code 真实流式成本、chunk 质量和 parse failure 趋势仍需后续纳入 Adapter quality dashboard。
+
+### 下一步建议
+
+- 保持 `CLAUDE_CODE` Artifact-only v1，优先继续观察真实输出质量和 fallback pattern。
+- 暂不同时推进 Codex / OpenCode 深度接入，避免多平台生产化面过大。
+- 后续如做 workspace-write，需要先完成更严格的 Snapshot、Approval、Audit、沙箱和回滚策略。
+
+## Phase 97：Token Streaming 产品化展示与 Stop / Cancel Partial 语义
+
+### 目标
+
+- 将现有 Adapter streaming chunk 从“调试预览”升级为 Workspace 中可理解的产品体验。
+- 在 MessageStream 和 TaskRunPanel 显示增量生成状态，并在 Stop / Cancel 后明确标记 partial output 为 discarded / partial。
+
+### 主要变更
+
+- 前端新增 `StreamingPreviewState`，记录 `taskRunId`、`taskStepId`、`adapterType`、`content`、`chunkCount`、`status`、`finishReason`。
+- `WorkspacePage` 不再只保存 stepId 到纯字符串的映射，而是维护 `STREAMING / PARTIAL / DISCARDED` 状态。
+- 收到 `ADAPTER_STREAM_CHUNK` / `TASK_STEP_STREAM_CHUNK` 时追加到内存态 streaming preview，不持久化 token。
+- 收到 `CONTROL_COMMAND_RECEIVED` 或 REST reload 后，如果 TaskRun / TaskStep 已 stop、cancel、skip、fail，则将已有 partial preview 标记为 discarded 或 partial。
+- `MessageStream` 增加类似消息气泡的实时生成卡片，展示 chunk 数、Adapter、状态和“最终 Artifact 校验前不会持久化”的边界。
+- `TaskRunPanel` 在 TaskStep 内展示 streaming 状态、partial/discarded 说明和 chunk 计数。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮不做 token 级持久化；streaming chunk 只保存在前端内存态。
+- 最终消息、Artifact 和 run event summary 仍由后端 REST / SSE 主链路决定。
+- Stop / Cancel 对已在途的非流式 HTTP 调用仍不是硬中断；前端只把 late / partial preview 标记为 discarded，不把它当最终结果。
+- 本轮不是多 provider 完整 token streaming，也不是多节点事件总线。
+
+### 遗留问题
+
+- 当前 streaming preview 与具体 Agent bubble 的绑定仍是 TaskStep 级，不是完整 token-by-token 消息对象。
+- 切换页面或刷新后不会恢复 token 级 partial 内容，这是刻意边界。
+- 浏览器级 E2E 尚未覆盖 streaming UI 的视觉状态。
+
+### 下一步建议
+
+- 扩展 `scripts/e2e-browser.mjs` 覆盖 streaming preview、Stop / Cancel 后 discarded 状态。
+- 如果真实 provider streaming 稳定，再把 stream duration、chunk count、fallback reason 纳入 Adapter quality dashboard。

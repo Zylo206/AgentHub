@@ -26,6 +26,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace MessageStream and TaskRunPanel can show streaming preview / generating text.
    - `Done`: final aggregated output still goes through JSON contract validation, quality evaluation, build validation, REAL_FIRST, and fallback.
    - `Done`: fixture streaming verification on port `18091` observed 7 stream chunks and 2 `REAL_ADAPTER / REAL_FIRST` Artifacts.
+   - `Done`: Workspace MessageStream and TaskRunPanel now show streaming status as `STREAMING / PARTIAL / DISCARDED` without persisting token-level chunks.
+   - `Done`: Stop / Cancel marks in-memory partial streaming output as discarded; final messages and Artifacts remain REST-backed authoritative state.
    - `Boundary`: this is not full multi-provider token streaming, not token-level persistence, and not a multi-node event bus.
 
 4. **Validate Claude Code Artifact-only headless Adapter v1**
@@ -33,6 +35,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: supports Claude Code CLI `json` and `stream-json` output modes behind `AGENTHUB_CLAUDE_CODE_STREAMING_ENABLED`.
    - `Done`: final output must pass AgentHub Artifact JSON contract before becoming `REAL_ADAPTER`.
    - `Done`: fixture smoke on port `18092` observed `ADAPTER_STREAM_CHUNK` and `CLAUDE_CODE / REAL_ADAPTER / REAL_FIRST` artifacts.
+   - `Done`: real local Claude Code CLI 2.1.143 smoke on port `18094` passed with streaming chunk events and `CLAUDE_CODE / REAL_ADAPTER` Artifact output.
+   - `Done`: Windows npm shim resolution prefers `.cmd/.exe/.bat` over extensionless shims, and `stream-json` uses Claude Code's required `--verbose` flag.
    - `Boundary`: fixture mode is not real Claude Code provider output; real CLI mode still requires local `claude` install and authentication.
    - `Boundary`: v1 is Artifact-only and does not allow Claude Code to modify the AgentHub workspace.
 
