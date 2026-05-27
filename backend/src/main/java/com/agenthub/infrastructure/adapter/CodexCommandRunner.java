@@ -311,6 +311,20 @@ public class CodexCommandRunner {
         } catch (IOException ignored) {
             // Best-effort cleanup only.
         }
+        try {
+            Path parent = requestDir.getParent();
+            if (parent != null && Files.isDirectory(parent) && isDirectoryEmpty(parent)) {
+                Files.deleteIfExists(parent);
+            }
+        } catch (IOException ignored) {
+            // Best-effort cleanup only.
+        }
+    }
+
+    private boolean isDirectoryEmpty(Path directory) throws IOException {
+        try (var entries = Files.list(directory)) {
+            return entries.findAny().isEmpty();
+        }
     }
 
     private String getFuture(CompletableFuture<String> future, String streamName) throws CodexCommandException {

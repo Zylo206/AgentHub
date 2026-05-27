@@ -6,6 +6,7 @@ import com.agenthub.domain.task.TaskStep;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,10 +20,13 @@ public class ReviewDecisionEvaluator {
             @Value("${agenthub.orchestrator.review.force-rejection-enabled:false}") boolean forceRejectionEnabled,
             @Value("${agenthub.orchestrator.review.rejection-keywords:REJECTION,decision: reject,reject,不通过,拒绝,blocker,阻塞}") String rejectionKeywords) {
         this.forceRejectionEnabled = forceRejectionEnabled;
-        this.rejectionKeywords = Arrays.stream((rejectionKeywords == null ? "" : rejectionKeywords).split(","))
+        this.rejectionKeywords = Stream.concat(
+                        Arrays.stream((rejectionKeywords == null ? "" : rejectionKeywords).split(",")),
+                        Stream.of("force reject", "不通过", "拒绝", "阻塞"))
                 .map(String::trim)
                 .filter(keyword -> !keyword.isBlank())
                 .map(keyword -> keyword.toLowerCase(Locale.ROOT))
+                .distinct()
                 .toList();
     }
 

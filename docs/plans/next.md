@@ -48,11 +48,17 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: `.env.example` and `scripts/README.md` document Codex opt-in configuration and smoke usage.
    - `Done`: fixture smoke passed on port `18095` with `AGENTHUB_CODEX_FIXTURE_ENABLED=true`.
    - `Done`: real local Codex CLI smoke passed on port `18096` with `AGENTHUB_CODEX_FIXTURE_ENABLED=false` and `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`.
-   - `Active`: if Codex streaming is needed, run `AGENTHUB_CODEX_STREAMING_ENABLED=true` and `AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING=true` opt-in verification.
+   - `Done`: real Codex streaming smoke passed on port `18100` with `AGENTHUB_CODEX_STREAMING_ENABLED=true`, observed `ADAPTER_STREAM_CHUNK`, and created `CODEX / REAL_ADAPTER / REAL_FIRST` Artifact.
    - `Boundary`: this is not Codex Desktop GUI automation; the intended integration is headless / Artifact-only execution with fallback.
    - `Boundary`: default smoke must not require Codex, and Codex output must not bypass Artifact contract validation or quality gates.
 
-6. **Run a JDBC / MySQL real database verification sprint**
+6. **Keep Reviewer REJECTION retry/revise loop verifiable**
+   - `Done`: reviewer rejection can be triggered by explicit prompt keywords such as `force reject`, `blocker`, `reject`, and `不通过`.
+   - `Done`: rejected review marks the TaskRun as `BLOCKED`, marks the Review Report `REJECTED`, emits `REJECTION` protocol messages, and creates retry/revise guidance.
+   - `Done`: opt-in smoke with `AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION=true` verifies the rejection path and then verifies Artifact Revision returns to a `COMPLETED` / accepted review path.
+   - `Boundary`: this is a rule-based review decision loop; it is not a full static analysis engine or automatic code-fix system.
+
+7. **Run a JDBC / MySQL real database verification sprint**
    - Do not switch MySQL on by default.
    - `Done`: `jdbc-smoke-test.mjs` now verifies restart persistence for Conversation, Message, Attachment download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary.
    - `Done`: local MySQL-compatible create / restart verify passed with the JDBC profile on port `18087`.
@@ -60,7 +66,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Boundary`: this validates schema and repository create/query/update/restart paths; it does not make MySQL the default runtime.
    - The memory profile must remain the default stable path.
 
-7. **Converge Stop / Cancel execution semantics**
+8. **Converge Stop / Cancel execution semantics**
    - Build on the existing control plane and cancellation token.
    - `Done`: `CANCEL_RUN` ends as `CANCELLED`; `STOP_RUN` ends as `STOPPED`.
    - `Done`: Orchestrator steps check the control token before delay, before adapter execution, and after adapter execution; late adapter results are discarded.
@@ -68,7 +74,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Boundary`: non-streaming Java HTTP calls already in flight are not forcibly interrupted; results are discarded when the control token is observed.
    - Keep ActionAuditLog, RealtimeRunState, and TaskRunPanel in sync.
 
-8. **Keep plans and docs synchronized**
+9. **Keep plans and docs synchronized**
    - P0 specs for multi-agent chat, artifact lifecycle, adapter output, context/memory, and approval/audit are now captured under `docs/spec/`.
    - `Done`: Context Retrieval now uses DB-backed Agentic Search as the default retrieval shape: List / Grep / Read, with heuristic semantic scoring and optional embedding boundary retained.
    - `Done`: JDBC search has a MySQL FULLTEXT opt-in switch while keeping LIKE as the default.

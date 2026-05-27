@@ -4494,6 +4494,7 @@
 - `git diff --check`
 - Codex fixture smoke：临时 backend 端口 `18095`，`AGENTHUB_CODEX_FIXTURE_ENABLED=true`，`node scripts/codex-smoke-test.mjs` 通过。
 - 真实 Codex CLI smoke：临时 backend 端口 `18096`，`AGENTHUB_CODEX_FIXTURE_ENABLED=false`，`AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`，`node scripts/codex-smoke-test.mjs` 通过。
+- 真实 Codex streaming smoke：临时 backend 端口 `18100`，`AGENTHUB_CODEX_STREAMING_ENABLED=true`，`AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING=true`，观察到 `ADAPTER_STREAM_CHUNK`，并生成 `CODEX / REAL_ADAPTER / REAL_FIRST` Artifact。
 
 ### 静态 / Mock / Placeholder 部分
 
@@ -4505,10 +4506,47 @@
 ### 遗留问题
 
 - 真实 Codex 输出质量和 fallback pattern 仍需在更多任务类型下继续观察。
-- 本轮未开启 `AGENTHUB_CODEX_STREAMING_ENABLED=true` 跑真实 streaming smoke。
+- 真实 Codex streaming 已通过 opt-in smoke，但 chunk 结构仍需在更多任务类型下继续观察。
 - OpenCode 仍是通用 CLI 探测型 Adapter，未做深度接入。
 
 ### 下一步建议
 
 - 用 `AGENTHUB_CODEX_ENABLED=true`、`AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST` 启动 backend 后运行 `node scripts/codex-smoke-test.mjs`。
-- 如果真实 Codex streaming 稳定，再开启 `AGENTHUB_CODEX_STREAMING_ENABLED=true` 和 `AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING=true` 验证 SSE chunk。
+- 后续把 Codex streaming 的 chunk count、duration、fallback pattern 纳入 Adapter quality dashboard 观察。
+
+## Phase 100：Reviewer REJECTION 与 Revision Recovery 验证闭环
+
+### 目标
+
+- 将 Reviewer `REJECTION` 从协议展示能力推进到可控、可回归的 retry / revise 验证闭环。
+- 确认拒绝后执行 Artifact Revision 能回到 `COMPLETED` / accepted review 路径。
+
+### 主要变更
+
+- `ReviewDecisionEvaluator` 增加稳定的内置拒绝触发词兜底，覆盖 `force reject`、`不通过`、`拒绝`、`阻塞` 等显式测试输入。
+- 保持现有配置化 rejection keywords，不移除 `AGENTHUB_REVIEW_REJECTION_KEYWORDS`。
+- `scripts/smoke-test.mjs` 的 opt-in REJECTION 路径新增 revision recovery 断言：拒绝后执行 `demo-revision`，revision TaskRun 必须 `COMPLETED`，revision Review Report 必须 `ACCEPTED`。
+- `docs/plans/next.md` 记录 Reviewer REJECTION retry / revise loop 的 Done 与 Boundary。
+
+### 验证方式
+
+- `node --check scripts/smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- `AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION=true node scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- REJECTION 判定仍是规则化关键词触发，不是真实静态分析、真实 QA 引擎或完整 Reviewer 智能体。
+- retry / revise 指令只生成修复建议和可见闭环，不自动伪造代码修复。
+- Revision recovery 使用现有静态 demo revision 路径验证回到 accepted review，不代表真实代码修复已经自动完成。
+
+### 遗留问题
+
+- Reviewer 不会基于真实 lint/build/test 自动生成 rejection。
+- 失败后自动选择最小修复 patch、自动重新运行完整 Reviewer 的闭环仍未完成。
+- Browser E2E 尚未覆盖 REJECTION badge 和 recovery path。
+
+### 下一步建议
+
+- 后续把真实 lint/build/test 结果接入 `ReviewDecisionEvaluator`，让 rejection 不只依赖 prompt 关键词。
+- 扩展 browser E2E 覆盖 `REJECTION -> Revision -> APPROVAL` 的可视化路径。

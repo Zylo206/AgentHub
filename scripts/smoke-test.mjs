@@ -993,6 +993,20 @@ async function runSmokeTest() {
   if (!revision.taskRun?.orchestratorDecisionLog?.plannerDecision) {
     throw new Error("revision taskRun missing orchestratorDecisionLog");
   }
+  if (EXPECT_REVIEW_REJECTION) {
+    if (revision.taskRun.status !== "COMPLETED") {
+      throw new Error(`review rejection recovery expected revision taskRun status COMPLETED, got ${revision.taskRun.status}`);
+    }
+    if (revision.reviewArtifact?.type !== "REVIEW_REPORT" || revision.reviewArtifact?.status !== "ACCEPTED") {
+      throw new Error(
+        `review rejection recovery expected ACCEPTED Review Report after revision, got ${revision.reviewArtifact?.type}/${revision.reviewArtifact?.status}`
+      );
+    }
+    if (String(revision.reviewArtifact?.content || "").includes("Decision: REJECTED")) {
+      throw new Error("review rejection recovery expected revision review report to leave REJECTED state");
+    }
+    pass("review rejection recovery returned to approval after revision");
+  }
   pass("revision completed");
   pass(`revision decision log loaded: ${revision.taskRun.orchestratorDecisionLog.decisionMode || "UNKNOWN"}`);
 
