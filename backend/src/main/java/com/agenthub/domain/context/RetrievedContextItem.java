@@ -18,6 +18,7 @@ public class RetrievedContextItem {
     private final String semanticExplanation;
     private final java.util.List<String> matchedTokens;
     private final String windowPolicy;
+    private final String searchStage;
 
     public RetrievedContextItem(
             String sourceType,
@@ -42,7 +43,8 @@ public class RetrievedContextItem {
                 "HEURISTIC",
                 "Legacy retrieved context item did not record semantic backend details.",
                 java.util.List.of(),
-                "LEGACY");
+                "LEGACY",
+                "UNKNOWN");
     }
 
     public RetrievedContextItem(
@@ -62,6 +64,44 @@ public class RetrievedContextItem {
             String semanticExplanation,
             java.util.List<String> matchedTokens,
             String windowPolicy) {
+        this(
+                sourceType,
+                sourceId,
+                title,
+                content,
+                score,
+                reason,
+                sourceRank,
+                baseScore,
+                keywordScore,
+                recencyScore,
+                importanceScore,
+                semanticScore,
+                semanticBackend,
+                semanticExplanation,
+                matchedTokens,
+                windowPolicy,
+                inferSearchStage(reason, windowPolicy, matchedTokens));
+    }
+
+    public RetrievedContextItem(
+            String sourceType,
+            String sourceId,
+            String title,
+            String content,
+            double score,
+            String reason,
+            int sourceRank,
+            double baseScore,
+            double keywordScore,
+            double recencyScore,
+            double importanceScore,
+            double semanticScore,
+            String semanticBackend,
+            String semanticExplanation,
+            java.util.List<String> matchedTokens,
+            String windowPolicy,
+            String searchStage) {
         this.sourceType = sourceType;
         this.sourceId = sourceId;
         this.title = title;
@@ -80,6 +120,9 @@ public class RetrievedContextItem {
                 : semanticExplanation;
         this.matchedTokens = matchedTokens == null ? java.util.List.of() : java.util.List.copyOf(matchedTokens);
         this.windowPolicy = windowPolicy;
+        this.searchStage = searchStage == null || searchStage.isBlank()
+                ? inferSearchStage(reason, windowPolicy, this.matchedTokens)
+                : searchStage;
     }
 
     public RetrievedContextItem withSourceRank(int nextSourceRank) {
@@ -99,7 +142,8 @@ public class RetrievedContextItem {
                 semanticBackend,
                 semanticExplanation,
                 matchedTokens,
-                windowPolicy);
+                windowPolicy,
+                searchStage);
     }
 
     public String getSourceType() {
@@ -164,5 +208,29 @@ public class RetrievedContextItem {
 
     public String getWindowPolicy() {
         return windowPolicy;
+    }
+
+    public String getSearchStage() {
+        return searchStage;
+    }
+
+    private static String inferSearchStage(String reason, String windowPolicy, java.util.List<String> matchedTokens) {
+        if (reason != null) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("Search stage:\\s*([A-Z_]+)")
+                    .matcher(reason);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+        if (windowPolicy != null && windowPolicy.startsWith("GREP_")) {
+            return "LIST_GREP_READ";
+        }
+        if (matchedTokens != null && !matchedTokens.isEmpty()) {
+            return "LIST_GREP_READ";
+        }
+        if (windowPolicy != null && windowPolicy.startsWith("LIST_")) {
+            return "LIST_READ_FALLBACK";
+        }
+        return "UNKNOWN";
     }
 }

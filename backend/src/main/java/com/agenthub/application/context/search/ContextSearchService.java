@@ -79,6 +79,7 @@ public class ContextSearchService {
 
         listPinned(conversationId).forEach(candidate -> put(candidates, candidate));
         listMemory(conversationId, memoryLimit, now).forEach(candidate -> put(candidates, candidate));
+        grepMemory(conversationId, tokens, now).forEach(candidate -> put(candidates, candidate));
         listRecentMessages(conversationId, sourceMessageId).forEach(candidate -> put(candidates, candidate));
         grepMessages(conversationId, sourceMessageId, tokens).forEach(candidate -> put(candidates, candidate));
         listRecentArtifacts(conversationId).forEach(candidate -> put(candidates, candidate));
@@ -119,6 +120,16 @@ public class ContextSearchService {
         return memoryRepository.findRelevantForConversation(conversationId, Math.max(limit, 6)).stream()
                 .map(memoryItem -> memoryRepository.markUsed(memoryItem.getMemoryId(), now).orElse(memoryItem))
                 .map(this::fromMemory)
+                .toList();
+    }
+
+    private List<ContextSearchCandidate> grepMemory(ConversationId conversationId, List<String> tokens, Instant now) {
+        if (tokens.isEmpty()) {
+            return List.of();
+        }
+        return memoryRepository.searchByConversationId(conversationId, tokens, grepLimit).stream()
+                .map(memoryItem -> memoryRepository.markUsed(memoryItem.getMemoryId(), now).orElse(memoryItem))
+                .map(memoryItem -> withWindowPolicy(fromMemory(memoryItem), "GREP_MEMORY"))
                 .toList();
     }
 

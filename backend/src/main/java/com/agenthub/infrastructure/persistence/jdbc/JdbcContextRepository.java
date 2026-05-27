@@ -306,7 +306,8 @@ public class JdbcContextRepository implements ContextRepository {
                         node.path("semanticBackend").asText("HEURISTIC"),
                         node.path("semanticExplanation").asText("Loaded from JDBC context snapshot."),
                         readStringArray(node.path("matchedTokens")),
-                        node.path("windowPolicy").asText("JDBC")));
+                        node.path("windowPolicy").asText("JDBC"),
+                        node.path("searchStage").asText("UNKNOWN")));
             }
             return items;
         } catch (Exception exception) {

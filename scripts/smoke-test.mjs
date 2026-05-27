@@ -8,6 +8,8 @@ const EXPECT_REAL_ADAPTER = process.env.AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER === "
 const EXPECT_OPENAI_FIXTURE = process.env.AGENTHUB_SMOKE_EXPECT_OPENAI_FIXTURE === "true";
 const EXPECT_REAL_FIRST = process.env.AGENTHUB_SMOKE_EXPECT_REAL_FIRST === "true";
 const EXPECT_REVIEW_REJECTION = process.env.AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION === "true";
+const EXPECT_REVIEW_QUALITY_REJECTION = process.env.AGENTHUB_SMOKE_EXPECT_REVIEW_QUALITY_REJECTION === "true";
+const EXPECT_ANY_REVIEW_REJECTION = EXPECT_REVIEW_REJECTION || EXPECT_REVIEW_QUALITY_REJECTION;
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
 const EXPECT_ADAPTER_STATS_PERSISTENCE = process.env.AGENTHUB_SMOKE_EXPECT_ADAPTER_STATS_PERSISTENCE === "true";
 const EXPECT_JDBC_PROFILE = process.env.AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE === "true";
@@ -37,10 +39,12 @@ const SMOKE_ATTACHMENTS = [
 ];
 
 const DEMO_PROMPT = "帮我生成一个 React 登录页面，支持邮箱登录和验证码登录，同时生成 README，并检查代码质量。";
-const ACTIVE_DEMO_PROMPT = EXPECT_REVIEW_REJECTION
+const ACTIVE_DEMO_PROMPT = EXPECT_REVIEW_QUALITY_REJECTION
+  ? `${DEMO_PROMPT}\nSmoke quality gate trigger: AGENTHUB_SMOKE_QUALITY_GATE=BUILD_FAILED.`
+  : EXPECT_REVIEW_REJECTION
   ? `${DEMO_PROMPT}\nReviewer instruction: decision: reject because blocker risk must trigger retry/revise.`
   : DEMO_PROMPT;
-const EXPECTED_DEMO_TASK_STATUS = EXPECT_REVIEW_REJECTION ? "BLOCKED" : "COMPLETED";
+const EXPECTED_DEMO_TASK_STATUS = EXPECT_ANY_REVIEW_REJECTION ? "BLOCKED" : "COMPLETED";
 const REVISION_INSTRUCTION = "把按钮改成蓝色，并增加 loading 状态。";
 
 function pass(message) {
@@ -141,22 +145,6 @@ async function expectRequestFailure(path, init = {}, expectedText = "") {
   }
 
   throw new Error(`Expected request to fail: ${path}`);
-}
-
-async function tryRunOrchestratorFromMessage(conversationId, messageId) {
-  try {
-    return await request(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-run`, {
-      method: "POST",
-      body: JSON.stringify({})
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("HTTP 404") || message.includes("HTTP 405")) {
-      warn("message-level orchestrator-run endpoint is unavailable; skipping auto-trigger smoke coverage.");
-      return null;
-    }
-    throw error;
-  }
 }
 
 async function runOrchestratorFromMessageWithApproval(conversationId, messageId, approvalId) {
@@ -278,6 +266,72 @@ function pickCodeArtifact(artifacts) {
   );
 }
 
+function splitContentLines(content) {
+  const value = String(content || "");
+  return value ? value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n") : [];
+}
+
+function estimateLineDiffStats(previousContent, nextContent) {
+  const previousLines = splitContentLines(previousContent);
+  const nextLines = splitContentLines(nextContent);
+  const table = Array.from({ length: previousLines.length + 1 }, () =>
+    Array.from({ length: nextLines.length + 1 }, () => 0)
+  );
+
+  for (let previousIndex = previousLines.length - 1; previousIndex >= 0; previousIndex -= 1) {
+    for (let nextIndex = nextLines.length - 1; nextIndex >= 0; nextIndex -= 1) {
+      table[previousIndex][nextIndex] = previousLines[previousIndex] === nextLines[nextIndex]
+        ? table[previousIndex + 1][nextIndex + 1] + 1
+        : Math.max(table[previousIndex + 1][nextIndex], table[previousIndex][nextIndex + 1]);
+    }
+  }
+
+  let previousIndex = 0;
+  let nextIndex = 0;
+  let added = 0;
+  let removed = 0;
+  let context = 0;
+
+  while (previousIndex < previousLines.length && nextIndex < nextLines.length) {
+    if (previousLines[previousIndex] === nextLines[nextIndex]) {
+      context += 1;
+      previousIndex += 1;
+      nextIndex += 1;
+    } else if (table[previousIndex + 1][nextIndex] >= table[previousIndex][nextIndex + 1]) {
+      removed += 1;
+      previousIndex += 1;
+    } else {
+      added += 1;
+      nextIndex += 1;
+    }
+  }
+
+  removed += previousLines.length - previousIndex;
+  added += nextLines.length - nextIndex;
+  return { added, removed, context, changed: Math.min(added, removed) };
+}
+
+function buildSmokeDiffAffectedItems(revisionArtifact, baseArtifact) {
+  const stats = estimateLineDiffStats(baseArtifact?.content, revisionArtifact?.content);
+  return [
+    `Artifact: ${revisionArtifact?.title || getIdValue(revisionArtifact?.id)} v${revisionArtifact?.version}`,
+    `Base artifact: ${baseArtifact?.title || getIdValue(baseArtifact?.id)} v${baseArtifact?.version}`,
+    `Diff summary: +${stats.added} added / -${stats.removed} removed / ${stats.context} context / ${stats.changed} changed blocks`,
+    `Revision instruction: ${revisionArtifact?.revisionInstruction || "n/a"}`
+  ];
+}
+
+function assertExplainableDiffStats(result, label) {
+  for (const field of ["addedLines", "removedLines", "unchangedLines", "changedLines"]) {
+    if (typeof result[field] !== "number") {
+      throw new Error(`${label} missing numeric ${field}`);
+    }
+  }
+  if (result.addedLines + result.removedLines <= 0) {
+    throw new Error(`${label} expected at least one added or removed line`);
+  }
+}
+
 function assertRealAdapterArtifactContract(artifact, label) {
   if (artifact.sourceKind !== "REAL_ADAPTER") {
     throw new Error(`${label} sourceKind expected REAL_ADAPTER, got ${artifact.sourceKind}`);
@@ -356,6 +410,7 @@ async function runSmokeTest() {
   console.log(`AgentHub OpenAI fixture expectation: ${EXPECT_OPENAI_FIXTURE ? "enabled" : "disabled"}`);
   console.log(`AgentHub REAL_FIRST expectation: ${EXPECT_REAL_FIRST ? "enabled" : "disabled"}`);
   console.log(`AgentHub reviewer rejection expectation: ${EXPECT_REVIEW_REJECTION ? "enabled" : "disabled"}`);
+  console.log(`AgentHub reviewer quality-gate rejection expectation: ${EXPECT_REVIEW_QUALITY_REJECTION ? "enabled" : "disabled"}`);
   console.log(`AgentHub auto-trigger approval expectation: ${EXPECT_AUTO_TRIGGER_APPROVAL ? "enabled" : "disabled"}`);
   console.log(`AgentHub adapter stats persistence expectation: ${EXPECT_ADAPTER_STATS_PERSISTENCE ? "enabled" : "disabled"}`);
   console.log(`AgentHub JDBC profile expectation: ${EXPECT_JDBC_PROFILE ? "enabled" : "disabled"}`);
@@ -518,7 +573,7 @@ async function runSmokeTest() {
   }
 
   let autoTriggeredTaskRun = null;
-  if (triggerSuggestion?.enabled && triggerSuggestion.requireApproval) {
+  if (EXPECT_AUTO_TRIGGER_APPROVAL) {
     await expectRequestFailure(`/api/conversations/${conversationId}/messages/${messageId}/orchestrator-run`, {
       method: "POST",
       body: JSON.stringify({})
@@ -532,20 +587,18 @@ async function runSmokeTest() {
       approval.targetId === messageId &&
       approval.status === "PENDING"
     );
-    const approvalId = pendingAutoTriggerApproval?.approvalId || await createAndApproveApproval(conversationId, {
-      actionType: "ORCHESTRATOR_RUN",
-      targetType: "MESSAGE",
-      targetId: messageId,
-      riskLevel: "MEDIUM",
-      summary: "Smoke test approves message-level Orchestrator run.",
-      affectedItems: [`Message: ${messageId}`]
-    });
-    if (pendingAutoTriggerApproval) {
-      await request(`/api/approval-requests/${approvalId}/approve`, { method: "POST" });
+    if (!pendingAutoTriggerApproval) {
+      throw new Error("expected message send to create a pending ORCHESTRATOR_RUN approval request");
     }
+    const approvalId = requireValue(pendingAutoTriggerApproval.approvalId, "auto-trigger approvalId missing");
+    const approvedAutoTriggerApproval = await request(`/api/approval-requests/${approvalId}/approve`, { method: "POST" });
+    if (approvedAutoTriggerApproval.status !== "APPROVED") {
+      throw new Error(`auto-trigger approval expected APPROVED, got ${approvedAutoTriggerApproval.status}`);
+    }
+    pass(`auto-trigger approval confirmed: ${approvalId}`);
     autoTriggeredTaskRun = await runOrchestratorFromMessageWithApproval(conversationId, messageId, approvalId);
-  } else {
-    autoTriggeredTaskRun = await tryRunOrchestratorFromMessage(conversationId, messageId);
+  } else if (triggerSuggestion?.enabled) {
+    pass("message-level orchestrator auto-trigger run skipped; set AGENTHUB_SMOKE_EXPECT_AUTO_TRIGGER_APPROVAL=true to exercise approval/run.");
   }
   if (autoTriggeredTaskRun) {
     const autoTriggeredTaskRunId = requireValue(getIdValue(autoTriggeredTaskRun.id), "autoTriggeredTaskRunId missing");
@@ -740,6 +793,11 @@ async function runSmokeTest() {
   pass(`conversation participants loaded: ${refreshedParticipantIds.length}`);
 
   const contextSnapshots = await request(`/api/task-runs/${taskRunId}/context-snapshots`);
+  const rerunContextSnapshots = await request(`/api/task-runs/${rerunTaskRunId}/context-snapshots`);
+  const explainContextSnapshots = [
+    ...(Array.isArray(contextSnapshots) ? contextSnapshots : []),
+    ...(Array.isArray(rerunContextSnapshots) ? rerunContextSnapshots : [])
+  ];
   const hasPinnedSnapshotItem = Array.isArray(contextSnapshots) && contextSnapshots.some((snapshot) =>
     (Array.isArray(snapshot.pinnedContextItems) &&
       snapshot.pinnedContextItems.some((item) => String(item).includes(messageId))) ||
@@ -755,7 +813,7 @@ async function runSmokeTest() {
   if (!hasRetrievedContextItem) {
     throw new Error("context snapshot did not include retrievedContextItems");
   }
-  const retrievedContextItems = contextSnapshots.flatMap((snapshot) =>
+  const retrievedContextItems = explainContextSnapshots.flatMap((snapshot) =>
     Array.isArray(snapshot.retrievedContextItems) ? snapshot.retrievedContextItems : []
   );
   const missingRetrievalExplanation = retrievedContextItems.find(
@@ -774,16 +832,31 @@ async function runSmokeTest() {
       typeof item.importanceScore !== "number" ||
       typeof item.sourceRank !== "number" ||
       !Array.isArray(item.matchedTokens) ||
-      !String(item.semanticBackend || "").trim()
+      !String(item.semanticBackend || "").trim() ||
+      !["LIST_GREP_READ", "LIST_READ_FALLBACK"].includes(String(item.searchStage || "")) ||
+      !String(item.windowPolicy || "").trim()
   );
   if (missingRetrievalScoreBreakdown) {
     throw new Error(
       `retrieved context item missing v4 score breakdown: ${JSON.stringify(missingRetrievalScoreBreakdown)}`
     );
   }
+  const retrievedSourceTypes = new Set(retrievedContextItems.map((item) => item.sourceType));
+  const requiredRetrievedSourceTypes = ["RECENT_MESSAGE", "ARTIFACT", "MEMORY", "ATTACHMENT", "TASK_RUN_SUMMARY"];
+  const missingRetrievedSourceTypes = requiredRetrievedSourceTypes.filter((sourceType) => !retrievedSourceTypes.has(sourceType));
+  if (missingRetrievedSourceTypes.length > 0) {
+    throw new Error(
+      `context retrieval source coverage missing ${missingRetrievedSourceTypes.join(", ")} from ${Array.from(retrievedSourceTypes).join(", ")}`
+    );
+  }
+  const hasGrepReadStage = retrievedContextItems.some((item) => item.searchStage === "LIST_GREP_READ");
+  if (!hasGrepReadStage) {
+    throw new Error("context retrieval explain did not include a List/Grep/Read hit");
+  }
   pass(`context snapshots include pinned context: ${contextSnapshots.length}`);
   pass("context snapshots include retrieved context items");
   pass(`context retrieval v4 explanations validated: ${retrievedContextItems.length}`);
+  pass(`context retrieval source coverage validated: ${requiredRetrievedSourceTypes.join(", ")}`);
 
   const taskRuns = await request(`/api/conversations/${conversationId}/task-runs`);
   if (!Array.isArray(taskRuns) || taskRuns.length < 1) {
@@ -805,7 +878,7 @@ async function runSmokeTest() {
     String(item.title || "").includes("retry / revise") &&
     String(item.content || "").includes("Retry / Revise Instruction")
   );
-  if (EXPECT_REVIEW_REJECTION) {
+  if (EXPECT_ANY_REVIEW_REJECTION) {
     const rejectedReviewArtifact = artifacts.find((item) =>
       item.type === "REVIEW_REPORT" &&
       item.status === "REJECTED" &&
@@ -819,6 +892,26 @@ async function runSmokeTest() {
     }
     if (!String(taskRun.orchestratorDecisionLog?.aggregationDecision || "").includes("reviewDecision=REJECTED")) {
       throw new Error("orchestratorDecisionLog did not record reviewDecision=REJECTED");
+    }
+    if (EXPECT_REVIEW_QUALITY_REJECTION) {
+      const qualityRejectedArtifacts = artifacts.filter((item) =>
+        item.buildValidationStatus === "FAILED" ||
+        item.qualityStatus === "REJECTED" ||
+        String(item.qualityReason || "").includes("Smoke quality gate trigger")
+      );
+      const qualityDecisionEvidence = [
+        taskRun.orchestratorDecisionLog?.aggregationDecision,
+        taskRun.orchestratorDecisionLog?.fallbackDecision,
+        retryAdviceArtifact?.content,
+        rejectedReviewArtifact.content
+      ].map((item) => String(item || "")).join("\n");
+      if (qualityRejectedArtifacts.length < 1) {
+        throw new Error("quality-gate rejection expected at least one artifact with FAILED/REJECTED quality metadata");
+      }
+      if (!qualityDecisionEvidence.includes("quality-gate") && !qualityDecisionEvidence.includes("build/lint validation failed")) {
+        throw new Error("quality-gate rejection expected decision evidence to name the quality gate");
+      }
+      pass(`review quality-gate rejection metadata validated: ${qualityRejectedArtifacts.map((item) => item.title || item.id).join(", ")}`);
     }
     pass(`review rejection artifacts validated: ${rejectedReviewArtifact.title}, ${retryAdviceArtifact.title}`);
   }
@@ -881,7 +974,7 @@ async function runSmokeTest() {
     }
     pass("real adapter quality reason present on TaskSteps");
   }
-  if (EXPECT_REVIEW_REJECTION) {
+  if (EXPECT_ANY_REVIEW_REJECTION) {
     const rejectionDecisionText = [
       taskRun.orchestratorDecisionLog?.aggregationDecision,
       taskRun.orchestratorDecisionLog?.executionDecision,
@@ -993,7 +1086,7 @@ async function runSmokeTest() {
   if (!revision.taskRun?.orchestratorDecisionLog?.plannerDecision) {
     throw new Error("revision taskRun missing orchestratorDecisionLog");
   }
-  if (EXPECT_REVIEW_REJECTION) {
+  if (EXPECT_ANY_REVIEW_REJECTION) {
     if (revision.taskRun.status !== "COMPLETED") {
       throw new Error(`review rejection recovery expected revision taskRun status COMPLETED, got ${revision.taskRun.status}`);
     }
@@ -1017,6 +1110,7 @@ async function runSmokeTest() {
   pass(`artifact snapshots loaded after revision: ${snapshotsAfterRevision.length}`);
 
   const revisedArtifactId = requireValue(getIdValue(revision.revisedArtifact?.id), "revisedArtifactId missing");
+  const diffAffectedItems = buildSmokeDiffAffectedItems(revision.revisedArtifact, artifact);
   await expectRequestFailure(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
     method: "POST"
   }, "approvalId is required");
@@ -1027,12 +1121,14 @@ async function runSmokeTest() {
     targetId: revisedArtifactId,
     riskLevel: "MEDIUM",
     summary: "Smoke test approves applying generated diff.",
-    affectedItems: [`Artifact: ${revisedArtifactId}`]
+    affectedItems: diffAffectedItems
   });
   const applyDiffResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
     method: "POST",
     body: JSON.stringify({ approvalId: applyApprovalId })
   });
+  assertExplainableDiffStats(applyDiffResult, "apply diff response");
+  requireValue(applyDiffResult.snapshotId, "apply diff snapshotId missing");
   const appliedArtifactId = requireValue(getIdValue(applyDiffResult.appliedArtifact?.id), "appliedArtifactId missing");
   if (applyDiffResult.appliedArtifact.status !== "ACCEPTED") {
     throw new Error(`expected applied artifact status ACCEPTED, got ${applyDiffResult.appliedArtifact.status}`);
@@ -1063,18 +1159,27 @@ async function runSmokeTest() {
         targetId: revisedArtifactId,
         riskLevel: "MEDIUM",
         summary: "Smoke test approves conflict-path diff apply.",
-        affectedItems: [`Artifact: ${revisedArtifactId}`]
+        affectedItems: diffAffectedItems
       })
     })
   });
+  assertExplainableDiffStats(conflictResult, "conflict diff response");
   if (conflictResult.conflict !== true || conflictResult.appliedArtifact) {
     throw new Error("expected repeated diff apply to return a conflict without creating another artifact");
   }
   if (!conflictResult.latestAppliedArtifactId) {
     throw new Error("diff conflict response missing latestAppliedArtifactId");
   }
+  if (!String(conflictResult.conflictReason || "").includes(conflictResult.latestAppliedArtifactId)) {
+    throw new Error("diff conflict response reason did not identify the latest applied artifact");
+  }
   pass(`diff conflict detected: latest=${conflictResult.latestAppliedArtifactId}`);
 
+  await expectRequestFailure(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
+    method: "POST",
+    body: JSON.stringify({ force: true })
+  }, "approvalId is required");
+  pass("backend approval enforced for force apply diff without approvalId");
   const forceApplyResult = await request(`/api/artifacts/${revisedArtifactId}/apply-diff`, {
     method: "POST",
     body: JSON.stringify({
@@ -1085,10 +1190,15 @@ async function runSmokeTest() {
         targetId: revisedArtifactId,
         riskLevel: "HIGH",
         summary: "Smoke test approves force applying generated diff.",
-        affectedItems: [`Artifact: ${revisedArtifactId}`]
+        affectedItems: [
+          ...diffAffectedItems,
+          "Mode: force apply, bypass conflict guard after explicit approval"
+        ]
       })
     })
   });
+  assertExplainableDiffStats(forceApplyResult, "force apply diff response");
+  requireValue(forceApplyResult.snapshotId, "force apply snapshotId missing");
   const forcedAppliedArtifactId = requireValue(
     getIdValue(forceApplyResult.appliedArtifact?.id),
     "forced appliedArtifactId missing"
@@ -1096,7 +1206,13 @@ async function runSmokeTest() {
   if (forceApplyResult.appliedArtifact.status !== "ACCEPTED") {
     throw new Error(`expected forced applied artifact status ACCEPTED, got ${forceApplyResult.appliedArtifact.status}`);
   }
-  pass(`diff force applied: ${forcedAppliedArtifactId}`);
+  if (forceApplyResult.conflictBypassed !== true) {
+    throw new Error("force apply response did not report conflictBypassed=true");
+  }
+  if (!String(forceApplyResult.conflictReason || "").includes("Force apply bypassed conflict guard")) {
+    throw new Error("force apply response missing conflict bypass reason");
+  }
+  pass(`diff force applied with conflict bypass: ${forcedAppliedArtifactId}`);
 
   await expectRequestFailure(`/api/artifacts/${appliedArtifactId}/demo-deploy`, {
     method: "POST"
@@ -1151,6 +1267,10 @@ async function runSmokeTest() {
   if (restoredArtifact.status !== "ACCEPTED") {
     throw new Error(`restored artifact status expected ACCEPTED, got ${restoredArtifact.status}`);
   }
+  const artifactsAfterRestore = await request(`/api/conversations/${conversationId}/artifacts`);
+  if (!Array.isArray(artifactsAfterRestore) || !artifactsAfterRestore.some((item) => getIdValue(item.id) === restoredArtifactId)) {
+    throw new Error("restored artifact was not visible in conversation artifacts list");
+  }
   pass(`artifact snapshot restored: ${restoredArtifactId}`);
 
   const approvalAudit = await request(`/api/conversations/${conversationId}/action-audits`, {
@@ -1175,6 +1295,15 @@ async function runSmokeTest() {
   const approvalRequests = await request(`/api/conversations/${conversationId}/approval-requests`);
   if (!Array.isArray(approvalRequests) || !approvalRequests.some((approval) => approval.status === "CONSUMED")) {
     throw new Error("expected consumed backend approval request records");
+  }
+  const diffApprovalWithSummary = approvalRequests.find((approval) =>
+    ["APPLY_DIFF", "FORCE_APPLY_DIFF"].includes(approval.actionType) &&
+    Array.isArray(approval.affectedItems) &&
+    approval.affectedItems.some((item) => String(item).includes("Artifact:")) &&
+    approval.affectedItems.some((item) => String(item).includes("Diff summary:"))
+  );
+  if (!diffApprovalWithSummary) {
+    throw new Error("expected diff approval request affectedItems to include artifact and diff summary");
   }
   const requiredAuditActions = [
     "APPLY_DIFF",
@@ -1252,12 +1381,12 @@ async function runSmokeTest() {
   );
   const taskStepAgentMessages = agentMessages.filter((item) => String(item.content || "").includes("TaskStep"));
   const protocolMessageTypes = new Set(agentMessages.map((item) => item.messageType));
-  const requiredProtocolTypes = EXPECT_REVIEW_REJECTION
+  const requiredProtocolTypes = EXPECT_ANY_REVIEW_REJECTION
     ? ["TASK", "RESULT", "REVIEW", "REJECTION"]
     : ["TASK", "RESULT", "REVIEW", "APPROVAL"];
   const missingProtocolTypes = requiredProtocolTypes.filter((messageType) => !protocolMessageTypes.has(messageType));
   const rejectionMessages = agentMessages.filter((item) => item.messageType === "REJECTION");
-  if (EXPECT_REVIEW_REJECTION) {
+  if (EXPECT_ANY_REVIEW_REJECTION) {
     const hasRetryReviseSuggestion = rejectionMessages.some((item) =>
       String(item.content || "").includes("retry/revise") || String(item.content || "").includes("revise")
     );

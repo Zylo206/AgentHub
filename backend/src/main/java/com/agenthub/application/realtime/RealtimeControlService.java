@@ -9,10 +9,14 @@ import com.agenthub.domain.task.TaskRunStatus;
 import java.time.Instant;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class RealtimeControlService {
+
+    private static final Logger logger = LoggerFactory.getLogger(RealtimeControlService.class);
 
     private final TaskRepository taskRepository;
     private final RealtimeEventPublisher realtimeEventPublisher;
@@ -134,7 +138,8 @@ public class RealtimeControlService {
                             "action", action,
                             "reason", reason == null ? "" : reason,
                             "rejectionReason", rejectionReason));
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException exception) {
+            logger.warn("Failed to publish realtime control rejection for taskRunId={}", taskRun.getId().value(), exception);
             // Control commands should still return a deterministic result even if realtime notification fails.
         }
     }
@@ -148,7 +153,13 @@ public class RealtimeControlService {
             String summary) {
         try {
             actionAuditService.record(conversationId, action, targetType, targetId, status, summary);
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException exception) {
+            logger.warn(
+                    "Failed to record realtime control audit action={} targetType={} targetId={}",
+                    action,
+                    targetType,
+                    targetId,
+                    exception);
             // Audit is important but must not turn a rejected/accepted control command into a 500 response.
         }
     }

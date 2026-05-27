@@ -126,6 +126,8 @@ export interface ApplyDiffResponse {
   conflict: boolean;
   conflictReason?: string | null;
   latestAppliedArtifactId?: string | null;
+  snapshotId?: string | null;
+  conflictBypassed: boolean;
 }
 
 export interface CreateAgentRequest {

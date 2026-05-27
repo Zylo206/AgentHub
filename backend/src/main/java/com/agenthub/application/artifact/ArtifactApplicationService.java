@@ -113,29 +113,43 @@ public class ArtifactApplicationService {
         }
 
         Artifact parentArtifact = getArtifact(parentArtifactId);
+        LinePatchResult patchResult = buildAndApplyLinePatch(parentArtifact.getContent(), revisionArtifact.getContent());
+        if (!patchResult.appliedContent().equals(revisionArtifact.getContent())) {
+            throw new IllegalStateException("Line patch application did not reproduce the revision artifact content.");
+        }
+
         Artifact conflictingArtifact = findLatestAppliedArtifact(revisionArtifact);
         if (!force && conflictingArtifact != null) {
+            String conflictReason = buildConflictReason(revisionArtifact, conflictingArtifact);
             actionAuditService.record(
                     revisionArtifact.getConversationId(),
                     "APPLY_DIFF",
                     "ARTIFACT",
                     revisionArtifact.getId().value(),
                     "CONFLICT",
-                    "Diff apply blocked because a newer accepted artifact exists in this lineage.");
+                    conflictReason);
             return ApplyDiffResult.conflict(
                     parentArtifact.getId().value(),
                     revisionArtifact.getId().value(),
                     conflictingArtifact.getId().value(),
-                    "A newer applied artifact already exists for this revision lineage. Review the latest accepted artifact or force apply if this older revision should still be materialized.");
-        }
-
-        LinePatchResult patchResult = buildAndApplyLinePatch(parentArtifact.getContent(), revisionArtifact.getContent());
-        if (!patchResult.appliedContent().equals(revisionArtifact.getContent())) {
-            throw new IllegalStateException("Line patch application did not reproduce the revision artifact content.");
+                    patchResult.added(),
+                    patchResult.removed(),
+                    patchResult.unchanged(),
+                    patchResult.changed(),
+                    conflictReason);
         }
 
         Instant now = timeProvider.now();
         ArtifactSnapshot snapshot = createSnapshot(parentArtifact, force ? "FORCE_APPLY_DIFF" : "APPLY_DIFF");
+        boolean conflictBypassed = force && conflictingArtifact != null;
+        String conflictReason = conflictBypassed
+                ? "Force apply bypassed conflict guard because accepted artifact "
+                        + conflictingArtifact.getId().value()
+                        + " (v" + conflictingArtifact.getVersion()
+                        + ") is newer than revision "
+                        + revisionArtifact.getId().value()
+                        + " (v" + revisionArtifact.getVersion() + ")."
+                : null;
         Artifact appliedArtifact = new Artifact(
                 new ArtifactId(idGenerator.nextId("art")),
                 revisionArtifact.getConversationId(),
@@ -160,7 +174,8 @@ public class ArtifactApplicationService {
                 revisionArtifact.getId().value(),
                 "COMPLETED",
                 "Created pre-apply snapshot " + snapshot.getSnapshotId() + " and materialized applied artifact "
-                        + appliedArtifact.getId().value() + ".");
+                        + appliedArtifact.getId().value()
+                        + (conflictBypassed ? " after force bypassing the conflict guard." : "."));
         return new ApplyDiffResult(
                 appliedArtifact,
                 parentArtifact.getId().value(),
@@ -170,8 +185,10 @@ public class ArtifactApplicationService {
                 patchResult.unchanged(),
                 patchResult.changed(),
                 false,
-                null,
-                null);
+                conflictReason,
+                conflictBypassed ? conflictingArtifact.getId().value() : null,
+                snapshot.getSnapshotId(),
+                conflictBypassed);
     }
 
     public ArtifactSnapshot createSnapshot(Artifact artifact, String operationType) {
@@ -205,6 +222,20 @@ public class ArtifactApplicationService {
                     return left.getCreatedAt().compareTo(right.getCreatedAt());
                 })
                 .orElse(null);
+    }
+
+    private String buildConflictReason(Artifact revisionArtifact, Artifact conflictingArtifact) {
+        return "Diff apply blocked because accepted artifact "
+                + conflictingArtifact.getId().value()
+                + " ("
+                + conflictingArtifact.getTitle()
+                + " v"
+                + conflictingArtifact.getVersion()
+                + ") is newer than revision "
+                + revisionArtifact.getId().value()
+                + " (v"
+                + revisionArtifact.getVersion()
+                + "). Review the latest accepted artifact or use force apply to materialize this older revision.";
     }
 
     private LinePatchResult buildAndApplyLinePatch(String baseContent, String targetContent) {
@@ -289,24 +320,32 @@ public class ArtifactApplicationService {
             int changedLines,
             boolean conflict,
             String conflictReason,
-            String latestAppliedArtifactId) {
+            String latestAppliedArtifactId,
+            String snapshotId,
+            boolean conflictBypassed) {
 
         public static ApplyDiffResult conflict(
                 String baseArtifactId,
                 String revisionArtifactId,
                 String latestAppliedArtifactId,
+                int addedLines,
+                int removedLines,
+                int unchangedLines,
+                int changedLines,
                 String conflictReason) {
             return new ApplyDiffResult(
                     null,
                     baseArtifactId,
                     revisionArtifactId,
-                    0,
-                    0,
-                    0,
-                    0,
+                    addedLines,
+                    removedLines,
+                    unchangedLines,
+                    changedLines,
                     true,
                     conflictReason,
-                    latestAppliedArtifactId);
+                    latestAppliedArtifactId,
+                    null,
+                    false);
         }
     }
 

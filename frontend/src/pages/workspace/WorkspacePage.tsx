@@ -402,6 +402,20 @@ export function WorkspacePage() {
     return byMessageId;
   }, [approvalRequests, triggerSuggestionsByMessageId]);
 
+  const latestUserMessageId = latestUserMessage ? getIdValue(latestUserMessage.id) : null;
+  const latestTriggerSuggestion = latestUserMessageId ? triggerSuggestionsByMessageId[latestUserMessageId] ?? null : null;
+  const latestTriggerApproval = latestUserMessageId ? approvalByMessageId[latestUserMessageId] ?? null : null;
+  const latestTriggerReady = Boolean(latestTriggerSuggestion?.enabled && latestTriggerSuggestion.matched);
+  const latestTriggerApprovalStatus = latestTriggerApproval?.status?.toUpperCase() ?? null;
+  const latestTriggerPrimaryLabel =
+    latestTriggerApprovalStatus === "APPROVED"
+      ? "已批准，启动协作"
+      : latestTriggerApprovalStatus === "PENDING"
+        ? "批准并启动协作"
+        : latestTriggerSuggestion?.requireApproval
+          ? "创建协作确认"
+          : "启动 Agent 协作";
+
   const highlightedArtifactIds = useMemo(
     () => (selectedTaskStep ? selectedTaskStep.producedArtifactIds.map((artifactId) => getIdValue(artifactId)) : []),
     [selectedTaskStep]
@@ -1184,7 +1198,8 @@ export function WorkspacePage() {
     try {
       const applyResult = await applyArtifactDiff(artifactId, false, approvalId);
       if (applyResult.conflict) {
-        setOperationMessage(applyResult.conflictReason || "检测到 Diff 应用冲突，请查看最新已应用产物。");
+        const lineStats = `Diff 仍包含新增 ${applyResult.addedLines} 行、删除 ${applyResult.removedLines} 行。`;
+        setOperationMessage(`${applyResult.conflictReason || "检测到 Diff 应用冲突，请查看最新已应用产物。"} ${lineStats}`);
         return null;
       }
       if (!applyResult.appliedArtifact) {
@@ -1226,8 +1241,11 @@ export function WorkspacePage() {
       await loadConversationData(currentConversationId);
       setShowAllArtifacts(true);
       setSelectedArtifactId(appliedArtifactId);
+      const bypassMessage = applyResult.conflictBypassed
+        ? ` 已绕过冲突保护：${applyResult.conflictReason || "force apply bypassed the latest accepted artifact guard."}`
+        : "";
       setOperationMessage(
-        `已强制应用 Diff 为 ${applyResult.appliedArtifact.title} v${applyResult.appliedArtifact.version}。`
+        `已强制应用 Diff 为 ${applyResult.appliedArtifact.title} v${applyResult.appliedArtifact.version}，新增 ${applyResult.addedLines} 行，删除 ${applyResult.removedLines} 行。${bypassMessage}`
       );
       return applyResult.appliedArtifact;
     } catch (error) {
@@ -1484,19 +1502,30 @@ export function WorkspacePage() {
           </div>
         ) : null}
 
-        <div className="workspace-main__toolbar">
+        <div className="workspace-main__toolbar workspace-main__toolbar--collaboration">
           <div className="section-header">
-            <h3>消息流</h3>
-            <span>{messages.length} 条消息</span>
+            <h3>协作消息流</h3>
+            <span>{messages.length} 条消息 · 发送任务后，通过消息卡片确认 Agent 协作。</span>
           </div>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={!currentConversationId || !latestUserMessage || runningDemoTask}
-            onClick={handleRunDemoTask}
-          >
-            {runningDemoTask ? "运行中..." : "运行 Demo Task"}
-          </button>
+          <div className="workspace-main__collaboration-actions">
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!currentConversationId || !latestUserMessage || !latestTriggerReady || Boolean(autoTriggerRunningMessageId)}
+              onClick={() => latestUserMessage && handleConfirmOrchestratorTrigger(latestUserMessage)}
+            >
+              {autoTriggerRunningMessageId ? "启动中..." : latestTriggerReady ? latestTriggerPrimaryLabel : "发送任务后确认协作"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button secondary-button--quiet"
+              disabled={!currentConversationId || !latestUserMessage || runningDemoTask}
+              onClick={handleRunDemoTask}
+              title="本地验证和调试用的手动兜底入口。"
+            >
+              {runningDemoTask ? "运行中..." : "调试：手动运行"}
+            </button>
+          </div>
         </div>
 
         <div className="selected-agent-banner">

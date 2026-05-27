@@ -50,9 +50,11 @@ public class ContextRetrievalService {
                 .map(result -> fromSearchResult(result, query))
                 .forEach(item -> putBest(candidates, item));
 
-        List<RetrievedContextItem> ranked = candidates.values().stream()
+        List<RetrievedContextItem> rankedCandidates = candidates.values().stream()
                 .filter(item -> item.getContent() != null && !item.getContent().isBlank())
                 .sorted(Comparator.comparingDouble(RetrievedContextItem::getScore).reversed())
+                .toList();
+        List<RetrievedContextItem> ranked = diversifySources(rankedCandidates, Math.max(1, limit)).stream()
                 .limit(Math.max(1, limit))
                 .toList();
 
@@ -78,7 +80,8 @@ public class ContextRetrievalService {
                 result.candidate().content(),
                 scores,
                 result.candidate().reason() + " Search stage: " + result.searchStage() + ".",
-                result.candidate().windowPolicy());
+                result.candidate().windowPolicy(),
+                result.searchStage());
     }
 
     private RetrievedContextItem item(
@@ -88,7 +91,8 @@ public class ContextRetrievalService {
             String content,
             ScoreBreakdown scores,
             String reason,
-            String windowPolicy) {
+            String windowPolicy,
+            String searchStage) {
         return new RetrievedContextItem(
                 sourceType,
                 sourceId,
@@ -105,15 +109,40 @@ public class ContextRetrievalService {
                 scores.semanticBackend(),
                 scores.semanticExplanation(),
                 scores.matchedTokens(),
-                windowPolicy);
+                windowPolicy,
+                searchStage);
+    }
+
+    private List<RetrievedContextItem> diversifySources(List<RetrievedContextItem> rankedCandidates, int limit) {
+        Map<String, RetrievedContextItem> topBySource = new LinkedHashMap<>();
+        for (RetrievedContextItem item : rankedCandidates) {
+            topBySource.putIfAbsent(item.getSourceType(), item);
+        }
+
+        Map<String, RetrievedContextItem> selected = new LinkedHashMap<>();
+        topBySource.values().stream()
+                .sorted(Comparator.comparingDouble(RetrievedContextItem::getScore).reversed())
+                .limit(limit)
+                .forEach(item -> selected.put(key(item), item));
+        rankedCandidates.stream()
+                .filter(item -> !selected.containsKey(key(item)))
+                .limit(Math.max(0, limit - selected.size()))
+                .forEach(item -> selected.put(key(item), item));
+
+        return selected.values().stream()
+                .sorted(Comparator.comparingDouble(RetrievedContextItem::getScore).reversed())
+                .toList();
     }
 
     private void putBest(Map<String, RetrievedContextItem> candidates, RetrievedContextItem item) {
-        String key = item.getSourceType() + ":" + item.getSourceId();
-        RetrievedContextItem existing = candidates.get(key);
+        RetrievedContextItem existing = candidates.get(key(item));
         if (existing == null || item.getScore() > existing.getScore()) {
-            candidates.put(key, item);
+            candidates.put(key(item), item);
         }
+    }
+
+    private String key(RetrievedContextItem item) {
+        return item.getSourceType() + ":" + item.getSourceId();
     }
 
     private ScoreBreakdown score(

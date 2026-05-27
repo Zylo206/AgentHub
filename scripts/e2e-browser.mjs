@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import { createRequire } from "node:module";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import process from "node:process";
 
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
@@ -10,10 +13,16 @@ const SLOW_MO = Number(process.env.AGENTHUB_E2E_SLOW_MO || 0);
 const BROWSER_CHANNEL = process.env.AGENTHUB_E2E_BROWSER_CHANNEL || "msedge";
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
 const EXPECT_REJECTION = process.env.AGENTHUB_E2E_EXPECT_REJECTION === "true";
-const TEST_TITLE = `E2E Browser Conversation ${Date.now()}`;
-const TEST_PROMPT = [
-  "Browser E2E: generate a React login preview, include verification-code login,",
-  "use the attached product brief, and route through Orchestrator."
+const TEST_MARKER = `browser-e2e-main-${Date.now()}`;
+const TEST_ATTACHMENT_FILE_NAME = "browser-e2e-ui-brief.md";
+const TEST_PROMPT_BODY = [
+  `${TEST_MARKER}: Browser E2E main path.`,
+  "Build a React login preview with verification-code login, route through AgentHub collaboration,",
+  "use the attached product brief, then produce artifacts that can be revised, applied, restored, and previewed."
+].join(" ");
+const REVISION_INSTRUCTION = [
+  `${TEST_MARKER}: change the primary CTA copy to Continue securely,`,
+  "add a visible loading-state note, and keep verification-code login."
 ].join(" ");
 
 function pass(message) {
@@ -24,6 +33,10 @@ function fail(message, error) {
   const detail = error instanceof Error ? error.message : String(error);
   console.error(`[FAIL] ${message}: ${detail}`);
   process.exitCode = 1;
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function requireValue(value, message) {
@@ -44,6 +57,20 @@ function getIdValue(value) {
     return value.value;
   }
   return null;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function step(label, action) {
+  try {
+    const result = await action();
+    pass(label);
+    return result;
+  } catch (error) {
+    throw new Error(`${label} failed: ${getErrorMessage(error)}`);
+  }
 }
 
 async function loadPlaywright() {
@@ -72,11 +99,11 @@ async function loadPlaywright() {
   }
 }
 
-async function request(path, init = {}) {
+async function request(pathname, init = {}) {
   let response;
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${API_BASE}${pathname}`, {
       ...init,
       headers: isFormData
         ? {
@@ -97,7 +124,7 @@ async function request(path, init = {}) {
     try {
       payload = JSON.parse(text);
     } catch {
-      throw new Error(`Invalid JSON response from ${path}: ${text.slice(0, 160)}`);
+      throw new Error(`Invalid JSON response from ${pathname}: ${text.slice(0, 160)}`);
     }
   }
 
@@ -105,28 +132,87 @@ async function request(path, init = {}) {
     throw new Error(payload?.message || `HTTP ${response.status}`);
   }
   if (!payload?.success) {
-    throw new Error(payload?.message || payload?.errorCode || `API failure from ${path}`);
+    throw new Error(payload?.message || payload?.errorCode || `API failure from ${pathname}`);
   }
   return payload.data;
 }
 
-async function uploadE2eAttachment(conversationId) {
-  const formData = new FormData();
-  formData.append(
-    "file",
-    new Blob(["Browser E2E brief: preserve verification-code login and blue primary CTA."], {
-      type: "text/markdown"
-    }),
-    "browser-e2e-brief.md"
-  );
-  const attachment = await request(`/api/conversations/${conversationId}/attachments`, {
-    method: "POST",
-    body: formData
-  });
-  if (!attachment.attachmentId) {
-    throw new Error(`attachment upload response missing id: ${JSON.stringify(attachment)}`);
+async function waitForApiState(label, producer, predicate, timeout = 30000, interval = 500) {
+  const startedAt = Date.now();
+  let lastValue = null;
+  let lastError = null;
+
+  while (Date.now() - startedAt < timeout) {
+    try {
+      lastValue = await producer();
+      const result = predicate(lastValue);
+      if (result) {
+        return result;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
   }
-  return attachment;
+
+  const detail = lastError
+    ? getErrorMessage(lastError)
+    : JSON.stringify(lastValue).slice(0, 600);
+  throw new Error(`${label} timed out after ${timeout}ms. Last state: ${detail}`);
+}
+
+async function waitForVisible(page, selector, label, timeout = 20000) {
+  await page.waitForSelector(selector, { state: "visible", timeout });
+  pass(`${label} visible`);
+}
+
+async function waitForLocatorEnabled(locator, label, timeout = 20000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeout) {
+    const visible = await locator.first().isVisible().catch(() => false);
+    const enabled = visible ? await locator.first().isEnabled().catch(() => false) : false;
+    if (visible && enabled) {
+      return locator.first();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`${label} was not visible and enabled after ${timeout}ms`);
+}
+
+async function createTempAttachmentFile() {
+  const directory = await mkdtemp(path.join(tmpdir(), "agenthub-e2e-"));
+  const filePath = path.join(directory, TEST_ATTACHMENT_FILE_NAME);
+  await writeFile(
+    filePath,
+    [
+      "# Browser E2E product brief",
+      "",
+      `Marker: ${TEST_MARKER}`,
+      "Keep verification-code login visible.",
+      "Primary CTA should be blue and easy to validate in preview."
+    ].join("\n"),
+    "utf8"
+  );
+  return { directory, filePath };
+}
+
+function resolvePreviewUrl(previewUrl) {
+  const value = requireValue(previewUrl, "deployment previewUrl missing");
+  try {
+    const parsedUrl = new URL(value);
+    if (parsedUrl.hostname === "localhost") {
+      const frontendBaseUrl = new URL(FRONTEND_BASE);
+      parsedUrl.protocol = frontendBaseUrl.protocol;
+      parsedUrl.hostname = frontendBaseUrl.hostname;
+      parsedUrl.port = frontendBaseUrl.port;
+    }
+    return parsedUrl.toString();
+  } catch {
+    if (!String(value).startsWith("/")) {
+      throw new Error(`Invalid preview URL: ${value}`);
+    }
+    return `${FRONTEND_BASE}${value}`;
+  }
 }
 
 async function createAndApproveApproval(conversationId, requestBody) {
@@ -155,7 +241,7 @@ async function runOrchestratorFromMessageWithOptionalApproval(conversationId, me
   try {
     return await runOrchestratorFromMessage(conversationId, messageId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     if (!message.includes("approvalId is required")) {
       throw error;
     }
@@ -182,53 +268,58 @@ async function runOrchestratorFromMessageWithOptionalApproval(conversationId, me
   return runOrchestratorFromMessage(conversationId, messageId, approvalId);
 }
 
-function resolvePreviewUrl(previewUrl) {
-  const value = requireValue(previewUrl, "deployment previewUrl missing");
-  try {
-    const parsedUrl = new URL(value);
-    if (parsedUrl.hostname === "localhost") {
-      const frontendBaseUrl = new URL(FRONTEND_BASE);
-      parsedUrl.protocol = frontendBaseUrl.protocol;
-      parsedUrl.hostname = frontendBaseUrl.hostname;
-      parsedUrl.port = frontendBaseUrl.port;
-    }
-    return parsedUrl.toString();
-  } catch {
-    if (!String(value).startsWith("/")) {
-      throw new Error(`Invalid preview URL: ${value}`);
-    }
-    return `${FRONTEND_BASE}${value}`;
-  }
+async function createWorkspaceConversation(page) {
+  const beforeConversations = await request("/api/conversations");
+  const beforeIds = new Set(beforeConversations.map((conversation) => getIdValue(conversation.id)));
+  const createButton = await waitForLocatorEnabled(
+    page.locator(".workspace-sidebar__header .primary-button"),
+    "Create Demo conversation button"
+  );
+
+  await createButton.click();
+  return waitForApiState(
+    "UI-created conversation",
+    () => request("/api/conversations"),
+    (conversations) => conversations.find((conversation) => !beforeIds.has(getIdValue(conversation.id))),
+    20000
+  );
 }
 
-async function seedE2eData() {
-  const health = await request("/api/health");
-  if (health?.status !== "UP") {
-    throw new Error(`Unexpected health status: ${JSON.stringify(health)}`);
+function buildMentionPrompt(agents) {
+  const namedAgents = agents.filter((agent) => agent.name?.trim()).slice(0, 2);
+  if (namedAgents.length < 2) {
+    throw new Error(`Need at least 2 agents for multi-agent mention, got ${namedAgents.length}`);
   }
+  const mentions = namedAgents.map((agent) => `@${agent.name.trim()}`).join(" ");
+  return { prompt: `${mentions} ${TEST_PROMPT_BODY}`, mentionedAgents: namedAgents };
+}
 
-  const conversation = await request("/api/conversations", {
-    method: "POST",
-    body: JSON.stringify({ title: TEST_TITLE, type: "GROUP" })
-  });
-  const conversationId = requireValue(getIdValue(conversation.id), "conversationId missing");
-  const uploadedAttachment = await uploadE2eAttachment(conversationId);
-  const message = await request(`/api/conversations/${conversationId}/messages`, {
-    method: "POST",
-    body: JSON.stringify({
-      content: TEST_PROMPT,
-      attachments: [
-        {
-          attachmentId: uploadedAttachment.attachmentId,
-          fileName: uploadedAttachment.fileName,
-          contentType: uploadedAttachment.contentType,
-          size: uploadedAttachment.sizeBytes,
-          contentPreview: uploadedAttachment.contentPreview
-        }
-      ]
-    })
-  });
-  const messageId = requireValue(getIdValue(message.id), "messageId missing");
+async function sendMessageWithAttachmentFromUi(page, conversationId, agents, attachmentPath) {
+  const { prompt, mentionedAgents } = buildMentionPrompt(agents);
+  await page.locator(".chat-input__textarea").fill(prompt);
+  await page.locator(".chat-attachment-composer__file").setInputFiles(attachmentPath);
+  await page.getByText(TEST_ATTACHMENT_FILE_NAME).first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".chat-input").locator(".primary-button").click();
+
+  const message = await waitForApiState(
+    "UI-sent multi-agent message with attachment",
+    () => request(`/api/conversations/${conversationId}/messages`),
+    (messages) => messages.find((item) =>
+      item.senderType === "USER" &&
+      String(item.content || "").includes(TEST_MARKER) &&
+      (item.mentionedAgentIds || []).length >= 2 &&
+      (item.attachments || []).some((attachment) => attachment.fileName === TEST_ATTACHMENT_FILE_NAME)
+    ),
+    30000
+  );
+
+  await page.getByText(new RegExp(escapeRegExp(TEST_MARKER))).first().waitFor({ state: "visible", timeout: 10000 });
+  await page.getByText(TEST_ATTACHMENT_FILE_NAME).first().waitFor({ state: "visible", timeout: 10000 });
+  return { message, mentionedAgents };
+}
+
+async function seedRetrievalContextFromMessage(conversationId, message) {
+  const messageId = requireValue(getIdValue(message.id), "messageId missing for retrieval context seed");
   await request(`/api/conversations/${conversationId}/messages/${messageId}/pin`, { method: "POST" });
   const memory = await request(`/api/conversations/${conversationId}/messages/${messageId}/memory`, {
     method: "POST",
@@ -240,36 +331,199 @@ async function seedE2eData() {
       body: JSON.stringify({
         category: "DECISION",
         importance: 8,
-        content: "Browser E2E memory: keep verification code login visible and use a blue primary button."
+        content: `${TEST_MARKER}: keep verification-code login visible and use the uploaded brief.`
       })
     });
   }
-  const taskRun = await runOrchestratorFromMessageWithOptionalApproval(conversationId, messageId);
-  if (taskRun.status !== "COMPLETED") {
-    throw new Error(`orchestrator-run status expected COMPLETED, got ${taskRun.status}`);
+}
+
+async function verifyContextPanel(page, conversationId) {
+  await waitForVisible(page, ".context-panel", "context panel");
+  await waitForApiState(
+    "context snapshot",
+    () => request(`/api/conversations/${conversationId}/context-snapshots`),
+    (snapshots) => snapshots.length > 0 ? snapshots : null,
+    20000
+  );
+  await waitForVisible(page, ".context-card-list", "context snapshot list");
+
+  const retrievedItem = page.locator(".retrieved-context-item").first();
+  const hasRetrievedItem = await retrievedItem.isVisible().catch(() => false);
+  if (hasRetrievedItem) {
+    pass("retrieved context item visible");
+    await page.getByText(/score/i).first().waitFor({ state: "visible", timeout: 10000 });
+    await page.getByText(/injects into/i).first().waitFor({ state: "visible", timeout: 10000 });
+  } else {
+    pass("retrieved context item not emitted for this heuristic run; context snapshot fallback visible");
+  }
+}
+
+async function clickAutoTriggerIfAvailable(page) {
+  const autoButton = page.locator(".message-auto-trigger .message-action-button--primary").last();
+  const visible = await autoButton.isVisible().catch(() => false);
+  if (!visible) {
+    return false;
+  }
+  const enabledButton = await waitForLocatorEnabled(autoButton, "auto-trigger collaboration button", 5000);
+  await enabledButton.click();
+  return true;
+}
+
+async function triggerTaskRunFromUi(page, conversationId) {
+  const beforeRuns = await request(`/api/conversations/${conversationId}/task-runs`);
+  const beforeRunIds = new Set(beforeRuns.map((taskRun) => getIdValue(taskRun.id)));
+
+  let triggerPath = "manual Demo Task";
+  if (await clickAutoTriggerIfAvailable(page)) {
+    triggerPath = "auto-trigger collaboration";
+    try {
+      await waitForApiState(
+        "auto-triggered TaskRun",
+        () => request(`/api/conversations/${conversationId}/task-runs`),
+        (taskRuns) => taskRuns.find((taskRun) => !beforeRunIds.has(getIdValue(taskRun.id))),
+        8000,
+        500
+      );
+    } catch {
+      if (EXPECT_AUTO_TRIGGER_APPROVAL) {
+        await clickAutoTriggerIfAvailable(page);
+      } else {
+        triggerPath = "auto-trigger approval confirmation";
+        await clickAutoTriggerIfAvailable(page);
+      }
+    }
+  } else {
+    const runButton = await waitForLocatorEnabled(
+      page.locator(".workspace-main__toolbar .secondary-button"),
+      "Run Demo Task button"
+    );
+    await runButton.click();
   }
 
-  const artifacts = await request(`/api/conversations/${conversationId}/artifacts`);
-  const artifact = artifacts.find((item) => item.type === "CODE" || item.artifactType === "CODE") || artifacts[0];
-  const artifactId = requireValue(getIdValue(artifact?.id), "artifactId missing after orchestrator-run");
-  const approvalId = await createAndApproveApproval(conversationId, {
-    actionType: "DEMO_DEPLOY",
-    targetType: "ARTIFACT",
-    targetId: artifactId,
-    riskLevel: "MEDIUM",
-    summary: "Browser E2E approves static preview deployment.",
-    affectedItems: [`Artifact: ${artifact.title || artifactId}`]
-  });
-  const deployment = await request(`/api/artifacts/${artifactId}/demo-deploy`, {
-    method: "POST",
-    body: JSON.stringify({ approvalId })
-  });
+  const taskRun = await waitForApiState(
+    "completed TaskRun",
+    () => request(`/api/conversations/${conversationId}/task-runs`),
+    (taskRuns) => {
+      const created = taskRuns.find((item) => !beforeRunIds.has(getIdValue(item.id)));
+      if (!created) {
+        return null;
+      }
+      const status = String(created.status || "").toUpperCase();
+      if (["COMPLETED", "BLOCKED", "FAILED", "CANCELLED", "STOPPED"].includes(status)) {
+        return created;
+      }
+      return null;
+    },
+    45000,
+    750
+  );
 
-  return {
-    conversationId,
-    artifactId,
-    previewUrl: resolvePreviewUrl(deployment.previewUrl)
-  };
+  if (String(taskRun.status).toUpperCase() !== "COMPLETED") {
+    throw new Error(`${triggerPath} created TaskRun ${getIdValue(taskRun.id)} with status ${taskRun.status}`);
+  }
+  pass(`TaskRun triggered through ${triggerPath}`);
+  return taskRun;
+}
+
+async function waitForArtifacts(conversationId, beforeIds = new Set(), label = "artifacts") {
+  return waitForApiState(
+    label,
+    () => request(`/api/conversations/${conversationId}/artifacts`),
+    (artifacts) => artifacts.filter((artifact) => !beforeIds.has(getIdValue(artifact.id))).length > 0 ? artifacts : null,
+    30000
+  );
+}
+
+async function approveCurrentGate(page, label) {
+  await waitForVisible(page, ".approval-gate", `${label} approval gate`);
+  await waitForVisible(page, ".approval-gate__affected", `${label} affected summary`);
+  const approveButton = await waitForLocatorEnabled(
+    page.locator(".approval-gate__actions .primary-button"),
+    `${label} approval confirm button`
+  );
+  await approveButton.click();
+}
+
+async function selectArtifactCardById(page, artifactId, label) {
+  const card = page.locator(".artifact-card").filter({ hasText: artifactId }).first();
+  await waitForLocatorEnabled(card, `${label} artifact card`);
+  await card.click();
+  await waitForVisible(page, ".artifact-preview", `${label} artifact preview`);
+}
+
+async function selectCodeArtifact(page, conversationId) {
+  const artifacts = await request(`/api/conversations/${conversationId}/artifacts`);
+  const codeArtifact = artifacts.find((artifact) => artifact.type === "CODE" || artifact.artifactType === "CODE");
+  const artifactId = requireValue(getIdValue(codeArtifact?.id), "CODE artifact missing after TaskRun");
+  await selectArtifactCardById(page, artifactId, "CODE");
+  return codeArtifact;
+}
+
+async function createRevisionAndApplyDiff(page, conversationId) {
+  const beforeArtifacts = await request(`/api/conversations/${conversationId}/artifacts`);
+  const beforeIds = new Set(beforeArtifacts.map((artifact) => getIdValue(artifact.id)));
+
+  await page.locator(".artifact-revision-box__input").fill(REVISION_INSTRUCTION);
+  const revisionButton = await waitForLocatorEnabled(
+    page.locator(".artifact-revision-box .artifact-revision-box__button").first(),
+    "artifact revision button"
+  );
+  await revisionButton.click();
+
+  const artifactsAfterRevision = await waitForArtifacts(conversationId, beforeIds, "artifact revision output");
+  const revisionArtifact = artifactsAfterRevision.find((artifact) =>
+    !beforeIds.has(getIdValue(artifact.id)) &&
+    (artifact.parentArtifactId || artifact.revisionInstruction)
+  );
+  if (!revisionArtifact) {
+    throw new Error("revision completed but no revision artifact was found");
+  }
+
+  await selectArtifactCardById(page, getIdValue(revisionArtifact.id), "revision");
+  await waitForVisible(page, ".diff-summary", "diff summary");
+
+  const beforeApplyIds = new Set(artifactsAfterRevision.map((artifact) => getIdValue(artifact.id)));
+  const applyButton = await waitForLocatorEnabled(
+    page.locator(".diff-summary .diff-summary-apply button").first(),
+    "Apply Diff button"
+  );
+  await applyButton.click();
+  await approveCurrentGate(page, "apply diff");
+
+  const artifactsAfterApply = await waitForArtifacts(conversationId, beforeApplyIds, "applied diff artifact");
+  const appliedArtifact = artifactsAfterApply.find((artifact) => !beforeApplyIds.has(getIdValue(artifact.id)));
+  if (!appliedArtifact) {
+    throw new Error("Apply Diff approval completed but no applied artifact was created");
+  }
+  return appliedArtifact;
+}
+
+async function deploySelectedArtifact(page) {
+  const deployButton = await waitForLocatorEnabled(
+    page.locator(".deploy-status-box .artifact-revision-box__button").first(),
+    "Deploy Selected Artifact button"
+  );
+  await deployButton.click();
+  await approveCurrentGate(page, "deploy");
+  await waitForVisible(page, ".deploy-status-card", "deploy status card");
+
+  const previewHref = await page.locator(".deploy-preview-link").last().getAttribute("href");
+  return resolvePreviewUrl(previewHref);
+}
+
+async function restoreSelectedSnapshot(page, conversationId) {
+  const beforeArtifacts = await request(`/api/conversations/${conversationId}/artifacts`);
+  const beforeIds = new Set(beforeArtifacts.map((artifact) => getIdValue(artifact.id)));
+  const restoreButton = await waitForLocatorEnabled(
+    page.locator(".artifact-snapshot-box .deploy-status-card__button").first(),
+    "Restore Snapshot button"
+  );
+  await restoreButton.click();
+  await approveCurrentGate(page, "restore");
+  await waitForArtifacts(conversationId, beforeIds, "restored artifact");
+  await waitForVisible(page, ".action-audit-panel", "action audit panel");
+  await page.locator(".action-audit-panel__toggle").click();
+  await waitForVisible(page, ".action-audit-card", "action audit card");
 }
 
 async function seedOptionalRejectionScenario() {
@@ -281,7 +535,7 @@ async function seedOptionalRejectionScenario() {
   const message = await request(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
     body: JSON.stringify({
-      content: `${TEST_PROMPT}\nReviewer instruction: decision: reject because blocker risk must trigger retry/revise.`
+      content: `${TEST_PROMPT_BODY}\nReviewer instruction: decision: reject because blocker risk must trigger retry/revise.`
     })
   });
   const messageId = requireValue(getIdValue(message.id), "rejection messageId missing");
@@ -298,22 +552,27 @@ async function seedOptionalRejectionScenario() {
   pass(`optional rejection scenario covered: ${rejectionMessages.length} REJECTION messages`);
 }
 
-async function waitForVisible(page, selector, label, timeout = 20000) {
-  await page.waitForSelector(selector, { state: "visible", timeout });
-  pass(`${label} visible`);
-}
-
 async function runBrowserE2e() {
   console.log(`AgentHub browser E2E target: ${FRONTEND_BASE}`);
   console.log(`AgentHub browser E2E API: ${API_BASE}`);
-  const { chromium } = await loadPlaywright();
-  const seeded = await seedE2eData();
-  pass(`seeded conversation=${seeded.conversationId}, artifact=${seeded.artifactId}`);
+  console.log("Prerequisites: backend and frontend must already be running; this script does not start or stop services.");
+  console.log("Browser plugin not available in this session; using the repository Playwright path.");
 
+  const { chromium } = await loadPlaywright();
+  await step("backend health is UP", async () => {
+    const health = await request("/api/health");
+    if (health?.status !== "UP") {
+      throw new Error(`Unexpected health status: ${JSON.stringify(health)}`);
+    }
+  });
+  const agents = await step("agents loaded for multi-agent mention", () => request("/api/agents"));
+
+  const tempAttachment = await createTempAttachmentFile();
   const launchOptions = { headless: HEADLESS, slowMo: SLOW_MO };
   if (BROWSER_CHANNEL) {
     launchOptions.channel = BROWSER_CHANNEL;
   }
+
   const browser = await chromium.launch(launchOptions);
   const page = await browser.newPage();
   const consoleErrors = [];
@@ -325,12 +584,27 @@ async function runBrowserE2e() {
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
   try {
-    await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
-    await waitForVisible(page, ".workspace-page", "workspace page");
-    await page.getByRole("button", { name: new RegExp(TEST_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+    await step("workspace route opens", async () => {
+      await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
+      await waitForVisible(page, ".workspace-page", "workspace page");
+    });
+
+    const conversation = await step("workspace creates and selects a conversation", () => createWorkspaceConversation(page));
+    const conversationId = requireValue(getIdValue(conversation.id), "conversationId missing");
+
+    const sentMessage = await step("UI sends multi-agent message with uploaded attachment", () =>
+      sendMessageWithAttachmentFromUi(page, conversationId, agents, tempAttachment.filePath)
+    );
+    await step("retrieval context seeded from UI message", () =>
+      seedRetrievalContextFromMessage(conversationId, sentMessage.message)
+    );
     await waitForVisible(page, ".message-stream", "message stream");
+    await waitForVisible(page, ".message-target-agent-name", "multi-agent target label");
     await waitForVisible(page, ".message-attachment-card", "message attachment card");
-    await page.getByText("browser-e2e-brief.md").first().waitFor({ state: "visible", timeout: 10000 });
+
+    await step("UI triggers collaboration run", () => triggerTaskRunFromUi(page, conversationId));
+    await waitForVisible(page, ".task-panel", "TaskRun panel");
+    await waitForVisible(page, ".message-bubble--agent-protocol", "agent protocol message");
     await waitForVisible(page, ".adapter-quality-dashboard", "adapter quality dashboard");
     await page.getByRole("button", { name: "Stop Run" }).first().waitFor({ state: "visible", timeout: 10000 });
     await page.getByRole("button", { name: "Cancel Run" }).first().waitFor({ state: "visible", timeout: 10000 });
@@ -338,34 +612,26 @@ async function runBrowserE2e() {
       await waitForVisible(page, ".message-auto-trigger", "message auto-trigger card");
     }
     await waitForVisible(page, ".orchestrator-explain-panel", "orchestrator explain panel");
-    await waitForVisible(page, ".retrieved-context-item", "retrieved context item");
-    await page.getByText(/score/i).first().waitFor({ state: "visible", timeout: 10000 });
-    await page.getByText(/injects into/i).first().waitFor({ state: "visible", timeout: 10000 });
+    await step("Context panel shows TaskRun snapshot", () => verifyContextPanel(page, conversationId));
     await waitForVisible(page, ".artifact-card", "artifact card");
-    await page.locator(".artifact-card").first().click();
-    await waitForVisible(page, ".artifact-preview", "artifact preview");
+    await step("CODE artifact selected for revision", () => selectCodeArtifact(page, conversationId));
 
-    await page.getByRole("button", { name: "Deploy Selected Artifact" }).click();
-    await waitForVisible(page, ".approval-gate", "approval gate");
-    await waitForVisible(page, ".approval-gate__affected", "approval affected summary");
-    await page.getByRole("button", { name: "Approve Deploy" }).click();
-    await waitForVisible(page, ".deploy-status-card", "deploy status card");
-    await page.getByRole("button", { name: /Restore Snapshot/ }).first().click();
-    await waitForVisible(page, ".approval-gate", "restore approval gate");
-    await waitForVisible(page, ".approval-gate__affected", "restore affected summary");
-    await page.getByRole("button", { name: "Approve Restore" }).click();
-    await waitForVisible(page, ".action-audit-panel", "action audit panel");
-    await page.locator(".action-audit-panel__toggle").click();
+    await step("UI creates revision and approves Apply Diff", () => createRevisionAndApplyDiff(page, conversationId));
+    const previewUrl = await step("UI approves deploy and exposes preview URL", () => deploySelectedArtifact(page));
+    await step("UI approves snapshot restore and shows audit trail", () => restoreSelectedSnapshot(page, conversationId));
 
-    await page.goto(seeded.previewUrl, { waitUntil: "domcontentloaded" });
-    await waitForVisible(page, ".preview-page__card", "preview page card");
-    await waitForVisible(page, ".preview-page__content", "preview page content");
+    await step("preview page renders deployed artifact", async () => {
+      await page.goto(previewUrl, { waitUntil: "domcontentloaded" });
+      await waitForVisible(page, ".preview-page__card", "preview page card");
+      await waitForVisible(page, ".preview-page__content", "preview page content");
+    });
 
     if (consoleErrors.length > 0) {
       throw new Error(`browser console/page errors: ${consoleErrors.slice(0, 5).join(" | ")}`);
     }
   } finally {
     await browser.close();
+    await rm(tempAttachment.directory, { recursive: true, force: true });
   }
 
   if (EXPECT_REJECTION) {

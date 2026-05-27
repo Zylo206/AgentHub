@@ -96,6 +96,11 @@ function resolveInjectionMode(
 type ContextSearchStage = "LIST_GREP_READ" | "LIST_READ_FALLBACK" | "UNKNOWN";
 
 function resolveContextSearchStage(item: RetrievedContextItem): ContextSearchStage {
+  const explicitStage = item.searchStage?.toUpperCase();
+  if (explicitStage === "LIST_GREP_READ" || explicitStage === "LIST_READ_FALLBACK") {
+    return explicitStage;
+  }
+
   const reasonMatch = item.reason?.match(/Search stage:\s*([A-Z_]+)/i);
   const reasonStage = reasonMatch?.[1]?.toUpperCase();
   if (reasonStage === "LIST_GREP_READ" || reasonStage === "LIST_READ_FALLBACK") {

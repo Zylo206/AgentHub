@@ -6,6 +6,14 @@ const EXPECT_STREAMING = process.env.AGENTHUB_CODEX_SMOKE_EXPECT_STREAMING === "
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
 
+const OUTCOME = {
+  ACCEPTED: "ACCEPTED",
+  PARSE_FAILED: "PARSE_FAILED",
+  QUALITY_FAILED: "QUALITY_FAILED",
+  BUILD_FAILED: "BUILD_FAILED",
+  FALLBACK: "FALLBACK"
+};
+
 function pass(message) {
   console.log(`[PASS] ${message}`);
 }
@@ -14,6 +22,42 @@ function fail(message, error) {
   const detail = error instanceof Error ? error.message : String(error);
   console.error(`[FAIL] ${message}: ${detail}`);
   process.exitCode = 1;
+}
+
+function smokeError(outcome, message) {
+  return new Error(`[${outcome}] ${message}`);
+}
+
+function classifyDiagnostic(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (!normalized.trim()) {
+    return null;
+  }
+  if (
+    normalized.includes("parse_failed") ||
+    normalized.includes("artifact json schema validation") ||
+    normalized.includes("artifact contract") ||
+    normalized.includes("not valid json") ||
+    normalized.includes("invalid json") ||
+    normalized.includes("json output") ||
+    normalized.includes("markdown fence")
+  ) {
+    return OUTCOME.PARSE_FAILED;
+  }
+  if (normalized.includes("build_failed") || normalized.includes("buildvalidationstatus=failed") || (normalized.includes("build validation") && normalized.includes("failed"))) {
+    return OUTCOME.BUILD_FAILED;
+  }
+  if (normalized.includes("quality_failed") || normalized.includes("qualitystatus=rejected") || normalized.includes("quality checks") || normalized.includes("rejected")) {
+    return OUTCOME.QUALITY_FAILED;
+  }
+  if (normalized.includes("fallback") || normalized.includes("fallback_used")) {
+    return OUTCOME.FALLBACK;
+  }
+  return null;
+}
+
+function classifiedError(message, diagnostic, fallbackOutcome = OUTCOME.FALLBACK) {
+  return smokeError(classifyDiagnostic(diagnostic) || fallbackOutcome, message);
 }
 
 function getIdValue(value) {
@@ -169,9 +213,14 @@ async function collectRealtimeEvents(conversationId, expectedEventTypes, trigger
 }
 
 function assertArtifactJsonContract(content) {
-  const parsed = JSON.parse(content);
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    throw smokeError(OUTCOME.PARSE_FAILED, `Codex adapter content was not valid JSON: ${error.message}`);
+  }
   if (!parsed.assistantMessage || !Array.isArray(parsed.artifacts) || parsed.artifacts.length < 1) {
-    throw new Error("Codex adapter content did not match AgentHub artifact contract.");
+    throw smokeError(OUTCOME.PARSE_FAILED, "Codex adapter content did not match AgentHub artifact contract.");
   }
   const invalid = parsed.artifacts.find(
     (artifact) =>
@@ -182,9 +231,21 @@ function assertArtifactJsonContract(content) {
       !artifact.summary
   );
   if (invalid) {
-    throw new Error(`Codex artifact is missing required fields: ${JSON.stringify(invalid).slice(0, 300)}`);
+    throw smokeError(OUTCOME.PARSE_FAILED, `Codex artifact is missing required fields: ${JSON.stringify(invalid).slice(0, 300)}`);
   }
-  pass(`adapter execute returned artifact JSON: ${parsed.artifacts.length} artifact(s)`);
+  pass(`${OUTCOME.ACCEPTED}: adapter execute returned artifact JSON: ${parsed.artifacts.length} artifact(s)`);
+}
+
+function describeTaskStep(step) {
+  return [
+    step.stepOrder,
+    step.actualAdapterType || "-",
+    `realOutputUsed=${step.realOutputUsed}`,
+    `parse=${step.artifactParseStatus || "-"}`,
+    `build=${step.artifactBuildValidationStatus || "-"}`,
+    `quality=${step.artifactQualityStatus || "-"}`,
+    step.adapterErrorMessage || step.artifactQualityReason || ""
+  ].join(":");
 }
 
 function assertStreamingEvents(taskRunId, events) {
@@ -206,16 +267,20 @@ function assertStreamingEvents(taskRunId, events) {
 
 function assertCodexArtifact(artifact) {
   if (artifact.sourceKind !== "REAL_ADAPTER") {
-    throw new Error(`sourceKind expected REAL_ADAPTER, got ${artifact.sourceKind}`);
+    throw classifiedError(`sourceKind expected REAL_ADAPTER, got ${artifact.sourceKind}`, JSON.stringify(artifact), OUTCOME.FALLBACK);
   }
   if (artifact.sourceAdapterType !== "CODEX") {
-    throw new Error(`sourceAdapterType expected CODEX, got ${artifact.sourceAdapterType}`);
+    throw classifiedError(`sourceAdapterType expected CODEX, got ${artifact.sourceAdapterType}`, JSON.stringify(artifact), OUTCOME.FALLBACK);
   }
   if (artifact.generationMode !== "REAL_FIRST") {
-    throw new Error(`generationMode expected REAL_FIRST, got ${artifact.generationMode}`);
+    throw classifiedError(`generationMode expected REAL_FIRST, got ${artifact.generationMode}`, JSON.stringify(artifact), OUTCOME.FALLBACK);
   }
   if (artifact.qualityStatus !== "ACCEPTED") {
-    throw new Error(`qualityStatus expected ACCEPTED, got ${artifact.qualityStatus}`);
+    throw classifiedError(
+      `qualityStatus expected ACCEPTED, got ${artifact.qualityStatus}`,
+      JSON.stringify(artifact),
+      OUTCOME.QUALITY_FAILED
+    );
   }
   requireValue(artifact.content, "REAL_ADAPTER artifact content missing");
 }
@@ -284,13 +349,22 @@ async function run() {
     })
   });
   if (executeResponse.status !== "COMPLETED") {
-    throw new Error(`adapter execute expected COMPLETED, got ${executeResponse.status}: ${executeResponse.errorMessage || ""}`);
+    throw classifiedError(
+      `adapter execute expected COMPLETED, got ${executeResponse.status}: ${executeResponse.errorMessage || ""}`,
+      `${executeResponse.errorMessage || ""}\n${executeResponse.content || ""}`
+    );
   }
   if (executeResponse.actualAdapterType && executeResponse.actualAdapterType !== "CODEX") {
-    throw new Error(`adapter execute expected actualAdapterType=CODEX, got ${executeResponse.actualAdapterType}`);
+    throw classifiedError(
+      `adapter execute expected actualAdapterType=CODEX, got ${executeResponse.actualAdapterType}`,
+      `${executeResponse.errorMessage || ""}\n${executeResponse.content || ""}`
+    );
   }
   if (executeResponse.fallbackUsed) {
-    throw new Error("adapter execute used fallback; expected direct CODEX output");
+    throw classifiedError(
+      "adapter execute used fallback; expected direct CODEX output",
+      `${executeResponse.errorMessage || ""}\n${executeResponse.content || ""}`
+    );
   }
   assertArtifactJsonContract(executeResponse.content);
 
@@ -322,8 +396,25 @@ async function run() {
   const { taskRun, events } = await runDemoTask(conversationId, messageId, agentId);
   const taskRunId = requireValue(getIdValue(taskRun.id), "taskRunId missing");
   pass(`demo task completed: ${taskRunId}, status=${taskRun.status}`);
+  if (taskRun.status !== "COMPLETED") {
+    throw classifiedError(`demo task expected COMPLETED, got ${taskRun.status}`, JSON.stringify(taskRun), OUTCOME.FALLBACK);
+  }
   if (EXPECT_STREAMING) {
     assertStreamingEvents(taskRunId, events);
+  }
+  const steps = Array.isArray(taskRun.steps) ? taskRun.steps : [];
+  const acceptedRealStep = steps.find(
+    (step) => step.actualAdapterType === "CODEX"
+      && step.realOutputUsed === true
+      && step.artifactQualityStatus === "ACCEPTED"
+  );
+  if (!acceptedRealStep) {
+    const diagnostic = steps.map(describeTaskStep).join(" | ");
+    throw classifiedError(
+      `no TaskStep accepted real CODEX output. steps=${diagnostic}`,
+      diagnostic,
+      OUTCOME.QUALITY_FAILED
+    );
   }
 
   const artifacts = await request(`/api/conversations/${conversationId}/artifacts`);
@@ -339,10 +430,14 @@ async function run() {
         `${artifact.title || artifact.id}:${artifact.sourceKind || "-"}:${artifact.sourceAdapterType || "-"}:${artifact.generationMode || "-"}:${artifact.qualityStatus || "-"}`
       )
       .join(" | ");
-    throw new Error(`expected at least one CODEX REAL_ADAPTER REAL_FIRST ACCEPTED artifact. Observed: ${observed}`);
+    throw classifiedError(
+      `expected at least one CODEX REAL_ADAPTER REAL_FIRST ACCEPTED artifact. Observed: ${observed}`,
+      observed,
+      OUTCOME.QUALITY_FAILED
+    );
   }
   realArtifacts.forEach(assertCodexArtifact);
-  pass(`CODEX REAL_ADAPTER artifacts created: ${realArtifacts.length}`);
+  pass(`${OUTCOME.ACCEPTED}: CODEX REAL_ADAPTER artifacts created: ${realArtifacts.length}`);
 
   console.log("Codex smoke test completed successfully.");
 }

@@ -14,6 +14,23 @@ CREATE TABLE IF NOT EXISTS agenthub_conversations (
     INDEX idx_agenthub_conversations_updated_at (updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS agenthub_agents (
+    id VARCHAR(128) PRIMARY KEY,
+    name VARCHAR(256) NOT NULL,
+    avatar_url TEXT,
+    role VARCHAR(64) NOT NULL,
+    description TEXT,
+    system_prompt LONGTEXT,
+    preferred_adapter_type VARCHAR(64),
+    capability_tags_json TEXT,
+    tool_tags_json TEXT,
+    status VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    INDEX idx_agenthub_agents_role_created (role, created_at),
+    INDEX idx_agenthub_agents_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS agenthub_messages (
     id VARCHAR(128) PRIMARY KEY,
     conversation_id VARCHAR(128) NOT NULL,
@@ -189,7 +206,8 @@ CREATE TABLE IF NOT EXISTS agenthub_memory_items (
     last_used_at TIMESTAMP NULL,
     UNIQUE KEY uq_agenthub_memory_source (conversation_id, source_type, source_id),
     INDEX idx_agenthub_memory_conversation_updated (conversation_id, updated_at),
-    INDEX idx_agenthub_memory_scope_updated (scope, updated_at)
+    INDEX idx_agenthub_memory_scope_updated (scope, updated_at),
+    FULLTEXT KEY ft_agenthub_memory_content (content)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS agenthub_handoff_summaries (
@@ -205,4 +223,34 @@ CREATE TABLE IF NOT EXISTS agenthub_handoff_summaries (
     summary TEXT,
     created_at TIMESTAMP NULL,
     INDEX idx_agenthub_handoff_summaries_task_run_created (task_run_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_approval_requests (
+    approval_id VARCHAR(128) PRIMARY KEY,
+    conversation_id VARCHAR(128) NOT NULL,
+    action_type VARCHAR(128) NOT NULL,
+    target_type VARCHAR(128) NOT NULL,
+    target_id VARCHAR(128) NOT NULL,
+    risk_level VARCHAR(64),
+    summary TEXT,
+    affected_items_json TEXT,
+    status VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NULL,
+    resolved_at TIMESTAMP NULL,
+    expires_at TIMESTAMP NULL,
+    INDEX idx_agenthub_approval_conversation_created (conversation_id, created_at),
+    INDEX idx_agenthub_approval_status_expires (status, expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_action_audits (
+    audit_id VARCHAR(128) PRIMARY KEY,
+    conversation_id VARCHAR(128) NOT NULL,
+    action_type VARCHAR(128) NOT NULL,
+    target_type VARCHAR(128) NOT NULL,
+    target_id VARCHAR(128) NOT NULL,
+    status VARCHAR(64) NOT NULL,
+    summary TEXT,
+    created_at TIMESTAMP NULL,
+    INDEX idx_agenthub_action_audits_conversation_created (conversation_id, created_at),
+    INDEX idx_agenthub_action_audits_action_created (action_type, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

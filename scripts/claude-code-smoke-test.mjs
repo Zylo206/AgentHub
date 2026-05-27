@@ -6,6 +6,14 @@ const EXPECT_STREAMING = process.env.AGENTHUB_CLAUDE_CODE_SMOKE_EXPECT_STREAMING
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
 
+const OUTCOME = {
+  ACCEPTED: "ACCEPTED",
+  PARSE_FAILED: "PARSE_FAILED",
+  QUALITY_FAILED: "QUALITY_FAILED",
+  BUILD_FAILED: "BUILD_FAILED",
+  FALLBACK: "FALLBACK"
+};
+
 function pass(message) {
   console.log(`[PASS] ${message}`);
 }
@@ -18,6 +26,42 @@ function fail(message, error) {
 
 function warn(message) {
   console.warn(`[WARN] ${message}`);
+}
+
+function smokeError(outcome, message) {
+  return new Error(`[${outcome}] ${message}`);
+}
+
+function classifyDiagnostic(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (!normalized.trim()) {
+    return null;
+  }
+  if (
+    normalized.includes("parse_failed") ||
+    normalized.includes("artifact json schema validation") ||
+    normalized.includes("artifact contract") ||
+    normalized.includes("not valid json") ||
+    normalized.includes("invalid json") ||
+    normalized.includes("json output") ||
+    normalized.includes("markdown fence")
+  ) {
+    return OUTCOME.PARSE_FAILED;
+  }
+  if (normalized.includes("build_failed") || normalized.includes("buildvalidationstatus=failed") || (normalized.includes("build validation") && normalized.includes("failed"))) {
+    return OUTCOME.BUILD_FAILED;
+  }
+  if (normalized.includes("quality_failed") || normalized.includes("qualitystatus=rejected") || normalized.includes("quality checks") || normalized.includes("rejected")) {
+    return OUTCOME.QUALITY_FAILED;
+  }
+  if (normalized.includes("fallback") || normalized.includes("fallback_used")) {
+    return OUTCOME.FALLBACK;
+  }
+  return null;
+}
+
+function classifiedError(message, diagnostic, fallbackOutcome = OUTCOME.FALLBACK) {
+  return smokeError(classifyDiagnostic(diagnostic) || fallbackOutcome, message);
 }
 
 function getIdValue(value) {
@@ -165,9 +209,14 @@ async function collectRealtimeEvents(conversationId, expectedEventTypes, trigger
 }
 
 function assertArtifactJsonContract(content) {
-  const parsed = JSON.parse(content);
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    throw smokeError(OUTCOME.PARSE_FAILED, `Claude Code adapter content was not valid JSON: ${error.message}`);
+  }
   if (!parsed.assistantMessage || !Array.isArray(parsed.artifacts) || parsed.artifacts.length < 1) {
-    throw new Error("Claude Code adapter content did not match AgentHub artifact contract.");
+    throw smokeError(OUTCOME.PARSE_FAILED, "Claude Code adapter content did not match AgentHub artifact contract.");
   }
   const invalid = parsed.artifacts.find(
     (artifact) =>
@@ -178,9 +227,21 @@ function assertArtifactJsonContract(content) {
       !artifact.summary
   );
   if (invalid) {
-    throw new Error(`Claude Code artifact is missing required fields: ${JSON.stringify(invalid).slice(0, 300)}`);
+    throw smokeError(OUTCOME.PARSE_FAILED, `Claude Code artifact is missing required fields: ${JSON.stringify(invalid).slice(0, 300)}`);
   }
-  pass(`adapter execute returned artifact JSON: ${parsed.artifacts.length} artifact(s)`);
+  pass(`${OUTCOME.ACCEPTED}: adapter execute returned artifact JSON: ${parsed.artifacts.length} artifact(s)`);
+}
+
+function describeTaskStep(step) {
+  return [
+    step.stepOrder,
+    step.actualAdapterType || "-",
+    `realOutputUsed=${step.realOutputUsed}`,
+    `parse=${step.artifactParseStatus || "-"}`,
+    `build=${step.artifactBuildValidationStatus || "-"}`,
+    `quality=${step.artifactQualityStatus || "-"}`,
+    step.adapterErrorMessage || step.artifactQualityReason || ""
+  ].join(":");
 }
 
 function assertStreamingEvents(taskRunId, events) {
@@ -242,7 +303,16 @@ async function run() {
     })
   });
   if (executeResponse.status !== "COMPLETED") {
-    throw new Error(`adapter execute expected COMPLETED, got ${executeResponse.status}: ${executeResponse.errorMessage || ""}`);
+    throw classifiedError(
+      `adapter execute expected COMPLETED, got ${executeResponse.status}: ${executeResponse.errorMessage || ""}`,
+      `${executeResponse.errorMessage || ""}\n${executeResponse.content || ""}`
+    );
+  }
+  if (executeResponse.fallbackUsed) {
+    throw classifiedError(
+      `adapter execute used fallback: ${executeResponse.errorMessage || "no reason"}`,
+      `${executeResponse.errorMessage || ""}\n${executeResponse.content || ""}`
+    );
   }
   assertArtifactJsonContract(executeResponse.content);
 
@@ -288,6 +358,23 @@ async function run() {
   );
   const taskRunId = requireValue(getIdValue(taskRun.id), "taskRunId missing");
   pass(`demo task completed: ${taskRunId}, status=${taskRun.status}`);
+  if (taskRun.status !== "COMPLETED") {
+    throw classifiedError(`demo task expected COMPLETED, got ${taskRun.status}`, JSON.stringify(taskRun), OUTCOME.FALLBACK);
+  }
+  const steps = Array.isArray(taskRun.steps) ? taskRun.steps : [];
+  const acceptedRealStep = steps.find(
+    (step) => step.actualAdapterType === "CLAUDE_CODE"
+      && step.realOutputUsed === true
+      && step.artifactQualityStatus === "ACCEPTED"
+  );
+  if (!acceptedRealStep) {
+    const diagnostic = steps.map(describeTaskStep).join(" | ");
+    throw classifiedError(
+      `no TaskStep accepted real CLAUDE_CODE output. steps=${diagnostic}`,
+      diagnostic,
+      OUTCOME.QUALITY_FAILED
+    );
+  }
   if (EXPECT_STREAMING) {
     assertStreamingEvents(taskRunId, events);
   }
@@ -299,13 +386,21 @@ async function run() {
       && artifact.generationMode === "REAL_FIRST"
   );
   if (realArtifacts.length < 1) {
-    throw new Error(`expected at least one CLAUDE_CODE REAL_ADAPTER artifact, got ${realArtifacts.length}`);
+    throw classifiedError(
+      `expected at least one CLAUDE_CODE REAL_ADAPTER artifact, got ${realArtifacts.length}`,
+      JSON.stringify(artifacts.slice(0, 5)),
+      OUTCOME.FALLBACK
+    );
   }
-  const rejected = realArtifacts.find((artifact) => artifact.artifactQualityStatus === "REJECTED");
+  const rejected = realArtifacts.find((artifact) => artifact.qualityStatus === "REJECTED");
   if (rejected) {
-    throw new Error(`CLAUDE_CODE REAL_ADAPTER artifact was rejected: ${rejected.artifactQualityReason || rejected.title}`);
+    throw classifiedError(
+      `CLAUDE_CODE REAL_ADAPTER artifact was rejected: ${rejected.qualityReason || rejected.title}`,
+      JSON.stringify(rejected),
+      OUTCOME.QUALITY_FAILED
+    );
   }
-  pass(`CLAUDE_CODE REAL_ADAPTER artifacts created: ${realArtifacts.length}`);
+  pass(`${OUTCOME.ACCEPTED}: CLAUDE_CODE REAL_ADAPTER artifacts created: ${realArtifacts.length}`);
 
   console.log("Claude Code smoke test completed successfully.");
 }

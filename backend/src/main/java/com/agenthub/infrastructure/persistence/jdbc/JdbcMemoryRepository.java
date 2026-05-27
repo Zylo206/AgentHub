@@ -8,7 +8,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
@@ -17,9 +19,13 @@ import org.springframework.stereotype.Repository;
 public class JdbcMemoryRepository implements MemoryRepository {
 
     private final JdbcConnectionFactory connectionFactory;
+    private final boolean fulltextEnabled;
 
-    public JdbcMemoryRepository(JdbcConnectionFactory connectionFactory) {
+    public JdbcMemoryRepository(
+            JdbcConnectionFactory connectionFactory,
+            @Value("${agenthub.context.search.fulltext-enabled:false}") boolean fulltextEnabled) {
         this.connectionFactory = connectionFactory;
+        this.fulltextEnabled = fulltextEnabled;
         initSchema();
     }
 
@@ -130,6 +136,28 @@ public class JdbcMemoryRepository implements MemoryRepository {
     }
 
     @Override
+    public List<MemoryItem> searchByConversationId(ConversationId conversationId, List<String> keywords, int limit) {
+        List<String> normalizedKeywords = normalizeKeywords(keywords);
+        if (normalizedKeywords.isEmpty()) {
+            return List.of();
+        }
+        if (fulltextEnabled) {
+            String sql = """
+                    SELECT * FROM agenthub_memory_items
+                    WHERE (conversation_id = ? OR UPPER(scope) = 'GLOBAL')
+                      AND MATCH(content) AGAINST (? IN NATURAL LANGUAGE MODE)
+                    ORDER BY importance DESC, last_used_at DESC, updated_at DESC
+                    LIMIT ?
+                    """;
+            return queryMany(sql, conversationId.value(), toFulltextQuery(normalizedKeywords), Math.max(0, limit));
+        }
+        String where = likeWhere("LOWER(COALESCE(content, ''))", normalizedKeywords.size());
+        String sql = "SELECT * FROM agenthub_memory_items WHERE (conversation_id = ? OR UPPER(scope) = 'GLOBAL') AND ("
+                + where + ") ORDER BY importance DESC, last_used_at DESC, updated_at DESC LIMIT ?";
+        return queryMany(sql, conversationId.value(), normalizedKeywords, Math.max(0, limit));
+    }
+
+    @Override
     public Optional<MemoryItem> markUsed(String memoryId, Instant usedAt) {
         Optional<MemoryItem> current = findById(memoryId);
         if (current.isEmpty()) {
@@ -164,6 +192,66 @@ public class JdbcMemoryRepository implements MemoryRepository {
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to query memory items", exception);
         }
+    }
+
+    private List<MemoryItem> queryMany(String sql, String conversationId, List<String> keywords, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, conversationId);
+            int index = 2;
+            for (String keyword : keywords) {
+                statement.setString(index++, "%" + keyword + "%");
+            }
+            statement.setInt(index, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<MemoryItem> memoryItems = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    memoryItems.add(map(resultSet));
+                }
+                return memoryItems;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search memory items", exception);
+        }
+    }
+
+    private List<MemoryItem> queryMany(String sql, String conversationId, String fulltextQuery, int limit) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, conversationId);
+            statement.setString(2, fulltextQuery);
+            statement.setInt(3, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                java.util.ArrayList<MemoryItem> memoryItems = new java.util.ArrayList<>();
+                while (resultSet.next()) {
+                    memoryItems.add(map(resultSet));
+                }
+                return memoryItems;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to fulltext search memory items", exception);
+        }
+    }
+
+    private String likeWhere(String columnExpression, int keywordCount) {
+        return java.util.stream.IntStream.range(0, keywordCount)
+                .mapToObj(index -> columnExpression + " LIKE ?")
+                .collect(java.util.stream.Collectors.joining(" OR "));
+    }
+
+    private List<String> normalizeKeywords(List<String> keywords) {
+        if (keywords == null) {
+            return List.of();
+        }
+        return keywords.stream()
+                .filter(keyword -> keyword != null && !keyword.isBlank())
+                .map(keyword -> keyword.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private String toFulltextQuery(List<String> keywords) {
+        return String.join(" ", keywords);
     }
 
     private MemoryItem map(ResultSet resultSet) throws SQLException {

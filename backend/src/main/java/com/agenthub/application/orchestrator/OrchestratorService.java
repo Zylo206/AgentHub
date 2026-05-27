@@ -391,15 +391,24 @@ public class OrchestratorService {
         TaskStep frontendStep = findExecutedStep(executedSteps, 1);
         TaskStep backendStep = findExecutedStep(executedSteps, 2);
         TaskStep reviewStep = findExecutedStep(executedSteps, 3);
+        List<ArtifactId> affectedArtifactIds = List.of(
+                codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId());
+        if (!cancellationRequested && hasSmokeQualityGateTrigger(userInput)) {
+            codeArtifact = withArtifactQualityGateFailure(codeArtifact, now);
+            artifactRepository.save(codeArtifact);
+            publishArtifactUpdated(codeArtifact);
+        }
+        List<Artifact> reviewedArtifacts = artifactRepository.findByTaskRunId(taskRunId);
         ReviewDecision reviewDecision = cancellationRequested
                 ? ReviewDecision.approved(
-                        List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId()),
+                        affectedArtifactIds,
                         "CANCELLED_RUN")
                 : reviewDecisionEvaluator.evaluate(
                         userInput,
                         reviewStep,
                         reviewArtifact,
-                        List.of(codeArtifact.getId(), readmeArtifact.getId(), apiContractArtifact.getId(), reviewArtifact.getId()));
+                        reviewedArtifacts,
+                        affectedArtifactIds);
         Artifact retryAdviceArtifact = null;
         if (reviewDecision.rejected()) {
             reviewArtifact = withArtifactStatus(
@@ -1834,10 +1843,41 @@ public class OrchestratorService {
                 artifact.getSourceAdapterType(),
                 artifact.getSourceTaskStepId(),
                 artifact.getGenerationMode(),
+                artifact.getBuildValidationStatus(),
                 artifact.getQualityStatus(),
+                artifact.getQualityScore(),
                 artifact.getQualityReason(),
                 artifact.getCreatedAt(),
                 now);
+    }
+
+    private Artifact withArtifactQualityGateFailure(Artifact artifact, Instant now) {
+        return new Artifact(
+                artifact.getId(),
+                artifact.getConversationId(),
+                artifact.getTaskRunId(),
+                artifact.getParentArtifactId(),
+                artifact.getRevisionInstruction(),
+                artifact.getTitle(),
+                artifact.getType(),
+                artifact.getStatus(),
+                artifact.getLanguage(),
+                artifact.getContent(),
+                artifact.getVersion(),
+                artifact.getSourceKind(),
+                artifact.getSourceAdapterType(),
+                artifact.getSourceTaskStepId(),
+                artifact.getGenerationMode(),
+                "FAILED",
+                "REJECTED",
+                0,
+                "Smoke quality gate trigger marked this artifact as BUILD_FAILED for reviewer rejection validation.",
+                artifact.getCreatedAt(),
+                now);
+    }
+
+    private boolean hasSmokeQualityGateTrigger(String userInput) {
+        return userInput != null && userInput.contains("AGENTHUB_SMOKE_QUALITY_GATE=BUILD_FAILED");
     }
 
     private Artifact createReviewRetryAdviceArtifact(

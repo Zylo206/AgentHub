@@ -259,18 +259,17 @@ public class AgentStepExecutor {
             AgentResponse adapterResponse) {
         List<ArtifactId> producedArtifactIds = new ArrayList<>(command.producedArtifactIds());
         if (!shouldPersistAdapterOutput(adapterResponse) || "STATIC_TEMPLATE".equals(artifactGenerationMode)) {
-            String status = adapterResponse == null || adapterResponse.content() == null || adapterResponse.content().isBlank()
-                    ? "EMPTY"
-                    : "NOT_ATTEMPTED";
+            String parseStatus = classifySkippedAdapterParseStatus(adapterResponse);
+            String qualityStatus = "PARSE_FAILED".equals(parseStatus) ? "REJECTED" : "FALLBACK";
             String reason = "STATIC_TEMPLATE".equals(artifactGenerationMode)
                     ? "Artifact generation mode is STATIC_TEMPLATE."
-                    : "Adapter output was not persisted because adapter execution was MOCK, fallback, failed, or empty.";
+                    : buildSkippedAdapterOutputReason(adapterResponse);
             return new AdapterArtifactAppendResult(
                     List.copyOf(producedArtifactIds),
                     List.of(),
-                    status,
+                    parseStatus,
                     "NOT_EVALUATED",
-                    "NOT_EVALUATED",
+                    qualityStatus,
                     null,
                     reason);
         }
@@ -445,6 +444,44 @@ public class AgentStepExecutor {
                 && adapterResponse.actualAdapterType() != AgentAdapterType.MOCK
                 && adapterResponse.content() != null
                 && !adapterResponse.content().isBlank();
+    }
+
+    private String classifySkippedAdapterParseStatus(AgentResponse adapterResponse) {
+        if (adapterResponse == null
+                || ((adapterResponse.content() == null || adapterResponse.content().isBlank())
+                && (adapterResponse.errorMessage() == null || adapterResponse.errorMessage().isBlank()))) {
+            return "EMPTY";
+        }
+        String diagnostic = ((adapterResponse.errorMessage() == null ? "" : adapterResponse.errorMessage())
+                + "\n"
+                + (adapterResponse.content() == null ? "" : adapterResponse.content())).toLowerCase();
+        if (diagnostic.contains("artifact json schema validation")
+                || diagnostic.contains("artifact contract")
+                || diagnostic.contains("not valid json")
+                || diagnostic.contains("invalid json")
+                || diagnostic.contains("json output")
+                || diagnostic.contains("markdown fences")) {
+            return "PARSE_FAILED";
+        }
+        return "NOT_ATTEMPTED";
+    }
+
+    private String buildSkippedAdapterOutputReason(AgentResponse adapterResponse) {
+        if (adapterResponse == null) {
+            return "Adapter output was not persisted because adapter execution did not return a response.";
+        }
+        StringBuilder reason = new StringBuilder("Adapter output was not persisted because adapter execution was MOCK, fallback, failed, or empty.");
+        reason.append(" adapterStatus=").append(adapterResponse.status() == null ? "UNKNOWN" : adapterResponse.status().name());
+        if (adapterResponse.actualAdapterType() != null) {
+            reason.append("; actualAdapterType=").append(adapterResponse.actualAdapterType().name());
+        }
+        if (adapterResponse.fallbackUsed()) {
+            reason.append("; fallbackUsed=true");
+        }
+        if (adapterResponse.errorMessage() != null && !adapterResponse.errorMessage().isBlank()) {
+            reason.append("; fallbackReason=").append(adapterResponse.errorMessage());
+        }
+        return reason.toString();
     }
 
     private String buildAdapterOutputArtifactContent(

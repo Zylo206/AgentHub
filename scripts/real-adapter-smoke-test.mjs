@@ -30,6 +30,14 @@ const EXPECT_STREAMING = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMIN
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
 
+const OUTCOME = {
+  ACCEPTED: "ACCEPTED",
+  PARSE_FAILED: "PARSE_FAILED",
+  QUALITY_FAILED: "QUALITY_FAILED",
+  BUILD_FAILED: "BUILD_FAILED",
+  FALLBACK: "FALLBACK"
+};
+
 function pass(message) {
   console.log(`[PASS] ${message}`);
 }
@@ -42,6 +50,42 @@ function fail(message, error) {
 
 function warn(message) {
   console.warn(`[WARN] ${message}`);
+}
+
+function smokeError(outcome, message) {
+  return new Error(`[${outcome}] ${message}`);
+}
+
+function classifyDiagnostic(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (!normalized.trim()) {
+    return null;
+  }
+  if (
+    normalized.includes("parse_failed") ||
+    normalized.includes("artifact json schema validation") ||
+    normalized.includes("artifact contract") ||
+    normalized.includes("not valid json") ||
+    normalized.includes("invalid json") ||
+    normalized.includes("json output") ||
+    normalized.includes("markdown fence")
+  ) {
+    return OUTCOME.PARSE_FAILED;
+  }
+  if (normalized.includes("build_failed") || normalized.includes("buildvalidationstatus=failed") || normalized.includes("build validation") && normalized.includes("failed")) {
+    return OUTCOME.BUILD_FAILED;
+  }
+  if (normalized.includes("quality_failed") || normalized.includes("qualitystatus=rejected") || normalized.includes("quality checks") || normalized.includes("rejected")) {
+    return OUTCOME.QUALITY_FAILED;
+  }
+  if (normalized.includes("fallback") || normalized.includes("fallback_used")) {
+    return OUTCOME.FALLBACK;
+  }
+  return null;
+}
+
+function classifiedError(message, diagnostic, fallbackOutcome = OUTCOME.FALLBACK) {
+  return smokeError(classifyDiagnostic(diagnostic) || fallbackOutcome, message);
 }
 
 function requireValue(value, message) {
@@ -203,6 +247,32 @@ function assertStreamingEventsForTaskRun(taskRunId, events) {
   pass(`streaming chunk event observed for taskRun ${taskRunId} (${runStreamEvents.length} chunks)`);
 }
 
+function describeTaskStep(step) {
+  return [
+    step.stepOrder,
+    step.actualAdapterType || "-",
+    `realOutputUsed=${step.realOutputUsed}`,
+    `parse=${step.artifactParseStatus || "-"}`,
+    `build=${step.artifactBuildValidationStatus || "-"}`,
+    `quality=${step.artifactQualityStatus || "-"}`,
+    step.adapterErrorMessage || step.artifactQualityReason || ""
+  ].join(":");
+}
+
+function classifyTaskStepFailure(steps) {
+  const diagnostic = steps.map(describeTaskStep).join(" | ");
+  const failedStep = steps.find((step) => step.artifactParseStatus === "PARSE_FAILED")
+    || steps.find((step) => step.artifactBuildValidationStatus === "FAILED")
+    || steps.find((step) => step.artifactQualityStatus === "REJECTED")
+    || steps.find((step) => step.adapterStatus === "FALLBACK_USED" || step.actualAdapterType === "MOCK")
+    || steps[0];
+  return classifiedError(
+    `no TaskStep accepted real OPENAI_COMPATIBLE output. steps=${diagnostic}`,
+    `${diagnostic}\n${failedStep?.adapterErrorMessage || ""}\n${failedStep?.artifactQualityReason || ""}`,
+    OUTCOME.QUALITY_FAILED
+  );
+}
+
 function assertRequiredEnvironment() {
   const missing = REQUIRED_ENV.filter((name) => !String(process.env[name] || "").trim());
   const isConfigured = missing.length === 0 && process.env.AGENTHUB_OPENAI_ENABLED === "true" && process.env.AGENTHUB_OPENAI_FIXTURE_ENABLED !== "true";
@@ -232,22 +302,31 @@ function isFixtureBackedOpenAiAdapter(adapter) {
 
 function assertAdapterExecutionResponseContract(response) {
   if (!response || typeof response !== "object") {
-    throw new Error("adapter execute response is not an object");
+    throw smokeError(OUTCOME.FALLBACK, "adapter execute response is not an object");
   }
   if (response.actualAdapterType !== "OPENAI_COMPATIBLE") {
-    throw new Error(`expected actualAdapterType=OPENAI_COMPATIBLE, got ${response.actualAdapterType}`);
+    throw classifiedError(
+      `expected actualAdapterType=OPENAI_COMPATIBLE, got ${response.actualAdapterType}`,
+      `${response.errorMessage || ""}\n${response.content || ""}`
+    );
   }
   if (response.status !== "COMPLETED") {
-    throw new Error(`adapter execution expected COMPLETED, got ${response.status}: ${response.errorMessage || ""}`);
+    throw classifiedError(
+      `adapter execution expected COMPLETED, got ${response.status}: ${response.errorMessage || ""}`,
+      `${response.errorMessage || ""}\n${response.content || ""}`
+    );
   }
   if (response.fallbackUsed) {
-    throw new Error(`adapter execution used fallback: ${response.errorMessage || "no reason"}`);
+    throw classifiedError(
+      `adapter execution used fallback: ${response.errorMessage || "no reason"}`,
+      `${response.errorMessage || ""}\n${response.content || ""}`
+    );
   }
   if (typeof response.content !== "string" || !response.content.trim()) {
-    throw new Error("adapter execution response content is empty");
+    throw smokeError(OUTCOME.PARSE_FAILED, "adapter execution response content is empty");
   }
   if (!Array.isArray(response.producedArtifactHints)) {
-    throw new Error("adapter execution response missing producedArtifactHints[]");
+    throw smokeError(OUTCOME.PARSE_FAILED, "adapter execution response missing producedArtifactHints[]");
   }
 }
 
@@ -378,34 +457,34 @@ async function request(path, init = {}) {
 function parseArtifactJson(content) {
   const raw = String(content || "").trim();
   if (!raw) {
-    throw new Error("adapter response content is empty");
+    throw smokeError(OUTCOME.PARSE_FAILED, "adapter response content is empty");
   }
   if (raw.startsWith("```")) {
-    throw new Error("adapter response is wrapped in a Markdown code fence; expected raw JSON only");
+    throw smokeError(OUTCOME.PARSE_FAILED, "adapter response is wrapped in a Markdown code fence; expected raw JSON only");
   }
   let payload;
   try {
     payload = JSON.parse(raw);
   } catch (error) {
-    throw new Error(`adapter response is not valid JSON: ${error.message}`);
+    throw smokeError(OUTCOME.PARSE_FAILED, `adapter response is not valid JSON: ${error.message}`);
   }
   if (!payload || typeof payload !== "object") {
-    throw new Error("adapter response JSON root must be an object");
+    throw smokeError(OUTCOME.PARSE_FAILED, "adapter response JSON root must be an object");
   }
   if (typeof payload.assistantMessage !== "string" || !payload.assistantMessage.trim()) {
-    throw new Error("adapter response JSON missing assistantMessage");
+    throw smokeError(OUTCOME.PARSE_FAILED, "adapter response JSON missing assistantMessage");
   }
   if (!Array.isArray(payload.artifacts) || payload.artifacts.length === 0) {
-    throw new Error("adapter response JSON missing non-empty artifacts[]");
+    throw smokeError(OUTCOME.PARSE_FAILED, "adapter response JSON missing non-empty artifacts[]");
   }
   payload.artifacts.forEach((artifact, index) => {
     for (const field of ["title", "type", "language", "content", "summary"]) {
       if (typeof artifact?.[field] !== "string" || !artifact[field].trim()) {
-        throw new Error(`artifact[${index}] missing ${field}`);
+        throw smokeError(OUTCOME.PARSE_FAILED, `artifact[${index}] missing ${field}`);
       }
     }
     if (artifact.type === "CODE" && artifact.content.trim().startsWith("```")) {
-      throw new Error(`artifact[${index}] CODE content must be raw source, not Markdown fenced`);
+      throw smokeError(OUTCOME.PARSE_FAILED, `artifact[${index}] CODE content must be raw source, not Markdown fenced`);
     }
   });
   return payload;
@@ -475,20 +554,29 @@ async function executeOpenAiAdapter() {
     assertAdapterExecutionResponseContract(response);
   } else {
     if (response.actualAdapterType !== "OPENAI_COMPATIBLE") {
-      throw new Error(`expected actualAdapterType=OPENAI_COMPATIBLE, got ${response.actualAdapterType}`);
+      throw classifiedError(
+        `expected actualAdapterType=OPENAI_COMPATIBLE, got ${response.actualAdapterType}`,
+        `${response.errorMessage || ""}\n${response.content || ""}`
+      );
     }
     if (response.fallbackUsed) {
-      throw new Error(`adapter execution used fallback: ${response.errorMessage || "no reason"}`);
+      throw classifiedError(
+        `adapter execution used fallback: ${response.errorMessage || "no reason"}`,
+        `${response.errorMessage || ""}\n${response.content || ""}`
+      );
     }
     if (response.status !== "COMPLETED") {
-      throw new Error(`adapter execution expected COMPLETED, got ${response.status}: ${response.errorMessage || ""}`);
+      throw classifiedError(
+        `adapter execution expected COMPLETED, got ${response.status}: ${response.errorMessage || ""}`,
+        `${response.errorMessage || ""}\n${response.content || ""}`
+      );
     }
     if (typeof response.content !== "string" || !response.content.trim()) {
-      throw new Error("adapter response content is empty");
+      throw smokeError(OUTCOME.PARSE_FAILED, "adapter response content is empty");
     }
   }
   parseArtifactJson(response.content);
-  pass("OPENAI_COMPATIBLE execute returned valid artifact JSON");
+  pass(`${OUTCOME.ACCEPTED}: OPENAI_COMPATIBLE execute returned valid artifact JSON`);
   if (EXPECT_EXECUTE_JSON_CONTRACT) {
     pass("OPENAI_COMPATIBLE execute response contract validated");
   }
@@ -570,11 +658,7 @@ async function runDemoTaskWithRealAdapter() {
       step.artifactQualityStatus === "ACCEPTED"
   );
   if (!acceptedRealStep) {
-    throw new Error(
-      `no TaskStep accepted real OPENAI_COMPATIBLE output. steps=${steps
-        .map((step) => `${step.stepOrder}:${step.actualAdapterType}:${step.realOutputUsed}:${step.artifactQualityStatus}:${step.artifactQualityReason}`)
-        .join(" | ")}`
-    );
+    throw classifyTaskStepFailure(steps);
   }
   if (EXPECT_BUILD_VALIDATION || EXPECT_QUALITY_SCORE || EXPECT_QUALITY_REASON) {
     if (!acceptedRealStep.artifactParseStatus) {
@@ -598,11 +682,19 @@ async function runDemoTaskWithRealAdapter() {
   }
   const realArtifacts = artifacts.filter((artifact) => artifact.sourceKind === "REAL_ADAPTER");
   if (realArtifacts.length === 0) {
-    throw new Error("expected at least one REAL_ADAPTER artifact");
+    throw classifiedError(
+      "expected at least one REAL_ADAPTER artifact",
+      JSON.stringify(artifacts.slice(0, 5)),
+      OUTCOME.FALLBACK
+    );
   }
   const acceptedPrimary = realArtifacts.find((artifact) => artifact.qualityStatus === "ACCEPTED");
   if (!acceptedPrimary) {
-    throw new Error(`no REAL_ADAPTER artifact passed quality checks: ${JSON.stringify(realArtifacts.slice(0, 3))}`);
+    throw classifiedError(
+      `no REAL_ADAPTER artifact passed quality checks: ${JSON.stringify(realArtifacts.slice(0, 3))}`,
+      JSON.stringify(realArtifacts.slice(0, 3)),
+      OUTCOME.QUALITY_FAILED
+    );
   }
   if (EXPECT_BUILD_VALIDATION && !acceptedPrimary.buildValidationStatus) {
     throw new Error("accepted REAL_ADAPTER artifact missing buildValidationStatus");
@@ -637,7 +729,7 @@ async function runDemoTaskWithRealAdapter() {
   if (archivedFallbacks.length === 0) {
     throw new Error("REAL_FIRST expected static template fallback artifacts to be archived");
   }
-  pass(`REAL_FIRST accepted primary artifact: ${acceptedPrimary.title}`);
+  pass(`${OUTCOME.ACCEPTED}: REAL_FIRST accepted primary artifact: ${acceptedPrimary.title}`);
   if (EXPECT_REAL_FIRST_ARTIFACT) {
     pass(`REAL_FIRST primary artifact generationMode: ${acceptedPrimary.generationMode}`);
   }

@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Value;
@@ -93,6 +94,21 @@ public class InMemoryMemoryRepository implements MemoryRepository {
     }
 
     @Override
+    public List<MemoryItem> searchByConversationId(ConversationId conversationId, List<String> keywords, int limit) {
+        List<String> normalizedKeywords = normalizeKeywords(keywords);
+        if (normalizedKeywords.isEmpty()) {
+            return List.of();
+        }
+        return storage.values().stream()
+                .filter(memoryItem -> memoryItem.getConversationId().equals(conversationId)
+                        || "GLOBAL".equalsIgnoreCase(memoryItem.getScope()))
+                .filter(memoryItem -> containsAny(memoryItem.getContent(), normalizedKeywords))
+                .sorted(memoryRanking())
+                .limit(Math.max(0, limit))
+                .toList();
+    }
+
+    @Override
     public Optional<MemoryItem> markUsed(String memoryId, Instant usedAt) {
         MemoryItem current = storage.get(memoryId);
         if (current == null) {
@@ -149,6 +165,25 @@ public class InMemoryMemoryRepository implements MemoryRepository {
             return 1;
         }
         return 0;
+    }
+
+    private List<String> normalizeKeywords(List<String> keywords) {
+        if (keywords == null) {
+            return List.of();
+        }
+        return keywords.stream()
+                .filter(keyword -> keyword != null && !keyword.isBlank())
+                .map(keyword -> keyword.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private boolean containsAny(String content, List<String> keywords) {
+        if (content == null || content.isBlank()) {
+            return false;
+        }
+        String normalizedContent = content.toLowerCase(Locale.ROOT);
+        return keywords.stream().anyMatch(normalizedContent::contains);
     }
 
     private void persist() {

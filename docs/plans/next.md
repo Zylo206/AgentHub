@@ -11,7 +11,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 1. **Monitor real Adapter output quality convergence**
    - Focus on `OPENAI_COMPATIBLE -> REAL_FIRST -> REAL_ADAPTER Artifact`.
    - `Done`: contract validation, quality evaluator, build validation, fallback reasons, TaskStep metadata, Artifact metadata, and Adapter Quality Dashboard are wired through.
-   - `Active`: keep monitoring real provider parse failure, quality failure, build failure, and fallback patterns.
+   - `Done`: OpenAI-compatible, Claude Code, and Codex opt-in smoke scripts classify `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` outcomes instead of returning generic failures.
+   - `Done`: TaskStep fallback/quality reason now records contract-class failures as `PARSE_FAILED` and non-real-output fallback as `FALLBACK`.
+   - `Active`: keep monitoring real provider parse failure, quality failure, build failure, and fallback patterns across more task types.
    - Real provider validation must be opt-in and must not commit keys.
 
 2. **Maintain REAL_FIRST primary Artifact rules**
@@ -54,15 +56,18 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 
 6. **Keep Reviewer REJECTION retry/revise loop verifiable**
    - `Done`: reviewer rejection can be triggered by explicit prompt keywords such as `force reject`, `blocker`, `reject`, and `不通过`.
+   - `Done`: Reviewer quality gate now also rejects structured adapter/artifact failures such as parse failure, quality failure, build failure, fallback-blocking evidence, and invalid-code markers.
    - `Done`: rejected review marks the TaskRun as `BLOCKED`, marks the Review Report `REJECTED`, emits `REJECTION` protocol messages, and creates retry/revise guidance.
    - `Done`: opt-in smoke with `AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION=true` verifies the rejection path and then verifies Artifact Revision returns to a `COMPLETED` / accepted review path.
-   - `Boundary`: this is a rule-based review decision loop; it is not a full static analysis engine or automatic code-fix system.
+   - `Done`: opt-in smoke with `AGENTHUB_SMOKE_EXPECT_REVIEW_QUALITY_REJECTION=true` verifies quality-gate rejection and revision recovery.
+   - `Boundary`: this is a rule-based review decision loop using available build/quality metadata; it is not a full static analysis engine or automatic code-fix system.
 
 7. **Run a JDBC / MySQL real database verification sprint**
    - Do not switch MySQL on by default.
    - `Done`: `jdbc-smoke-test.mjs` now verifies restart persistence for Conversation, Message, Attachment download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary.
    - `Done`: local MySQL-compatible create / restart verify passed with the JDBC profile on port `18087`.
    - `Done`: restart verification confirmed Conversation, Message, Attachment metadata + download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary persisted after backend restart.
+   - `Done`: JDBC repositories and schema now cover Agent, ApprovalRequest, and ActionAuditLog; real MySQL restart verification covered agents, approval requests, action audits, memories, task steps, and attachments.
    - `Boundary`: this validates schema and repository create/query/update/restart paths; it does not make MySQL the default runtime.
    - The memory profile must remain the default stable path.
 
@@ -80,8 +85,15 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: JDBC search has a MySQL FULLTEXT opt-in switch while keeping LIKE as the default.
    - `Done`: ContextPanel displays List / Grep / Read retrieval stage chips.
    - `Done`: MemoryItem has an embedding provider/storage skeleton via `embeddingJson`; real embedding provider remains deferred.
+   - `Done`: Context Search v2 keeps representative sources across recent messages, artifacts, memories, attachment previews, and task run summaries instead of letting one source type dominate ranking.
    - Keep future spec changes aligned with the focused plans and `docs/collaboration/dev-log.md`.
    - Do not describe Mock / fixture / static / half-real behavior as full production capability.
+
+10. **Converge the default IM-first collaboration path**
+   - `Done`: Workspace now promotes the latest task message's Orchestrator trigger confirmation as the primary action.
+   - `Done`: the previous `Run Demo Task` entry is visually weakened and labeled as a manual debug fallback.
+   - `Done`: user message rerun action no longer exposes `Demo Task` as the primary product language.
+   - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 ## Not Now
 

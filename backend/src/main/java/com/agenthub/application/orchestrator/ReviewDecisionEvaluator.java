@@ -2,7 +2,9 @@ package com.agenthub.application.orchestrator;
 
 import com.agenthub.domain.artifact.Artifact;
 import com.agenthub.domain.artifact.ArtifactId;
+import com.agenthub.domain.artifact.ArtifactType;
 import com.agenthub.domain.task.TaskStep;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -35,15 +37,35 @@ public class ReviewDecisionEvaluator {
             TaskStep reviewStep,
             Artifact reviewArtifact,
             List<ArtifactId> affectedArtifactIds) {
+        return evaluate(userInput, reviewStep, reviewArtifact, List.of(), affectedArtifactIds);
+    }
+
+    public ReviewDecision evaluate(
+            String userInput,
+            TaskStep reviewStep,
+            Artifact reviewArtifact,
+            List<Artifact> reviewedArtifacts,
+            List<ArtifactId> affectedArtifactIds) {
         if (forceRejectionEnabled) {
             return rejected("force-rejection-enabled", affectedArtifactIds);
+        }
+
+        List<String> qualityBlockers = findQualityBlockers(reviewStep, reviewArtifact, reviewedArtifacts);
+        if (!qualityBlockers.isEmpty()) {
+            return rejected("quality-gate", qualityBlockers, affectedArtifactIds);
         }
 
         String evidence = String.join("\n",
                 value(userInput),
                 value(reviewStep == null ? null : reviewStep.getOutputContent()),
+                value(reviewStep == null ? null : reviewStep.getAdapterStatus()),
                 value(reviewStep == null ? null : reviewStep.getAdapterResponseSummary()),
                 value(reviewStep == null ? null : reviewStep.getAdapterErrorMessage()),
+                value(reviewStep == null ? null : reviewStep.getArtifactParseStatus()),
+                value(reviewStep == null ? null : reviewStep.getArtifactBuildValidationStatus()),
+                value(reviewStep == null ? null : reviewStep.getArtifactQualityStatus()),
+                value(reviewStep == null ? null : reviewStep.getArtifactQualityReason()),
+                artifactQualityEvidence(reviewedArtifacts),
                 value(reviewArtifact == null ? null : reviewArtifact.getContent()));
         String normalizedEvidence = evidence.toLowerCase(Locale.ROOT);
         String matchedKeyword = rejectionKeywords.stream()
@@ -58,17 +80,140 @@ public class ReviewDecisionEvaluator {
     }
 
     private ReviewDecision rejected(String source, List<ArtifactId> affectedArtifactIds) {
-        List<ArtifactId> safeAffectedArtifactIds = affectedArtifactIds == null ? List.of() : List.copyOf(affectedArtifactIds);
-        return ReviewDecision.rejected(
+        return rejected(
+                source,
                 List.of(
                         "Reviewer found blocker evidence and did not approve the current artifact set.",
                         "Affected artifacts must be revised before approval."),
+                affectedArtifactIds);
+    }
+
+    private ReviewDecision rejected(String source, List<String> blockers, List<ArtifactId> affectedArtifactIds) {
+        List<ArtifactId> safeAffectedArtifactIds = affectedArtifactIds == null ? List.of() : List.copyOf(affectedArtifactIds);
+        return ReviewDecision.rejected(
+                blockers,
                 safeAffectedArtifactIds,
                 "action=REVISE_AND_RETRY; autoFix=false; owner=owning-worker; affectedArtifacts="
                         + safeAffectedArtifactIds.stream().map(ArtifactId::value).toList()
                         + "; steps=[inspectBlockers,reviseAffectedArtifacts,rerunQualityChecks,rerunReviewer]; "
                         + "note=Orchestrator records guidance only and does not fabricate an automatic fix.",
                 source);
+    }
+
+    private List<String> findQualityBlockers(
+            TaskStep reviewStep,
+            Artifact reviewArtifact,
+            List<Artifact> reviewedArtifacts) {
+        List<String> blockers = new ArrayList<>();
+        addStepQualityBlockers(blockers, reviewStep);
+        addArtifactQualityBlockers(blockers, reviewArtifact);
+        if (reviewedArtifacts != null) {
+            reviewedArtifacts.forEach(artifact -> addArtifactQualityBlockers(blockers, artifact));
+        }
+        return blockers.stream().distinct().toList();
+    }
+
+    private void addStepQualityBlockers(List<String> blockers, TaskStep step) {
+        if (step == null) {
+            return;
+        }
+        if (isParseFailure(step.getArtifactParseStatus())) {
+            blockers.add("Reviewer step parse status failed: " + step.getArtifactParseStatus());
+        }
+        if (isBuildFailure(step.getArtifactBuildValidationStatus())) {
+            blockers.add("Reviewer step build/lint validation failed: "
+                    + step.getArtifactBuildValidationStatus()
+                    + qualityReason(step.getArtifactQualityReason()));
+        }
+        if (isQualityFailure(step.getArtifactQualityStatus())) {
+            blockers.add("Reviewer step artifact quality failed: "
+                    + step.getArtifactQualityStatus()
+                    + qualityReason(step.getArtifactQualityReason()));
+        }
+        String adapterEvidence = String.join(" ",
+                value(step.getAdapterStatus()),
+                value(step.getAdapterErrorMessage()),
+                value(step.getAdapterResponseSummary()),
+                value(step.getArtifactQualityReason()));
+        if (containsToken(adapterEvidence, "FALLBACK_BLOCKING")) {
+            blockers.add("Reviewer step adapter fallback is blocking approval.");
+        }
+        if (containsToken(adapterEvidence, "INVALID_CODE")) {
+            blockers.add("Reviewer step reported invalid code.");
+        }
+    }
+
+    private void addArtifactQualityBlockers(List<String> blockers, Artifact artifact) {
+        if (artifact == null) {
+            return;
+        }
+        String label = artifact.getTitle() == null || artifact.getTitle().isBlank()
+                ? artifact.getId().value()
+                : artifact.getTitle();
+        if (isBuildFailure(artifact.getBuildValidationStatus())) {
+            blockers.add("Artifact build/lint validation failed: "
+                    + label
+                    + " status=" + artifact.getBuildValidationStatus()
+                    + qualityReason(artifact.getQualityReason()));
+        }
+        if (isQualityFailure(artifact.getQualityStatus())) {
+            blockers.add("Artifact quality failed: "
+                    + label
+                    + " status=" + artifact.getQualityStatus()
+                    + qualityReason(artifact.getQualityReason()));
+        }
+        if (artifact.getType() == ArtifactType.CODE && looksLikeInvalidCode(artifact.getContent())) {
+            blockers.add("Artifact contains invalid code markers: " + label);
+        }
+    }
+
+    private boolean isParseFailure(String status) {
+        return containsAny(status, "PARSE_FAILED", "INVALID_JSON", "MALFORMED_JSON");
+    }
+
+    private boolean isBuildFailure(String status) {
+        return containsAny(status, "BUILD_FAILED", "FAILED");
+    }
+
+    private boolean isQualityFailure(String status) {
+        return containsAny(status, "QUALITY_FAILED", "REJECTED");
+    }
+
+    private boolean looksLikeInvalidCode(String content) {
+        return containsAny(content, "TODO_BUILD_FAIL", "throw new Error(\"TODO\")", "SYNTAX_ERROR");
+    }
+
+    private String artifactQualityEvidence(List<Artifact> artifacts) {
+        if (artifacts == null || artifacts.isEmpty()) {
+            return "";
+        }
+        return artifacts.stream()
+                .map(artifact -> String.join(" ",
+                        value(artifact.getTitle()),
+                        value(artifact.getBuildValidationStatus()),
+                        value(artifact.getQualityStatus()),
+                        value(artifact.getQualityReason())))
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse("");
+    }
+
+    private String qualityReason(String reason) {
+        return reason == null || reason.isBlank() ? "" : " reason=" + reason;
+    }
+
+    private boolean containsAny(String value, String... tokens) {
+        for (String token : tokens) {
+            if (containsToken(value, token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsToken(String value, String token) {
+        return value != null
+                && token != null
+                && value.toUpperCase(Locale.ROOT).contains(token.toUpperCase(Locale.ROOT));
     }
 
     private String value(String value) {

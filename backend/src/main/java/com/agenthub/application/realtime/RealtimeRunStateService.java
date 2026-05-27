@@ -55,10 +55,13 @@ public class RealtimeRunStateService {
             Instant now) {
         cleanup(now);
         RealtimeRunState previous = statesByTaskRunId.get(taskRunId);
+        String resolvedSourceMessageId = sourceMessageId == null || sourceMessageId.isBlank()
+                ? (previous == null ? null : previous.getSourceMessageId())
+                : sourceMessageId;
         RealtimeRunState state = new RealtimeRunState(
                 taskRunId,
                 conversationId,
-                sourceMessageId,
+                resolvedSourceMessageId,
                 status,
                 lastEventId,
                 summary,

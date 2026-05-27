@@ -29,6 +29,7 @@ export interface RetrievedContextItem {
   semanticExplanation?: string;
   matchedTokens?: string[];
   windowPolicy?: string;
+  searchStage?: string;
   taskStepId?: IdValue | null;
   injectedStepId?: IdValue | null;
   injectionStepId?: IdValue | null;

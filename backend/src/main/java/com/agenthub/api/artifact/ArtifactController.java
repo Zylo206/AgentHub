@@ -101,7 +101,9 @@ public class ArtifactController {
                         result.changedLines(),
                         result.conflict(),
                         result.conflictReason(),
-                        result.latestAppliedArtifactId()),
+                        result.latestAppliedArtifactId(),
+                        result.snapshotId(),
+                        result.conflictBypassed()),
                 "Artifact diff applied");
     }
 
@@ -141,7 +143,9 @@ record ApplyDiffResponse(
         int changedLines,
         boolean conflict,
         String conflictReason,
-        String latestAppliedArtifactId) {}
+        String latestAppliedArtifactId,
+        String snapshotId,
+        boolean conflictBypassed) {}
 
 record ApplyDiffRequest(Boolean force, String approvalId) {}
 

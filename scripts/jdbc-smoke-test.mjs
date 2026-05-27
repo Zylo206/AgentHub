@@ -7,6 +7,10 @@ const VERIFY_CONVERSATION_ID = process.env.AGENTHUB_JDBC_VERIFY_CONVERSATION_ID 
 const VERIFY_TASK_RUN_ID = process.env.AGENTHUB_JDBC_VERIFY_TASK_RUN_ID || "";
 const VERIFY_ARTIFACT_ID = process.env.AGENTHUB_JDBC_VERIFY_ARTIFACT_ID || "";
 const VERIFY_ATTACHMENT_ID = process.env.AGENTHUB_JDBC_VERIFY_ATTACHMENT_ID || "";
+const VERIFY_AGENT_ID = process.env.AGENTHUB_JDBC_VERIFY_AGENT_ID || "";
+const VERIFY_MEMORY_ID = process.env.AGENTHUB_JDBC_VERIFY_MEMORY_ID || "";
+const VERIFY_APPROVAL_ID = process.env.AGENTHUB_JDBC_VERIFY_APPROVAL_ID || "";
+const VERIFY_AUDIT_ID = process.env.AGENTHUB_JDBC_VERIFY_AUDIT_ID || "";
 
 function pass(message) {
   console.log(`[PASS] ${message}`);
@@ -71,6 +75,27 @@ async function runVerifyMode() {
     throw new Error("AGENTHUB_JDBC_VERIFY_TASK_RUN_ID is required to verify TaskRun, ContextSnapshot, and Handoff persistence");
   }
 
+  const agents = await request("/api/agents");
+  if (!Array.isArray(agents) || agents.length < 4) {
+    throw new Error("agents were not loaded after restart");
+  }
+  const requiredAgentIds = [
+    "agent_orchestrator",
+    "agent_frontend_builder",
+    "agent_backend_worker",
+    "agent_reviewer"
+  ];
+  const missingAgentIds = requiredAgentIds.filter((agentId) =>
+    !agents.some((agent) => getIdValue(agent.id) === agentId)
+  );
+  if (missingAgentIds.length > 0) {
+    throw new Error(`built-in agents were not loaded after restart: ${missingAgentIds.join(", ")}`);
+  }
+  if (VERIFY_AGENT_ID && !agents.some((agent) => getIdValue(agent.id) === VERIFY_AGENT_ID)) {
+    throw new Error(`agent ${VERIFY_AGENT_ID} was not loaded after restart`);
+  }
+  pass(`agents persisted/seeded after restart: ${agents.length}`);
+
   const conversation = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}`);
   if (getIdValue(conversation.id) !== VERIFY_CONVERSATION_ID) {
     throw new Error(`conversation was not loaded after restart: ${JSON.stringify(conversation)}`);
@@ -118,10 +143,59 @@ async function runVerifyMode() {
   if (!Array.isArray(taskRuns) || taskRuns.length === 0) {
     throw new Error("task runs were not loaded after restart");
   }
-  if (VERIFY_TASK_RUN_ID && !taskRuns.some((taskRun) => getIdValue(taskRun.id) === VERIFY_TASK_RUN_ID)) {
+  const taskRunToVerify = taskRuns.find((taskRun) => getIdValue(taskRun.id) === VERIFY_TASK_RUN_ID);
+  if (VERIFY_TASK_RUN_ID && !taskRunToVerify) {
     throw new Error(`taskRun ${VERIFY_TASK_RUN_ID} was not loaded after restart`);
   }
+  if (!Array.isArray(taskRunToVerify?.steps) || taskRunToVerify.steps.length === 0) {
+    throw new Error(`task steps for ${VERIFY_TASK_RUN_ID} were not loaded after restart`);
+  }
   pass(`task runs persisted after restart: ${taskRuns.length}`);
+  pass(`task steps persisted after restart: ${taskRunToVerify.steps.length}`);
+
+  const memories = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/memories`);
+  if (!Array.isArray(memories) || memories.length === 0) {
+    throw new Error("memories were not loaded after restart");
+  }
+  if (VERIFY_MEMORY_ID && !memories.some((memory) => memory.memoryId === VERIFY_MEMORY_ID)) {
+    throw new Error(`memory ${VERIFY_MEMORY_ID} was not loaded after restart`);
+  }
+  const relevantMemories = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/memories/relevant?limit=3`);
+  if (!Array.isArray(relevantMemories) || relevantMemories.length === 0) {
+    throw new Error("relevant memories were not loaded after restart");
+  }
+  pass(`memories persisted after restart: ${memories.length}`);
+
+  const approvalRequests = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/approval-requests`);
+  if (!Array.isArray(approvalRequests) || approvalRequests.length === 0) {
+    throw new Error("approval requests were not loaded after restart");
+  }
+  if (VERIFY_APPROVAL_ID && !approvalRequests.some((approval) => approval.approvalId === VERIFY_APPROVAL_ID)) {
+    throw new Error(`approval request ${VERIFY_APPROVAL_ID} was not loaded after restart`);
+  }
+  if (!approvalRequests.some((approval) => ["APPROVED", "CONSUMED"].includes(approval.status))) {
+    throw new Error("approval requests after restart did not include an approved/consumed backend gate");
+  }
+  pass(`approval requests persisted after restart: ${approvalRequests.length}`);
+
+  const actionAudits = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/action-audits`);
+  if (!Array.isArray(actionAudits) || actionAudits.length === 0) {
+    throw new Error("action audits were not loaded after restart");
+  }
+  if (VERIFY_AUDIT_ID && !actionAudits.some((audit) => audit.auditId === VERIFY_AUDIT_ID)) {
+    throw new Error(`action audit ${VERIFY_AUDIT_ID} was not loaded after restart`);
+  }
+  const requiredAuditActions = [
+    "APPROVAL_REQUEST_CREATED",
+    "APPROVAL_REQUEST_APPROVED"
+  ];
+  const missingAuditActions = requiredAuditActions.filter((actionType) =>
+    !actionAudits.some((audit) => audit.actionType === actionType)
+  );
+  if (missingAuditActions.length > 0) {
+    throw new Error(`action audits after restart missing actions: ${missingAuditActions.join(", ")}`);
+  }
+  pass(`action audits persisted after restart: ${actionAudits.length}`);
 
   const conversationSnapshots = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/context-snapshots`);
   if (!Array.isArray(conversationSnapshots) || conversationSnapshots.length === 0) {
@@ -160,6 +234,10 @@ function runCreateMode() {
   console.log("  AGENTHUB_JDBC_VERIFY_TASK_RUN_ID=<run_id>");
   console.log("  AGENTHUB_JDBC_VERIFY_ARTIFACT_ID=<artifact_id>");
   console.log("  AGENTHUB_JDBC_VERIFY_ATTACHMENT_ID=<attachment_id> (optional; first attachment is used if omitted)");
+  console.log("  AGENTHUB_JDBC_VERIFY_AGENT_ID=<agent_id> (optional)");
+  console.log("  AGENTHUB_JDBC_VERIFY_MEMORY_ID=<memory_id> (optional)");
+  console.log("  AGENTHUB_JDBC_VERIFY_APPROVAL_ID=<approval_id> (optional)");
+  console.log("  AGENTHUB_JDBC_VERIFY_AUDIT_ID=<audit_id> (optional)");
 
   const child = spawn(process.execPath, ["scripts/smoke-test.mjs"], {
     stdio: "inherit",

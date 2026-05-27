@@ -233,7 +233,7 @@ export function MessageBubble({
               disabled={rerunning}
               onClick={() => onRerunFromMessage(message)}
             >
-              {rerunning ? "重新运行中..." : "重新运行 Demo Task"}
+              {rerunning ? "重新运行中..." : "从此消息重新运行"}
             </button>
           ) : null}
           {message.senderType === "AGENT" ? (

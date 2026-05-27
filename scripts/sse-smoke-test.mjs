@@ -286,6 +286,17 @@ async function runActiveControlSmoke({ action, endpoint, expectedStatus, title, 
   }
   pass(`active ${action} accepted for running taskRun: ${taskRunId}`);
 
+  const controlRunState = await request(`/api/task-runs/${taskRunId}/realtime-state`);
+  if (
+    !controlRunState ||
+    controlRunState.taskRunId !== taskRunId ||
+    controlRunState.sourceMessageId !== messageId ||
+    controlRunState.status !== expectedStatus
+  ) {
+    throw new Error(`active ${action} realtime state not synchronized: ${JSON.stringify(controlRunState)}`);
+  }
+  pass(`active ${action} realtime state synchronized: ${controlRunState.status}`);
+
   await triggerPromise.catch(() => null);
   const taskRun = await request(`/api/task-runs/${taskRunId}`);
   if (taskRun?.status !== expectedStatus) {
@@ -296,6 +307,13 @@ async function runActiveControlSmoke({ action, endpoint, expectedStatus, title, 
   );
   if (skippedSteps.length < 1) {
     throw new Error(`active ${action} did not skip or discard any step result: ${JSON.stringify(taskRun.steps || [])}`);
+  }
+  const actionAudits = await request(`/api/conversations/${conversationId}/action-audits`);
+  const controlAudit = (actionAudits || []).find((audit) =>
+    audit.actionType === action && audit.targetId === taskRunId && audit.status === "ACCEPTED"
+  );
+  if (!controlAudit) {
+    throw new Error(`active ${action} did not record accepted ActionAuditLog: ${JSON.stringify(actionAudits || [])}`);
   }
   pass(`active ${action} marked TaskRun ${expectedStatus} and skipped/discarded ${skippedSteps.length} step(s)`);
 }
