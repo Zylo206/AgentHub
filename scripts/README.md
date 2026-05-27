@@ -110,6 +110,7 @@ $env:AGENTHUB_OPENAI_ENABLED="true"
 $env:AGENTHUB_OPENAI_BASE_URL="<openai-compatible-base-url>"
 $env:AGENTHUB_OPENAI_API_KEY="<your-api-key>"
 $env:AGENTHUB_OPENAI_MODEL="<model>"
+$env:AGENTHUB_OPENAI_STREAMING_ENABLED="false"
 $env:AGENTHUB_OPENAI_FIXTURE_ENABLED="false"
 $env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
 cd backend
@@ -124,12 +125,14 @@ $env:AGENTHUB_OPENAI_ENABLED="true"
 $env:AGENTHUB_OPENAI_BASE_URL="<openai-compatible-base-url>"
 $env:AGENTHUB_OPENAI_API_KEY="<your-api-key>"
 $env:AGENTHUB_OPENAI_MODEL="<model>"
+$env:AGENTHUB_OPENAI_STREAMING_ENABLED="false"
 $env:AGENTHUB_OPENAI_FIXTURE_ENABLED="false"
 $env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
 node scripts/real-adapter-smoke-test.mjs
 ```
 
 This script verifies `/api/adapters`, `POST /api/adapters/OPENAI_COMPATIBLE/execute`, and a `REAL_FIRST` demo-task run. It expects a non-MOCK `OPENAI_COMPATIBLE` response, valid raw artifact JSON, an accepted `REAL_ADAPTER` primary Artifact, and archived static fallback Artifacts. Do not commit API keys or local secrets.
+Streaming is opt-in. Set `AGENTHUB_OPENAI_STREAMING_ENABLED=true` in backend and `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING="true"` when you need to verify stream chunks.
 
 Optional stricter real-provider assertions:
 
@@ -138,6 +141,7 @@ $env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_BUILD_VALIDATION="true"   # assert artif
 $env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_SCORE="true"     # assert artifact quality score
 $env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUALITY_REASON="true"    # assert artifact quality reason
 $env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD="true"        # compile accepted REAL_ADAPTER CODE with frontend TypeScript
+$env:AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING="true"         # expect ADAPTER_STREAM_CHUNK from conversation SSE during demo-task
 $env:AGENTHUB_REAL_ADAPTER_SMOKE_STRICT="true"                   # enforce fixture / missing-env fail-fast
 ```
 
@@ -146,6 +150,52 @@ The optional CODE build check writes the accepted `REAL_ADAPTER` code artifact t
 with `--noEmit`, and removes the temporary directory afterwards. It is intentionally opt-in:
 default smoke tests do not require a real provider, do not run TypeScript compilation against
 generated artifacts, and do not treat fixture output as a real provider result.
+
+## Claude Code Adapter Smoke Test
+
+`claude-code-smoke-test.mjs` verifies the Artifact-only Claude Code headless adapter. It is opt-in and is not part of the default smoke path. The adapter uses Claude Code CLI `-p` mode and requires output to pass the same AgentHub Artifact JSON contract as other real adapters.
+
+Fixture mode verifies the backend contract without requiring a local Claude login:
+
+```powershell
+$env:AGENTHUB_CLAUDE_CODE_ENABLED="true"
+$env:AGENTHUB_CLAUDE_CODE_FIXTURE_ENABLED="true"
+$env:AGENTHUB_CLAUDE_CODE_STREAMING_ENABLED="false"
+$env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
+cd backend
+mvn spring-boot:run
+```
+
+Then run:
+
+```powershell
+$env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
+node scripts/claude-code-smoke-test.mjs
+```
+
+Real Claude Code CLI mode requires `claude` to be installed and authenticated on the machine:
+
+```powershell
+$env:AGENTHUB_CLAUDE_CODE_ENABLED="true"
+$env:AGENTHUB_CLAUDE_CODE_FIXTURE_ENABLED="false"
+$env:AGENTHUB_CLAUDE_CODE_COMMAND="claude"
+$env:AGENTHUB_CLAUDE_CODE_MODEL="sonnet"
+$env:AGENTHUB_CLAUDE_CODE_ARTIFACT_ONLY="true"
+$env:AGENTHUB_CLAUDE_CODE_ALLOWED_TOOLS="Read,Grep,Glob"
+$env:AGENTHUB_CLAUDE_CODE_DISALLOWED_TOOLS="Edit,MultiEdit,Write,NotebookEdit,Bash"
+$env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
+node scripts/claude-code-smoke-test.mjs
+```
+
+Streaming is also opt-in:
+
+```powershell
+$env:AGENTHUB_CLAUDE_CODE_STREAMING_ENABLED="true"
+$env:AGENTHUB_CLAUDE_CODE_SMOKE_EXPECT_STREAMING="true"
+node scripts/claude-code-smoke-test.mjs
+```
+
+This is not an interactive Claude Code terminal and does not allow Claude Code to directly edit the AgentHub workspace. Workspace-write mode remains out of scope for this v1 adapter.
 
 If you explicitly run the backend in `REAL_FIRST` mode and expect the primary generated Artifact to come from a real Adapter, enable the stricter REAL_FIRST check:
 

@@ -27,6 +27,7 @@ interface MessageStreamProps {
   onRegenerateAgentReply: (message: Message) => void;
   onConfirmOrchestratorTrigger: (message: Message) => void;
   onRefreshOrchestratorSuggestion: (message: Message) => void;
+  streamingChunksByStepId?: Record<string, string>;
 }
 
 function resolveSenderLabel(message: Message, agents: Agent[]): string {
@@ -103,6 +104,11 @@ function resolveTargetAgentLabel(message: Message, agents: Agent[]): string | nu
     : null;
 }
 
+function getLatestStreamingChunk(streamingChunksByStepId: Record<string, string> = {}): string {
+  const chunks = Object.values(streamingChunksByStepId).filter((chunk) => typeof chunk === "string" && chunk.trim());
+  return chunks.length === 0 ? "" : chunks[chunks.length - 1];
+}
+
 export function MessageStream({
   messages,
   agents,
@@ -122,7 +128,8 @@ export function MessageStream({
   onRerunFromMessage,
   onRegenerateAgentReply,
   onConfirmOrchestratorTrigger,
-  onRefreshOrchestratorSuggestion
+  onRefreshOrchestratorSuggestion,
+  streamingChunksByStepId = {}
 }: MessageStreamProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(() => new Set());
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -179,8 +186,23 @@ export function MessageStream({
     );
   }
 
+  const streamingPreview = getLatestStreamingChunk(streamingChunksByStepId);
+
   return (
     <div className="message-stream">
+      {streamingPreview ? (
+        <div className="message-stream__status-row">
+          <div className="message-bubble message-bubble--system message-bubble--streaming">
+            <div className="message-bubble__header">
+              <span className="message-bubble__sender">
+                <span>生成中</span>
+              </span>
+              <span>流式预览</span>
+            </div>
+            <div className="message-stream__preview-content">{streamingPreview}</div>
+          </div>
+        </div>
+      ) : null}
       {messages.map((message) => {
         const messageId = getIdValue(message.id);
         const replyMessages = repliesByMessageId.get(messageId) ?? [];

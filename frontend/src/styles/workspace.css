@@ -622,6 +622,26 @@
   background: linear-gradient(180deg, #f8fafc, #ffffff);
 }
 
+.message-stream__status-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.message-stream__preview-content {
+  margin-top: 8px;
+  color: #1d4ed8;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-bubble--streaming {
+  max-width: min(92%, 900px);
+  border-left: 4px solid #2563eb;
+  background: #eef5ff;
+}
+
 .message-row {
   display: flex;
 }
@@ -1089,6 +1109,16 @@
   color: #40536b;
   background: #f4f8fd;
   border: 1px solid #d9e7f7;
+}
+
+.step-streaming-preview {
+  color: #1e3a8a;
+  background: rgba(239, 246, 255, 0.86);
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
 }
 
 .step-adapter-error {
@@ -2463,6 +2493,25 @@
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.07), transparent 28%),
     #ffffff;
   box-shadow: var(--shadow-md);
+}
+
+.message-stream__status-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.message-stream__preview-content {
+  margin-top: 8px;
+  color: #1d4ed8;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-bubble--streaming {
+  border-left: 4px solid #1d4ed8;
+  background: #eff6ff;
 }
 
 .message-bubble {

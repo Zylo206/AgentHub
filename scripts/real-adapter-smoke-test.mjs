@@ -25,6 +25,7 @@ const EXPECT_QUALITY_REASON = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_QUA
 const EXPECT_EXECUTE_JSON_CONTRACT = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_EXECUTE_JSON_CONTRACT === "true";
 const EXPECT_REAL_FIRST_ARTIFACT = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_REAL_FIRST_ARTIFACT === "true";
 const EXPECT_CODE_BUILD = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD === "true";
+const EXPECT_STREAMING = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING === "true";
 
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
@@ -61,6 +62,145 @@ function getIdValue(value) {
     return value.value;
   }
   return null;
+}
+
+function parseSseBlock(block) {
+  const lines = block.split(/\r?\n/);
+  const event = { eventId: "", eventType: "message", data: "" };
+  for (const line of lines) {
+    if (line.startsWith("id:")) {
+      event.eventId = line.slice("id:".length).trim();
+    } else if (line.startsWith("event:")) {
+      event.eventType = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      event.data += line.slice("data:".length).trim();
+    }
+  }
+  return event;
+}
+
+function parseJsonValue(value) {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function parseSseEventData(event) {
+  const payload = parseJsonValue(event.data);
+  if (!payload || typeof payload !== "object") {
+    return event;
+  }
+  return {
+    ...event,
+    resourceId: event.resourceId || payload.resourceId || "",
+    payload: payload.payload || {},
+    resourceType: event.resourceType || payload.resourceType || "",
+    conversationId: payload.conversationId || event.conversationId || "",
+    taskRunId: payload.taskRunId || payload.payload?.taskRunId || event.taskRunId || event.resourceId || "",
+    taskStepId: payload.taskStepId || payload.payload?.taskStepId || event.taskStepId || "",
+    adapterType: payload.adapterType || payload.payload?.adapterType || event.adapterType || "",
+    chunk: payload.chunk || payload.payload?.chunk || "",
+  };
+}
+
+async function collectRealtimeEvents(conversationId, expectedEventTypes, trigger) {
+  const controller = new AbortController();
+  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events`, {
+    signal: controller.signal,
+    headers: { Accept: "text/event-stream" }
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`SSE stream failed: HTTP ${response.status}`);
+  }
+
+  const seenEventTypes = new Set();
+  const events = [];
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = "";
+
+  const readerPromise = (async () => {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || "";
+      for (const block of blocks) {
+        let parsed = parseSseBlock(block);
+        if (!parsed.eventType || parsed.eventType === "HEARTBEAT") {
+          continue;
+        }
+        parsed = parseSseEventData(parsed);
+        seenEventTypes.add(parsed.eventType);
+        events.push(parsed);
+        if (expectedEventTypes.every((eventType) => seenEventTypes.has(eventType))) {
+          controller.abort();
+          return;
+        }
+      }
+    }
+  })();
+
+  await trigger();
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Timed out waiting for SSE events. Seen: ${events.map((event) => event.eventType).join(", ")}`)), 12000);
+  });
+
+  try {
+    await Promise.race([readerPromise, timeoutPromise]);
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      throw error;
+    }
+  } finally {
+    controller.abort();
+  }
+
+  const missing = expectedEventTypes.filter((eventType) => !seenEventTypes.has(eventType));
+  if (missing.length > 0) {
+    throw new Error(`Missing SSE event types: ${missing.join(", ")}. Seen: ${events.map((event) => event.eventType).join(", ")}`);
+  }
+  return events;
+}
+
+function assertStreamingEventsForTaskRun(taskRunId, events) {
+  const streamEvents = events.filter((event) => event.eventType === "ADAPTER_STREAM_CHUNK");
+  if (streamEvents.length === 0) {
+    throw new Error(`expected ADAPTER_STREAM_CHUNK event, taskRunId=${taskRunId}`);
+  }
+
+  const runStreamEvents = streamEvents.filter((event) => {
+    const payload = event.payload || {};
+    const eventTaskRunId = String(event.taskRunId || "").trim();
+    const eventChunk = String(payload.chunk || event.chunk || "").trim();
+    const eventAdapterType = String(payload.adapterType || event.adapterType || "").trim();
+    if (!eventChunk) {
+      return false;
+    }
+    if (eventTaskRunId && taskRunId && eventTaskRunId !== taskRunId) {
+      return false;
+    }
+    if (!eventTaskRunId && !taskRunId) {
+      return false;
+    }
+    if (eventAdapterType) {
+      return eventAdapterType === "OPENAI_COMPATIBLE";
+    }
+    return true;
+  });
+  if (runStreamEvents.length === 0) {
+    throw new Error(`expected OPENAI_COMPATIBLE ADAPTER_STREAM_CHUNK with taskRunId=${taskRunId} and non-empty chunk`);
+  }
+
+  pass(`streaming chunk event observed for taskRun ${taskRunId} (${runStreamEvents.length} chunks)`);
 }
 
 function assertRequiredEnvironment() {
@@ -395,15 +535,29 @@ async function runDemoTaskWithRealAdapter() {
   const messageId = requireValue(getIdValue(message.id), "messageId missing");
   pass(`message sent: ${messageId}`);
 
-  const taskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
-    method: "POST",
-    body: JSON.stringify({
-      messageId,
-      userInput: DEMO_PROMPT,
-      selectedAgentId: codeAgentId
-    })
-  });
+  const expectedEvents = EXPECT_STREAMING
+    ? ["TASK_RUN_CREATED", "TASK_RUN_UPDATED", "ADAPTER_STREAM_CHUNK"]
+    : ["TASK_RUN_CREATED", "TASK_RUN_UPDATED"];
+  let taskRun = null;
+  const events = await collectRealtimeEvents(
+    conversationId,
+    expectedEvents,
+    async () => {
+      taskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
+        method: "POST",
+        body: JSON.stringify({
+          messageId,
+          userInput: DEMO_PROMPT,
+          selectedAgentId: codeAgentId
+        })
+      });
+    }
+  );
   const taskRunId = requireValue(getIdValue(taskRun.id), "taskRunId missing");
+  pass(`demo task created: ${taskRunId}`);
+  if (EXPECT_STREAMING) {
+    assertStreamingEventsForTaskRun(taskRunId, events);
+  }
   if (taskRun.status !== "COMPLETED") {
     throw new Error(`demo task expected COMPLETED, got ${taskRun.status}`);
   }
@@ -502,6 +656,8 @@ async function runDemoTaskWithRealAdapter() {
 async function run() {
   console.log(`AgentHub real adapter smoke target: ${API_BASE}`);
   console.log(`AgentHub real adapter strict mode: ${STRICT_MODE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub real adapter streaming assertion: ${EXPECT_STREAMING ? "enabled" : "disabled"}`);
+  console.log(`AgentHub OpenAI streaming flag: ${process.env.AGENTHUB_OPENAI_STREAMING_ENABLED || "false"}`);
   console.log(`AgentHub real adapter execute JSON contract assertion: ${EXPECT_EXECUTE_JSON_CONTRACT ? "enabled" : "disabled"}`);
   console.log(`AgentHub real adapter REAL_FIRST artifact assertion: ${EXPECT_REAL_FIRST_ARTIFACT ? "enabled" : "disabled"}`);
   console.log(`AgentHub real build validation assertion: ${EXPECT_BUILD_VALIDATION ? "enabled" : "disabled"}`);

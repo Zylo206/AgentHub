@@ -74,6 +74,7 @@ agenthub:
       api-key: ${AGENTHUB_OPENAI_API_KEY:}
       model: ${AGENTHUB_OPENAI_MODEL:}
       timeout-seconds: 30
+      streaming-enabled: ${AGENTHUB_OPENAI_STREAMING_ENABLED:false}
       json-response-format-enabled: ${AGENTHUB_OPENAI_JSON_RESPONSE_FORMAT_ENABLED:false}
       max-retries: ${AGENTHUB_OPENAI_MAX_RETRIES:1}
       retry-backoff-millis: ${AGENTHUB_OPENAI_RETRY_BACKOFF_MILLIS:500}
@@ -88,7 +89,15 @@ agenthub:
       enabled: ${AGENTHUB_CLAUDE_CODE_ENABLED:false}
       command: ${AGENTHUB_CLAUDE_CODE_COMMAND:claude}
       args-template: ${AGENTHUB_CLAUDE_CODE_ARGS_TEMPLATE:}
-      timeout-seconds: 30
+      model: ${AGENTHUB_CLAUDE_CODE_MODEL:sonnet}
+      max-turns: ${AGENTHUB_CLAUDE_CODE_MAX_TURNS:3}
+      timeout-seconds: ${AGENTHUB_CLAUDE_CODE_TIMEOUT_SECONDS:120}
+      streaming-enabled: ${AGENTHUB_CLAUDE_CODE_STREAMING_ENABLED:false}
+      artifact-only: ${AGENTHUB_CLAUDE_CODE_ARTIFACT_ONLY:true}
+      allowed-tools: ${AGENTHUB_CLAUDE_CODE_ALLOWED_TOOLS:Read,Grep,Glob}
+      disallowed-tools: ${AGENTHUB_CLAUDE_CODE_DISALLOWED_TOOLS:Edit,MultiEdit,Write,NotebookEdit,Bash}
+      work-dir: ${AGENTHUB_CLAUDE_CODE_WORK_DIR:.agenthub/claude-code-runs}
+      fixture-enabled: ${AGENTHUB_CLAUDE_CODE_FIXTURE_ENABLED:false}
     open-code:
       enabled: ${AGENTHUB_OPEN_CODE_ENABLED:false}
       command: ${AGENTHUB_OPEN_CODE_COMMAND:opencode}

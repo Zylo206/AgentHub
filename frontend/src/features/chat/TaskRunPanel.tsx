@@ -12,6 +12,7 @@ interface TaskRunPanelProps {
   loading: boolean;
   selectedTaskRunId: string | null;
   selectedTaskStepId: string | null;
+  streamingChunksByStepId?: Record<string, string>;
   onSelectStep: (taskRunId: string, step: TaskStep) => void;
   onCancelTaskRun?: (taskRunId: string) => Promise<void>;
   onStopTaskRun?: (taskRunId: string) => Promise<void>;
@@ -433,6 +434,7 @@ export function TaskRunPanel({
   loading,
   selectedTaskRunId,
   selectedTaskStepId,
+  streamingChunksByStepId = {},
   onSelectStep,
   onCancelTaskRun,
   onStopTaskRun
@@ -563,6 +565,7 @@ export function TaskRunPanel({
                   const qualityScore = formatQualityScore(step.artifactQualityScore);
                   const buildValidationStatus = formatBuildValidationValue(step.artifactBuildValidationStatus);
                   const reviewRetryReviseState = getReviewRetryReviseLabel(step);
+                  const streamingPreview = streamingChunksByStepId[stepId] || "";
 
                   return (
                     <button
@@ -607,6 +610,11 @@ export function TaskRunPanel({
                         {step.adapterResponseSummary ? (
                           <div className="step-adapter-response">
                             <strong>Adapter 响应：</strong> {summarizeAdapterResponse(step.adapterResponseSummary)}
+                          </div>
+                        ) : null}
+                        {streamingPreview ? (
+                          <div className="step-streaming-preview">
+                            <strong>生成中：</strong> {summarizeAdapterResponse(streamingPreview)}
                           </div>
                         ) : null}
                         <div className="step-generated-artifacts">

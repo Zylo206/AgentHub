@@ -4,7 +4,7 @@ This is the default handoff entry for AgentHub. Every Agent should read this fil
 
 ## Current Stage
 
-AgentHub is in late MVP enhancement. The next stage is to keep moving from half-real / static fallback toward real dynamic capability. Demo video, desktop/mobile, real deployment platforms, multi-node event bus, and token streaming are not current priorities.
+AgentHub is in late MVP enhancement. The next stage is to keep moving from half-real / static fallback toward real dynamic capability. Demo video, desktop/mobile, real deployment platforms, and multi-node event bus are not current priorities. Full multi-provider token streaming is not current priority; `OPENAI_COMPATIBLE` streaming HTTP v1 is now implemented as an opt-in execution-experience enhancement.
 
 ## Current Top Priorities
 
@@ -20,7 +20,23 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: TaskRunPanel, ArtifactPanel, and Adapter Quality Dashboard show source, generation mode, quality/build status, and fallback or rejection reasons.
    - `Boundary`: REAL_ADAPTER means the output passed the current contract and quality gates, not that it is production-grade code.
 
-3. **Run a JDBC / MySQL real database verification sprint**
+3. **Validate OpenAI-compatible streaming HTTP v1**
+   - `Done`: `OPENAI_COMPATIBLE` supports opt-in `AGENTHUB_OPENAI_STREAMING_ENABLED=true`.
+   - `Done`: streaming chunks publish `ADAPTER_STREAM_CHUNK` over the existing Realtime SSE channel.
+   - `Done`: Workspace MessageStream and TaskRunPanel can show streaming preview / generating text.
+   - `Done`: final aggregated output still goes through JSON contract validation, quality evaluation, build validation, REAL_FIRST, and fallback.
+   - `Done`: fixture streaming verification on port `18091` observed 7 stream chunks and 2 `REAL_ADAPTER / REAL_FIRST` Artifacts.
+   - `Boundary`: this is not full multi-provider token streaming, not token-level persistence, and not a multi-node event bus.
+
+4. **Validate Claude Code Artifact-only headless Adapter v1**
+   - `Done`: `CLAUDE_CODE` has a dedicated Artifact-only headless adapter instead of only generic CLI args-template execution.
+   - `Done`: supports Claude Code CLI `json` and `stream-json` output modes behind `AGENTHUB_CLAUDE_CODE_STREAMING_ENABLED`.
+   - `Done`: final output must pass AgentHub Artifact JSON contract before becoming `REAL_ADAPTER`.
+   - `Done`: fixture smoke on port `18092` observed `ADAPTER_STREAM_CHUNK` and `CLAUDE_CODE / REAL_ADAPTER / REAL_FIRST` artifacts.
+   - `Boundary`: fixture mode is not real Claude Code provider output; real CLI mode still requires local `claude` install and authentication.
+   - `Boundary`: v1 is Artifact-only and does not allow Claude Code to modify the AgentHub workspace.
+
+5. **Run a JDBC / MySQL real database verification sprint**
    - Do not switch MySQL on by default.
    - `Done`: `jdbc-smoke-test.mjs` now verifies restart persistence for Conversation, Message, Attachment download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary.
    - `Done`: local MySQL-compatible create / restart verify passed with the JDBC profile on port `18087`.
@@ -28,7 +44,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Boundary`: this validates schema and repository create/query/update/restart paths; it does not make MySQL the default runtime.
    - The memory profile must remain the default stable path.
 
-4. **Converge Stop / Cancel execution semantics**
+6. **Converge Stop / Cancel execution semantics**
    - Build on the existing control plane and cancellation token.
    - `Done`: `CANCEL_RUN` ends as `CANCELLED`; `STOP_RUN` ends as `STOPPED`.
    - `Done`: Orchestrator steps check the control token before delay, before adapter execution, and after adapter execution; late adapter results are discarded.
@@ -36,7 +52,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Boundary`: non-streaming Java HTTP calls already in flight are not forcibly interrupted; results are discarded when the control token is observed.
    - Keep ActionAuditLog, RealtimeRunState, and TaskRunPanel in sync.
 
-5. **Keep plans and docs synchronized**
+7. **Keep plans and docs synchronized**
    - P0 specs for multi-agent chat, artifact lifecycle, adapter output, context/memory, and approval/audit are now captured under `docs/spec/`.
    - `Done`: Context Retrieval now uses DB-backed Agentic Search as the default retrieval shape: List / Grep / Read, with heuristic semantic scoring and optional embedding boundary retained.
    - `Done`: JDBC search has a MySQL FULLTEXT opt-in switch while keeping LIKE as the default.
@@ -51,8 +67,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 - No desktop or mobile client.
 - No real Vercel / Netlify / Docker / Kubernetes deployment.
 - No multi-node event bus.
-- No real token streaming.
-- No simultaneous deep Claude / Codex / OpenCode platform integrations.
+- No full multi-provider token streaming or token-level persistence.
+- No simultaneous deep Codex / OpenCode platform integrations.
+- No Claude Code workspace-write mode.
 - No default MySQL switch.
 
 ## Definition of Done

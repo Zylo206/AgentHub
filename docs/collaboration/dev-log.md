@@ -4199,3 +4199,145 @@
 - 单独验证 MySQL FULLTEXT opt-in 的 MATCH AGAINST 路径。
 - 继续收敛真实 OpenAI-compatible provider 的 REAL_FIRST 输出质量样本。
 - 视需要补浏览器 E2E 的 trace / screenshot failure artifact，但默认不要留下临时文件。
+
+## Phase 93：Real Adapter Smoke 流式事件可选校验
+
+### 目标
+
+- 在不改变默认行为的前提下，让 real adapter smoke 脚本支持可选流式事件校验。
+- 同步 `.env.example` 与 `scripts/README.md` 的脚本行为边界文档。
+
+### 主要变更
+
+- `scripts/real-adapter-smoke-test.mjs` 增加 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING` 读取。
+- 该开关开启时，脚本在 `TASK_RUN_CREATED` / `TASK_RUN_UPDATED` 外额外等待并校验 `ADAPTER_STREAM_CHUNK` SSE 事件。
+- 校验函数要求 `ADAPTER_STREAM_CHUNK` 有非空 chunk 且对应本次 `taskRunId`，且默认不强制 `AGENTHUB_OPENAI_STREAMING_ENABLED`，仍以 opt-in 为准。
+- `run()` 日志新增 streaming 断言状态和当前 `AGENTHUB_OPENAI_STREAMING_ENABLED` 输出。
+- `.env.example` 增加 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING=false`。
+- `scripts/README.md` 补充：
+  - `AGENTHUB_OPENAI_STREAMING_ENABLED` 与 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING` 的用途与默认值。
+  - 开启流式校验后需观察 `ADAPTER_STREAM_CHUNK` 的 opt-in 行为说明。
+
+### 验证方式
+
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`（确认现有 SSE 工具链语法）
+- 未在本次任务内执行真实 provider / fixture streaming 端到端跑通。
+
+### static / mock / placeholder 部分
+
+- 默认不开启 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING`，不会因为缺少流式输出而失败。
+- 脚本仍受 `AGENTHUB_REAL_ADAPTER_SMOKE_STRICT` 与 `AGENTHUB_OPENAI_FIXTURE_ENABLED` 跳过规则约束。
+- 流式校验只覆盖返回层面的 SSE event 可见性，不改变默认 Adapter fallback 语义。
+
+### 下一步遗留
+
+- 若 `AGENTHUB_OPENAI_STREAMING_ENABLED=true` 后仍无 chunk 事件，需结合 provider / fixture SSE 能力定位。
+- 若后续在真实 provider 上接入 token streaming，确认最终 Artifact contract 与流式统计边界保持一致。
+
+## Phase 94：OpenAI-compatible 流式 HTTP 调用 v1
+
+### 目标
+
+- 在不改变默认非流式路径的前提下，为 `OPENAI_COMPATIBLE` 增加 opt-in 流式 HTTP 调用。
+- 让流式 chunk 通过现有 Realtime SSE 推送到 Workspace，同时最终输出仍回到 JSON contract validator / quality evaluator / REAL_ADAPTER Artifact 链路。
+
+### 主要变更
+
+- `OpenAICompatibleAgentAdapter` 增加 `AGENTHUB_OPENAI_STREAMING_ENABLED` 配置，默认 `false`。
+- 流式模式下请求 OpenAI-compatible `/chat/completions` 时发送 `stream=true`，消费 provider SSE `data:` chunk，并累计完整 JSON 输出。
+- 每个有效 chunk 发布 `ADAPTER_STREAM_CHUNK` realtime event，payload 包含 `taskRunId`、`taskStepId`、`adapterType`、`chunk`、`accumulatedLength`。
+- fixture 模式也支持按 chunk 发布事件，用于无真实 key 环境的流式事件验证。
+- Stop / Cancel 检查接入流式 chunk 发布路径；控制 token 生效后不再发布 late chunks，最终结果仍由执行层控制是否落 Artifact。
+- Workspace 订阅 `ADAPTER_STREAM_CHUNK` / `TASK_STEP_STREAM_CHUNK`，在 MessageStream 和 TaskRunPanel 显示“生成中 / 流式预览”。
+- `scripts/real-adapter-smoke-test.mjs` 增加 `AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING` opt-in 校验。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `node scripts/smoke-test.mjs`
+- `node scripts/sse-smoke-test.mjs`
+- 本地独立端口 `18091` 启动 fixture + `AGENTHUB_OPENAI_STREAMING_ENABLED=true` 后，用临时内联 Node 验证：
+  - 收到 `ADAPTER_STREAM_CHUNK`：7 条。
+  - 最终生成 `REAL_ADAPTER / REAL_FIRST` Artifact：2 个。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认仍是非流式调用，不影响无真实 API key 的主链路。
+- 本轮不是全平台 token streaming；只覆盖 `OPENAI_COMPATIBLE` v1。
+- 流式 chunk 只用于执行体验和预览，不能绕过最终 Artifact JSON contract、quality evaluator、build validation 与 fallback。
+- 本轮未强制跑真实外部 provider streaming；已用 fixture 验证事件与最终 Artifact 闭环。
+- 多节点事件总线、跨 provider streaming、token 级持久化仍后置。
+
+### 遗留问题
+
+- 真实 provider 的 SSE 分片差异仍需继续采样；非标准事件会回退到当前非流式 / fallback 语义。
+- MessageStream 当前展示最新流式预览，不是完整多并发 step 的精确消息绑定视图。
+- 非流式 HTTP 调用仍不支持线程级硬中断；控制 token 生效后以丢弃 late result 为主。
+
+### 下一步建议
+
+- 用真实 OpenAI-compatible provider 开启 `AGENTHUB_OPENAI_STREAMING_ENABLED=true` 跑一次 opt-in streaming smoke。
+- 如果真实 provider 分片稳定，再补 Adapter streaming 质量指标，如 chunk count、stream duration、stream fallback reason。
+- 在真实输出质量稳定后，再评估是否需要真正 token streaming UI，而不是现在扩展到多 provider。
+
+## Phase 95：Claude Code Artifact-only Headless Adapter v1
+
+### 目标
+
+- 将 `CLAUDE_CODE` 从通用 CLI 探测型 Adapter 推进为 Artifact-only、可流式、可验证、可 fallback 的 headless Adapter v1。
+- 保持默认 demo 不依赖本机 Claude Code CLI，不允许 Claude Code 直接写 AgentHub workspace。
+
+### 主要变更
+
+- `ClaudeCodeAgentAdapter` 改为专用实现，不再依赖通用 `CliAgentAdapterSupport` 执行路径。
+- 支持 Claude Code CLI `-p` headless 模式：
+  - 非流式：`--output-format json`
+  - 流式：`--output-format stream-json`
+  - prompt 通过 stdin 传入，并在 `.agenthub/claude-code-runs/{requestId}/prompt.txt` 留本地运行记录。
+- 默认 Artifact-only：
+  - `allowedTools=Read,Grep,Glob`
+  - `disallowedTools=Edit,MultiEdit,Write,NotebookEdit,Bash`
+  - 不使用 `--dangerously-skip-permissions`
+  - 不在 repo 根目录执行。
+- Claude Code 输出必须通过 AgentHub Artifact JSON contract validator；普通文本、缺失 `result`、invalid JSON、Markdown fenced CODE 均会失败并由 AdapterRegistry fallback。
+- 流式模式发布 `ADAPTER_STREAM_CHUNK` / `TASK_STEP_STREAM_CHUNK`，最终完整输出仍走 contract validation、quality evaluator、build validation、REAL_FIRST。
+- Adapter routing 增强：显式非 MOCK preferred adapter 且 AVAILABLE 时先尝试该 adapter，再由 Registry fallback，避免历史 fallback 统计让 MOCK 抢走显式选择。
+- 新增 `scripts/claude-code-smoke-test.mjs`，覆盖 Adapter execute、demo-task REAL_FIRST Artifact、可选 streaming chunk。
+- `.env.example`、`scripts/README.md`、`docs/plans/next.md` 同步 Claude Code 配置和边界。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `node --check scripts/claude-code-smoke-test.mjs`
+- 以 `AGENTHUB_CLAUDE_CODE_ENABLED=true`、`AGENTHUB_CLAUDE_CODE_FIXTURE_ENABLED=true`、`AGENTHUB_CLAUDE_CODE_STREAMING_ENABLED=true`、`AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST` 启动临时后端端口 `18092`。
+- `AGENTHUB_API_BASE_URL=http://127.0.0.1:18092 AGENTHUB_CLAUDE_CODE_SMOKE_EXPECT_STREAMING=true node scripts/claude-code-smoke-test.mjs`
+  - 通过：`ADAPTER_STREAM_CHUNK` 12 条。
+  - 通过：`CLAUDE_CODE REAL_ADAPTER` Artifact 3 个。
+- 以默认配置启动临时后端端口 `18093`。
+- `AGENTHUB_API_BASE_URL=http://127.0.0.1:18093 node scripts/smoke-test.mjs`
+- `AGENTHUB_API_BASE_URL=http://127.0.0.1:18093 node scripts/sse-smoke-test.mjs`
+- `cd frontend && npm.cmd run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- fixture 模式只验证 Claude Code Adapter contract，不代表真实 Claude Code provider 输出。
+- 真实 Claude Code CLI 仍需本机安装和登录；本轮未强制真实 CLI 验证。
+- v1 不接 Claude Code TypeScript SDK，不做交互式终端，不做 workspace-write，不做 Claude 直接 patch apply。
+- 默认 `CLAUDE_CODE` 仍为 disabled，不影响无 Claude 环境。
+
+### 遗留问题
+
+- 真实 Claude Code CLI 的 `json` / `stream-json` 输出差异仍需在本机安装并登录后继续采样。
+- 当前 Artifact-only 模式无法利用 Claude Code 的真实编辑工具链；这是刻意安全边界。
+- 如果未来启用 workspace-write，需要 Snapshot、Approval、Audit、沙箱和回滚策略先行。
+
+### 下一步建议
+
+- 在已登录 Claude Code CLI 的机器上跑 `scripts/claude-code-smoke-test.mjs` 的真实模式。
+- 如果真实输出稳定，再把 Adapter quality dashboard 增加 Claude Code parse / quality / stream 指标趋势。
+- 暂不同时深接 Codex / OpenCode，避免多平台接入面过大。

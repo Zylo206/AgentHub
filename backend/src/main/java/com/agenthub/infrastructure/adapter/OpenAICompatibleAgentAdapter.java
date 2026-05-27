@@ -1,6 +1,9 @@
 package com.agenthub.infrastructure.adapter;
 
 import com.agenthub.common.TimeProvider;
+import com.agenthub.application.realtime.RealtimeEventPublisher;
+import com.agenthub.application.realtime.RealtimeEventType;
+import com.agenthub.application.realtime.RunCancellationRegistry;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +18,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -24,11 +29,14 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
     private final TimeProvider timeProvider;
     private final ObjectMapper objectMapper;
     private final AdapterArtifactContractValidator artifactContractValidator;
+    private final RealtimeEventPublisher realtimeEventPublisher;
+    private final RunCancellationRegistry runCancellationRegistry;
     private final boolean enabled;
     private final String baseUrl;
     private final String apiKey;
     private final String model;
     private final int timeoutSeconds;
+    private final boolean streamingEnabled;
     private final boolean jsonResponseFormatEnabled;
     private final int maxRetries;
     private final long retryBackoffMillis;
@@ -39,11 +47,14 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
             TimeProvider timeProvider,
             ObjectMapper objectMapper,
             AdapterArtifactContractValidator artifactContractValidator,
+            RealtimeEventPublisher realtimeEventPublisher,
+            RunCancellationRegistry runCancellationRegistry,
             @Value("${agenthub.adapters.openai-compatible.enabled:false}") boolean enabled,
             @Value("${agenthub.adapters.openai-compatible.base-url:}") String baseUrl,
             @Value("${agenthub.adapters.openai-compatible.api-key:}") String apiKey,
             @Value("${agenthub.adapters.openai-compatible.model:}") String model,
             @Value("${agenthub.adapters.openai-compatible.timeout-seconds:30}") int timeoutSeconds,
+            @Value("${agenthub.adapters.openai-compatible.streaming-enabled:false}") boolean streamingEnabled,
             @Value("${agenthub.adapters.openai-compatible.json-response-format-enabled:false}") boolean jsonResponseFormatEnabled,
             @Value("${agenthub.adapters.openai-compatible.max-retries:1}") int maxRetries,
             @Value("${agenthub.adapters.openai-compatible.retry-backoff-millis:500}") long retryBackoffMillis,
@@ -52,11 +63,14 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         this.timeProvider = timeProvider;
         this.objectMapper = objectMapper;
         this.artifactContractValidator = artifactContractValidator;
+        this.realtimeEventPublisher = realtimeEventPublisher;
+        this.runCancellationRegistry = runCancellationRegistry;
         this.enabled = enabled;
         this.baseUrl = baseUrl == null ? "" : baseUrl.trim();
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model == null ? "" : model.trim();
         this.timeoutSeconds = timeoutSeconds <= 0 ? 30 : timeoutSeconds;
+        this.streamingEnabled = streamingEnabled;
         this.jsonResponseFormatEnabled = jsonResponseFormatEnabled;
         this.maxRetries = Math.max(0, Math.min(maxRetries, 3));
         this.retryBackoffMillis = Math.max(0L, Math.min(retryBackoffMillis, 5_000L));
@@ -116,7 +130,9 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                 AgentAdapterHealthStatus.AVAILABLE,
                 true,
                 false,
-                "OpenAI Compatible adapter is configured and ready for non-stream chat completions calls.",
+                streamingEnabled
+                        ? "OpenAI Compatible adapter is configured and ready for streaming chat completions calls."
+                        : "OpenAI Compatible adapter is configured and ready for non-stream chat completions calls.",
                 null);
     }
 
@@ -161,18 +177,19 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
-        String payload = buildRequestPayload(request);
+        String nonStreamingPayload = buildRequestPayload(request, false);
+        String streamingPayload = streamingEnabled ? buildRequestPayload(request, true) : nonStreamingPayload;
         int totalAttempts = maxRetries + 1;
         String lastRetryableFailure = "";
 
         for (int attempt = 1; attempt <= totalAttempts; attempt++) {
             try {
-                HttpResponse<String> httpResponse = client.send(
-                        buildHttpRequest(payload),
-                        HttpResponse.BodyHandlers.ofString());
-                if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                    String errorMessage = describeProviderHttpError(httpResponse.statusCode(), httpResponse.body());
-                    if (isRetryableHttpStatus(httpResponse.statusCode()) && attempt < totalAttempts) {
+                ProviderMessage providerMessage = streamingEnabled
+                        ? sendStreamingRequestWithFallback(client, streamingPayload, nonStreamingPayload, request)
+                        : sendNonStreamingRequest(client, nonStreamingPayload);
+                if (providerMessage.statusCode() < 200 || providerMessage.statusCode() >= 300) {
+                    String errorMessage = describeProviderHttpError(providerMessage.statusCode(), providerMessage.body());
+                    if (isRetryableHttpStatus(providerMessage.statusCode()) && attempt < totalAttempts) {
                         lastRetryableFailure = errorMessage;
                         sleepBeforeRetry();
                         continue;
@@ -181,7 +198,10 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                             withAttemptSummary(errorMessage, attempt, totalAttempts, lastRetryableFailure));
                 }
 
-                String content = extractResponseContent(httpResponse.body());
+                String content = providerMessage.content();
+                if (content == null || content.isBlank()) {
+                    content = extractResponseContent(providerMessage.body());
+                }
                 if (content == null || content.isBlank()) {
                     return failedResponse(
                             request,
@@ -237,9 +257,86 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                         lastRetryableFailure));
     }
 
-    private String buildRequestPayload(AgentRequest request) throws AdapterResponseException {
+    private ProviderMessage sendNonStreamingRequest(
+            HttpClient client,
+            String payload) throws IOException, InterruptedException {
+        HttpResponse<String> httpResponse = client.send(
+                buildHttpRequest(payload),
+                HttpResponse.BodyHandlers.ofString());
+        return new ProviderMessage(httpResponse.statusCode(), httpResponse.body(), null);
+    }
+
+    private ProviderMessage sendStreamingRequestWithFallback(
+            HttpClient client,
+            String streamingPayload,
+            String nonStreamingPayload,
+            AgentRequest request) throws IOException, InterruptedException, AdapterResponseException {
+        ProviderMessage providerMessage;
         try {
-            return objectMapper.writeValueAsString(buildPayload(request));
+            providerMessage = sendStreamingRequest(client, streamingPayload, request);
+        } catch (AdapterResponseException exception) {
+            if (isCancellationRequested(request)) {
+                throw exception;
+            }
+            return sendNonStreamingRequest(client, nonStreamingPayload);
+        }
+        if (isCancellationRequested(request)) {
+            throw new AdapterResponseException(
+                    "OpenAI Compatible streaming response was cancelled before completion.");
+        }
+        if (shouldFallbackFromStreaming(providerMessage) && !isCancellationRequested(request)) {
+            return sendNonStreamingRequest(client, nonStreamingPayload);
+        }
+        return providerMessage;
+    }
+
+    private boolean shouldFallbackFromStreaming(ProviderMessage providerMessage) {
+        return providerMessage == null
+                || providerMessage.statusCode() < 200
+                || providerMessage.statusCode() >= 300
+                || providerMessage.content() == null
+                || providerMessage.content().isBlank();
+    }
+
+    private ProviderMessage sendStreamingRequest(
+            HttpClient client,
+            String payload,
+            AgentRequest request) throws IOException, InterruptedException, AdapterResponseException {
+        HttpResponse<Stream<String>> httpResponse = client.send(
+                buildHttpRequest(payload),
+                HttpResponse.BodyHandlers.ofLines());
+        if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+            String body;
+            try (Stream<String> lines = httpResponse.body()) {
+                body = String.join("\n", lines.toList());
+            }
+            return new ProviderMessage(httpResponse.statusCode(), body, null);
+        }
+
+        StringBuilder content = new StringBuilder();
+        int chunkIndex = 0;
+        try (Stream<String> lines = httpResponse.body()) {
+            Iterator<String> iterator = lines.iterator();
+            while (iterator.hasNext()) {
+                if (isCancellationRequested(request)) {
+                    throw new AdapterResponseException(
+                            "OpenAI Compatible streaming response was cancelled before completion.");
+                }
+                String line = iterator.next();
+                String chunk = parseStreamingContentDelta(line);
+                if (chunk == null || chunk.isEmpty()) {
+                    continue;
+                }
+                content.append(chunk);
+                publishStreamChunk(request, chunkIndex++, chunk, content.length());
+            }
+        }
+        return new ProviderMessage(httpResponse.statusCode(), "", content.toString());
+    }
+
+    private String buildRequestPayload(AgentRequest request, boolean stream) throws AdapterResponseException {
+        try {
+            return objectMapper.writeValueAsString(buildPayload(request, stream));
         } catch (JsonProcessingException exception) {
             throw new AdapterResponseException("OpenAI Compatible adapter failed to serialize request payload.");
         }
@@ -279,11 +376,11 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         return builder.toString();
     }
 
-    private JsonNode buildPayload(AgentRequest request) {
+    private JsonNode buildPayload(AgentRequest request, boolean stream) {
         var root = objectMapper.createObjectNode();
         root.put("model", model);
         root.put("temperature", 0.2);
-        root.put("stream", false);
+        root.put("stream", stream);
         if (jsonResponseFormatEnabled) {
             root.putObject("response_format").put("type", "json_object");
         }
@@ -306,6 +403,10 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
 
     private AgentResponse executeFixture(AgentRequest request, Instant startedAt) {
         try {
+            String fixtureJson = objectMapper.writeValueAsString(buildFixtureArtifactContract(request));
+            if (streamingEnabled) {
+                publishFixtureStream(request, fixtureJson);
+            }
             return new AgentResponse(
                     request.requestId(),
                     AgentAdapterType.OPENAI_COMPATIBLE,
@@ -313,7 +414,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                     AgentAdapterType.OPENAI_COMPATIBLE,
                     false,
                     AgentExecutionStatus.COMPLETED,
-                    objectMapper.writeValueAsString(buildFixtureArtifactContract(request)),
+                    fixtureJson,
                     List.of("JSON:openai-compatible-fixture-contract"),
                     null,
                     startedAt,
@@ -548,6 +649,101 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         return contentNode.toString();
     }
 
+    private String parseStreamingContentDelta(String line) throws AdapterResponseException {
+        if (line == null) {
+            return null;
+        }
+        String trimmed = line.trim();
+        if (trimmed.isEmpty() || trimmed.startsWith(":")) {
+            return null;
+        }
+        if (!trimmed.startsWith("data:")) {
+            return null;
+        }
+        String data = trimmed.substring("data:".length()).trim();
+        if ("[DONE]".equals(data)) {
+            return null;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(data);
+            JsonNode choicesNode = root.path("choices");
+            if (!choicesNode.isArray() || choicesNode.isEmpty()) {
+                return null;
+            }
+            JsonNode firstChoice = choicesNode.path(0);
+            JsonNode deltaContent = firstChoice.path("delta").path("content");
+            if (deltaContent.isTextual()) {
+                return deltaContent.asText();
+            }
+            JsonNode messageContent = firstChoice.path("message").path("content");
+            if (messageContent.isTextual()) {
+                return messageContent.asText();
+            }
+            return null;
+        } catch (JsonProcessingException exception) {
+            throw new AdapterResponseException(
+                    "OpenAI Compatible streaming response contained invalid JSON event: " + safeSnippet(data));
+        }
+    }
+
+    private void publishFixtureStream(AgentRequest request, String content) {
+        int chunkSize = 160;
+        int chunkIndex = 0;
+        for (int offset = 0; offset < content.length(); offset += chunkSize) {
+            if (isCancellationRequested(request)) {
+                return;
+            }
+            String chunk = content.substring(offset, Math.min(content.length(), offset + chunkSize));
+            publishStreamChunk(request, chunkIndex++, chunk, Math.min(content.length(), offset + chunk.length()));
+        }
+    }
+
+    private void publishStreamChunk(
+            AgentRequest request,
+            int chunkIndex,
+            String chunk,
+            int accumulatedLength) {
+        if (chunk == null || chunk.isEmpty() || isCancellationRequested(request)) {
+            return;
+        }
+        try {
+            realtimeEventPublisher.publish(
+                    request.conversationId(),
+                    RealtimeEventType.ADAPTER_STREAM_CHUNK,
+                    "TASK_STEP",
+                    request.taskStepId(),
+                    Map.of(
+                        "taskRunId", request.taskRunId(),
+                        "taskStepId", request.taskStepId(),
+                        "adapterType", AgentAdapterType.OPENAI_COMPATIBLE.name(),
+                        "chunk", chunk,
+                        "chunkIndex", chunkIndex,
+                        "chunkLength", chunk.length(),
+                        "accumulatedLength", accumulatedLength));
+            realtimeEventPublisher.publish(
+                    request.conversationId(),
+                    RealtimeEventType.TASK_STEP_STREAM_CHUNK,
+                    "TASK_STEP",
+                    request.taskStepId(),
+                    Map.of(
+                        "taskRunId", request.taskRunId(),
+                        "taskStepId", request.taskStepId(),
+                        "adapterType", AgentAdapterType.OPENAI_COMPATIBLE.name(),
+                        "chunk", chunk,
+                        "chunkIndex", chunkIndex,
+                        "chunkLength", chunk.length(),
+                        "accumulatedLength", accumulatedLength));
+        } catch (RuntimeException ignored) {
+            // Streaming preview must never break adapter execution or fallback behavior.
+        }
+    }
+
+    private boolean isCancellationRequested(AgentRequest request) {
+        return request != null
+                && request.taskRunId() != null
+                && runCancellationRegistry.isCancellationRequested(request.taskRunId());
+    }
+
     private JsonNode readProviderJson(String responseBody) throws AdapterResponseException {
         try {
             return objectMapper.readTree(responseBody);
@@ -679,6 +875,9 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                 errorMessage,
                 startedAt,
                 timeProvider.now());
+    }
+
+    private record ProviderMessage(int statusCode, String body, String content) {
     }
 
     private static class AdapterResponseException extends Exception {

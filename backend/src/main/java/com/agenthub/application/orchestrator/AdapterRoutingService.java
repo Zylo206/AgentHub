@@ -34,11 +34,22 @@ public class AdapterRoutingService {
                         0,
                         0,
                         "MISSING"));
+        AdapterRoutingDecision.AdapterCandidateScore preferredAvailable = scores.stream()
+                .filter(score -> score.adapterType() == preferred)
+                .filter(score -> "AVAILABLE".equals(score.status()))
+                .findFirst()
+                .orElse(null);
+        if (preferred != AgentAdapterType.MOCK && preferredAvailable != null) {
+            selected = preferredAvailable;
+        }
         String reason = "Adapter candidate pool selected "
                 + selected.adapterType()
                 + " from "
                 + scores.size()
-                + " candidate(s) using health 40%, success rate 25%, fallback penalty 20%, preferred bonus 15%.";
+                + " candidate(s) using health 40%, success rate 25%, fallback penalty 20%, preferred bonus 15%."
+                + (preferredAvailable == null
+                        ? ""
+                        : " Explicit non-MOCK preferred adapter was AVAILABLE, so it is tried before fallback.");
         return new AdapterRoutingDecision(selected.adapterType(), scores, reason, "STEP_FALLBACK_TO_MOCK");
     }
 

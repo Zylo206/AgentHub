@@ -73,6 +73,85 @@ import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayConversationType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import "../../styles/workspace.css";
 
+const TASK_STEP_STREAM_CHUNK_EVENT_TYPES = ["TASK_STEP_STREAM_CHUNK", "ADAPTER_STREAM_CHUNK"] as const;
+const STREAMING_PREVIEW_MAX_LENGTH = 1200;
+const TERMINAL_STEP_STATUSES = new Set([
+  "COMPLETED",
+  "SUCCEEDED",
+  "FAILED",
+  "REJECTED",
+  "CANCELLED",
+  "TIMED_OUT",
+  "SKIPPED",
+  "BLOCKED",
+  "DISABLED",
+  "ABORTED"
+]);
+
+interface ParsedStreamingChunkPayload {
+  taskRunId: string;
+  taskStepId: string;
+  adapterType?: string;
+  chunk: string;
+}
+
+function normalizeStreamingPayload(raw: string): ParsedStreamingChunkPayload | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      taskRunId?: unknown;
+      taskStepId?: unknown;
+      resourceId?: unknown;
+      chunk?: unknown;
+      adapterType?: unknown;
+      payload?: Record<string, unknown>;
+    };
+    const payload = parsed.payload ?? parsed;
+
+    const taskRunId = String((payload.taskRunId as unknown) ?? parsed.taskRunId ?? "");
+    const taskStepId = String((payload.taskStepId as unknown) ?? parsed.taskStepId ?? parsed.resourceId ?? "");
+    const chunkRaw = (payload.chunk as unknown) ?? parsed.chunk;
+    const chunk = typeof chunkRaw === "string" ? chunkRaw : typeof chunkRaw === "number" ? String(chunkRaw) : "";
+    const adapterTypeRaw = payload.adapterType as unknown;
+
+    if (!taskStepId || !chunk) {
+      return null;
+    }
+
+    return {
+      taskRunId,
+      taskStepId,
+      adapterType: typeof adapterTypeRaw === "string" ? adapterTypeRaw : undefined,
+      chunk
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isStreamingStepStatus(status: string): boolean {
+  return !TERMINAL_STEP_STATUSES.has((status || "").toUpperCase());
+}
+
+function appendStreamingChunk(previous: string, nextChunk: string): string {
+  return `${previous || ""}${nextChunk}`.slice(-STREAMING_PREVIEW_MAX_LENGTH);
+}
+
+function pruneStreamingStateByActiveSteps(taskRuns: TaskRun[], state: Record<string, string>): Record<string, string> {
+  const activeStepIds = new Set(
+    taskRuns.flatMap((taskRun) =>
+      taskRun.steps.filter((step) => isStreamingStepStatus(step.status)).map((step) => getIdValue(step.id))
+    )
+  );
+
+  const next: Record<string, string> = {};
+  Object.entries(state).forEach(([stepId, chunk]) => {
+    if (activeStepIds.has(stepId) && chunk) {
+      next[stepId] = chunk;
+    }
+  });
+  return next;
+}
+
 const PRODUCT_DEMO_PROMPT =
   "帮我生成一个 React 登录页面，要求支持邮箱登录和验证码登录，同时生成 README，最后检查代码质量并给出修改建议。";
 
@@ -128,6 +207,7 @@ export function WorkspacePage() {
     "DISCONNECTED"
   );
   const [activeRealtimeRunSummary, setActiveRealtimeRunSummary] = useState<string | null>(null);
+  const [streamingChunksByStepId, setStreamingChunksByStepId] = useState<Record<string, string>>({});
   const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
   const [quoteMode, setQuoteMode] = useState<"quote" | "reply">("quote");
 
@@ -330,6 +410,7 @@ export function WorkspacePage() {
       setPinnedContexts(pinnedContextData);
       setMemories(memoryData);
       setAdapterQualityMetrics(qualityMetricData);
+      setStreamingChunksByStepId((previous) => pruneStreamingStateByActiveSteps(taskRunData, previous));
       void loadMessageTriggerSuggestions(conversationId, messageData);
       setShowAllArtifacts(true);
       setSelectedTaskStepId(null);
@@ -385,6 +466,7 @@ export function WorkspacePage() {
       setMemories([]);
       setContextSnapshots([]);
       setHandoffSummaries([]);
+      setStreamingChunksByStepId({});
       setSelectedArtifactId(null);
       setSelectedArtifact(null);
       setSelectedTaskRunId(null);
@@ -446,6 +528,22 @@ export function WorkspacePage() {
         setRealtimeStatus("CONNECTED");
         return;
       }
+      if (TASK_STEP_STREAM_CHUNK_EVENT_TYPES.includes(event.type as (typeof TASK_STEP_STREAM_CHUNK_EVENT_TYPES)[number])) {
+        setRealtimeStatus("CONNECTED");
+        try {
+          const streamPayload = normalizeStreamingPayload(event.data);
+          if (streamPayload) {
+            setStreamingChunksByStepId((previous) => ({
+              ...previous,
+              [streamPayload.taskStepId]: appendStreamingChunk(previous[streamPayload.taskStepId], streamPayload.chunk)
+            }));
+            return;
+          }
+        } catch {
+          console.warn("Invalid AgentHub streaming event:", event.data);
+        }
+        return;
+      }
       if (
         [
           "MESSAGE_CREATED",
@@ -480,6 +578,8 @@ export function WorkspacePage() {
       "TASK_RUN_CREATED",
       "TASK_RUN_UPDATED",
       "TASK_STEP_UPDATED",
+      "ADAPTER_STREAM_CHUNK",
+      "TASK_STEP_STREAM_CHUNK",
       "ARTIFACT_CREATED",
       "ARTIFACT_UPDATED",
       "CONTEXT_UPDATED",
@@ -1317,6 +1417,7 @@ export function WorkspacePage() {
             triggerSuggestionsByMessageId={triggerSuggestionsByMessageId}
             approvalByMessageId={approvalByMessageId}
             autoTriggerRunningMessageId={autoTriggerRunningMessageId}
+            streamingChunksByStepId={streamingChunksByStepId}
             onSelectArtifact={setSelectedArtifactId}
             onToggleMessagePin={handleToggleMessagePin}
             onSaveMessageAsMemory={handleSaveMessageAsMemory}
@@ -1342,6 +1443,7 @@ export function WorkspacePage() {
             loading={loadingTaskRuns}
             selectedTaskRunId={selectedTaskRunId}
             selectedTaskStepId={selectedTaskStepId}
+            streamingChunksByStepId={streamingChunksByStepId}
             onSelectStep={handleSelectTaskStep}
             onCancelTaskRun={handleCancelTaskRun}
             onStopTaskRun={handleStopTaskRun}
