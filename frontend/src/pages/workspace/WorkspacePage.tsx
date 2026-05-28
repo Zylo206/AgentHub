@@ -339,6 +339,7 @@ export function WorkspacePage() {
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [runningDemoTask, setRunningDemoTask] = useState(false);
+  const [showDebugActions, setShowDebugActions] = useState(false);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [autoTriggerRunningMessageId, setAutoTriggerRunningMessageId] = useState<string | null>(null);
@@ -409,12 +410,12 @@ export function WorkspacePage() {
   const latestTriggerApprovalStatus = latestTriggerApproval?.status?.toUpperCase() ?? null;
   const latestTriggerPrimaryLabel =
     latestTriggerApprovalStatus === "APPROVED"
-      ? "已批准，启动协作"
+      ? "Start Approved Collaboration"
       : latestTriggerApprovalStatus === "PENDING"
-        ? "批准并启动协作"
+        ? "Approve & Start Collaboration"
         : latestTriggerSuggestion?.requireApproval
-          ? "创建协作确认"
-          : "启动 Agent 协作";
+          ? "Create Collaboration Confirmation"
+          : "Start Agent Collaboration";
 
   const highlightedArtifactIds = useMemo(
     () => (selectedTaskStep ? selectedTaskStep.producedArtifactIds.map((artifactId) => getIdValue(artifactId)) : []),
@@ -1337,7 +1338,12 @@ export function WorkspacePage() {
     }
 
     await approveApprovalRequest(approvalId);
-    setActionAudits(await getActionAuditsByConversation(currentConversationId));
+    const [refreshedAudits, refreshedApprovals] = await Promise.all([
+      getActionAuditsByConversation(currentConversationId),
+      getApprovalRequestsByConversation(currentConversationId)
+    ]);
+    setActionAudits(refreshedAudits);
+    setApprovalRequests(refreshedApprovals);
   }
 
   async function handleCancelApprovalRequest(approvalId: string) {
@@ -1346,7 +1352,12 @@ export function WorkspacePage() {
     }
 
     await cancelApprovalRequest(approvalId);
-    setActionAudits(await getActionAuditsByConversation(currentConversationId));
+    const [refreshedAudits, refreshedApprovals] = await Promise.all([
+      getActionAuditsByConversation(currentConversationId),
+      getApprovalRequestsByConversation(currentConversationId)
+    ]);
+    setActionAudits(refreshedAudits);
+    setApprovalRequests(refreshedApprovals);
   }
 
   async function handleCancelTaskRun(taskRunId: string) {
@@ -1398,14 +1409,20 @@ export function WorkspacePage() {
   }
 
   return (
-    <section className="workspace-page">
-      <aside className="workspace-sidebar">
+    <section className="workspace-page" data-testid="workspace-page">
+      <aside className="workspace-sidebar" data-testid="workspace-sidebar">
         <div className="workspace-sidebar__header">
           <div className="workspace-brand">
             <h1>AgentHub</h1>
             <p>面向 Orchestrator、TaskRun 和 Artifact 的 IM 式协作工作台。</p>
           </div>
-          <button type="button" className="primary-button" disabled={creatingConversation} onClick={handleCreateDemoConversation}>
+          <button
+            type="button"
+            className="primary-button"
+            data-testid="create-conversation-button"
+            disabled={creatingConversation}
+            onClick={handleCreateDemoConversation}
+          >
             {creatingConversation ? "创建中..." : "创建 Demo 会话"}
           </button>
         </div>
@@ -1507,28 +1524,48 @@ export function WorkspacePage() {
             <h3>协作消息流</h3>
             <span>{messages.length} 条消息 · 发送任务后，通过消息卡片确认 Agent 协作。</span>
           </div>
-          <div className="workspace-main__collaboration-actions">
+          <div className="workspace-main__collaboration-actions" data-testid="workspace-collaboration-actions">
             <button
               type="button"
               className="primary-button"
+              data-testid="start-collaboration-primary"
               disabled={!currentConversationId || !latestUserMessage || !latestTriggerReady || Boolean(autoTriggerRunningMessageId)}
               onClick={() => latestUserMessage && handleConfirmOrchestratorTrigger(latestUserMessage)}
             >
-              {autoTriggerRunningMessageId ? "启动中..." : latestTriggerReady ? latestTriggerPrimaryLabel : "发送任务后确认协作"}
+              {autoTriggerRunningMessageId ? "Starting..." : latestTriggerReady ? latestTriggerPrimaryLabel : "Send a task, then confirm collaboration"}
             </button>
             <button
               type="button"
-              className="secondary-button secondary-button--quiet"
-              disabled={!currentConversationId || !latestUserMessage || runningDemoTask}
-              onClick={handleRunDemoTask}
-              title="本地验证和调试用的手动兜底入口。"
+              className="secondary-button secondary-button--quiet workspace-debug-toggle"
+              data-testid="debug-actions-toggle"
+              onClick={() => setShowDebugActions((current) => !current)}
+              aria-expanded={showDebugActions}
+              title="Debug tools are secondary; the product path starts from message confirmation."
             >
-              {runningDemoTask ? "运行中..." : "调试：手动运行"}
+              {showDebugActions ? "Hide debug tools" : "Debug / Advanced"}
             </button>
           </div>
         </div>
 
-        <div className="workspace-main__flow-guide" aria-label="Agent collaboration flow">
+        {showDebugActions ? (
+          <div className="workspace-debug-panel" data-testid="debug-actions-panel">
+            <div className="workspace-debug-panel__header">
+              <strong>Manual debug fallback</strong>
+              <p>Use this only for smoke tests or local debugging. The product path is message confirmation.</p>
+            </div>
+            <button
+              type="button"
+              className="secondary-button secondary-button--quiet"
+              data-testid="manual-debug-run"
+              disabled={!currentConversationId || !latestUserMessage || runningDemoTask}
+              onClick={handleRunDemoTask}
+            >
+              {runningDemoTask ? "Running..." : "Manual Debug Run"}
+            </button>
+          </div>
+        ) : null}
+
+        <div className="workspace-main__flow-guide" data-testid="workspace-flow-guide" aria-label="Agent collaboration flow">
           <span>主路径</span>
           <strong>发送任务消息</strong>
           <em>→</em>
@@ -1591,6 +1628,7 @@ export function WorkspacePage() {
             onRerunFromMessage={handleRerunFromMessage}
             onRegenerateAgentReply={handleRegenerateAgentReply}
             onConfirmOrchestratorTrigger={handleConfirmOrchestratorTrigger}
+            onCancelOrchestratorTrigger={handleCancelApprovalRequest}
             onRefreshOrchestratorSuggestion={handleRefreshOrchestratorSuggestion}
           />
           <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
@@ -1642,7 +1680,7 @@ export function WorkspacePage() {
         </div>
       </main>
 
-      <aside className="workspace-artifacts">
+      <aside className="workspace-artifacts" data-testid="workspace-artifacts">
         <ArtifactPanel
           artifacts={visibleArtifacts}
           allArtifacts={artifacts}

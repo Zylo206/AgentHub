@@ -21,14 +21,14 @@ agenthub:
       username: ${AGENTHUB_JDBC_USERNAME:}
       password: ${AGENTHUB_JDBC_PASSWORD:}
   attachments:
-    storage-dir: ${AGENTHUB_ATTACHMENTS_STORAGE_DIR:./.agenthub/uploads}
+    storage-dir: ${AGENTHUB_ATTACHMENTS_STORAGE_DIR:${user.home}/.agenthub/agenthub/uploads}
     max-file-size-bytes: ${AGENTHUB_ATTACHMENTS_MAX_FILE_SIZE_BYTES:5242880}
   cors:
     allowed-origins: ${AGENTHUB_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
   memory:
     persistence:
       enabled: ${AGENTHUB_MEMORY_PERSISTENCE_ENABLED:true}
-      path: ${AGENTHUB_MEMORY_PERSISTENCE_PATH:./.agenthub/memories.json}
+      path: ${AGENTHUB_MEMORY_PERSISTENCE_PATH:${user.home}/.agenthub/agenthub/memories.json}
     retrieval:
       limit: ${AGENTHUB_MEMORY_RETRIEVAL_LIMIT:6}
   context:
@@ -65,11 +65,11 @@ agenthub:
     stats:
       persistence:
         enabled: ${AGENTHUB_ADAPTER_STATS_PERSISTENCE_ENABLED:true}
-        path: ${AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH:./.agenthub/adapter-route-stats.json}
+        path: ${AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH:${user.home}/.agenthub/agenthub/adapter-route-stats.json}
     quality:
       persistence:
         enabled: ${AGENTHUB_ADAPTER_QUALITY_PERSISTENCE_ENABLED:true}
-        path: ${AGENTHUB_ADAPTER_QUALITY_PERSISTENCE_PATH:./.agenthub/adapter-quality-metrics.json}
+        path: ${AGENTHUB_ADAPTER_QUALITY_PERSISTENCE_PATH:${user.home}/.agenthub/agenthub/adapter-quality-metrics.json}
     openai-compatible:
       enabled: ${AGENTHUB_OPENAI_ENABLED:false}
       base-url: ${AGENTHUB_OPENAI_BASE_URL:}
@@ -89,7 +89,7 @@ agenthub:
       timeout-seconds: ${AGENTHUB_CODEX_TIMEOUT_SECONDS:120}
       streaming-enabled: ${AGENTHUB_CODEX_STREAMING_ENABLED:false}
       artifact-only: ${AGENTHUB_CODEX_ARTIFACT_ONLY:true}
-      work-dir: ${AGENTHUB_CODEX_WORK_DIR:.agenthub/codex-runs}
+      work-dir: ${AGENTHUB_CODEX_WORK_DIR:${user.home}/.agenthub/agenthub/codex-runs}
       fixture-enabled: ${AGENTHUB_CODEX_FIXTURE_ENABLED:false}
     claude-code:
       enabled: ${AGENTHUB_CLAUDE_CODE_ENABLED:false}
@@ -102,7 +102,7 @@ agenthub:
       artifact-only: ${AGENTHUB_CLAUDE_CODE_ARTIFACT_ONLY:true}
       allowed-tools: ${AGENTHUB_CLAUDE_CODE_ALLOWED_TOOLS:Read,Grep,Glob}
       disallowed-tools: ${AGENTHUB_CLAUDE_CODE_DISALLOWED_TOOLS:Edit,MultiEdit,Write,NotebookEdit,Bash}
-      work-dir: ${AGENTHUB_CLAUDE_CODE_WORK_DIR:.agenthub/claude-code-runs}
+      work-dir: ${AGENTHUB_CLAUDE_CODE_WORK_DIR:${user.home}/.agenthub/agenthub/claude-code-runs}
       fixture-enabled: ${AGENTHUB_CLAUDE_CODE_FIXTURE_ENABLED:false}
     open-code:
       enabled: ${AGENTHUB_OPEN_CODE_ENABLED:false}

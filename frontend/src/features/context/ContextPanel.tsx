@@ -179,7 +179,7 @@ export function ContextPanel({
   }
 
   return (
-    <div className="context-panel">
+    <div className="context-panel" data-testid="context-panel">
       <div className="section-header">
         <h3>Context / Handoff</h3>
         <span>
@@ -267,7 +267,7 @@ export function ContextPanel({
         {contextSnapshots.length === 0 ? (
           <div className="context-panel__empty">当前 TaskRun 暂无上下文快照。</div>
         ) : (
-          <div className="context-card-list">
+          <div className="context-card-list" data-testid="context-snapshot-list">
             {contextSnapshots.map((snapshot) => (
               <section className="context-card" key={formatId(snapshot.id)}>
                 <div className="context-card__header">
@@ -301,6 +301,7 @@ export function ContextPanel({
                         return (
                           <article
                             className="retrieved-context-item"
+                            data-testid="retrieved-context-item"
                             key={`${formatId(snapshot.id)}-retrieved-${index}-${item.sourceType}-${item.sourceId}`}
                           >
                             <div className="retrieved-context-item__topline">
@@ -317,7 +318,11 @@ export function ContextPanel({
                               {item.windowPolicy ? <span>window {item.windowPolicy}</span> : null}
                               {item.semanticBackend ? <span>semantic {item.semanticBackend}</span> : null}
                             </div>
-                            <div className="retrieved-context-item__pipeline" aria-label="Context search pipeline">
+                            <div
+                              className="retrieved-context-item__pipeline"
+                              data-testid="context-search-pipeline"
+                              aria-label="Context search pipeline"
+                            >
                               {getContextSearchPipeline(searchStage, item).map((stageItem) => (
                                 <span key={`${item.sourceType}-${item.sourceId}-${stageItem.label}`}>
                                   <strong>{stageItem.label}</strong>

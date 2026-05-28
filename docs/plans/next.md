@@ -13,7 +13,10 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: contract validation, quality evaluator, build validation, fallback reasons, TaskStep metadata, Artifact metadata, and Adapter Quality Dashboard are wired through.
    - `Done`: OpenAI-compatible, Claude Code, and Codex opt-in smoke scripts classify `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` outcomes instead of returning generic failures.
    - `Done`: TaskStep fallback/quality reason now records contract-class failures as `PARSE_FAILED` and non-real-output fallback as `FALLBACK`.
+   - `Done`: `docs/spec/real-agent-output-stability-spec.md` now captures the stable contract, outcome taxonomy, acceptance criteria, and fallback boundaries for real Agent output.
+   - `Done`: REAL_FIRST invalid contract or fallback text promotion is explicitly treated as `PARSE_FAILED`, not a generic quality failure.
    - `Done`: TaskStep and Artifact expose a derived `realAdapterOutcome` field so UI and scripts can read a single `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` result.
+   - `Done`: TaskStep and Artifact now expose explicit build validation reason fields instead of forcing UI, smoke, and reviewer gates to parse build failure details from quality reason text.
    - `Active`: keep monitoring real provider parse failure, quality failure, build failure, and fallback patterns across more task types.
    - `Done`: Adapter Quality Dashboard now reads backend aggregate rates for real acceptance, total failure, parse failure, quality failure, and build failure instead of only deriving signals from currently loaded TaskSteps.
    - Real provider validation must be opt-in and must not commit keys.
@@ -41,6 +44,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: fixture smoke on port `18092` observed `ADAPTER_STREAM_CHUNK` and `CLAUDE_CODE / REAL_ADAPTER / REAL_FIRST` artifacts.
    - `Done`: real local Claude Code CLI 2.1.143 smoke on port `18094` passed with streaming chunk events and `CLAUDE_CODE / REAL_ADAPTER` Artifact output.
    - `Done`: Windows npm shim resolution prefers `.cmd/.exe/.bat` over extensionless shims, and `stream-json` uses Claude Code's required `--verbose` flag.
+   - `Done`: `docs/spec/claude-codex-headless-adapter-spec.md` captures the Claude Code / Codex headless Artifact-only v1 contract, smoke boundaries, and deeper integration prerequisites.
    - `Boundary`: fixture mode is not real Claude Code provider output; real CLI mode still requires local `claude` install and authentication.
    - `Boundary`: v1 is Artifact-only and does not allow Claude Code to modify the AgentHub workspace.
 
@@ -53,6 +57,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: fixture smoke passed on port `18095` with `AGENTHUB_CODEX_FIXTURE_ENABLED=true`.
    - `Done`: real local Codex CLI smoke passed on port `18096` with `AGENTHUB_CODEX_FIXTURE_ENABLED=false` and `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`.
    - `Done`: real Codex streaming smoke passed on port `18100` with `AGENTHUB_CODEX_STREAMING_ENABLED=true`, observed `ADAPTER_STREAM_CHUNK`, and created `CODEX / REAL_ADAPTER / REAL_FIRST` Artifact.
+   - `Done`: `docs/spec/claude-codex-headless-adapter-spec.md` defines Codex v1 as headless / Artifact-only, not Codex Desktop GUI automation.
    - `Boundary`: this is not Codex Desktop GUI automation; the intended integration is headless / Artifact-only execution with fallback.
    - `Boundary`: default smoke must not require Codex, and Codex output must not bypass Artifact contract validation or quality gates.
 
@@ -66,6 +71,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 
 7. **Run a JDBC / MySQL real database verification sprint**
    - Do not switch MySQL on by default.
+   - `Done`: `docs/spec/mysql-profile-spec.md` captures the MySQL/JDBC profile contract, initialization rules, repository coverage, restart verification, and production boundaries.
+   - `Done`: `scripts/mysql-init-profile.mjs` provides an opt-in MySQL CLI initializer for creating the database and applying `schema-jdbc.sql`.
+   - `Done`: local MySQL init + JDBC create / restart verify passed against `agenthub_jdbc_verify`.
    - `Done`: `jdbc-smoke-test.mjs` now verifies restart persistence for Conversation, Message, Attachment download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary.
    - `Done`: local MySQL-compatible create / restart verify passed with the JDBC profile on port `18087`.
    - `Done`: restart verification confirmed Conversation, Message, Attachment metadata + download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary persisted after backend restart.
@@ -86,6 +94,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 
 9. **Keep plans and docs synchronized**
    - P0 specs for multi-agent chat, artifact lifecycle, adapter output, context/memory, and approval/audit are now captured under `docs/spec/`.
+   - `Done`: `docs/spec/context-search-spec.md` captures the Context Search contract: DB-backed Agentic Search, ranking, read window, FULLTEXT opt-in, embedding boundary, and ContextPanel explain requirements.
    - `Done`: Context Retrieval now uses DB-backed Agentic Search as the default retrieval shape: List / Grep / Read, with heuristic semantic scoring and optional embedding boundary retained.
    - `Done`: JDBC search has a MySQL FULLTEXT opt-in switch while keeping LIKE as the default.
    - `Done`: ContextPanel displays List / Grep / Read retrieval stage chips.
@@ -99,6 +108,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace now promotes the latest task message's Orchestrator trigger confirmation as the primary action.
    - `Done`: message-level Orchestrator auto-trigger now defaults to enabled with approval required, so matched task messages create a confirmation request without auto-running.
    - `Done`: the previous `Run Demo Task` entry is visually weakened and labeled as a manual debug fallback.
+   - `Done`: manual debug run is now folded behind `Debug / Advanced` instead of being shown as the default secondary CTA.
+   - `Done`: message-level collaboration cards show task summary, expected agents, expected artifacts, context sources, start/edit/cancel actions.
+   - `Done`: empty message, TaskRun, Artifact, and ChatInput hints now direct users toward message-triggered collaboration instead of Demo Task.
    - `Done`: user message rerun action no longer exposes `Demo Task` as the primary product language.
    - `Done`: Workspace now shows an in-product flow guide: send task message -> confirm collaboration -> Orchestrator run -> Artifact / Approval / Preview.
    - `Done`: Browser E2E now requires the Workspace collaboration primary action for the product path and does not use the manual debug run as its default fallback.
@@ -106,7 +118,14 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: backend CORS origins are configurable through `AGENTHUB_CORS_ALLOWED_ORIGINS`, so local validation ports do not require code edits.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
-11. **Strengthen Artifact editing trust**
+11. **Normalize Browser E2E as the UI regression gate**
+   - `Done`: `scripts/e2e-browser.mjs` is the required browser-level gate for major Workspace, MessageStream, ArtifactPanel, Approval, Restore, Deploy Preview, and PreviewPage changes.
+   - `Done`: high-risk UI surfaces now expose stable `data-testid` hooks for the IM-first path, message confirmation, attachments, TaskRun / Orchestrator explain, context retrieval, approvals, diff, deploy, restore, audit, and artifacts.
+   - `Done`: Browser E2E failure diagnostics now print the current URL and write screenshot plus console summary under `.agenthub/e2e-browser/`.
+   - `Done`: `scripts/verify-local.mjs` provides a local gate that runs API smoke, SSE smoke, and Browser E2E in sequence.
+   - `Boundary`: Browser E2E validates UI integration; it does not replace API smoke, SSE smoke, JDBC/MySQL smoke, or opt-in real Adapter smoke.
+
+12. **Strengthen Artifact editing trust**
    - `Done`: Diff Summary now includes an apply-time trust check that explains approval, conflict, line impact, and snapshot/restore safety before users apply or force-apply a patch.
    - `Boundary`: line diff remains lightweight and conflict handling is explicit user approval, not automated semantic merge.
 

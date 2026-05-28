@@ -4833,3 +4833,295 @@
 
 - 将本轮新增 UI 信号纳入 browser E2E 断言。
 - 继续用真实 OpenAI-compatible / Codex / Claude Code smoke 观察 Adapter quality metrics 的长期趋势。
+
+## Phase 109：真实 Agent 输出稳定性 Spec 对齐
+
+### 目标
+
+- 按 `real-agent-output-stability-spec.md` 对齐真实 Adapter 输出质量链路。
+- 让 build validation failure 的原因成为结构化字段，而不是只混在 `qualityReason` 文本中。
+
+### 主要变更
+
+- `TaskStep` 新增 `artifactBuildValidationReason`，并继续兼容旧 `qualityReason` 中的 build lint reason。
+- `Artifact` 新增 `buildValidationReason`，REAL_ADAPTER Artifact、archived static fallback 和 JDBC 映射都会保留该字段。
+- `AgentStepExecutor` 在执行摘要、TaskStep、Artifact、REAL_FIRST fallback 路径中写入 build validation reason。
+- `JdbcTaskRepository`、`JdbcArtifactRepository` 和 `schema-jdbc.sql` 增加 build validation reason 列；已有 JDBC 表会在 init 时安全补列。
+- `TaskRunPanel`、`ArtifactPanel`、`ArtifactCard` 展示独立 build validation reason，并在质量门禁行动建议中优先使用该字段。
+- `real-adapter-smoke-test.mjs` 在开启 build validation 断言时同时校验 TaskStep 和 Artifact 的 build validation reason。
+- `ReviewDecisionEvaluator` 将 build validation reason 纳入 REJECTION evidence 和 blocker 文案。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/real-adapter-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有强跑真实外部 provider、Claude Code 或 Codex CLI smoke；这些仍是 opt-in 验证。
+- 默认 demo 仍允许 memory + MOCK/static fallback，不依赖真实 LLM。
+- build validation 仍是当前轻量规则和 opt-in TypeScript smoke，不是完整 ESLint/test/static-analysis 平台。
+
+### 遗留问题
+
+- API smoke 临时启动遇到本机 PowerShell 子进程启动限制，未完成本轮完整 API smoke。
+- 后续需要在真实 provider smoke 中重新确认 `buildValidationReason` 返回和展示。
+
+### 下一步建议
+
+- 以真实 OpenAI-compatible provider 跑一次 strict real-adapter smoke，确认 `artifactBuildValidationReason` 和 `buildValidationReason` 在真实输出链路中稳定返回。
+- 将 build validation reason 加入后续 Browser E2E 的 UI 可见性断言。
+
+## Phase 110：默认 IM-first 协作入口产品化
+
+### 目标
+
+- 将 `/workspace` 默认体验从手动 `Run Demo Task` 调整为“发送任务消息 -> 确认协作 -> Orchestrator 执行”的 IM-first 主路径。
+- 保留手动运行能力，但明确定位为 smoke / local debugging fallback。
+
+### 主要变更
+
+- Workspace 主工具栏保留协作确认主 CTA，并将手动运行入口折叠到 `Debug / Advanced` 区域。
+- Message-level collaboration card 增加 task summary、expected agents、expected artifacts、context sources、Start / Edit / Cancel 操作。
+- Cancel confirmation 会刷新 ApprovalRequest 和 ActionAuditLog，避免消息卡片停留在旧状态。
+- MessageStream 空状态增加任务示例，引导用户通过消息启动协作。
+- ChatInput、TaskRunPanel、ArtifactPanel 的空状态和提示文案改为围绕 message-triggered collaboration，而不是 Demo Task。
+- `docs/plans/next.md` 同步默认 IM-first 协作入口的完成状态。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有改变 Orchestrator 后端执行逻辑，也没有删除 demo-task API。
+- 确认卡片仍基于现有规则化 trigger suggestion，不是完整自然语言 intent engine。
+- 手动 debug run 仍保留给 smoke、fallback 验证和本地调试。
+
+### 遗留问题
+
+- Browser E2E 尚未在本轮重新完整跑 UI 主链路。
+- Message card 的 expected agents / expected artifacts 是轻量规则提示，最终执行仍以后端 Orchestrator plan 为准。
+
+### 下一步建议
+
+- 将新增 confirmation card 详情和 debug panel 折叠状态纳入 Browser E2E 断言。
+- 继续减少用户对 TaskRunPanel 的理解成本，让 MessageStream 本身能解释协作进度。
+
+## Phase 111：MySQL Profile 工程化 Spec
+
+### 目标
+
+- 将 MySQL/JDBC profile 从“已验证可用”整理为稳定规格。
+- 明确 memory 默认路径、jdbc opt-in 验证路径、初始化规则、Repository 覆盖和生产边界。
+
+### 主要变更
+
+- 新增 `docs/spec/mysql-profile-spec.md`。
+- Spec 覆盖 persistence mode、JDBC 配置、持久化对象、初始化规则、create/query/update/restart verify 流程。
+- Spec 明确 MySQL profile 不默认启用，不引入 migration framework，不提交真实数据库密码。
+- `docs/plans/next.md` 同步 MySQL/JDBC profile spec 已完成。
+
+### 验证方式
+
+- Docs-only change，未执行 backend / frontend build。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有新增 JDBC 代码，也没有重新跑真实 MySQL。
+- 当前 MySQL profile 仍是 opt-in 半生产验证路径，不是默认生产 runtime。
+- 当前没有完整 migration system、连接池调优、备份恢复或生产数据库治理。
+
+### 遗留问题
+
+- 后续仍需补更友好的初始化脚本体验。
+- 进入完整生产化前，需要评估 Flyway / Liquibase、数据库权限分层和备份策略。
+
+### 下一步建议
+
+- 为 `jdbc-smoke-test.mjs` 增加更明确的 init / create / restart verify 操作说明。
+- 在需要真实持久化演示时单独跑 MySQL create / restart verify，而不是默认切换 runtime。
+
+## Phase 112：MySQL Profile 初始化脚本体验
+
+### 目标
+
+- 将 MySQL/JDBC profile 从文档规格推进到更可执行的本地初始化体验。
+- 保持 MySQL 为 opt-in 验证路径，不影响默认 memory runtime。
+
+### 主要变更
+
+- 新增 `scripts/mysql-init-profile.mjs`，使用本机 `mysql` CLI 创建数据库并应用 `backend/src/main/resources/schema-jdbc.sql`。
+- 初始化脚本支持 `AGENTHUB_MYSQL_*` 配置，也可从 `AGENTHUB_JDBC_URL` 推导 host / port / database。
+- `.env.example` 增加 MySQL 初始化相关变量占位，不包含真实密码。
+- `scripts/README.md` 增加 MySQL 初始化、JDBC env 和 restart verify 说明。
+- `scripts/AGENTS.md`、`docs/spec/mysql-profile-spec.md`、`docs/plans/next.md` 同步 MySQL profile init 脚本边界。
+
+### 验证方式
+
+- `node --check scripts/mysql-init-profile.mjs`
+- `node scripts/mysql-init-profile.mjs`，连接本机 MySQL 并初始化 `agenthub_jdbc_verify`
+- `cd backend && mvn -q -DskipTests package`
+- 以 JDBC profile 启动 backend，运行 `node scripts/jdbc-smoke-test.mjs` create 路径
+- 重启 backend 后运行 `node scripts/jdbc-smoke-test.mjs` verify 路径
+- verify 覆盖 Conversation、Message、Attachment、Artifact、ArtifactSnapshot、Deployment、TaskRun、TaskStep、ContextSnapshot、PinnedContext、HandoffSummary、Memory、ApprovalRequest、ActionAuditLog
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮已连接本机 MySQL 执行初始化和 JDBC create / restart verify。
+- 脚本是本地验证辅助，不是生产 migration system。
+- MySQL profile 仍是 opt-in，不作为默认 runtime。
+
+### 遗留问题
+
+- 进入完整生产化前仍需评估 Flyway / Liquibase、备份恢复、连接池和数据库权限策略。
+- 仍需把本机验证流程收敛成更稳定的一键 release checklist，而不是依赖临时 PowerShell 编排。
+
+### 下一步建议
+
+- 后续每次修改 JDBC schema / repository 后重复执行 MySQL init + JDBC create / restart verify。
+- 若初始化脚本在不同 MySQL/MariaDB 版本上出现兼容问题，优先收敛 schema，而不是绕过 smoke 断言。
+
+## Phase 113：Browser E2E 常态化质量门禁
+
+### 目标
+
+- 将 Browser E2E 从偶发验证升级为每次大改后的固定 UI 回归门禁。
+- 覆盖 `/workspace` 的 IM-first 产品主路径，而不是依赖手动 Demo Task 调试入口。
+
+### 主要变更
+
+- Workspace、ChatInput、MessageStream、MessageBubble、TaskRunPanel、ContextPanel、ArtifactPanel、DiffSummary、ActionAuditTimeline 增加关键 `data-testid`。
+- `scripts/e2e-browser.mjs` 改用稳定测试入口覆盖核心路径，并在失败时输出当前 URL、截图和 console/page error 摘要。
+- 新增 `scripts/verify-local.mjs`，顺序运行 API smoke、SSE smoke、Browser E2E。
+- `scripts/README.md` 明确 Browser E2E 主链路、前置服务、失败诊断和质量门禁边界。
+- `scripts/AGENTS.md` 和 `docs/plans/next.md` 同步 Browser E2E 必跑策略。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `node --check scripts/verify-local.mjs`
+- `cd frontend && npm run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- Browser E2E 仍不调用真实 LLM、真实外部 Agent、真实部署平台或 MySQL。
+- `verify-local.mjs` 是本地顺序验证入口，不负责启动或停止 backend / frontend。
+- Browser E2E 是 UI 回归门禁，不替代 API smoke、SSE smoke、JDBC/MySQL smoke 或真实 Adapter smoke。
+
+### 遗留问题
+
+- 本轮未启动完整 backend / frontend 执行浏览器点击流；需要在大改验收时跑 `node scripts/e2e-browser.mjs`。
+- 后续可继续增加 REJECTION、attachment download、Context Retrieval explain 的更细粒度 DOM 断言。
+
+### 下一步建议
+
+- 每次修改 Workspace、MessageStream、ArtifactPanel、Approval、Restore、Deploy Preview 或 PreviewPage 后，将 `node scripts/e2e-browser.mjs` 作为必跑项。
+- 若后续接 CI，可把 Browser E2E 作为可选 UI regression job，默认本地仍保留手动执行路径。
+
+## Phase 114：Context Search 增强 Spec
+
+### 目标
+
+- 将 Context Search 从实现细节整理为稳定规格。
+- 明确 AgentHub 默认采用 DB-backed Agentic Search，并保留 MySQL FULLTEXT 与 embedding 的可插拔边界。
+
+### 主要变更
+
+- 新增 `docs/spec/context-search-spec.md`。
+- Spec 覆盖 `List / Grep / Read` 检索流程、ContextSearchCandidate、ContextSearchResult、RetrievedContextItem、ranking 规则、read window、FULLTEXT opt-in 和 embedding storage boundary。
+- `docs/plans/next.md` 同步 Context Search spec 已完成。
+
+### 验证方式
+
+- Docs-only change，未执行 backend / frontend build。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有新增检索代码。
+- 当前默认仍是 DB-backed Agentic Search + heuristic scoring。
+- FULLTEXT 是 opt-in，不替代 LIKE 默认路径。
+- embedding provider 仍是边界和存储骨架，不是默认向量检索能力。
+
+### 遗留问题
+
+- 后续如果调整 ranking / FULLTEXT / read window，需要同步更新该 spec。
+- 真正 embedding provider、向量索引和大规模知识库检索仍后置。
+
+### 下一步建议
+
+- 若继续做 Context Search 增强，优先补 ranking 调参和 Browser E2E 可见性断言，而不是直接引入重型向量数据库。
+
+## Phase 115：真实 Agent 输出稳定性 Spec 落地
+
+### 目标
+
+- 将真实 Agent 输出稳定性规则从计划收敛为可读 spec 和可验证代码路径。
+- 明确 `OpenAI-compatible / Claude Code / Codex -> REAL_FIRST -> REAL_ADAPTER Artifact` 的 contract、quality、build、fallback 边界。
+
+### 主要变更
+
+- 重写 `docs/spec/real-agent-output-stability-spec.md`，修复原文编码乱码，并固化目标、范围、非目标、Current behavior、核心模型、关键流程、验收标准和 fallback / boundary。
+- 调整 `AgentStepExecutor`，让 `REAL_FIRST` 下无效 contract 或 fallback text promotion 明确归类为 `PARSE_FAILED`，避免混入 generic `QUALITY_FAILED`。
+- 新增 `AdapterArtifactContractValidatorTest`，覆盖合法 JSON contract、Markdown fence、缺字段、非法 type、CODE fence、provider error 文本等 contract 规则。
+- 新增 `AdapterArtifactQualityEvaluatorTest`，覆盖 CODE 质量、build validation、fallback text extraction 和 outcome 归类行为。
+- 更新 `docs/plans/next.md`，把真实 Agent 输出稳定性 spec 和 `PARSE_FAILED` 分类规则标记为已完成。
+
+### 验证方式
+
+- `cd backend && mvn -q -Dtest=AdapterArtifactContractValidatorTest,AdapterArtifactQualityEvaluatorTest test`
+- `cd backend && mvn -q -DskipTests package`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮默认链路仍保持 `memory + MOCK/static fallback` 可运行。
+- 本轮验证重点是 contract / quality / build 规则，不强制真实外部 provider。
+- Fixture smoke 仍只能证明 contract 路径，不代表真实 provider 输出质量。
+- `REAL_ADAPTER` 只代表通过当前 gate，不代表生成代码达到生产可上线质量。
+
+### 遗留问题
+
+- 仍需持续观察真实 provider 的 parse failure、quality failure、build failure 和 fallback 分布。
+- 真实外部 OpenAI-compatible、Claude Code、Codex smoke 仍是 opt-in，不进入默认验证链路。
+- 后续如扩展 streaming 或新 Adapter，必须继续复用同一 contract validator 和 outcome taxonomy。
+
+### 下一步建议
+
+- 继续围绕真实 Adapter 输出质量 dashboard 做长期聚合观察。
+- 对更多任务类型运行 opt-in real adapter smoke，扩大 `REAL_FIRST` 质量样本。
+
+## Phase 116：Claude / Codex Headless Adapter 深接 Spec
+
+### 目标
+
+- 固化 Claude Code 与 Codex 的生产化 v1 接入边界。
+- 明确当前深接优先稳定 headless Artifact-only，而不是桌面端 GUI 自动化或 workspace-write 模式。
+
+### 主要变更
+
+- 新增 `docs/spec/claude-codex-headless-adapter-spec.md`。
+- Spec 覆盖 Claude Code / Codex Adapter 的目标、范围、非目标、Current behavior、Artifact contract、CLI 执行规则、配置、验收标准、深接前置条件和 fallback / boundary。
+- `docs/plans/next.md` 同步 Claude Code / Codex headless Adapter spec 已完成。
+
+### 验证方式
+
+- Docs-only change，未执行 backend / frontend build。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有新增 Adapter 代码。
+- Claude Code / Codex 默认仍是 opt-in 验证，不进入默认 smoke 强依赖。
+- Fixture mode 仍只能证明 contract，不代表真实 CLI provider 输出。
+- 当前深接仍是 Artifact-only，不允许外部 Agent 直接写 AgentHub 工作区。
+
+### 遗留问题
+
+- 后续若继续深接，需要先扩大真实 CLI smoke 样本，并观察 parse / quality / build / fallback 指标。
+- OpenCode 仍未进入同等级专用 headless Adapter 深接。
+- 更完整的 CLI capability discovery、tool allowlist / denylist 和 lint/test gate 仍可继续增强。
+
+### 下一步建议
+
+- 继续保持 OpenAI-compatible / Claude Code / Codex 共用同一 Artifact contract validator 和 quality evaluator。
+- 若要推进更深平台能力，先补更稳定的 CLI capability discovery 和长期 Adapter quality metrics，而不是接桌面端 GUI 自动化。

@@ -72,7 +72,7 @@ public class AdapterArtifactExtractor {
                 title == null || title.isBlank() ? fallbackTitle(context, artifactType) : title.trim(),
                 artifactType,
                 language == null || language.isBlank() ? fallbackLanguage(artifactType) : language.trim(),
-                rawContent,
+                normalizeArtifactContent(artifactType, rawContent),
                 summary);
     }
 
@@ -137,6 +137,30 @@ public class AdapterArtifactExtractor {
             case API_CONTRACT, DATA_MODEL -> "json";
             default -> "md";
         };
+    }
+
+    private String normalizeArtifactContent(ArtifactType artifactType, String content) {
+        if (artifactType != ArtifactType.CODE || content == null || content.isBlank()) {
+            return content;
+        }
+        String normalized = content.replace("\\r\\n", "\\n");
+        if (normalized.indexOf('\n') >= 0 || countOccurrences(normalized, "\\n") < 2) {
+            return content;
+        }
+        return normalized
+                .replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\\"", "\"");
+    }
+
+    private int countOccurrences(String value, String token) {
+        int count = 0;
+        int index = 0;
+        while ((index = value.indexOf(token, index)) >= 0) {
+            count++;
+            index += token.length();
+        }
+        return count;
     }
 
     private String stripJsonCodeFence(String content) {

@@ -26,6 +26,7 @@ interface MessageStreamProps {
   onRerunFromMessage: (message: Message) => void;
   onRegenerateAgentReply: (message: Message) => void;
   onConfirmOrchestratorTrigger: (message: Message) => void;
+  onCancelOrchestratorTrigger: (approvalId: string) => void;
   onRefreshOrchestratorSuggestion: (message: Message) => void;
   streamingPreviewsByStepId?: Record<string, StreamingPreviewState>;
 }
@@ -139,6 +140,7 @@ export function MessageStream({
   onRerunFromMessage,
   onRegenerateAgentReply,
   onConfirmOrchestratorTrigger,
+  onCancelOrchestratorTrigger,
   onRefreshOrchestratorSuggestion,
   streamingPreviewsByStepId = {}
 }: MessageStreamProps) {
@@ -188,8 +190,14 @@ export function MessageStream({
 
   if (messages.length === 0) {
     return (
-      <div className="panel-empty">
-        No messages yet. Send a task prompt to start the AgentHub workflow.
+      <div className="panel-empty panel-empty--collaboration">
+        <strong>Start from a task message</strong>
+        <p>Send a request, review the collaboration card, then approve Orchestrator to run the multi-Agent workflow.</p>
+        <div className="panel-empty__examples">
+          <span>Build a React login page with README and review.</span>
+          <span>@Frontend Builder @Reviewer improve this UI and check quality.</span>
+          <span>Design an API contract and deploy a preview.</span>
+        </div>
       </div>
     );
   }
@@ -197,7 +205,7 @@ export function MessageStream({
   const streamingPreviews = getStreamingPreviews(streamingPreviewsByStepId);
 
   return (
-    <div className="message-stream">
+    <div className="message-stream" data-testid="message-stream">
       {messages.map((message) => {
         const messageId = getIdValue(message.id);
         const replyMessages = repliesByMessageId.get(messageId) ?? [];
@@ -243,6 +251,7 @@ export function MessageStream({
               onRerunFromMessage={onRerunFromMessage}
               onRegenerateAgentReply={onRegenerateAgentReply}
               onConfirmOrchestratorTrigger={onConfirmOrchestratorTrigger}
+              onCancelOrchestratorTrigger={onCancelOrchestratorTrigger}
               onRefreshOrchestratorSuggestion={onRefreshOrchestratorSuggestion}
               onToggleThread={() => toggleThread(messageId)}
               onJumpToMessage={jumpToMessage}
@@ -251,7 +260,7 @@ export function MessageStream({
         );
       })}
       {streamingPreviews.map((preview) => (
-        <div className="message-stream__status-row" key={preview.taskStepId}>
+        <div className="message-stream__status-row" data-testid="streaming-status-row" key={preview.taskStepId}>
           <div className={`message-bubble message-bubble--system message-bubble--streaming message-bubble--streaming-${preview.status.toLowerCase()}`}>
             <div className="message-bubble__header">
               <span className="message-bubble__sender">

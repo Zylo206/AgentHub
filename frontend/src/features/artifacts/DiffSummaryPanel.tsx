@@ -60,12 +60,12 @@ export function DiffSummaryPanel({
   ];
 
   return (
-    <section className="diff-summary">
+    <section className="diff-summary" data-testid="diff-summary">
       <div className="artifact-detail-section__header">
         <strong>Diff 摘要</strong>
         <span>{summary.hasRealLineDiff ? "真实行级 diff" : summary.isInitialVersion ? "初始版本" : "无内容变化"}</span>
       </div>
-      <div className="diff-summary-apply">
+      <div className="diff-summary-apply" data-testid="diff-apply-panel">
         <div>
           <strong>{isApplied ? "当前 Diff 已应用" : "一键应用 Diff"}</strong>
           <p>
@@ -103,7 +103,10 @@ export function DiffSummaryPanel({
         </div>
       ) : null}
 
-      <div className={`diff-trust-card ${hasConflict ? "diff-trust-card--warning" : ""}`}>
+      <div
+        className={`diff-trust-card ${hasConflict ? "diff-trust-card--warning" : ""}`}
+        data-testid="diff-risk-summary"
+      >
         <div>
           <strong>应用前可信度检查</strong>
           <p>

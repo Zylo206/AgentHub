@@ -4,6 +4,7 @@ import com.agenthub.domain.artifact.ArtifactType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -91,7 +92,10 @@ public class AdapterArtifactContractValidator {
             return;
         }
 
-        String content = artifactNode.path("content").asText("");
+        String content = normalizeArtifactContent(artifactType, artifactNode.path("content").asText(""));
+        if (artifactNode instanceof ObjectNode objectNode) {
+            objectNode.put("content", content);
+        }
         if (looksLikeProviderError(content)) {
             errors.add("artifact[" + index + "].content looks like a provider error message");
         }
@@ -126,6 +130,30 @@ public class AdapterArtifactContractValidator {
                 || normalized.contains("invalid api key")
                 || normalized.contains("authentication failed")
                 || normalized.contains("rate limit exceeded");
+    }
+
+    private String normalizeArtifactContent(ArtifactType artifactType, String content) {
+        if (artifactType != ArtifactType.CODE || content == null || content.isBlank()) {
+            return content;
+        }
+        String normalized = content.replace("\\r\\n", "\\n");
+        if (normalized.indexOf('\n') >= 0 || countOccurrences(normalized, "\\n") < 2) {
+            return content;
+        }
+        return normalized
+                .replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\\"", "\"");
+    }
+
+    private int countOccurrences(String value, String token) {
+        int count = 0;
+        int index = 0;
+        while ((index = value.indexOf(token, index)) >= 0) {
+            count++;
+            index += token.length();
+        }
+        return count;
     }
 
     private String safeSnippet(String value) {

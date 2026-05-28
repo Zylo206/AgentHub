@@ -112,7 +112,7 @@ export function ChatInput({
   }
 
   return (
-    <form className="chat-input" onSubmit={handleSubmit}>
+    <form className="chat-input" data-testid="chat-input" onSubmit={handleSubmit}>
       <div className="chat-target-agent">
         {selectedAgent ? (
           <>
@@ -137,8 +137,9 @@ export function ChatInput({
       ) : null}
       <textarea
         className="chat-input__textarea"
+        data-testid="chat-input-textarea"
         rows={4}
-        placeholder="描述一个需要 AgentHub 协作完成的多步骤任务..."
+        placeholder="Describe a task for AgentHub Agents to collaborate on..."
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
@@ -152,6 +153,7 @@ export function ChatInput({
           <input
             ref={fileInputRef}
             className="chat-attachment-composer__file"
+            data-testid="chat-attachment-file-input"
             type="file"
             multiple
             disabled={disabled || sending}
@@ -165,6 +167,7 @@ export function ChatInput({
           <button
             type="button"
             className="secondary-button"
+            data-testid="chat-attachment-select-button"
             disabled={disabled || sending}
             onClick={() => fileInputRef.current?.click()}
           >
@@ -234,15 +237,16 @@ export function ChatInput({
       <div className="chat-input__actions">
         <div className="chat-input__hint-group">
           <span className="chat-input__hint">
-            先通过聊天描述任务，再触发 Demo Task 查看 Orchestrator 流程。
+            Send a task message first. AgentHub will show a collaboration confirmation card before Orchestrator runs.
           </span>
           <span className="chat-input__hint">
-            可以在消息开头输入 @AgentName 指定目标 Agent。
+            Start with @AgentName to target one or more Agents.
           </span>
         </div>
         <button
           type="submit"
           className="primary-button"
+          data-testid="chat-send-button"
           disabled={disabled || sending || (!value.trim() && attachments.length === 0)}
         >
           {sending ? "发送中..." : "发送消息"}

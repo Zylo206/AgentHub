@@ -82,7 +82,11 @@ function getStepQualityGateAction(step: TaskStep): { title: string; reason: stri
 
   return {
     title: failedGates.join(" · "),
-    reason: step.artifactQualityReason || step.adapterErrorMessage || "No detailed backend reason was returned.",
+    reason:
+      (buildFailed ? step.artifactBuildValidationReason : null) ||
+      step.artifactQualityReason ||
+      step.adapterErrorMessage ||
+      "No detailed backend reason was returned.",
     nextStep: "Open the produced artifact, copy this reason into the Revision instruction, then run review again."
   };
 }
@@ -219,7 +223,7 @@ function AdapterRoutingExplainPanel({ taskRun }: { taskRun: TaskRun }) {
   }
 
   return (
-    <section className="adapter-routing-panel" aria-label="Adapter routing candidate scores">
+    <section className="adapter-routing-panel" data-testid="adapter-routing-panel" aria-label="Adapter routing candidate scores">
       <div className="adapter-routing-panel__header">
         <strong>Adapter Routing Scores</strong>
         <span>{rows.length} candidates</span>
@@ -317,7 +321,7 @@ function OrchestratorExplainPanel({
   const decisionLog = taskRun.orchestratorDecisionLog ?? null;
 
   return (
-    <section className="orchestrator-explain-panel" aria-label="Orchestrator 决策链">
+    <section className="orchestrator-explain-panel" data-testid="orchestrator-explain-panel" aria-label="Orchestrator 决策链">
       <div className="orchestrator-explain-panel__header">
         <div>
           <strong>Orchestrator 决策链</strong>
@@ -479,13 +483,13 @@ export function TaskRunPanel({
   if (taskRuns.length === 0) {
     return (
       <div className="task-panel__empty">
-        暂无 TaskRun。运行 Demo Task 后会在这里展示执行步骤。
+        No TaskRun yet. Send a task message, confirm collaboration, then execution steps will appear here.
       </div>
     );
   }
 
   return (
-    <div className="task-panel">
+    <div className="task-panel" data-testid="task-run-panel">
       <div className="task-panel__header">
         <div>
           <h3>任务运行</h3>
@@ -518,6 +522,7 @@ export function TaskRunPanel({
           return (
             <section
               className={`task-run-card ${isActiveRun ? "task-run-card--active" : ""}`}
+              data-testid="task-run-card"
               key={formatId(taskRun.id)}
             >
               <div className="task-run-card__header">
@@ -536,6 +541,7 @@ export function TaskRunPanel({
                 <button
                   type="button"
                   className="secondary-button"
+                  data-testid="stop-run-button"
                   disabled={!canControlRun || !onStopTaskRun}
                   onClick={() => {
                     void onStopTaskRun?.(taskRunId);
@@ -546,6 +552,7 @@ export function TaskRunPanel({
                 <button
                   type="button"
                   className="secondary-button"
+                  data-testid="cancel-run-button"
                   disabled={!canControlRun || !onCancelTaskRun}
                   onClick={() => {
                     void onCancelTaskRun?.(taskRunId);
@@ -606,6 +613,7 @@ export function TaskRunPanel({
                     <button
                       type="button"
                       className={`task-step-item ${isSelectedStep ? "task-step-item--selected" : ""}`}
+                      data-testid="task-step-item"
                       key={formatId(step.id)}
                       onClick={() => onSelectStep(getIdValue(taskRun.id), step)}
                     >
@@ -717,6 +725,11 @@ export function TaskRunPanel({
                             Quality score: {qualityScore}
                           </span>
                         </div>
+                        {step.artifactBuildValidationReason ? (
+                          <div className="step-adapter-response">
+                            <strong>Build validation:</strong> {step.artifactBuildValidationReason}
+                          </div>
+                        ) : null}
                         {step.artifactQualityReason ? (
                           <div className="step-adapter-response">
                             <strong>Artifact quality:</strong> {step.artifactQualityReason}

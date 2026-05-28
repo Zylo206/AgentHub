@@ -22,6 +22,7 @@ public class Artifact {
     private final String sourceTaskStepId;
     private final String generationMode;
     private final String buildValidationStatus;
+    private final String buildValidationReason;
     private final String qualityStatus;
     private final Integer qualityScore;
     private final String qualityReason;
@@ -206,6 +207,54 @@ public class Artifact {
             String qualityReason,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                id,
+                conversationId,
+                taskRunId,
+                parentArtifactId,
+                revisionInstruction,
+                title,
+                type,
+                status,
+                language,
+                content,
+                version,
+                sourceKind,
+                sourceAdapterType,
+                sourceTaskStepId,
+                generationMode,
+                buildValidationStatus,
+                extractBuildValidationReason(qualityReason),
+                qualityStatus,
+                qualityScore,
+                qualityReason,
+                createdAt,
+                updatedAt);
+    }
+
+    public Artifact(
+            ArtifactId id,
+            ConversationId conversationId,
+            TaskRunId taskRunId,
+            String parentArtifactId,
+            String revisionInstruction,
+            String title,
+            ArtifactType type,
+            ArtifactStatus status,
+            String language,
+            String content,
+            int version,
+            ArtifactSourceKind sourceKind,
+            String sourceAdapterType,
+            String sourceTaskStepId,
+            String generationMode,
+            String buildValidationStatus,
+            String buildValidationReason,
+            String qualityStatus,
+            Integer qualityScore,
+            String qualityReason,
+            Instant createdAt,
+            Instant updatedAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.taskRunId = taskRunId;
@@ -224,6 +273,7 @@ public class Artifact {
                 ? this.sourceKind.name()
                 : generationMode;
         this.buildValidationStatus = buildValidationStatus;
+        this.buildValidationReason = buildValidationReason;
         this.qualityStatus = qualityStatus;
         this.qualityScore = qualityScore;
         this.qualityReason = qualityReason;
@@ -303,6 +353,10 @@ public class Artifact {
         return buildValidationStatus;
     }
 
+    public String getBuildValidationReason() {
+        return buildValidationReason;
+    }
+
     public String getQualityStatus() {
         return qualityStatus;
     }
@@ -339,6 +393,21 @@ public class Artifact {
             }
         }
         return false;
+    }
+
+    private static String extractBuildValidationReason(String qualityReason) {
+        if (qualityReason == null || qualityReason.isBlank()) {
+            return null;
+        }
+        String marker = "buildLintReason=";
+        int start = qualityReason.indexOf(marker);
+        if (start < 0) {
+            return null;
+        }
+        int valueStart = start + marker.length();
+        int end = qualityReason.indexOf("; ", valueStart);
+        String value = end >= 0 ? qualityReason.substring(valueStart, end) : qualityReason.substring(valueStart);
+        return value.isBlank() ? null : value;
     }
 
     public Instant getCreatedAt() {

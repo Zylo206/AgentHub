@@ -124,6 +124,8 @@ public class AgentStepExecutor {
                 + nullSafe(adapterArtifactResult.parseStatus(), "NOT_ATTEMPTED")
                 + ", buildValidationStatus="
                 + nullSafe(adapterArtifactResult.buildValidationStatus(), "NOT_EVALUATED")
+                + ", buildValidationReason="
+                + nullSafe(adapterArtifactResult.buildValidationReason(), "No build validation reason recorded.")
                 + ", qualityStatus="
                 + nullSafe(adapterArtifactResult.qualityStatus(), "NOT_EVALUATED")
                 + ", qualityScore="
@@ -151,6 +153,7 @@ public class AgentStepExecutor {
                 realAdapterArtifactCount > 0,
                 nullSafe(adapterArtifactResult.parseStatus(), "NOT_ATTEMPTED"),
                 nullSafe(adapterArtifactResult.buildValidationStatus(), "NOT_EVALUATED"),
+                nullSafe(adapterArtifactResult.buildValidationReason(), "No build validation reason recorded."),
                 nullSafe(adapterArtifactResult.qualityStatus(), "NOT_EVALUATED"),
                 adapterArtifactResult.qualityScore(),
                 nullSafe(adapterArtifactResult.qualityReason(), "No quality evaluation recorded."),
@@ -211,6 +214,7 @@ public class AgentStepExecutor {
                 false,
                 "SKIPPED",
                 "SKIPPED",
+                reason,
                 "SKIPPED",
                 null,
                 reason,
@@ -269,6 +273,7 @@ public class AgentStepExecutor {
                     List.of(),
                     parseStatus,
                     "NOT_EVALUATED",
+                    "Adapter output was not evaluated by build validation.",
                     qualityStatus,
                     null,
                     reason);
@@ -289,14 +294,20 @@ public class AgentStepExecutor {
         boolean realFirstRequiresBuildPass = "REAL_FIRST".equals(artifactGenerationMode)
                 && "FAILED".equals(qualityReport.buildValidationStatus());
         if (realFirstRequiresValidJson || realFirstRequiresBuildPass || !qualityReport.hasAcceptedArtifacts()) {
+            String rejectedParseStatus = realFirstRequiresValidJson ? "PARSE_FAILED" : qualityReport.parseStatus();
+            String rejectedQualityReason = realFirstRequiresValidJson
+                    ? "REAL_FIRST requires a valid AgentHub artifact JSON contract. "
+                            + buildStepQualityReason(qualityReport)
+                    : buildStepQualityReason(qualityReport);
             return new AdapterArtifactAppendResult(
                     List.copyOf(producedArtifactIds),
                     List.of(),
-                    qualityReport.parseStatus(),
+                    rejectedParseStatus,
                     qualityReport.buildValidationStatus(),
+                    qualityReport.buildValidationReason(),
                     "REJECTED",
                     qualityReport.qualityScore(),
-                    buildStepQualityReason(qualityReport));
+                    rejectedQualityReason);
         }
 
         for (AdapterArtifactQualityEvaluator.ArtifactQuality artifactQuality : qualityReport.artifactQualities()) {
@@ -324,6 +335,7 @@ public class AgentStepExecutor {
                     stepId.value(),
                     artifactGenerationMode,
                     artifactQuality.buildValidationStatus(),
+                    artifactQuality.buildValidationReason(),
                     artifactQuality.qualityStatus(),
                     artifactQuality.qualityScore(),
                     buildArtifactQualityReason(artifactQuality),
@@ -339,6 +351,7 @@ public class AgentStepExecutor {
                     List.of(),
                     qualityReport.parseStatus(),
                     qualityReport.buildValidationStatus(),
+                    qualityReport.buildValidationReason(),
                     "REJECTED",
                     qualityReport.qualityScore(),
                     "All extracted adapter artifacts failed quality/build checks. "
@@ -353,6 +366,7 @@ public class AgentStepExecutor {
                     List.copyOf(adapterArtifactIds),
                     qualityReport.parseStatus(),
                     qualityReport.buildValidationStatus(),
+                    qualityReport.buildValidationReason(),
                     qualityReport.qualityStatus(),
                     qualityReport.qualityScore(),
                     buildStepQualityReason(qualityReport));
@@ -363,6 +377,7 @@ public class AgentStepExecutor {
                 List.copyOf(adapterArtifactIds),
                 qualityReport.parseStatus(),
                 qualityReport.buildValidationStatus(),
+                qualityReport.buildValidationReason(),
                 qualityReport.qualityStatus(),
                 qualityReport.qualityScore(),
                 buildStepQualityReason(qualityReport));
@@ -401,6 +416,7 @@ public class AgentStepExecutor {
                         artifact.getSourceTaskStepId(),
                         "REAL_FIRST_STATIC_FALLBACK",
                         artifact.getBuildValidationStatus(),
+                        artifact.getBuildValidationReason(),
                         artifact.getQualityStatus(),
                         artifact.getQualityScore(),
                         artifact.getQualityReason(),
@@ -523,6 +539,7 @@ public class AgentStepExecutor {
             List<ArtifactId> adapterArtifactIds,
             String parseStatus,
             String buildValidationStatus,
+            String buildValidationReason,
             String qualityStatus,
             Integer qualityScore,
             String qualityReason) {

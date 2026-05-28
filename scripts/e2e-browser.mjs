@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createRequire } from "node:module";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -11,6 +11,7 @@ const FRONTEND_BASE = (process.env.AGENTHUB_FRONTEND_BASE_URL || "http://127.0.0
 const HEADLESS = process.env.AGENTHUB_E2E_HEADLESS !== "false";
 const SLOW_MO = Number(process.env.AGENTHUB_E2E_SLOW_MO || 0);
 const BROWSER_CHANNEL = process.env.AGENTHUB_E2E_BROWSER_CHANNEL || "msedge";
+const E2E_ARTIFACT_DIR = process.env.AGENTHUB_E2E_ARTIFACT_DIR || path.resolve(".agenthub", "e2e-browser");
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
 const EXPECT_REJECTION = process.env.AGENTHUB_E2E_EXPECT_REJECTION !== "false";
 const TEST_MARKER = `browser-e2e-main-${Date.now()}`;
@@ -166,6 +167,29 @@ async function waitForVisible(page, selector, label, timeout = 20000) {
   pass(`${label} visible`);
 }
 
+async function captureFailureDiagnostics(page, consoleErrors, error) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  await mkdir(E2E_ARTIFACT_DIR, { recursive: true });
+  const screenshotPath = path.join(E2E_ARTIFACT_DIR, `failure-${timestamp}.png`);
+  const consolePath = path.join(E2E_ARTIFACT_DIR, `failure-${timestamp}-console.txt`);
+  const currentUrl = page.url();
+  await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => null);
+  await writeFile(
+    consolePath,
+    [
+      `URL: ${currentUrl}`,
+      `Error: ${getErrorMessage(error)}`,
+      "",
+      "Console errors:",
+      ...(consoleErrors.length > 0 ? consoleErrors : ["<none>"])
+    ].join("\n"),
+    "utf8"
+  ).catch(() => null);
+  console.error(`[DIAG] current URL: ${currentUrl}`);
+  console.error(`[DIAG] screenshot: ${screenshotPath}`);
+  console.error(`[DIAG] console summary: ${consolePath}`);
+}
+
 async function waitForLocatorEnabled(locator, label, timeout = 20000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeout) {
@@ -272,7 +296,7 @@ async function createWorkspaceConversation(page) {
   const beforeConversations = await request("/api/conversations");
   const beforeIds = new Set(beforeConversations.map((conversation) => getIdValue(conversation.id)));
   const createButton = await waitForLocatorEnabled(
-    page.locator(".workspace-sidebar__header .primary-button"),
+    page.getByTestId("create-conversation-button"),
     "Create Demo conversation button"
   );
 
@@ -296,10 +320,10 @@ function buildMentionPrompt(agents) {
 
 async function sendMessageWithAttachmentFromUi(page, conversationId, agents, attachmentPath) {
   const { prompt, mentionedAgents } = buildMentionPrompt(agents);
-  await page.locator(".chat-input__textarea").fill(prompt);
-  await page.locator(".chat-attachment-composer__file").setInputFiles(attachmentPath);
+  await page.getByTestId("chat-input-textarea").fill(prompt);
+  await page.getByTestId("chat-attachment-file-input").setInputFiles(attachmentPath);
   await page.getByText(TEST_ATTACHMENT_FILE_NAME).first().waitFor({ state: "visible", timeout: 10000 });
-  await page.locator(".chat-input").locator(".primary-button").click();
+  await page.getByTestId("chat-send-button").click();
 
   const message = await waitForApiState(
     "UI-sent multi-agent message with attachment",
@@ -338,16 +362,16 @@ async function seedRetrievalContextFromMessage(conversationId, message) {
 }
 
 async function verifyContextPanel(page, conversationId) {
-  await waitForVisible(page, ".context-panel", "context panel");
+  await waitForVisible(page, "[data-testid='context-panel']", "context panel");
   await waitForApiState(
     "context snapshot",
     () => request(`/api/conversations/${conversationId}/context-snapshots`),
     (snapshots) => snapshots.length > 0 ? snapshots : null,
     20000
   );
-  await waitForVisible(page, ".context-card-list", "context snapshot list");
+  await waitForVisible(page, "[data-testid='context-snapshot-list']", "context snapshot list");
 
-  const retrievedItem = page.locator(".retrieved-context-item").first();
+  const retrievedItem = page.getByTestId("retrieved-context-item").first();
   const hasRetrievedItem = await retrievedItem.isVisible().catch(() => false);
   if (hasRetrievedItem) {
     pass("retrieved context item visible");
@@ -359,7 +383,7 @@ async function verifyContextPanel(page, conversationId) {
 }
 
 async function clickAutoTriggerIfAvailable(page) {
-  const autoButton = page.locator(".message-auto-trigger .message-action-button--primary").last();
+  const autoButton = page.getByTestId("message-start-collaboration").last();
   const visible = await autoButton.isVisible().catch(() => false);
   if (!visible) {
     return false;
@@ -370,7 +394,7 @@ async function clickAutoTriggerIfAvailable(page) {
 }
 
 async function clickWorkspaceCollaborationCtaIfAvailable(page) {
-  const primaryButton = page.locator(".workspace-main__collaboration-actions .primary-button").first();
+  const primaryButton = page.getByTestId("start-collaboration-primary").first();
   const visible = await primaryButton.isVisible().catch(() => false);
   if (!visible) {
     return false;
@@ -392,7 +416,7 @@ async function clickWorkspaceCollaborationCta(page) {
 }
 
 async function approveCollaborationGateIfVisible(page) {
-  const gate = page.locator(".approval-gate").first();
+  const gate = page.getByTestId("approval-gate").first();
   const visible = await gate.isVisible().catch(() => false);
   if (!visible) {
     return false;
@@ -457,8 +481,8 @@ async function waitForArtifacts(conversationId, beforeIds = new Set(), label = "
 }
 
 async function approveCurrentGate(page, label) {
-  await waitForVisible(page, ".approval-gate", `${label} approval gate`);
-  await waitForVisible(page, ".approval-gate__affected", `${label} affected summary`);
+  await waitForVisible(page, "[data-testid='approval-gate']", `${label} approval gate`);
+  await waitForVisible(page, "[data-testid='approval-affected-summary']", `${label} affected summary`);
   const approveButton = await waitForLocatorEnabled(
     page.locator(".approval-gate__actions .primary-button"),
     `${label} approval confirm button`
@@ -467,7 +491,7 @@ async function approveCurrentGate(page, label) {
 }
 
 async function selectArtifactCardById(page, artifactId, label) {
-  const card = page.locator(".artifact-card").filter({ hasText: artifactId }).first();
+  const card = page.getByTestId("artifact-card").filter({ hasText: artifactId }).first();
   await waitForLocatorEnabled(card, `${label} artifact card`);
   await card.click();
   await waitForVisible(page, ".artifact-preview", `${label} artifact preview`);
@@ -502,7 +526,7 @@ async function createRevisionAndApplyDiff(page, conversationId) {
   }
 
   await selectArtifactCardById(page, getIdValue(revisionArtifact.id), "revision");
-  await waitForVisible(page, ".diff-summary", "diff summary");
+  await waitForVisible(page, "[data-testid='diff-summary']", "diff summary");
 
   const beforeApplyIds = new Set(artifactsAfterRevision.map((artifact) => getIdValue(artifact.id)));
   const applyButton = await waitForLocatorEnabled(
@@ -527,7 +551,7 @@ async function deploySelectedArtifact(page) {
   );
   await deployButton.click();
   await approveCurrentGate(page, "deploy");
-  await waitForVisible(page, ".deploy-status-card", "deploy status card");
+  await waitForVisible(page, "[data-testid='deploy-status-card']", "deploy status card");
 
   const previewHref = await page.locator(".deploy-preview-link").last().getAttribute("href");
   return resolvePreviewUrl(previewHref);
@@ -543,9 +567,9 @@ async function restoreSelectedSnapshot(page, conversationId) {
   await restoreButton.click();
   await approveCurrentGate(page, "restore");
   await waitForArtifacts(conversationId, beforeIds, "restored artifact");
-  await waitForVisible(page, ".action-audit-panel", "action audit panel");
-  await page.locator(".action-audit-panel__toggle").click();
-  await waitForVisible(page, ".action-audit-card", "action audit card");
+  await waitForVisible(page, "[data-testid='action-audit-panel']", "action audit panel");
+  await page.getByTestId("action-audit-toggle").click();
+  await waitForVisible(page, "[data-testid='action-audit-card']", "action audit card");
 }
 
 async function seedOptionalRejectionScenario() {
@@ -608,7 +632,7 @@ async function runBrowserE2e() {
   try {
     await step("workspace route opens", async () => {
       await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
-      await waitForVisible(page, ".workspace-page", "workspace page");
+      await waitForVisible(page, "[data-testid='workspace-page']", "workspace page");
     });
 
     const conversation = await step("workspace creates and selects a conversation", () => createWorkspaceConversation(page));
@@ -617,26 +641,26 @@ async function runBrowserE2e() {
     const sentMessage = await step("UI sends multi-agent message with uploaded attachment", () =>
       sendMessageWithAttachmentFromUi(page, conversationId, agents, tempAttachment.filePath)
     );
-    await waitForVisible(page, ".workspace-main__flow-guide", "IM-first collaboration flow guide");
+    await waitForVisible(page, "[data-testid='workspace-flow-guide']", "IM-first collaboration flow guide");
     await step("retrieval context seeded from UI message", () =>
       seedRetrievalContextFromMessage(conversationId, sentMessage.message)
     );
-    await waitForVisible(page, ".message-stream", "message stream");
-    await waitForVisible(page, ".message-target-agent-name", "multi-agent target label");
-    await waitForVisible(page, ".message-attachment-card", "message attachment card");
+    await waitForVisible(page, "[data-testid='message-stream']", "message stream");
+    await waitForVisible(page, "[data-testid='message-target-agent']", "multi-agent target label");
+    await waitForVisible(page, "[data-testid='message-attachment-card']", "message attachment card");
 
     await step("UI triggers collaboration run", () => triggerTaskRunFromUi(page, conversationId));
-    await waitForVisible(page, ".task-panel", "TaskRun panel");
+    await waitForVisible(page, "[data-testid='task-run-panel']", "TaskRun panel");
     await waitForVisible(page, ".message-bubble--agent-protocol", "agent protocol message");
     await waitForVisible(page, ".adapter-quality-dashboard", "adapter quality dashboard");
-    await page.getByRole("button", { name: "Stop Run" }).first().waitFor({ state: "visible", timeout: 10000 });
-    await page.getByRole("button", { name: "Cancel Run" }).first().waitFor({ state: "visible", timeout: 10000 });
+    await page.getByTestId("stop-run-button").first().waitFor({ state: "visible", timeout: 10000 });
+    await page.getByTestId("cancel-run-button").first().waitFor({ state: "visible", timeout: 10000 });
     if (EXPECT_AUTO_TRIGGER_APPROVAL) {
-      await waitForVisible(page, ".message-auto-trigger", "message auto-trigger card");
+      await waitForVisible(page, "[data-testid='message-auto-trigger']", "message auto-trigger card");
     }
-    await waitForVisible(page, ".orchestrator-explain-panel", "orchestrator explain panel");
+    await waitForVisible(page, "[data-testid='orchestrator-explain-panel']", "orchestrator explain panel");
     await step("Context panel shows TaskRun snapshot", () => verifyContextPanel(page, conversationId));
-    await waitForVisible(page, ".artifact-card", "artifact card");
+    await waitForVisible(page, "[data-testid='artifact-card']", "artifact card");
     await step("CODE artifact selected for revision", () => selectCodeArtifact(page, conversationId));
 
     await step("UI creates revision and approves Apply Diff", () => createRevisionAndApplyDiff(page, conversationId));
@@ -652,6 +676,9 @@ async function runBrowserE2e() {
     if (consoleErrors.length > 0) {
       throw new Error(`browser console/page errors: ${consoleErrors.slice(0, 5).join(" | ")}`);
     }
+  } catch (error) {
+    await captureFailureDiagnostics(page, consoleErrors, error);
+    throw error;
   } finally {
     await browser.close();
     await rm(tempAttachment.directory, { recursive: true, force: true });

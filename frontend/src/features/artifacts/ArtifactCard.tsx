@@ -37,6 +37,7 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
       className={`artifact-card ${selected ? "artifact-card--selected" : ""} ${
         highlighted ? "artifact-card--highlighted" : ""
       }`}
+      data-testid="artifact-card"
       onClick={() => onSelect(artifactId)}
     >
       <div className="artifact-card__row">
@@ -74,6 +75,11 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
           )}
           {artifact.qualityReason ? (
             <span className="artifact-card__tag artifact-source-badge">Quality reason: {artifact.qualityReason}</span>
+          ) : null}
+          {artifact.buildValidationReason ? (
+            <span className="artifact-card__tag artifact-source-badge">
+              Build reason: {artifact.buildValidationReason}
+            </span>
           ) : null}
         </div>
       ) : null}

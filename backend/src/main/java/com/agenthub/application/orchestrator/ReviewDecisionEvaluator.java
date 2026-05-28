@@ -63,6 +63,7 @@ public class ReviewDecisionEvaluator {
                 value(reviewStep == null ? null : reviewStep.getAdapterErrorMessage()),
                 value(reviewStep == null ? null : reviewStep.getArtifactParseStatus()),
                 value(reviewStep == null ? null : reviewStep.getArtifactBuildValidationStatus()),
+                value(reviewStep == null ? null : reviewStep.getArtifactBuildValidationReason()),
                 value(reviewStep == null ? null : reviewStep.getArtifactQualityStatus()),
                 value(reviewStep == null ? null : reviewStep.getArtifactQualityReason()),
                 artifactQualityEvidence(reviewedArtifacts),
@@ -123,6 +124,7 @@ public class ReviewDecisionEvaluator {
         if (isBuildFailure(step.getArtifactBuildValidationStatus())) {
             blockers.add("Reviewer step build/lint validation failed: "
                     + step.getArtifactBuildValidationStatus()
+                    + qualityReason(step.getArtifactBuildValidationReason())
                     + qualityReason(step.getArtifactQualityReason()));
         }
         if (isQualityFailure(step.getArtifactQualityStatus())) {
@@ -154,6 +156,7 @@ public class ReviewDecisionEvaluator {
             blockers.add("Artifact build/lint validation failed: "
                     + label
                     + " status=" + artifact.getBuildValidationStatus()
+                    + qualityReason(artifact.getBuildValidationReason())
                     + qualityReason(artifact.getQualityReason()));
         }
         if (isQualityFailure(artifact.getQualityStatus())) {
@@ -191,6 +194,7 @@ public class ReviewDecisionEvaluator {
                 .map(artifact -> String.join(" ",
                         value(artifact.getTitle()),
                         value(artifact.getBuildValidationStatus()),
+                        value(artifact.getBuildValidationReason()),
                         value(artifact.getQualityStatus()),
                         value(artifact.getQualityReason())))
                 .reduce((left, right) -> left + "\n" + right)

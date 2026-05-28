@@ -42,7 +42,7 @@ export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelPro
   const latestAudit = sortedAudits[0] ?? null;
 
   return (
-    <section className="action-audit-panel">
+    <section className="action-audit-panel" data-testid="action-audit-panel">
       <div className="section-header">
         <div>
           <h3>Action Audit</h3>
@@ -51,6 +51,7 @@ export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelPro
         <button
           type="button"
           className="secondary-button action-audit-panel__toggle"
+          data-testid="action-audit-toggle"
           onClick={() => setExpanded((previous) => !previous)}
         >
           {expanded ? "收起审计" : "展开审计"} · {audits.length}
@@ -62,7 +63,7 @@ export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelPro
       ) : (
         <>
           {!expanded && latestAudit ? (
-            <article className="action-audit-card action-audit-card--latest">
+            <article className="action-audit-card action-audit-card--latest" data-testid="action-audit-card">
               <div className="action-audit-card__dot" />
               <div>
                 <div className="action-audit-card__header">
@@ -83,7 +84,7 @@ export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelPro
           {expanded ? (
             <div className="action-audit-timeline">
               {sortedAudits.map((audit) => (
-                <article className="action-audit-card" key={audit.auditId}>
+                <article className="action-audit-card" data-testid="action-audit-card" key={audit.auditId}>
                   <div className="action-audit-card__dot" />
                   <div>
                     <div className="action-audit-card__header">

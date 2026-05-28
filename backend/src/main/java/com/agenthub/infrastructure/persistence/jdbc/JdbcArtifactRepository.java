@@ -40,8 +40,8 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                 REPLACE INTO agenthub_artifacts
                 (id, conversation_id, task_run_id, parent_artifact_id, revision_instruction, title, type, status,
                  language, content, version, source_kind, source_adapter_type, source_task_step_id, generation_mode,
-                 build_validation_status, quality_status, quality_score, quality_reason, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 build_validation_status, build_validation_reason, quality_status, quality_score, quality_reason, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open();
                 var statement = connection.prepareStatement(sql)) {
@@ -61,15 +61,16 @@ public class JdbcArtifactRepository implements ArtifactRepository {
             statement.setString(14, artifact.getSourceTaskStepId());
             statement.setString(15, artifact.getGenerationMode());
             statement.setString(16, artifact.getBuildValidationStatus());
-            statement.setString(17, artifact.getQualityStatus());
+            statement.setString(17, artifact.getBuildValidationReason());
+            statement.setString(18, artifact.getQualityStatus());
             if (artifact.getQualityScore() == null) {
-                statement.setObject(18, null);
+                statement.setObject(19, null);
             } else {
-                statement.setInt(18, artifact.getQualityScore());
+                statement.setInt(19, artifact.getQualityScore());
             }
-            statement.setString(19, artifact.getQualityReason());
-            statement.setTimestamp(20, JdbcSerializationSupport.timestamp(artifact.getCreatedAt()));
-            statement.setTimestamp(21, JdbcSerializationSupport.timestamp(artifact.getUpdatedAt()));
+            statement.setString(20, artifact.getQualityReason());
+            statement.setTimestamp(21, JdbcSerializationSupport.timestamp(artifact.getCreatedAt()));
+            statement.setTimestamp(22, JdbcSerializationSupport.timestamp(artifact.getUpdatedAt()));
             statement.executeUpdate();
             return artifact;
         } catch (SQLException exception) {
@@ -244,6 +245,7 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                 resultSet.getString("source_task_step_id"),
                 resultSet.getString("generation_mode"),
                 readOptionalColumn(resultSet, "build_validation_status"),
+                readOptionalColumn(resultSet, "build_validation_reason"),
                 readOptionalColumn(resultSet, "quality_status"),
                 readOptionalInteger(resultSet, "quality_score"),
                 readOptionalColumn(resultSet, "quality_reason"),
@@ -289,6 +291,7 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                         source_task_step_id VARCHAR(128),
                         generation_mode VARCHAR(64),
                         build_validation_status VARCHAR(64),
+                        build_validation_reason TEXT,
                         quality_status VARCHAR(64),
                         quality_score INT,
                         quality_reason TEXT,
@@ -296,8 +299,21 @@ public class JdbcArtifactRepository implements ArtifactRepository {
                         updated_at TIMESTAMP
                     )
                     """);
+            ensureColumn(connection, "agenthub_artifacts", "build_validation_reason", "TEXT");
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to initialize artifact schema", exception);
+        }
+    }
+
+    private void ensureColumn(Connection connection, String tableName, String columnName, String columnDefinition)
+            throws SQLException {
+        try (ResultSet columns = connection.getMetaData().getColumns(null, null, tableName, columnName)) {
+            if (columns.next()) {
+                return;
+            }
+        }
+        try (var statement = connection.createStatement()) {
+            statement.executeUpdate("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnDefinition);
         }
     }
 }

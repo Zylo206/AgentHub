@@ -260,6 +260,28 @@ The explicit schema file is available at `backend/src/main/resources/schema-jdbc
 
 `schema-jdbc.sql` is a fresh-initialization schema, not a migration script. If you already have an older AgentHub JDBC database, recreate it for local validation or apply equivalent `ALTER TABLE` statements manually before running the JDBC smoke flow.
 
+For a repeatable local MySQL initialization flow, use the opt-in helper script. It uses the local `mysql` CLI, creates the database if needed, and applies `schema-jdbc.sql`:
+
+```powershell
+$env:AGENTHUB_MYSQL_HOST="127.0.0.1"
+$env:AGENTHUB_MYSQL_PORT="3306"
+$env:AGENTHUB_MYSQL_DATABASE="agenthub"
+$env:AGENTHUB_MYSQL_USERNAME="<username>"
+$env:AGENTHUB_MYSQL_PASSWORD="<password>"
+node scripts/mysql-init-profile.mjs
+```
+
+You can also derive host, port, and database from `AGENTHUB_JDBC_URL`:
+
+```powershell
+$env:AGENTHUB_JDBC_URL="jdbc:mysql://127.0.0.1:3306/agenthub?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC"
+$env:AGENTHUB_JDBC_USERNAME="<username>"
+$env:AGENTHUB_JDBC_PASSWORD="<password>"
+node scripts/mysql-init-profile.mjs
+```
+
+The script prints the JDBC env values to use next, but never prints the password. It does not make MySQL the default runtime.
+
 You can also use the JDBC wrapper script after starting the backend in JDBC mode:
 
 ```powershell
@@ -404,6 +426,28 @@ The current control semantics are execution-aware for Orchestrator steps: `CANCE
 
 `e2e-browser.mjs` is a lightweight Playwright wrapper that drives the IM-first Workspace flow: create a conversation, send a multi-Agent task with a real text attachment, require the Workspace collaboration primary action, then verify the rendered Workspace, message attachment card, Adapter quality dashboard, retrieved context explanation, Orchestrator explain panel, Stop / Cancel run controls, artifact preview, approval affected summary, diff apply, restore approval flow, Action Audit panel, deploy status card, static preview page, and the rejection protocol.
 
+Treat this script as the required UI regression gate after major changes to Workspace, MessageStream, ArtifactPanel, Approval, Restore, Deploy Preview, or PreviewPage. A change in those areas should not be marked complete until this script has either passed or the reason for not running it is recorded.
+
+Required product path:
+
+- open `/workspace`
+- create or select a Conversation
+- send a task message with a real local attachment
+- confirm collaboration from the Workspace primary action or message confirmation card
+- observe multi-Agent protocol messages
+- inspect TaskRun / Orchestrator explain output
+- inspect Artifact output
+- approve Apply Diff
+- approve Restore Snapshot
+- approve Deploy Preview
+- open `/preview/:artifactId`
+
+The script uses stable `data-testid` selectors for the main product path and writes failure diagnostics under `.agenthub/e2e-browser/` when the browser flow fails:
+
+- current URL
+- screenshot
+- console / page error summary
+
 The wrapper can use `playwright-core`, `playwright`, or `@playwright/test` from the frontend package. The lightest path is `playwright-core` plus the local Microsoft Edge browser channel:
 
 ```powershell
@@ -423,6 +467,7 @@ Environment overrides:
 ```powershell
 $env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
 $env:AGENTHUB_FRONTEND_BASE_URL="http://127.0.0.1:5173"
+$env:VITE_API_BASE_URL="http://127.0.0.1:8080" # set before starting frontend dev server
 $env:AGENTHUB_E2E_BROWSER_CHANNEL="msedge"
 $env:AGENTHUB_E2E_HEADLESS="false"
 $env:AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL="true"
@@ -431,6 +476,23 @@ node scripts/e2e-browser.mjs
 ```
 
 The browser E2E requires backend and frontend to already be running. If the frontend uses a non-default port, start the backend with `AGENTHUB_CORS_ALLOWED_ORIGINS` including that frontend origin. It does not start servers, does not call real LLM providers, does not use the manual demo/debug toolbar path, and does not perform an external deployment.
+When the backend is not running on `http://localhost:8080`, start Vite with `VITE_API_BASE_URL` pointing at the same backend that `AGENTHUB_API_BASE_URL` uses; otherwise the browser UI and the E2E API polling will target different backends.
+
+## Local Verification Gate
+
+`verify-local.mjs` runs the local baseline checks in sequence:
+
+- API smoke: `node scripts/smoke-test.mjs`
+- SSE smoke: `node scripts/sse-smoke-test.mjs`
+- Browser E2E: `node scripts/e2e-browser.mjs`
+
+Start backend and frontend first, then run:
+
+```powershell
+node scripts/verify-local.mjs
+```
+
+This wrapper is intended for local release-style verification after broad UI or workflow changes. It does not replace opt-in checks for real providers, JDBC/MySQL, Claude Code, Codex, or streaming-specific validation.
 
 ## OpenAI-compatible / DeepSeek Adapter
 

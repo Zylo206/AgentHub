@@ -183,9 +183,9 @@ public class JdbcTaskRepository implements TaskRepository {
                  preferred_adapter_type, actual_adapter_type, adapter_status, adapter_response_summary,
                  adapter_error_message, parallel_group_key, depends_on_step_orders_json, routing_reason,
                  real_output_used, artifact_parse_status, artifact_build_validation_status,
-                 artifact_quality_status, artifact_quality_score, artifact_quality_reason,
+                 artifact_build_validation_reason, artifact_quality_status, artifact_quality_score, artifact_quality_reason,
                  produced_artifact_ids_json, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open()) {
             try (var delete = connection.prepareStatement(deleteSql)) {
@@ -213,16 +213,17 @@ public class JdbcTaskRepository implements TaskRepository {
                     insert.setBoolean(17, step.isRealOutputUsed());
                     insert.setString(18, step.getArtifactParseStatus());
                     insert.setString(19, step.getArtifactBuildValidationStatus());
-                    insert.setString(20, step.getArtifactQualityStatus());
+                    insert.setString(20, step.getArtifactBuildValidationReason());
+                    insert.setString(21, step.getArtifactQualityStatus());
                     if (step.getArtifactQualityScore() == null) {
-                        insert.setObject(21, null);
+                        insert.setObject(22, null);
                     } else {
-                        insert.setInt(21, step.getArtifactQualityScore());
+                        insert.setInt(22, step.getArtifactQualityScore());
                     }
-                    insert.setString(22, step.getArtifactQualityReason());
-                    insert.setString(23, JdbcSerializationSupport.artifactIdsJson(step.getProducedArtifactIds()));
-                    insert.setTimestamp(24, JdbcSerializationSupport.timestamp(step.getCreatedAt()));
-                    insert.setTimestamp(25, JdbcSerializationSupport.timestamp(step.getUpdatedAt()));
+                    insert.setString(23, step.getArtifactQualityReason());
+                    insert.setString(24, JdbcSerializationSupport.artifactIdsJson(step.getProducedArtifactIds()));
+                    insert.setTimestamp(25, JdbcSerializationSupport.timestamp(step.getCreatedAt()));
+                    insert.setTimestamp(26, JdbcSerializationSupport.timestamp(step.getUpdatedAt()));
                     insert.addBatch();
                 }
                 insert.executeBatch();
@@ -414,6 +415,7 @@ public class JdbcTaskRepository implements TaskRepository {
                             readOptionalBoolean(resultSet, "real_output_used"),
                             readOptionalColumn(resultSet, "artifact_parse_status"),
                             readOptionalColumn(resultSet, "artifact_build_validation_status"),
+                            readOptionalColumn(resultSet, "artifact_build_validation_reason"),
                             readOptionalColumn(resultSet, "artifact_quality_status"),
                             readOptionalInteger(resultSet, "artifact_quality_score"),
                             readOptionalColumn(resultSet, "artifact_quality_reason"),
@@ -489,6 +491,7 @@ public class JdbcTaskRepository implements TaskRepository {
                         real_output_used BOOLEAN,
                         artifact_parse_status VARCHAR(64),
                         artifact_build_validation_status VARCHAR(64),
+                        artifact_build_validation_reason TEXT,
                         artifact_quality_status VARCHAR(64),
                         artifact_quality_score INT,
                         artifact_quality_reason TEXT,
@@ -497,8 +500,21 @@ public class JdbcTaskRepository implements TaskRepository {
                         updated_at TIMESTAMP
                     )
                     """);
+            ensureColumn(connection, "agenthub_task_steps", "artifact_build_validation_reason", "TEXT");
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to initialize task schema", exception);
+        }
+    }
+
+    private void ensureColumn(Connection connection, String tableName, String columnName, String columnDefinition)
+            throws SQLException {
+        try (ResultSet columns = connection.getMetaData().getColumns(null, null, tableName, columnName)) {
+            if (columns.next()) {
+                return;
+            }
+        }
+        try (var statement = connection.createStatement()) {
+            statement.executeUpdate("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnDefinition);
         }
     }
 

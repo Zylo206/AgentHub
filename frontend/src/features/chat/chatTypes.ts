@@ -86,6 +86,7 @@ export interface TaskStep {
   artifactQualityReason?: string | null;
   artifactQualityScore?: number | null;
   artifactBuildValidationStatus?: string | null;
+  artifactBuildValidationReason?: string | null;
   realAdapterOutcome?: "ACCEPTED" | "PARSE_FAILED" | "QUALITY_FAILED" | "BUILD_FAILED" | "FALLBACK" | string | null;
   producedArtifactIds: IdValue[];
   createdAt: string;

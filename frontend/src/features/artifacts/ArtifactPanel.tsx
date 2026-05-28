@@ -161,7 +161,7 @@ function buildQualityRevisionInstruction(artifact: Artifact): string | null {
   const reasons = [
     artifact.qualityReason ? `Address reviewer feedback: ${artifact.qualityReason}` : null,
     isBlockingValidationStatus(artifact.buildValidationStatus)
-      ? `Fix build validation status: ${artifact.buildValidationStatus}`
+      ? `Fix build validation status: ${artifact.buildValidationStatus}${artifact.buildValidationReason ? ` (${artifact.buildValidationReason})` : ""}`
       : null,
     artifact.sourceKind && artifact.sourceKind !== "REAL_ADAPTER"
       ? `Replace fallback output (${displayArtifactSourceKind(artifact.sourceKind)}) with a validated revision.`
@@ -195,7 +195,11 @@ function getArtifactGateAction(
 
   return {
     title: failedGates.join(" · "),
-    reason: artifact.qualityReason || fallbackReason || "No detailed backend reason was returned.",
+    reason:
+      (buildFailed ? artifact.buildValidationReason : null) ||
+      artifact.qualityReason ||
+      fallbackReason ||
+      "No detailed backend reason was returned.",
     nextStep: "Use the prefilled Revision instruction below, create a revision, then re-run review/build validation."
   };
 }
@@ -548,7 +552,7 @@ export function ArtifactPanel({
   }
 
   return (
-    <div className="artifact-panel">
+    <div className="artifact-panel" data-testid="artifact-panel">
       <div className="artifact-panel__sidebar">
         <div className="section-header">
           <h3>产物</h3>
@@ -566,9 +570,9 @@ export function ArtifactPanel({
         {loadingArtifacts ? (
           <div className="panel-empty">正在加载产物...</div>
         ) : artifacts.length === 0 ? (
-          <div className="panel-empty">运行 Demo Task 后会生成产物。</div>
+          <div className="panel-empty">Confirm Agent collaboration from a task message to generate Artifacts.</div>
         ) : (
-          <div className="artifact-card-list">
+          <div className="artifact-card-list" data-testid="artifact-card-list">
             {artifacts.map((artifact) => {
               const artifactId = getIdValue(artifact.id);
               return (
@@ -585,7 +589,7 @@ export function ArtifactPanel({
         )}
       </div>
 
-      <div className="artifact-panel__detail">
+      <div className="artifact-panel__detail" data-testid="artifact-detail">
         <div className="section-header">
           <h3>产物详情</h3>
           {selectedArtifact ? <span>{displayArtifactType(selectedArtifact.type)}</span> : null}
@@ -623,6 +627,9 @@ export function ArtifactPanel({
                 </p>
                 {selectedArtifact.sourceKind === "REAL_ADAPTER" ? (
                   <p className="artifact-preview__line">Build validation: {formatBuildValidationValue(selectedArtifact)}</p>
+                ) : null}
+                {selectedArtifact.buildValidationReason ? (
+                  <p className="artifact-preview__line">Build validation reason: {selectedArtifact.buildValidationReason}</p>
                 ) : null}
                 <p className="artifact-preview__line">Code quality score: {formatQualityScore(selectedArtifact.qualityScore)}</p>
                 {selectedArtifactFallbackReason ? (
@@ -677,7 +684,10 @@ export function ArtifactPanel({
               ) : null}
             </div>
             {pendingApproval ? (
-              <div className={`approval-gate approval-gate--${pendingApproval.riskLevel.toLowerCase()}`}>
+              <div
+                className={`approval-gate approval-gate--${pendingApproval.riskLevel.toLowerCase()}`}
+                data-testid="approval-gate"
+              >
                 <div className="approval-gate__header">
                   <div>
                     <strong>{pendingApproval.title}</strong>
@@ -693,7 +703,7 @@ export function ArtifactPanel({
                   <span>Approval result will be written to Action Audit.</span>
                 </div>
                 {pendingApproval.affectedItems.length > 0 ? (
-                  <div className="approval-gate__affected">
+                  <div className="approval-gate__affected" data-testid="approval-affected-summary">
                     <span className="approval-gate__affected-label">Affected summary</span>
                     <ul>
                       {pendingApproval.affectedItems.map((item) => (
@@ -746,7 +756,7 @@ export function ArtifactPanel({
                 {revisingArtifact ? "修改中..." : "修改选中产物"}
               </button>
             </div>
-            <div className="deploy-status-box">
+            <div className="deploy-status-box" data-testid="deploy-status-box">
               <div className="artifact-revision-box__header">
                 <strong>Deploy Status</strong>
                 <span>Static demo simulation</span>
@@ -768,7 +778,7 @@ export function ArtifactPanel({
               ) : (
                 <div className="deploy-status-list">
                   {deployments.map((deployment) => (
-                    <div className="deploy-status-card" key={deployment.deploymentId}>
+                    <div className="deploy-status-card" data-testid="deploy-status-card" key={deployment.deploymentId}>
                       <div className="deploy-status-card__row">
                         <strong>{deployment.artifactTitle}</strong>
                         <span className={`status-pill status-pill--${normalizeStatusClass(deployment.status)}`}>
@@ -819,7 +829,7 @@ export function ArtifactPanel({
               selectedArtifactId={selectedArtifactId}
               onSelectArtifact={onSelectArtifact}
             />
-            <div className="artifact-snapshot-box">
+            <div className="artifact-snapshot-box" data-testid="artifact-snapshot-box">
               <div className="artifact-revision-box__header">
                 <strong>Safety Snapshots</strong>
                 <span>{snapshots.length} record(s)</span>

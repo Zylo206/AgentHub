@@ -17,6 +17,7 @@ export interface Artifact {
   sourceTaskStepId?: string | null;
   generationMode?: string | null;
   buildValidationStatus?: string | null;
+  buildValidationReason?: string | null;
   qualityStatus?: string | null;
   qualityReason?: string | null;
   qualityScore?: number | null;

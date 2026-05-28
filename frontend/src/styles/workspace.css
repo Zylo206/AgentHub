@@ -596,6 +596,31 @@
   gap: 8px;
 }
 
+.workspace-debug-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 20px 12px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(100, 116, 139, 0.34);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.86);
+  color: var(--text-muted);
+}
+
+.workspace-debug-panel__header strong {
+  display: block;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.workspace-debug-panel__header p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .secondary-button--quiet {
   color: var(--text-muted);
   background: #f8fafc;
@@ -2289,6 +2314,35 @@
   background: #f8fafc;
 }
 
+.panel-empty--collaboration {
+  display: grid;
+  gap: 10px;
+}
+
+.panel-empty--collaboration strong {
+  color: var(--text-main);
+}
+
+.panel-empty--collaboration p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.panel-empty__examples {
+  display: grid;
+  gap: 8px;
+}
+
+.panel-empty__examples span {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  border-radius: 12px;
+  background: rgba(239, 246, 255, 0.72);
+  color: var(--text-main);
+  font-size: 12px;
+}
+
 .workspace-error {
   display: flex;
   align-items: center;
@@ -2838,6 +2892,52 @@
   padding: 4px 8px;
   background: rgba(15, 23, 42, 0.06);
   color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.message-auto-trigger__plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.message-auto-trigger__plan-cell {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.message-auto-trigger__plan-cell span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.message-auto-trigger__plan-cell p {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.message-auto-trigger__plan-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.message-auto-trigger__plan-chips strong {
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 900;
 }

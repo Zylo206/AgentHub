@@ -27,6 +27,7 @@ public class TaskStep {
     private final boolean realOutputUsed;
     private final String artifactParseStatus;
     private final String artifactBuildValidationStatus;
+    private final String artifactBuildValidationReason;
     private final String artifactQualityStatus;
     private final Integer artifactQualityScore;
     private final String artifactQualityReason;
@@ -167,6 +168,7 @@ public class TaskStep {
                 realOutputUsed,
                 artifactParseStatus,
                 null,
+                null,
                 artifactQualityStatus,
                 null,
                 artifactQualityReason,
@@ -201,6 +203,62 @@ public class TaskStep {
             List<ArtifactId> producedArtifactIds,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                id,
+                taskRunId,
+                stepOrder,
+                assignedAgentId,
+                taskDescription,
+                status,
+                inputContext,
+                outputContent,
+                preferredAdapterType,
+                actualAdapterType,
+                adapterStatus,
+                adapterResponseSummary,
+                adapterErrorMessage,
+                parallelGroupKey,
+                dependsOnStepOrders,
+                routingReason,
+                realOutputUsed,
+                artifactParseStatus,
+                artifactBuildValidationStatus,
+                extractBuildValidationReason(artifactQualityReason),
+                artifactQualityStatus,
+                artifactQualityScore,
+                artifactQualityReason,
+                producedArtifactIds,
+                createdAt,
+                updatedAt);
+    }
+
+    public TaskStep(
+            TaskStepId id,
+            TaskRunId taskRunId,
+            int stepOrder,
+            AgentId assignedAgentId,
+            String taskDescription,
+            TaskStepStatus status,
+            String inputContext,
+            String outputContent,
+            String preferredAdapterType,
+            String actualAdapterType,
+            String adapterStatus,
+            String adapterResponseSummary,
+            String adapterErrorMessage,
+            String parallelGroupKey,
+            List<Integer> dependsOnStepOrders,
+            String routingReason,
+            boolean realOutputUsed,
+            String artifactParseStatus,
+            String artifactBuildValidationStatus,
+            String artifactBuildValidationReason,
+            String artifactQualityStatus,
+            Integer artifactQualityScore,
+            String artifactQualityReason,
+            List<ArtifactId> producedArtifactIds,
+            Instant createdAt,
+            Instant updatedAt) {
         this.id = id;
         this.taskRunId = taskRunId;
         this.stepOrder = stepOrder;
@@ -221,6 +279,7 @@ public class TaskStep {
         this.realOutputUsed = realOutputUsed;
         this.artifactParseStatus = artifactParseStatus;
         this.artifactBuildValidationStatus = artifactBuildValidationStatus;
+        this.artifactBuildValidationReason = artifactBuildValidationReason;
         this.artifactQualityStatus = artifactQualityStatus;
         this.artifactQualityScore = artifactQualityScore;
         this.artifactQualityReason = artifactQualityReason;
@@ -340,6 +399,10 @@ public class TaskStep {
         return artifactBuildValidationStatus;
     }
 
+    public String getArtifactBuildValidationReason() {
+        return artifactBuildValidationReason;
+    }
+
     public String getArtifactQualityStatus() {
         return artifactQualityStatus;
     }
@@ -379,6 +442,21 @@ public class TaskStep {
             }
         }
         return false;
+    }
+
+    private static String extractBuildValidationReason(String qualityReason) {
+        if (qualityReason == null || qualityReason.isBlank()) {
+            return null;
+        }
+        String marker = "buildLintReason=";
+        int start = qualityReason.indexOf(marker);
+        if (start < 0) {
+            return null;
+        }
+        int valueStart = start + marker.length();
+        int end = qualityReason.indexOf("; ", valueStart);
+        String value = end >= 0 ? qualityReason.substring(valueStart, end) : qualityReason.substring(valueStart);
+        return value.isBlank() ? null : value;
     }
 
     public List<ArtifactId> getProducedArtifactIds() {

@@ -669,6 +669,9 @@ async function runDemoTaskWithRealAdapter() {
   if (EXPECT_BUILD_VALIDATION && !acceptedRealStep.artifactBuildValidationStatus) {
     throw new Error(`accepted real step missing artifactBuildValidationStatus: ${acceptedRealStep.stepOrder}`);
   }
+  if (EXPECT_BUILD_VALIDATION && !String(acceptedRealStep.artifactBuildValidationReason || "").trim()) {
+    throw new Error(`accepted real step missing artifactBuildValidationReason: ${acceptedRealStep.stepOrder}`);
+  }
   if (EXPECT_QUALITY_SCORE && (typeof acceptedRealStep.artifactQualityScore !== "number" || !Number.isFinite(acceptedRealStep.artifactQualityScore))) {
     throw new Error(`accepted real step missing artifactQualityScore: ${acceptedRealStep.stepOrder}`);
   }
@@ -698,6 +701,9 @@ async function runDemoTaskWithRealAdapter() {
   }
   if (EXPECT_BUILD_VALIDATION && !acceptedPrimary.buildValidationStatus) {
     throw new Error("accepted REAL_ADAPTER artifact missing buildValidationStatus");
+  }
+  if (EXPECT_BUILD_VALIDATION && !String(acceptedPrimary.buildValidationReason || "").trim()) {
+    throw new Error("accepted REAL_ADAPTER artifact missing buildValidationReason");
   }
   if (EXPECT_QUALITY_SCORE && (typeof acceptedPrimary.qualityScore !== "number" || !Number.isFinite(acceptedPrimary.qualityScore))) {
     throw new Error("accepted REAL_ADAPTER artifact missing qualityScore");
@@ -735,6 +741,7 @@ async function runDemoTaskWithRealAdapter() {
   }
   if (EXPECT_BUILD_VALIDATION) {
     pass(`accepted primary artifact build validation: ${acceptedPrimary.buildValidationStatus}`);
+    pass(`accepted primary artifact build reason: ${acceptedPrimary.buildValidationReason}`);
   }
   if (EXPECT_QUALITY_SCORE) {
     pass(`accepted primary artifact quality score: ${String(acceptedPrimary.qualityScore)}`);
