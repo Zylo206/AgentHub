@@ -45,6 +45,11 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: real local Claude Code CLI 2.1.143 smoke on port `18094` passed with streaming chunk events and `CLAUDE_CODE / REAL_ADAPTER` Artifact output.
    - `Done`: Windows npm shim resolution prefers `.cmd/.exe/.bat` over extensionless shims, and `stream-json` uses Claude Code's required `--verbose` flag.
    - `Done`: `docs/spec/claude-codex-headless-adapter-spec.md` captures the Claude Code / Codex headless Artifact-only v1 contract, smoke boundaries, and deeper integration prerequisites.
+   - `Done`: `/api/adapters` now exposes Claude Code supported modes, safety policies, and non-invasive version/help capability details without triggering model execution.
+   - `Done`: Claude Code direct execute diagnostics now include `failureType`, command mode, timeout, and CLI path; smoke can require real CLI with `AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true`.
+   - `Done`: Claude Code prompt contract now requires a single raw JSON object, raw CODE source, no Markdown fences, no CLI wrapper/log content, and explicit Artifact type / summary fields.
+   - `Done`: Claude Code contract failures are surfaced as `PARSE_FAILED`; quality/build failures remain visible through TaskStep and Artifact metadata.
+   - `Done`: Claude Code streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, destroys the CLI process when cancellation is observed during stream-json reading, and discards final output after Stop / Cancel.
    - `Boundary`: fixture mode is not real Claude Code provider output; real CLI mode still requires local `claude` install and authentication.
    - `Boundary`: v1 is Artifact-only and does not allow Claude Code to modify the AgentHub workspace.
 
@@ -58,6 +63,11 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: real local Codex CLI smoke passed on port `18096` with `AGENTHUB_CODEX_FIXTURE_ENABLED=false` and `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`.
    - `Done`: real Codex streaming smoke passed on port `18100` with `AGENTHUB_CODEX_STREAMING_ENABLED=true`, observed `ADAPTER_STREAM_CHUNK`, and created `CODEX / REAL_ADAPTER / REAL_FIRST` Artifact.
    - `Done`: `docs/spec/claude-codex-headless-adapter-spec.md` defines Codex v1 as headless / Artifact-only, not Codex Desktop GUI automation.
+   - `Done`: `/api/adapters` now exposes Codex supported modes, safety policies, and non-invasive `--version` / `exec --help` capability details.
+   - `Done`: Codex direct execute diagnostics now include `failureType`, command mode, timeout, and CLI path; smoke can require real CLI with `AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI=true`.
+   - `Done`: Codex prompt contract now requires a single raw JSON object, raw CODE source, no Markdown fences, no CLI wrapper/log content, and explicit Artifact type / summary fields.
+   - `Done`: Codex contract failures are surfaced as `PARSE_FAILED`; quality/build failures remain visible through TaskStep and Artifact metadata.
+   - `Done`: Codex streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, supports fixture stream previews for contract smoke, and discards final output after Stop / Cancel.
    - `Boundary`: this is not Codex Desktop GUI automation; the intended integration is headless / Artifact-only execution with fallback.
    - `Boundary`: default smoke must not require Codex, and Codex output must not bypass Artifact contract validation or quality gates.
 

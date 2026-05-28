@@ -24,6 +24,9 @@ interface AdapterQualityRow {
   realOutputAccepted: number;
   lastQualityStatus?: string | null;
   lastQualityReason?: string | null;
+  supportedModes: string[];
+  safetyPolicies: string[];
+  capabilityDetails: Record<string, unknown>;
 }
 
 function getStepAdapterType(step: TaskStep): string {
@@ -77,7 +80,10 @@ function buildRows(
       buildFailures: 0,
       realOutputAccepted: 0,
       lastQualityStatus: null,
-      lastQualityReason: null
+      lastQualityReason: null,
+      supportedModes: descriptor.supportedModes ?? [],
+      safetyPolicies: descriptor.safetyPolicies ?? [],
+      capabilityDetails: descriptor.capabilityDetails ?? {}
     });
   });
 
@@ -99,7 +105,10 @@ function buildRows(
         buildFailures: 0,
         realOutputAccepted: 0,
         lastQualityStatus: null,
-        lastQualityReason: null
+        lastQualityReason: null,
+        supportedModes: [],
+        safetyPolicies: [],
+        capabilityDetails: {}
       };
 
     row.observedSteps = Math.max(row.observedSteps, metrics.attempts);
@@ -140,7 +149,10 @@ function buildRows(
         buildFailures: 0,
         realOutputAccepted: 0,
         lastQualityStatus: null,
-        lastQualityReason: null
+        lastQualityReason: null,
+        supportedModes: [],
+        safetyPolicies: [],
+        capabilityDetails: {}
       };
 
     row.observedSteps += 1;
@@ -200,6 +212,8 @@ export function AdapterQualityDashboard({
           <span>Real accepted</span>
           <span>Failure rate</span>
           <span>Failures</span>
+          <span>Modes</span>
+          <span>Policy</span>
           <span>Last reason</span>
         </div>
         {rows.map((row) => (
@@ -217,6 +231,12 @@ export function AdapterQualityDashboard({
             <span>{formatRate(row.totalFailureRate)}</span>
             <span title="parse / quality / build failures">
               {row.parseFailures} / {row.qualityFailures} / {row.buildFailures}
+            </span>
+            <span title={row.supportedModes.join(", ") || "No capability mode metadata reported"}>
+              {row.supportedModes.slice(0, 2).join(", ") || "N/A"}
+            </span>
+            <span title={row.safetyPolicies.join(" | ") || "No safety policy metadata reported"}>
+              {row.safetyPolicies.some((policy) => policy.includes("workspace-write-disabled")) ? "No workspace write" : "N/A"}
             </span>
             <span title={row.lastQualityReason || ""}>{row.lastQualityStatus || "N/A"}</span>
           </div>

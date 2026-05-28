@@ -176,6 +176,7 @@ node scripts/claude-code-smoke-test.mjs
 Real Claude Code CLI mode requires `claude` to be installed and authenticated on the machine:
 
 ```powershell
+claude --version
 $env:AGENTHUB_CLAUDE_CODE_ENABLED="true"
 $env:AGENTHUB_CLAUDE_CODE_FIXTURE_ENABLED="false"
 $env:AGENTHUB_CLAUDE_CODE_COMMAND="claude"
@@ -184,6 +185,7 @@ $env:AGENTHUB_CLAUDE_CODE_ARTIFACT_ONLY="true"
 $env:AGENTHUB_CLAUDE_CODE_ALLOWED_TOOLS="Read,Grep,Glob"
 $env:AGENTHUB_CLAUDE_CODE_DISALLOWED_TOOLS="Edit,MultiEdit,Write,NotebookEdit,Bash"
 $env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
+$env:AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI="true"
 node scripts/claude-code-smoke-test.mjs
 ```
 
@@ -197,6 +199,16 @@ node scripts/claude-code-smoke-test.mjs
 
 This is not an interactive Claude Code terminal and does not allow Claude Code to directly edit the AgentHub workspace. Workspace-write mode remains out of scope for this v1 adapter.
 
+The smoke script checks `/api/adapters` capability metadata before execution. With `AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true`, fixture mode is rejected and the descriptor must expose a passing version probe, headless/artifact-only modes, and workspace-write-disabled policy. Failure diagnostics are classified as `NOT_INSTALLED`, `NOT_AUTHENTICATED`, `PERMISSION_DENIED`, `TIMEOUT`, `CONTRACT_INVALID`, `QUALITY_FAILED`, `BUILD_FAILED`, `CANCELLED`, or `FALLBACK` where possible.
+
+Common Claude Code failures:
+
+- `NOT_INSTALLED`: `claude --version` fails or `AGENTHUB_CLAUDE_CODE_COMMAND` points to a missing executable.
+- `NOT_AUTHENTICATED`: CLI exists but the local Claude Code account/session is not usable for headless execution.
+- `CONTRACT_INVALID` / `PARSE_FAILED`: CLI returned prose, Markdown fences, wrapper metadata, or invalid AgentHub Artifact JSON.
+- `QUALITY_FAILED` / `BUILD_FAILED`: JSON was parseable, but content failed raw-source or lightweight build heuristics.
+- `CANCELLED`: Stop/Cancel was requested before final output was accepted; chunks are preview-only and late results are discarded.
+
 ## Codex Adapter Smoke Test
 
 `codex-smoke-test.mjs` verifies the production Codex Adapter v1 contract. It is opt-in and is not part of the default smoke path. The backend must expose `CODEX=AVAILABLE`, `POST /api/adapters/CODEX/execute` must return AgentHub Artifact JSON, and a `REAL_FIRST` demo-task run must produce at least one accepted `CODEX / REAL_ADAPTER` Artifact.
@@ -204,6 +216,7 @@ This is not an interactive Claude Code terminal and does not allow Claude Code t
 Backend setup:
 
 ```powershell
+codex --version
 $env:AGENTHUB_CODEX_ENABLED="true"
 $env:AGENTHUB_CODEX_COMMAND="codex"
 $env:AGENTHUB_CODEX_ARTIFACT_ONLY="true"
@@ -218,6 +231,7 @@ Then run:
 
 ```powershell
 $env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
+$env:AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI="true"
 node scripts/codex-smoke-test.mjs
 ```
 
@@ -230,6 +244,16 @@ node scripts/codex-smoke-test.mjs
 ```
 
 This is not Codex Desktop GUI automation. The intended production boundary is headless / Artifact-only execution: Codex output must pass the AgentHub Artifact JSON contract, quality evaluation, optional build validation, and REAL_FIRST selection before it can become a primary Artifact. Default smoke tests must not require Codex.
+
+The Codex smoke script checks descriptor capability metadata before execution. With `AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI=true`, fixture mode is rejected and the descriptor must expose a passing version probe plus `exec`, `--output-schema`, and read-only sandbox support. Failure diagnostics are classified as `NOT_INSTALLED`, `NOT_AUTHENTICATED`, `PERMISSION_DENIED`, `TIMEOUT`, `CONTRACT_INVALID`, `QUALITY_FAILED`, `BUILD_FAILED`, `CANCELLED`, or `FALLBACK` where possible.
+
+Common Codex failures:
+
+- `NOT_INSTALLED`: `codex --version` fails or `AGENTHUB_CODEX_COMMAND` points to a missing executable.
+- `NOT_AUTHENTICATED`: CLI exists but cannot execute the configured model/session.
+- `CONTRACT_INVALID` / `PARSE_FAILED`: CLI returned plain text, Markdown fences, logs, wrapper payloads, or invalid Artifact JSON.
+- `QUALITY_FAILED` / `BUILD_FAILED`: JSON was accepted by the contract but rejected by content quality or build heuristics.
+- `CANCELLED`: Stop/Cancel was requested; no late chunks are published after the token is observed and the final result is not persisted.
 
 If you explicitly run the backend in `REAL_FIRST` mode and expect the primary generated Artifact to come from a real Adapter, enable the stricter REAL_FIRST check:
 

@@ -120,7 +120,10 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                     true,
                     false,
                     "Claude Code adapter is using local fixture mode for deterministic Artifact-only contract tests.",
-                    null);
+                    null,
+                    supportedModes(),
+                    safetyPolicies(),
+                    capabilityDetails("fixture", null));
         }
 
         CliAgentCommandRunner.CliAvailability availability = commandRunner.checkAvailable(command);
@@ -131,7 +134,10 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                     true,
                     false,
                     "Claude Code CLI command is not available.",
-                    availability.failureReason());
+                    withFailureType("NOT_INSTALLED", availability.failureReason()),
+                    supportedModes(),
+                    safetyPolicies(),
+                    capabilityDetails("missing", availability.failureReason()));
         }
 
         return new AgentAdapterDescriptor(
@@ -142,7 +148,10 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 streamingEnabled
                         ? "Claude Code headless adapter is configured for Artifact-only stream-json execution."
                         : "Claude Code headless adapter is configured for Artifact-only json execution.",
-                null);
+                null,
+                supportedModes(),
+                safetyPolicies(),
+                capabilityDetails("available", null));
     }
 
     @Override
@@ -186,7 +195,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                     List.of(result.streaming()
                             ? "JSON:claude-code-stream-json-artifact-contract"
                             : "JSON:claude-code-json-artifact-contract"),
-                    result.diagnostic(),
+                    withCommandDiagnostics(result.diagnostic(), result.streaming() ? "stream-json" : "json", "COMPLETED"),
                     startedAt,
                     timeProvider.now());
         } catch (AdapterResponseException exception) {
@@ -235,6 +244,11 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
             }
             String content = extractJsonResult(stdout);
             return new ExecutionResult(content, false, summarizeDiagnostics(stdout, stderr));
+        } catch (AdapterResponseException exception) {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            throw exception;
         } catch (IOException exception) {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();
@@ -269,6 +283,11 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 throw new AdapterResponseException("Claude Code stream-json did not include a final result payload.");
             }
             return new ExecutionResult(content, true, summarizeDiagnostics("", stderr));
+        } catch (AdapterResponseException exception) {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            throw exception;
         } catch (IOException exception) {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();
@@ -366,6 +385,112 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
             commandLine.add(disallowedTools);
         }
         return commandLine;
+    }
+
+    private List<String> supportedModes() {
+        List<String> modes = new ArrayList<>();
+        modes.add("headless");
+        modes.add("artifact-only");
+        modes.add("json");
+        if (streamingEnabled) {
+            modes.add("stream-json");
+            modes.add("sse-preview");
+        }
+        modes.add("real-first-compatible");
+        return List.copyOf(modes);
+    }
+
+    private List<String> safetyPolicies() {
+        return List.of(
+                "workspace-write-disabled",
+                "processbuilder-no-shell",
+                "isolated-run-directory=" + workDir,
+                "allowedTools=" + allowedTools,
+                "disallowedTools=" + disallowedTools,
+                "final-output-requires-artifact-contract",
+                "streaming-chunks-are-preview-only");
+    }
+
+    private Map<String, Object> capabilityDetails(String availability, String failureReason) {
+        CliAgentCommandRunner.CliProbeResult versionProbe = "available".equals(availability)
+                ? commandRunner.probe(command, List.of("--version"), 3)
+                : CliAgentCommandRunner.CliProbeResult.failed(
+                        failureReason == null ? "Version probe skipped because adapter is not available." : failureReason);
+        CliAgentCommandRunner.CliProbeResult helpProbe = "available".equals(availability)
+                ? commandRunner.probe(command, List.of("--help"), 3)
+                : CliAgentCommandRunner.CliProbeResult.failed(
+                        failureReason == null ? "Help probe skipped because adapter is not available." : failureReason);
+        String helpOutput = (nullToBlank(helpProbe.stdout()) + "\n" + nullToBlank(helpProbe.stderr())).toLowerCase(Locale.ROOT);
+        return Map.ofEntries(
+                Map.entry("adapterMode", "HEADLESS_ARTIFACT_ONLY"),
+                Map.entry("availabilityProbe", availability),
+                Map.entry("cliPath", commandRunner.resolveCommandPath(command)),
+                Map.entry("commandMode", streamingEnabled ? "stream-json" : "json"),
+                Map.entry("version", versionProbe.success()
+                        ? safeSnippet(versionProbe.stdout() + " " + versionProbe.stderr())
+                        : "UNKNOWN"),
+                Map.entry("versionProbeStatus", versionProbe.success() ? "PASSED" : "FAILED"),
+                Map.entry("versionProbeFailure", versionProbe.failureReason() == null ? "" : versionProbe.failureReason()),
+                Map.entry("supportsPrint", helpOutput.contains("--print") || helpOutput.contains("-p")),
+                Map.entry("supportsJsonOutput", helpOutput.contains("json")),
+                Map.entry("supportsStreamJson", helpOutput.contains("stream-json")),
+                Map.entry("supportsToolPolicy", helpOutput.contains("allowedtools") || helpOutput.contains("allowed-tools")),
+                Map.entry("authenticationProbe", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
+                Map.entry("streamingEnabled", streamingEnabled),
+                Map.entry("artifactOnly", artifactOnly),
+                Map.entry("workspaceWriteAllowed", false),
+                Map.entry("timeoutSeconds", timeoutSeconds),
+                Map.entry("maxTurns", maxTurns));
+    }
+
+    private String withCommandDiagnostics(String diagnostic, String commandMode, String status) {
+        return "failureType=NONE"
+                + "; commandMode=" + commandMode
+                + "; timeoutSeconds=" + timeoutSeconds
+                + "; cliPath=" + commandRunner.resolveCommandPath(command)
+                + "; status=" + status
+                + (diagnostic == null || diagnostic.isBlank() ? "" : "; " + diagnostic);
+    }
+
+    private String withFailureType(String failureType, String message) {
+        String normalizedType = failureType == null || failureType.isBlank() ? "FAILED" : failureType;
+        String normalizedMessage = message == null || message.isBlank() ? "No diagnostic message." : message;
+        return "failureType=" + normalizedType
+                + "; commandMode=" + (streamingEnabled ? "stream-json" : "json")
+                + "; timeoutSeconds=" + timeoutSeconds
+                + "; cliPath=" + commandRunner.resolveCommandPath(command)
+                + "; " + sanitizeDiagnosticText(normalizedMessage);
+    }
+
+    private String classifyFailure(String errorMessage, String content) {
+        String normalized = (nullToBlank(errorMessage) + "\n" + nullToBlank(content)).toLowerCase(Locale.ROOT);
+        if (normalized.contains("cancel")) {
+            return "CANCELLED";
+        }
+        if (normalized.contains("timed out") || normalized.contains("timeout")) {
+            return "TIMEOUT";
+        }
+        if (normalized.contains("artifact json schema validation")
+                || normalized.contains("json output")
+                || normalized.contains("contract")
+                || normalized.contains("invalid json")
+                || normalized.contains("not valid json")) {
+            return "CONTRACT_INVALID";
+        }
+        if (normalized.contains("permission denied") || normalized.contains("access is denied")) {
+            return "PERMISSION_DENIED";
+        }
+        if (normalized.contains("not available") || normalized.contains("cannot run program")) {
+            return "NOT_INSTALLED";
+        }
+        if (normalized.contains("auth")
+                || normalized.contains("login")
+                || normalized.contains("unauthorized")
+                || normalized.contains("api key")
+                || normalized.contains("not authenticated")) {
+            return "NOT_AUTHENTICATED";
+        }
+        return "FAILED";
     }
 
     private String resolveCommandExecutable() {
@@ -540,7 +665,10 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                     AgentExecutionStatus.COMPLETED,
                     artifactJson,
                     List.of("JSON:claude-code-fixture-artifact-contract"),
-                    "Claude Code fixture mode generated local Artifact-only JSON.",
+                    withCommandDiagnostics(
+                            "Claude Code fixture mode generated local Artifact-only JSON.",
+                            streamingEnabled ? "fixture-stream-json" : "fixture-json",
+                            "COMPLETED"),
                     startedAt,
                     timeProvider.now());
         } catch (Exception exception) {
@@ -649,7 +777,9 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
         StringBuilder builder = new StringBuilder();
         builder.append("You are Claude Code running inside AgentHub Artifact-only adapter mode.\n");
         builder.append("You must not modify files, run commands, or write to the workspace.\n");
-        builder.append("Return exactly one valid JSON object and nothing else.\n\n");
+        builder.append("Return exactly one valid JSON object and nothing else.\n");
+        builder.append("The first non-whitespace character must be { and the last non-whitespace character must be }.\n");
+        builder.append("Do not include Markdown fences, Claude Code wrapper metadata, CLI logs, stdout/stderr, usage stats, or explanations outside JSON.\n\n");
         builder.append("Agent name: ").append(nullToBlank(request.agentName())).append('\n');
         if (!nullToBlank(request.systemPrompt()).isBlank()) {
             builder.append("Agent system prompt:\n").append(request.systemPrompt()).append("\n\n");
@@ -685,13 +815,17 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                   ]
                 }
 
-                Rules:
+                Required rules:
                 - Return only the JSON object. No markdown fences. No prose outside JSON.
+                - The root object must contain assistantMessage and artifacts only.
+                - Artifact type must be exactly one of CODE, MARKDOWN, REVIEW_REPORT, API_CONTRACT, DATA_MODEL, WEB_PREVIEW.
                 - Every artifact must have non-empty title, type, language, content, and summary.
-                - CODE content must be complete raw source code inside the JSON string, not markdown fenced code.
-                - REVIEW_REPORT and MARKDOWN content must be useful markdown body text.
+                - CODE content must be complete raw source code inside the JSON string, not markdown fenced code, not comments explaining code, and not CLI wrapper output.
+                - REVIEW_REPORT and MARKDOWN content must be useful markdown body text without outer code fences.
                 - API_CONTRACT and DATA_MODEL content should be structured JSON text or schema text.
-                - Empty content, provider error text, plain text responses, invalid JSON, or missing artifacts will be rejected.
+                - Summary must explain what the artifact contains in one concise sentence.
+                - If you cannot complete the task, return a REVIEW_REPORT artifact with blockers and retry advice inside content.
+                - Empty content, provider error text, plain text responses, invalid JSON, missing fields, markdown fences, CLI logs, or wrapper metadata will be rejected.
                 """);
         return builder.toString();
     }
@@ -701,7 +835,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 artifactContractValidator.validate(content);
         if (!validationResult.valid()) {
             throw new AdapterResponseException(
-                    "Claude Code output failed AgentHub artifact JSON schema validation: "
+                    "PARSE_FAILED: Claude Code output failed AgentHub artifact JSON schema validation: "
                             + validationResult.errorMessage());
         }
         return validationResult.normalizedJson();
@@ -767,7 +901,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 AgentExecutionStatus.FAILED,
                 content,
                 List.of(),
-                errorMessage,
+                withFailureType(classifyFailure(errorMessage, content), errorMessage),
                 startedAt,
                 timeProvider.now());
     }

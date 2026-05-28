@@ -84,7 +84,7 @@ public class AdapterArtifactQualityEvaluator {
                     spec,
                     "REJECTED",
                     Math.min(score, 45),
-                    formatQualityReason(Math.min(score, 45), "REJECTED", buildValidation.reason(), spec),
+                    formatQualityReason(Math.min(score, 45), "REJECTED", buildValidation.reason(), spec, "BUILD_FAILED"),
                     buildValidation.status(),
                     buildValidation.reason());
         }
@@ -96,7 +96,7 @@ public class AdapterArtifactQualityEvaluator {
                 spec,
                 status,
                 score,
-                formatQualityReason(score, status, reason, spec),
+                formatQualityReason(score, status, reason, spec, classifyQualityOutcome(status, buildValidation.status())),
                 buildValidation.status(),
                 buildValidation.reason());
     }
@@ -149,7 +149,7 @@ public class AdapterArtifactQualityEvaluator {
                 spec,
                 "REJECTED",
                 score,
-                formatQualityReason(score, "REJECTED", reason, spec),
+                formatQualityReason(score, "REJECTED", reason, spec, classifyQualityOutcome("REJECTED", buildValidation.status())),
                 buildValidation.status(),
                 buildValidation.reason());
     }
@@ -271,11 +271,23 @@ public class AdapterArtifactQualityEvaluator {
             int score,
             String status,
             String reason,
-            AdapterArtifactExtractor.AdapterArtifactSpec spec) {
-        return "score=" + score
+            AdapterArtifactExtractor.AdapterArtifactSpec spec,
+            String outcome) {
+        return "outcome=" + outcome
+                + "; score=" + score
                 + "; status=" + status
                 + "; reason=" + reason
                 + "; retryAdvice=" + buildArtifactRetryAdvice(spec, reason);
+    }
+
+    private String classifyQualityOutcome(String qualityStatus, String buildValidationStatus) {
+        if ("FAILED".equals(buildValidationStatus)) {
+            return "BUILD_FAILED";
+        }
+        if ("REJECTED".equals(qualityStatus)) {
+            return "QUALITY_FAILED";
+        }
+        return "ACCEPTED";
     }
 
     private String buildQualityRetryAdvice(List<ArtifactQuality> artifactQualities) {

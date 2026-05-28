@@ -103,7 +103,29 @@ class AdapterArtifactContractValidatorTest {
                 """);
 
         assertFalse(result.valid());
+        assertTrue(result.errorMessage().contains("Markdown fenced content"));
         assertTrue(result.errorMessage().contains("raw source code"));
+    }
+
+    @Test
+    void rejectsMarkdownArtifactWrappedInMarkdownFence() {
+        AdapterArtifactContractValidator.ValidationResult result = validator.validate("""
+                {
+                  "assistantMessage": "Generated markdown.",
+                  "artifacts": [
+                    {
+                      "title": "README.md",
+                      "type": "MARKDOWN",
+                      "language": "md",
+                      "content": "```md\\n# README\\n```",
+                      "summary": "Readme."
+                    }
+                  ]
+                }
+                """);
+
+        assertFalse(result.valid());
+        assertTrue(result.errorMessage().contains("Markdown fenced content"));
     }
 
     @Test
@@ -125,5 +147,35 @@ class AdapterArtifactContractValidatorTest {
 
         assertFalse(result.valid());
         assertTrue(result.errorMessage().contains("provider error"));
+    }
+
+    @Test
+    void rejectsCliWrapperMetadataAsArtifactContent() {
+        AdapterArtifactContractValidator.ValidationResult result = validator.validate("""
+                {
+                  "assistantMessage": "Generated wrapper output.",
+                  "artifacts": [
+                    {
+                      "title": "claude-wrapper.json",
+                      "type": "MARKDOWN",
+                      "language": "json",
+                      "content": "{\\"type\\":\\"result\\",\\"is_error\\":false,\\"result\\":\\"ok\\",\\"usage\\":{\\"input_tokens\\":1}}",
+                      "summary": "Wrapper payload."
+                    }
+                  ]
+                }
+                """);
+
+        assertFalse(result.valid());
+        assertTrue(result.errorMessage().contains("CLI wrapper metadata"));
+    }
+
+    @Test
+    void rejectsPlainTextResponseAsParseFailure() {
+        AdapterArtifactContractValidator.ValidationResult result =
+                validator.validate("Generated a login page, but not as JSON.");
+
+        assertFalse(result.valid());
+        assertTrue(result.errorMessage().contains("not valid JSON"));
     }
 }

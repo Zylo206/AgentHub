@@ -54,6 +54,7 @@ class AdapterArtifactQualityEvaluatorTest {
 
         assertEquals("REJECTED", report.qualityStatus());
         assertEquals("QUALITY_FAILED", classifyOutcome(report));
+        assertTrue(report.artifactQualities().get(0).qualityReason().contains("outcome=QUALITY_FAILED"));
         assertTrue(report.artifactQualities().get(0).qualityReason()
                 .contains("CODE artifact content does not look like raw source code"));
     }
@@ -76,6 +77,7 @@ class AdapterArtifactQualityEvaluatorTest {
         assertEquals("REJECTED", report.qualityStatus());
         assertEquals("FAILED", report.buildValidationStatus());
         assertEquals("BUILD_FAILED", classifyOutcome(report));
+        assertTrue(report.artifactQualities().get(0).qualityReason().contains("outcome=BUILD_FAILED"));
         assertTrue(report.buildValidationReason().contains("unbalanced"));
     }
 

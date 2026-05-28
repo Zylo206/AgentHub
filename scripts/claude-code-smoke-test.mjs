@@ -2,6 +2,7 @@
 
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const EXPECT_STREAMING = process.env.AGENTHUB_CLAUDE_CODE_SMOKE_EXPECT_STREAMING === "true";
+const REQUIRE_REAL_CLI = process.env.AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI === "true";
 
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
@@ -11,7 +12,13 @@ const OUTCOME = {
   PARSE_FAILED: "PARSE_FAILED",
   QUALITY_FAILED: "QUALITY_FAILED",
   BUILD_FAILED: "BUILD_FAILED",
-  FALLBACK: "FALLBACK"
+  FALLBACK: "FALLBACK",
+  NOT_INSTALLED: "NOT_INSTALLED",
+  NOT_AUTHENTICATED: "NOT_AUTHENTICATED",
+  PERMISSION_DENIED: "PERMISSION_DENIED",
+  TIMEOUT: "TIMEOUT",
+  CONTRACT_INVALID: "CONTRACT_INVALID",
+  CANCELLED: "CANCELLED"
 };
 
 function pass(message) {
@@ -37,6 +44,24 @@ function classifyDiagnostic(value) {
   if (!normalized.trim()) {
     return null;
   }
+  if (normalized.includes("failuretype=not_installed") || normalized.includes("not available on path") || normalized.includes("cannot run program")) {
+    return OUTCOME.NOT_INSTALLED;
+  }
+  if (normalized.includes("failuretype=not_authenticated") || normalized.includes("not authenticated") || normalized.includes("unauthorized") || normalized.includes("login")) {
+    return OUTCOME.NOT_AUTHENTICATED;
+  }
+  if (normalized.includes("failuretype=permission_denied") || normalized.includes("permission denied") || normalized.includes("access is denied")) {
+    return OUTCOME.PERMISSION_DENIED;
+  }
+  if (normalized.includes("failuretype=timeout") || normalized.includes("timed out") || normalized.includes("timeout")) {
+    return OUTCOME.TIMEOUT;
+  }
+  if (normalized.includes("failuretype=cancelled") || normalized.includes("cancelled")) {
+    return OUTCOME.CANCELLED;
+  }
+  if (normalized.includes("failuretype=contract_invalid")) {
+    return OUTCOME.CONTRACT_INVALID;
+  }
   if (
     normalized.includes("parse_failed") ||
     normalized.includes("artifact json schema validation") ||
@@ -58,6 +83,42 @@ function classifyDiagnostic(value) {
     return OUTCOME.FALLBACK;
   }
   return null;
+}
+
+function assertDescriptorCapabilities(descriptor) {
+  const modes = Array.isArray(descriptor.supportedModes) ? descriptor.supportedModes : [];
+  const policies = Array.isArray(descriptor.safetyPolicies) ? descriptor.safetyPolicies : [];
+  const details = descriptor.capabilityDetails && typeof descriptor.capabilityDetails === "object"
+    ? descriptor.capabilityDetails
+    : {};
+
+  if (!modes.includes("headless") || !modes.includes("artifact-only")) {
+    throw new Error(`CLAUDE_CODE descriptor missing headless/artifact-only modes: ${modes.join(", ")}`);
+  }
+  if (!policies.some((policy) => String(policy).includes("workspace-write-disabled"))) {
+    throw new Error(`CLAUDE_CODE descriptor missing workspace-write-disabled policy: ${policies.join(" | ")}`);
+  }
+  if (details.adapterMode !== "HEADLESS_ARTIFACT_ONLY") {
+    throw new Error(`CLAUDE_CODE adapterMode expected HEADLESS_ARTIFACT_ONLY, got ${details.adapterMode || "missing"}`);
+  }
+  if (details.workspaceWriteAllowed !== false) {
+    throw new Error("CLAUDE_CODE descriptor must report workspaceWriteAllowed=false");
+  }
+  if (!details.cliPath) {
+    throw new Error("CLAUDE_CODE descriptor missing cliPath capability detail");
+  }
+  if (REQUIRE_REAL_CLI) {
+    if (details.availabilityProbe === "fixture") {
+      throw new Error("AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true forbids fixture mode");
+    }
+    if (details.versionProbeStatus !== "PASSED") {
+      throw new Error(`CLAUDE_CODE real CLI version probe did not pass: ${details.versionProbeFailure || "no reason"}`);
+    }
+    if (details.authenticationProbe !== "NOT_PROBED_EXECUTE_SMOKE_REQUIRED") {
+      throw new Error(`unexpected authenticationProbe=${details.authenticationProbe || "missing"}`);
+    }
+  }
+  pass(`CLAUDE_CODE descriptor capabilities verified: modes=${modes.join(", ")}`);
 }
 
 function classifiedError(message, diagnostic, fallbackOutcome = OUTCOME.FALLBACK) {
@@ -278,6 +339,7 @@ async function run() {
     throw new Error(`CLAUDE_CODE expected AVAILABLE, got ${claude.status}: ${claude.failureReason || claude.description || ""}`);
   }
   pass(`CLAUDE_CODE adapter available: ${claude.description}`);
+  assertDescriptorCapabilities(claude);
 
   const conversation = await request("/api/conversations", {
     method: "POST",

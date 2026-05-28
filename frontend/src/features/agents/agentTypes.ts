@@ -89,6 +89,9 @@ export interface AdapterDescriptor {
   routeFailures?: number;
   fallbackRate?: number;
   successRate?: number;
+  supportedModes?: string[];
+  safetyPolicies?: string[];
+  capabilityDetails?: Record<string, unknown>;
 }
 
 export interface AdapterExecutionResponse {

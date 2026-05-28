@@ -1,13 +1,18 @@
 package com.agenthub.infrastructure.adapter;
 
+import com.agenthub.application.realtime.RealtimeEventPublisher;
+import com.agenthub.application.realtime.RealtimeEventType;
+import com.agenthub.application.realtime.RunCancellationRegistry;
 import com.agenthub.common.TimeProvider;
 import com.agenthub.infrastructure.adapter.CodexCommandRunner.CodexCommandException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +24,8 @@ public class CodexAgentAdapter implements AgentAdapter {
     private final AdapterArtifactContractValidator artifactContractValidator;
     private final CodexCommandRunner commandRunner;
     private final CodexArtifactPromptBuilder promptBuilder;
+    private final RealtimeEventPublisher realtimeEventPublisher;
+    private final RunCancellationRegistry runCancellationRegistry;
     private final boolean enabled;
     private final String command;
     private final String model;
@@ -34,6 +41,8 @@ public class CodexAgentAdapter implements AgentAdapter {
             AdapterArtifactContractValidator artifactContractValidator,
             CodexCommandRunner commandRunner,
             CodexArtifactPromptBuilder promptBuilder,
+            RealtimeEventPublisher realtimeEventPublisher,
+            RunCancellationRegistry runCancellationRegistry,
             @Value("${agenthub.adapters.codex.enabled:false}") boolean enabled,
             @Value("${agenthub.adapters.codex.command:codex}") String command,
             @Value("${agenthub.adapters.codex.model:}") String model,
@@ -47,6 +56,8 @@ public class CodexAgentAdapter implements AgentAdapter {
         this.artifactContractValidator = artifactContractValidator;
         this.commandRunner = commandRunner;
         this.promptBuilder = promptBuilder;
+        this.realtimeEventPublisher = realtimeEventPublisher;
+        this.runCancellationRegistry = runCancellationRegistry;
         this.enabled = enabled;
         this.command = normalize(command, "codex");
         this.model = normalize(model, "");
@@ -91,7 +102,10 @@ public class CodexAgentAdapter implements AgentAdapter {
                     true,
                     false,
                     "Codex adapter is using local fixture mode for deterministic Artifact-only contract tests.",
-                    null);
+                    null,
+                    supportedModes(),
+                    safetyPolicies(),
+                    capabilityDetails("fixture", null));
         }
 
         CodexCommandRunner.Availability availability = commandRunner.checkAvailable(command);
@@ -102,7 +116,10 @@ public class CodexAgentAdapter implements AgentAdapter {
                     true,
                     false,
                     "Codex CLI command is not available.",
-                    availability.failureReason());
+                    withFailureType("NOT_INSTALLED", availability.failureReason()),
+                    supportedModes(),
+                    safetyPolicies(),
+                    capabilityDetails("missing", availability.failureReason()));
         }
 
         return new AgentAdapterDescriptor(
@@ -113,7 +130,10 @@ public class CodexAgentAdapter implements AgentAdapter {
                 streamingEnabled
                         ? "Codex headless adapter is configured for Artifact-only JSON event execution."
                         : "Codex headless adapter is configured for Artifact-only non-interactive execution.",
-                null);
+                null,
+                supportedModes(),
+                safetyPolicies(),
+                capabilityDetails("available", null));
     }
 
     @Override
@@ -150,7 +170,7 @@ public class CodexAgentAdapter implements AgentAdapter {
                     List.of(result.streaming()
                             ? "JSON:codex-json-event-artifact-contract"
                             : "JSON:codex-artifact-contract"),
-                    result.diagnostic(),
+                    withCommandDiagnostics(result.diagnostic(), result.streaming() ? "json-event-stream" : "exec", "COMPLETED"),
                     startedAt,
                     timeProvider.now());
         } catch (CodexCommandException exception) {
@@ -178,6 +198,9 @@ public class CodexAgentAdapter implements AgentAdapter {
     private AgentResponse executeFixture(AgentRequest request, Instant startedAt) {
         try {
             String fixtureJson = objectMapper.writeValueAsString(buildFixtureArtifactContract(request));
+            if (streamingEnabled) {
+                publishFixtureStream(request, fixtureJson);
+            }
             String artifactJson = normalizeAndValidateArtifactContract(fixtureJson);
             return new AgentResponse(
                     request.requestId(),
@@ -188,7 +211,10 @@ public class CodexAgentAdapter implements AgentAdapter {
                     AgentExecutionStatus.COMPLETED,
                     artifactJson,
                     List.of("JSON:codex-fixture-artifact-contract"),
-                    "Codex fixture mode generated local Artifact-only JSON.",
+                    withCommandDiagnostics(
+                            "Codex fixture mode generated local Artifact-only JSON.",
+                            streamingEnabled ? "fixture-json-event-stream" : "fixture-exec",
+                            "COMPLETED"),
                     startedAt,
                     timeProvider.now());
         } catch (Exception exception) {
@@ -298,10 +324,120 @@ public class CodexAgentAdapter implements AgentAdapter {
                 artifactContractValidator.validate(content);
         if (!validationResult.valid()) {
             throw new CodexCommandException(
-                    "Codex output failed AgentHub artifact JSON schema validation: "
+                    "PARSE_FAILED: Codex output failed AgentHub artifact JSON schema validation: "
                             + validationResult.errorMessage());
         }
         return validationResult.normalizedJson();
+    }
+
+    private List<String> supportedModes() {
+        List<String> modes = new ArrayList<>();
+        modes.add("headless");
+        modes.add("artifact-only");
+        modes.add("exec");
+        modes.add("json-schema");
+        modes.add("read-only-sandbox");
+        if (streamingEnabled) {
+            modes.add("json-event-stream");
+            modes.add("sse-preview");
+        }
+        modes.add("real-first-compatible");
+        return List.copyOf(modes);
+    }
+
+    private List<String> safetyPolicies() {
+        return List.of(
+                "workspace-write-disabled",
+                "processbuilder-no-shell",
+                "isolated-run-directory=" + workDir,
+                "sandbox=read-only",
+                "ephemeral-session",
+                "skip-git-repo-check-inside-run-dir",
+                "final-output-requires-artifact-contract",
+                "streaming-chunks-are-preview-only");
+    }
+
+    private Map<String, Object> capabilityDetails(String availability, String failureReason) {
+        CodexCommandRunner.ProbeResult versionProbe = "available".equals(availability)
+                ? commandRunner.probe(command, List.of("--version"), 3)
+                : CodexCommandRunner.ProbeResult.failed(
+                        failureReason == null ? "Version probe skipped because adapter is not available." : failureReason);
+        CodexCommandRunner.ProbeResult execHelpProbe = "available".equals(availability)
+                ? commandRunner.probe(command, List.of("exec", "--help"), 3)
+                : CodexCommandRunner.ProbeResult.failed(
+                        failureReason == null ? "Help probe skipped because adapter is not available." : failureReason);
+        String helpOutput = (nullToBlank(execHelpProbe.stdout()) + "\n" + nullToBlank(execHelpProbe.stderr()))
+                .toLowerCase(Locale.ROOT);
+        return Map.ofEntries(
+                Map.entry("adapterMode", "HEADLESS_ARTIFACT_ONLY"),
+                Map.entry("availabilityProbe", availability),
+                Map.entry("cliPath", commandRunner.resolveCommandPath(command)),
+                Map.entry("commandMode", streamingEnabled ? "json-event-stream" : "exec"),
+                Map.entry("version", versionProbe.success()
+                        ? safeDiagnostic(versionProbe.stdout() + " " + versionProbe.stderr())
+                        : "UNKNOWN"),
+                Map.entry("versionProbeStatus", versionProbe.success() ? "PASSED" : "FAILED"),
+                Map.entry("versionProbeFailure", versionProbe.failureReason() == null ? "" : versionProbe.failureReason()),
+                Map.entry("supportsExec", helpOutput.contains("exec")),
+                Map.entry("supportsJsonEvents", helpOutput.contains("--json")),
+                Map.entry("supportsOutputSchema", helpOutput.contains("--output-schema")),
+                Map.entry("supportsOutputLastMessage", helpOutput.contains("--output-last-message")),
+                Map.entry("supportsSandbox", helpOutput.contains("--sandbox")),
+                Map.entry("authenticationProbe", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
+                Map.entry("streamingEnabled", streamingEnabled),
+                Map.entry("artifactOnly", artifactOnly),
+                Map.entry("workspaceWriteAllowed", false),
+                Map.entry("timeoutSeconds", timeoutSeconds));
+    }
+
+    private String withCommandDiagnostics(String diagnostic, String commandMode, String status) {
+        return "failureType=NONE"
+                + "; commandMode=" + commandMode
+                + "; timeoutSeconds=" + timeoutSeconds
+                + "; cliPath=" + commandRunner.resolveCommandPath(command)
+                + "; status=" + status
+                + (diagnostic == null || diagnostic.isBlank() ? "" : "; " + diagnostic);
+    }
+
+    private String withFailureType(String failureType, String message) {
+        String normalizedType = failureType == null || failureType.isBlank() ? "FAILED" : failureType;
+        String normalizedMessage = message == null || message.isBlank() ? "No diagnostic message." : message;
+        return "failureType=" + normalizedType
+                + "; commandMode=" + (streamingEnabled ? "json-event-stream" : "exec")
+                + "; timeoutSeconds=" + timeoutSeconds
+                + "; cliPath=" + commandRunner.resolveCommandPath(command)
+                + "; " + sanitizeDiagnosticText(normalizedMessage);
+    }
+
+    private String classifyFailure(String errorMessage, String content) {
+        String normalized = (nullToBlank(errorMessage) + "\n" + nullToBlank(content)).toLowerCase(Locale.ROOT);
+        if (normalized.contains("cancel")) {
+            return "CANCELLED";
+        }
+        if (normalized.contains("timed out") || normalized.contains("timeout")) {
+            return "TIMEOUT";
+        }
+        if (normalized.contains("artifact json schema validation")
+                || normalized.contains("json output")
+                || normalized.contains("contract")
+                || normalized.contains("invalid json")
+                || normalized.contains("not valid json")) {
+            return "CONTRACT_INVALID";
+        }
+        if (normalized.contains("permission denied") || normalized.contains("access is denied")) {
+            return "PERMISSION_DENIED";
+        }
+        if (normalized.contains("not available") || normalized.contains("cannot run program")) {
+            return "NOT_INSTALLED";
+        }
+        if (normalized.contains("auth")
+                || normalized.contains("login")
+                || normalized.contains("unauthorized")
+                || normalized.contains("api key")
+                || normalized.contains("not authenticated")) {
+            return "NOT_AUTHENTICATED";
+        }
+        return "FAILED";
     }
 
     private AgentResponse failedResponse(
@@ -318,7 +454,7 @@ public class CodexAgentAdapter implements AgentAdapter {
                 AgentExecutionStatus.FAILED,
                 content,
                 List.of(),
-                sanitizeDiagnosticText(errorMessage),
+                withFailureType(classifyFailure(errorMessage, content), errorMessage),
                 startedAt,
                 timeProvider.now());
     }
@@ -340,6 +476,63 @@ public class CodexAgentAdapter implements AgentAdapter {
         return value.replaceAll("(?i)api[_-]?key\\s*[:=]\\s*[^\\s]+", "api_key=[REDACTED]")
                 .replaceAll("(?i)openai_api_key\\s*[:=]\\s*[^\\s]+", "OPENAI_API_KEY=[REDACTED]")
                 .replaceAll("(?i)bearer\\s+[A-Za-z0-9._~+/=-]+", "Bearer [REDACTED]");
+    }
+
+    private String safeDiagnostic(String value) {
+        String sanitized = sanitizeDiagnosticText(value).replace("\r", " ").replace("\n", " ").trim();
+        return sanitized.length() <= 240 ? sanitized : sanitized.substring(0, 240) + "...";
+    }
+
+    private void publishFixtureStream(AgentRequest request, String content) {
+        int chunkSize = 160;
+        int chunkIndex = 0;
+        for (int offset = 0; offset < content.length(); offset += chunkSize) {
+            if (isCancellationRequested(request)) {
+                return;
+            }
+            String chunk = content.substring(offset, Math.min(content.length(), offset + chunkSize));
+            publishStreamChunk(request, chunkIndex++, chunk, Math.min(content.length(), offset + chunk.length()));
+        }
+    }
+
+    private void publishStreamChunk(
+            AgentRequest request,
+            int chunkIndex,
+            String chunk,
+            int accumulatedLength) {
+        if (chunk == null || chunk.isEmpty() || isCancellationRequested(request)) {
+            return;
+        }
+        try {
+            Map<String, Object> payload = Map.of(
+                    "taskRunId", nullToBlank(request.taskRunId()),
+                    "taskStepId", nullToBlank(request.taskStepId()),
+                    "adapterType", AgentAdapterType.CODEX.name(),
+                    "chunk", chunk,
+                    "chunkIndex", chunkIndex,
+                    "chunkLength", chunk.length(),
+                    "accumulatedLength", accumulatedLength);
+            realtimeEventPublisher.publish(
+                    request.conversationId(),
+                    RealtimeEventType.ADAPTER_STREAM_CHUNK,
+                    "TASK_STEP",
+                    request.taskStepId(),
+                    payload);
+            realtimeEventPublisher.publish(
+                    request.conversationId(),
+                    RealtimeEventType.TASK_STEP_STREAM_CHUNK,
+                    "TASK_STEP",
+                    request.taskStepId(),
+                    payload);
+        } catch (RuntimeException ignored) {
+            // Streaming preview is best-effort and must not break adapter execution or fallback behavior.
+        }
+    }
+
+    private boolean isCancellationRequested(AgentRequest request) {
+        return request != null
+                && request.taskRunId() != null
+                && runCancellationRegistry.isCancellationRequested(request.taskRunId());
     }
 
     private String normalize(String value, String fallback) {

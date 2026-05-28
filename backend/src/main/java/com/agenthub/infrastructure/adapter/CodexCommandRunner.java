@@ -50,7 +50,7 @@ public class CodexCommandRunner {
         Path directPath = Path.of(normalized);
         if (directPath.isAbsolute() || normalized.contains("/") || normalized.contains("\\")) {
             return Files.isRegularFile(directPath)
-                    ? Availability.availableResult()
+                    ? Availability.availableResult(directPath.toString())
                     : Availability.unavailable("Codex CLI command path is not executable: " + normalized);
         }
 
@@ -65,11 +65,54 @@ public class CodexCommandRunner {
             for (String candidateName : commandCandidates(normalized)) {
                 Path candidate = Path.of(pathEntry, candidateName);
                 if (Files.isRegularFile(candidate)) {
-                    return Availability.availableResult();
+                    return Availability.availableResult(candidate.toString());
                 }
             }
         }
         return Availability.unavailable("Codex CLI command is not available on PATH: " + normalized);
+    }
+
+    public ProbeResult probe(String command, List<String> args, int timeoutSeconds) {
+        String normalized = normalize(command);
+        if (normalized.isBlank()) {
+            return ProbeResult.failed("Codex CLI command is not configured.");
+        }
+        List<String> commandLine = new ArrayList<>();
+        commandLine.add(resolveCommandExecutable(normalized));
+        if (args != null) {
+            commandLine.addAll(args);
+        }
+        Process process = null;
+        try {
+            process = new ProcessBuilder(commandLine)
+                    .redirectInput(ProcessBuilder.Redirect.PIPE)
+                    .start();
+            CompletableFuture<String> stdoutFuture = readStream(process.getInputStream());
+            CompletableFuture<String> stderrFuture = readStream(process.getErrorStream());
+            boolean completed = process.waitFor(safeTimeout(timeoutSeconds).toSeconds(), TimeUnit.SECONDS);
+            if (!completed) {
+                process.destroyForcibly();
+                return ProbeResult.failed("Codex CLI probe timed out.");
+            }
+            String stdout = getFuture(stdoutFuture, "stdout");
+            String stderr = getFuture(stderrFuture, "stderr");
+            if (process.exitValue() != 0) {
+                return ProbeResult.failed("Codex CLI probe exited with code " + process.exitValue()
+                        + ": " + safeSnippet(!normalize(stderr).isBlank() ? stderr : stdout));
+            }
+            return new ProbeResult(true, stdout, stderr, null);
+        } catch (Exception exception) {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            return ProbeResult.failed(exception.getMessage() == null
+                    ? exception.getClass().getSimpleName()
+                    : exception.getMessage());
+        }
+    }
+
+    public String resolveCommandPath(String command) {
+        return resolveCommandExecutable(normalize(command));
     }
 
     public Result execute(
@@ -491,13 +534,19 @@ public class CodexCommandRunner {
             Path workDir) {
     }
 
-    public record Availability(boolean available, String failureReason) {
-        public static Availability availableResult() {
-            return new Availability(true, null);
+    public record Availability(boolean available, String failureReason, String resolvedPath) {
+        public static Availability availableResult(String resolvedPath) {
+            return new Availability(true, null, resolvedPath);
         }
 
         public static Availability unavailable(String failureReason) {
-            return new Availability(false, failureReason);
+            return new Availability(false, failureReason, null);
+        }
+    }
+
+    public record ProbeResult(boolean success, String stdout, String stderr, String failureReason) {
+        public static ProbeResult failed(String failureReason) {
+            return new ProbeResult(false, "", "", failureReason);
         }
     }
 

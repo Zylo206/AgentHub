@@ -27,7 +27,7 @@ public class CliAgentCommandRunner {
         Path directPath = Path.of(normalized);
         if (directPath.isAbsolute() || normalized.contains("/") || normalized.contains("\\")) {
             return Files.isRegularFile(directPath) && (isWindows() || Files.isExecutable(directPath))
-                    ? CliAvailability.availableResult()
+                    ? CliAvailability.availableResult(directPath.toString())
                     : CliAvailability.unavailable("CLI command path is not executable: " + normalized);
         }
 
@@ -43,12 +43,57 @@ public class CliAgentCommandRunner {
             for (String candidateName : commandCandidates(normalized)) {
                 Path candidate = Path.of(pathEntry, candidateName);
                 if (Files.isRegularFile(candidate)) {
-                    return CliAvailability.availableResult();
+                    return CliAvailability.availableResult(candidate.toString());
                 }
             }
         }
 
         return CliAvailability.unavailable("CLI command is not available on PATH: " + normalized);
+    }
+
+    public CliProbeResult probe(String command, List<String> args, int timeoutSeconds) {
+        String normalizedCommand = normalize(command);
+        if (normalizedCommand.isBlank()) {
+            return CliProbeResult.failed("CLI command is not configured.");
+        }
+
+        List<String> commandLine = new ArrayList<>();
+        commandLine.add(resolveCommandExecutable(normalizedCommand));
+        if (args != null) {
+            commandLine.addAll(args);
+        }
+
+        Process process = null;
+        try {
+            process = new ProcessBuilder(commandLine)
+                    .redirectInput(ProcessBuilder.Redirect.PIPE)
+                    .start();
+            CompletableFuture<String> stdoutFuture = readStream(process.getInputStream());
+            CompletableFuture<String> stderrFuture = readStream(process.getErrorStream());
+            boolean completed = process.waitFor(safeTimeoutSeconds(timeoutSeconds), TimeUnit.SECONDS);
+            if (!completed) {
+                process.destroyForcibly();
+                return CliProbeResult.failed("CLI probe timed out.");
+            }
+            String stdout = stdoutFuture.get(2, TimeUnit.SECONDS);
+            String stderr = stderrFuture.get(2, TimeUnit.SECONDS);
+            if (process.exitValue() != 0) {
+                return CliProbeResult.failed("CLI probe exited with code " + process.exitValue()
+                        + ": " + summarizeProbeOutput(stdout, stderr));
+            }
+            return new CliProbeResult(true, stdout, stderr, null);
+        } catch (Exception exception) {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            return CliProbeResult.failed(exception.getMessage() == null
+                    ? exception.getClass().getSimpleName()
+                    : exception.getMessage());
+        }
+    }
+
+    public String resolveCommandPath(String command) {
+        return resolveCommandExecutable(normalize(command));
     }
 
     public CliCommandResult execute(
@@ -206,6 +251,40 @@ public class CliAgentCommandRunner {
         return candidates;
     }
 
+    private String resolveCommandExecutable(String command) {
+        Path directPath = Path.of(command);
+        if (directPath.isAbsolute() || command.contains("/") || command.contains("\\")) {
+            return command;
+        }
+
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null || pathEnv.isBlank()) {
+            return command;
+        }
+
+        for (String pathEntry : pathEnv.split(java.io.File.pathSeparator)) {
+            if (pathEntry == null || pathEntry.isBlank()) {
+                continue;
+            }
+            for (String candidateName : commandCandidates(command)) {
+                Path candidate = Path.of(pathEntry, candidateName);
+                if (Files.isRegularFile(candidate)) {
+                    return candidate.toString();
+                }
+            }
+        }
+        return command;
+    }
+
+    private String summarizeProbeOutput(String stdout, String stderr) {
+        String value = !normalize(stderr).isBlank() ? stderr : stdout;
+        if (value == null || value.isBlank()) {
+            return "no diagnostic output";
+        }
+        String sanitized = value.replace("\r", " ").replace("\n", " ").trim();
+        return sanitized.length() <= 240 ? sanitized : sanitized.substring(0, 240) + "...";
+    }
+
     private boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
@@ -222,13 +301,19 @@ public class CliAgentCommandRunner {
         return Duration.ofSeconds(timeoutSeconds <= 0 ? 30 : timeoutSeconds).toSeconds();
     }
 
-    public record CliAvailability(boolean available, String failureReason) {
-        public static CliAvailability availableResult() {
-            return new CliAvailability(true, null);
+    public record CliAvailability(boolean available, String failureReason, String resolvedPath) {
+        public static CliAvailability availableResult(String resolvedPath) {
+            return new CliAvailability(true, null, resolvedPath);
         }
 
         public static CliAvailability unavailable(String failureReason) {
-            return new CliAvailability(false, failureReason);
+            return new CliAvailability(false, failureReason, null);
+        }
+    }
+
+    public record CliProbeResult(boolean success, String stdout, String stderr, String failureReason) {
+        public static CliProbeResult failed(String failureReason) {
+            return new CliProbeResult(false, "", "", failureReason);
         }
     }
 

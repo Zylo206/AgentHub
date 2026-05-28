@@ -48,7 +48,10 @@ public class AgentAdapterApplicationService {
                             stats.fallbacks(),
                             stats.failures(),
                             stats.fallbackRate(),
-                            stats.successRate());
+                            stats.successRate(),
+                            descriptor.supportedModes(),
+                            descriptor.safetyPolicies(),
+                            descriptor.capabilityDetails());
                 })
                 .toList();
     }
@@ -117,6 +120,9 @@ public class AgentAdapterApplicationService {
             long routeFallbacks,
             long routeFailures,
             double fallbackRate,
-            double successRate) {
+            double successRate,
+            List<String> supportedModes,
+            List<String> safetyPolicies,
+            Map<String, Object> capabilityDetails) {
     }
 }

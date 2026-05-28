@@ -144,8 +144,8 @@
 
 .adapter-quality-table__row {
   display: grid;
-  grid-template-columns: 150px 110px 82px 82px 82px 112px 112px 122px 110px;
-  min-width: 980px;
+  grid-template-columns: 150px 110px 82px 82px 82px 112px 112px 122px 132px 140px 110px;
+  min-width: 1240px;
   border-top: 1px solid #edf2f7;
 }
 

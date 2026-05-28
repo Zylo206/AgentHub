@@ -99,6 +99,12 @@ public class AdapterArtifactContractValidator {
         if (looksLikeProviderError(content)) {
             errors.add("artifact[" + index + "].content looks like a provider error message");
         }
+        if (content.trim().startsWith("```")) {
+            errors.add("artifact[" + index + "].content must not be Markdown fenced content");
+        }
+        if (looksLikeCliWrapperOrLog(content)) {
+            errors.add("artifact[" + index + "].content looks like CLI wrapper metadata or logs");
+        }
         if (artifactType == ArtifactType.CODE && content.trim().startsWith("```")) {
             errors.add("artifact[" + index + "].content must be raw source code, not Markdown fenced code");
         }
@@ -130,6 +136,24 @@ public class AdapterArtifactContractValidator {
                 || normalized.contains("invalid api key")
                 || normalized.contains("authentication failed")
                 || normalized.contains("rate limit exceeded");
+    }
+
+    private boolean looksLikeCliWrapperOrLog(String content) {
+        String normalized = content == null ? "" : content.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return false;
+        }
+        return normalized.startsWith("stdout=")
+                || normalized.startsWith("stderr=")
+                || normalized.startsWith("exit code")
+                || normalized.startsWith("usage:")
+                || normalized.startsWith("claude code cli failed")
+                || normalized.startsWith("codex cli failed")
+                || (normalized.contains("\"session_id\"")
+                && normalized.contains("\"usage\"")
+                && normalized.contains("\"result\""))
+                || (normalized.contains("\"is_error\"") && normalized.contains("\"result\""))
+                || (normalized.contains("stdout=") && normalized.contains("stderr="));
     }
 
     private String normalizeArtifactContent(ArtifactType artifactType, String content) {

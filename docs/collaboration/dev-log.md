@@ -5125,3 +5125,164 @@
 
 - 继续保持 OpenAI-compatible / Claude Code / Codex 共用同一 Artifact contract validator 和 quality evaluator。
 - 若要推进更深平台能力，先补更稳定的 CLI capability discovery 和长期 Adapter quality metrics，而不是接桌面端 GUI 自动化。
+
+## Phase 117：Claude / Codex Headless Adapter 可观测性增强
+
+### 目标
+
+- 将 Claude Code / Codex 深接计划中的 P1 可信度增强落到可观测字段。
+- 保持当前接入边界为 headless Artifact-only，不推进桌面端 GUI 自动化或 workspace-write。
+
+### 主要变更
+
+- `AgentAdapterDescriptor` 增加 `supportedModes`、`safetyPolicies`、`capabilityDetails`，兼容旧构造方式。
+- `CLAUDE_CODE` descriptor 暴露 headless、artifact-only、json / stream-json、tool policy、安全边界和非侵入式 version/help probe 结果。
+- `CODEX` descriptor 暴露 headless exec、json schema、read-only sandbox、streaming、安全边界和非侵入式 version / exec help probe 结果。
+- `AdapterQualityDashboard` 增加 modes 和 policy 列，展示 Adapter 当前能力模式和 workspace-write 禁用状态。
+- `docs/spec/claude-codex-headless-adapter-spec.md` 修复编码并补充 capability discovery 规则。
+- `docs/plans/next.md` 同步 Claude Code / Codex capability metadata 已完成。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- capability discovery 只运行 `--version` / `--help` 等非侵入式探测，不触发真实模型执行。
+- 认证状态仍必须通过 direct execute 或 smoke 验证，descriptor 中标记为 `NOT_PROBED_EXECUTE_SMOKE_REQUIRED`。
+- Claude Code / Codex 默认仍是 opt-in，不进入默认 smoke 强依赖。
+- 本轮没有实现桌面端 GUI 自动化、workspace-write 或完整外部 Agent session 托管。
+
+### 遗留问题
+
+- version/help probe 失败不等于真实执行失败；真实能力仍需 opt-in smoke 覆盖。
+- OpenCode 还没有同等级专用 Artifact-only headless Adapter。
+- 更深 tool allowlist / denylist 和 lint/test gate 仍可继续增强。
+
+### 下一步建议
+
+- 继续扩大 Claude Code / Codex real CLI smoke 样本，观察 Adapter Quality Dashboard 的长期趋势。
+- 后续若做 OpenCode 深接，应复用同一 descriptor metadata、Artifact contract 和 fallback 规则。
+
+## Phase 118：真实 Claude / Codex CLI 运行稳定性与 Smoke 强化
+
+### 目标
+
+- 提升真实 Claude Code / Codex CLI 接入的诊断能力和 smoke 稳定性。
+- 防止 fixture mode 被误判为真实 CLI 验证。
+
+### 主要变更
+
+- Claude Code / Codex Adapter 失败诊断增加 `failureType`、`commandMode`、`timeoutSeconds`、`cliPath`。
+- 失败类型覆盖 `NOT_INSTALLED / NOT_AUTHENTICATED / PERMISSION_DENIED / TIMEOUT / CONTRACT_INVALID / CANCELLED / FAILED`，quality / build / fallback 仍由 TaskStep 和 smoke 继续归类。
+- `CliAgentCommandRunner` 和 `CodexCommandRunner` 增加 command path resolution 与非侵入式 probe helper。
+- `claude-code-smoke-test.mjs` 增加 descriptor capability metadata 检查和 `AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true`。
+- `codex-smoke-test.mjs` 增加 descriptor capability metadata 检查和 `AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI=true`。
+- `.env.example` 与 `scripts/README.md` 增加 real CLI smoke guard 和 failure classification 说明。
+- `docs/spec/claude-codex-headless-adapter-spec.md` 和 `docs/plans/next.md` 同步真实 CLI 诊断边界。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/claude-code-smoke-test.mjs`
+- `node --check scripts/codex-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮未强制运行真实 Claude Code / Codex CLI smoke。
+- capability discovery 仍是非侵入式版本 / help 级别探测，不触发模型执行。
+- 认证状态仍必须通过 direct execute 或 opt-in smoke 验证。
+- 当前仍不做桌面端 GUI 自动化、workspace-write 或完整交互终端托管。
+
+### 遗留问题
+
+- `failureType` 目前作为诊断文本暴露，尚未升级为独立 DTO 字段。
+- Claude Code / Codex 的真实 smoke 样本仍需要在已安装、已认证机器上持续积累。
+- 更深 tool policy、lint/test gate、OpenCode 专用 headless Adapter 仍后置。
+
+### 下一步建议
+
+- 在本机真实 CLI 环境下分别运行 require-real smoke，记录 failure 分类是否足够准确。
+- 如果后续 UI 需要更结构化展示，再把 `failureType` 从诊断文本提升为正式 response 字段。
+
+## Phase 119：Claude / Codex Prompt Contract 与输出质量拒绝原因收敛
+
+### 目标
+
+- 收敛 Claude Code / Codex headless Adapter 的输出契约，避免真实 CLI 输出普通文本、Markdown fence、wrapper metadata 或 CLI logs 时被误采纳为 `REAL_ADAPTER`。
+- 让 parse / quality / build 失败原因更明确，保留静态 fallback 作为稳定兜底。
+
+### 主要变更
+
+- `CodexArtifactPromptBuilder` 强化 Artifact-only prompt：要求单个 JSON object、根输出首尾为 `{}`、禁止 Markdown fence、CLI logs、wrapper metadata、stdout/stderr 和 usage stats。
+- `ClaudeCodeAgentAdapter` 内置 prompt 同步强化同一 contract。
+- Claude Code / Codex contract validation failure 统一在 adapter error 中标记 `PARSE_FAILED`。
+- `AdapterArtifactContractValidator` 扩展拒绝规则：artifact content 中的 Markdown fence、CLI wrapper metadata、stdout/stderr 类日志不再通过 contract。
+- `AdapterArtifactQualityEvaluator` 的 quality reason 增加 `outcome=QUALITY_FAILED / BUILD_FAILED / ACCEPTED`，便于 UI、smoke 和 Reviewer gate 解释失败层级。
+- 补充 validator / quality evaluator 单元测试，覆盖普通文本、Markdown fenced artifact content、CLI wrapper metadata、QUALITY_FAILED 和 BUILD_FAILED。
+- `docs/spec/claude-codex-headless-adapter-spec.md` 与 `docs/plans/next.md` 同步最新 prompt contract 和失败分类边界。
+
+### 验证方式
+
+- `cd backend && mvn -q -Dtest=AdapterArtifactContractValidatorTest,AdapterArtifactQualityEvaluatorTest test`
+- `cd backend && mvn -q -DskipTests package`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有强制运行真实 Claude Code / Codex CLI smoke。
+- `BUILD_FAILED` 仍基于当前轻量 build heuristic，不是完整 ESLint / TypeScript / unit test 平台。
+- 静态 fallback 仍保留，避免真实 CLI 输出异常时破坏默认 demo。
+
+### 遗留问题
+
+- 真实 CLI 输出质量仍需要持续积累 smoke 样本。
+- `failureType` 仍主要通过诊断文本和 TaskStep / Artifact metadata 暴露，尚未升级为完整独立 DTO。
+- 更严格的真实 TypeScript build / lint / test 仍作为 opt-in 后续增强。
+
+### 下一步建议
+
+- 在真实 Claude Code / Codex CLI 环境下分别跑 require-real smoke，确认 prompt contract 对不同任务类型的约束稳定性。
+- 若真实输出仍频繁 PARSE_FAILED，继续微调 provider-specific prompt 或使用更强 schema 输出能力。
+
+## Phase 120：Claude / Codex Streaming Stop-Cancel 语义与运维文档同步
+
+### 目标
+
+- 固化 Claude Code / Codex streaming chunk 的产品边界：只做预览，不持久化 token。
+- 强化 Stop / Cancel 后 late chunks 与 late result 的丢弃语义。
+- 补齐新机器上检查 CLI、启动 backend、运行 fixture / real CLI smoke 的运维说明。
+
+### 主要变更
+
+- `ClaudeCodeAgentAdapter` 在 stream-json 读取过程中观察到 cancellation 时会强制清理 CLI 进程，避免中途取消后遗留进程继续输出。
+- `CodexAgentAdapter` fixture streaming 现在也发布 `ADAPTER_STREAM_CHUNK` / `TASK_STEP_STREAM_CHUNK`，与真实 Codex streaming 事件类型保持一致。
+- Codex / Claude streaming 继续只通过 realtime event 做预览；最终 Artifact 仍必须走完整 contract validator、quality evaluator、build validation 和 REAL_FIRST gate。
+- `.env.example` 增加 fixture / real CLI smoke guard 与 preview-only streaming 说明。
+- `scripts/README.md` 补充 Windows PowerShell 下 `claude --version`、`codex --version`、fixture smoke、real CLI smoke、streaming smoke、常见失败原因和排查方式。
+- `docs/spec/claude-codex-headless-adapter-spec.md` 增加 Streaming / Stop / Cancel 规则。
+- `docs/plans/next.md` 同步 Claude / Codex streaming 与 cancellation 已收敛的当前状态。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `node --check scripts/claude-code-smoke-test.mjs`
+- `node --check scripts/codex-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮没有强制运行真实 Claude Code / Codex CLI streaming smoke。
+- Fixture streaming 只验证事件和 contract，不代表真实 CLI token streaming 质量。
+- 目前仍不持久化 token-level chunk，也不做多节点 event bus。
+
+### 遗留问题
+
+- 非流式 Java / CLI 调用已经在途时仍不做硬线程中断；返回后通过 cancellation token 丢弃结果。
+- 真实 CLI cancellation 仍需要在已认证机器上持续跑 opt-in smoke 样本。
+- WebSocket 当前仍是 stop / cancel control plane，不是完整双向聊天系统。
+
+### 下一步建议
+
+- 在真实 Claude Code / Codex streaming 环境下分别运行 opt-in smoke，确认 cancellation 后没有 `REAL_ADAPTER` Artifact 落库。
+- 如需更强保证，可增加专门的 slow fixture / cancellation smoke 覆盖真实 late-result discard。
