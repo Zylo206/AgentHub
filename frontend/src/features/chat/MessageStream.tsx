@@ -33,11 +33,11 @@ interface MessageStreamProps {
 
 function resolveSenderLabel(message: Message, agents: Agent[]): string {
   if (message.senderType === "USER") {
-    return "You";
+    return "你";
   }
 
   if (message.senderType === "SYSTEM") {
-    return "System";
+    return "系统";
   }
 
   const matchedAgent = agents.find((agent) => getIdValue(agent.id) === message.senderId);
@@ -86,7 +86,7 @@ function resolveAgentStepLabel(message: Message): string | null {
 
   const match = String(message.content || "").match(/TaskStep\s*(\d+)/i);
   if (!match) {
-    return message.senderId === "agent_orchestrator" ? "Group orchestration" : null;
+    return message.senderId === "agent_orchestrator" ? "群聊编排" : null;
   }
 
   return `TaskStep ${match[1]}`;
@@ -113,12 +113,12 @@ function getStreamingPreviews(streamingPreviewsByStepId: Record<string, Streamin
 
 function getStreamingStatusLabel(status: StreamingPreviewState["status"]): string {
   if (status === "DISCARDED") {
-    return "Discarded partial output";
+    return "已丢弃的流式片段";
   }
   if (status === "PARTIAL") {
-    return "Partial output";
+    return "部分流式输出";
   }
-  return "Generating";
+  return "生成中";
 }
 
 export function MessageStream({
@@ -185,18 +185,18 @@ export function MessageStream({
   }
 
   if (loading) {
-    return <div className="panel-empty">Loading messages...</div>;
+    return <div className="panel-empty">正在加载消息...</div>;
   }
 
   if (messages.length === 0) {
     return (
       <div className="panel-empty panel-empty--collaboration">
-        <strong>Start from a task message</strong>
-        <p>Send a request, review the collaboration card, then approve Orchestrator to run the multi-Agent workflow.</p>
+        <strong>从任务消息开始</strong>
+        <p>发送需求后，AgentHub 会生成协作确认卡片；确认后 Orchestrator 会启动多 Agent 协作。</p>
         <div className="panel-empty__examples">
-          <span>Build a React login page with README and review.</span>
-          <span>@Frontend Builder @Reviewer improve this UI and check quality.</span>
-          <span>Design an API contract and deploy a preview.</span>
+          <span>生成一个 React 登录页，同时输出 README 并做质量检查。</span>
+          <span>@Frontend Builder @Reviewer 优化这个 UI 并检查代码质量。</span>
+          <span>设计 API 契约，并生成可打开的静态预览。</span>
         </div>
       </div>
     );
@@ -259,21 +259,21 @@ export function MessageStream({
           </div>
         );
       })}
+
       {streamingPreviews.map((preview) => (
         <div className="message-stream__status-row" data-testid="streaming-status-row" key={preview.taskStepId}>
-          <div className={`message-bubble message-bubble--system message-bubble--streaming message-bubble--streaming-${preview.status.toLowerCase()}`}>
-            <div className="message-bubble__header">
-              <span className="message-bubble__sender">
-                <span>{getStreamingStatusLabel(preview.status)}</span>
-                <span className="message-agent-step">{preview.taskStepId}</span>
-              </span>
-              <span>{preview.adapterType || "Adapter stream"}</span>
+          <div className={`message-stream-status-bar message-stream-status-bar--${preview.status.toLowerCase()}`}>
+            <div className="message-stream-status-bar__header">
+              <div>
+                <strong>{getStreamingStatusLabel(preview.status)}</strong>
+                <span>{preview.adapterType || "Adapter stream"} / {preview.taskStepId}</span>
+              </div>
+              <span>{preview.chunkCount} 个片段</span>
             </div>
             <div className="message-stream__preview-content">{preview.content}</div>
             <div className="message-stream__preview-meta">
-              {preview.chunkCount} chunk{preview.chunkCount === 1 ? "" : "s"}
-              {preview.finishReason ? ` / ${preview.finishReason}` : ""}
-              {preview.status === "STREAMING" ? " / not persisted until final Artifact validation passes" : ""}
+              {preview.finishReason ? preview.finishReason : "最终 Artifact 校验通过前，不会持久化 token 级片段。"}
+              {preview.status === "STREAMING" ? " / 正在等待最终 JSON contract 校验。" : ""}
             </div>
           </div>
         </div>

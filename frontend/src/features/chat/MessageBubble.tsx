@@ -33,12 +33,14 @@ interface MessageBubbleProps {
   onJumpToMessage: (messageId: string) => void;
 }
 
+type ProtocolTone = "TASK" | "RESULT" | "REVIEW" | "APPROVAL" | "REJECTION" | "ERROR";
+
 function getBubbleVariant(message: Message): string {
   if (message.senderType === "USER") {
     return "user";
   }
 
-  if (["TASK", "RESULT", "REVIEW", "APPROVAL", "REJECTION"].includes(message.messageType)) {
+  if (["TASK", "RESULT", "REVIEW", "APPROVAL", "REJECTION", "ERROR"].includes(message.messageType)) {
     return `agent-protocol agent-protocol--${message.messageType.toLowerCase()}`;
   }
 
@@ -65,17 +67,44 @@ function getBubbleVariant(message: Message): string {
   return "system";
 }
 
-function getProtocolLabel(messageType: string): string | null {
-  const labels: Record<string, string> = {
-    TASK: "TASK",
-    RESULT: "RESULT",
-    REVIEW: "REVIEW",
-    APPROVAL: "APPROVAL",
-    REJECTION: "REJECTION",
-    ERROR: "ERROR"
+function getProtocolLabel(messageType: string): ProtocolTone | null {
+  return ["TASK", "RESULT", "REVIEW", "APPROVAL", "REJECTION", "ERROR"].includes(messageType)
+    ? (messageType as ProtocolTone)
+    : null;
+}
+
+function getProtocolDescription(messageType: string): string {
+  const descriptions: Record<ProtocolTone, string> = {
+    TASK: "Orchestrator 正在拆解任务、分配 Agent 和上下文。",
+    RESULT: "Specialist Agent 返回了本步骤产出或执行结果。",
+    REVIEW: "Reviewer 正在检查质量、风险和可交付性。",
+    APPROVAL: "协作链路通过当前评审，可继续进入产物操作。",
+    REJECTION: "评审发现阻塞问题，需要先修复后再继续。",
+    ERROR: "协作链路遇到错误，请查看失败原因和 fallback 状态。"
   };
 
-  return labels[messageType] ?? null;
+  return descriptions[messageType as ProtocolTone] || "Agent 协作状态更新。";
+}
+
+function getProtocolCta(messageType: string): string {
+  const ctas: Record<ProtocolTone, string> = {
+    TASK: "查看计划",
+    RESULT: "查看产物",
+    REVIEW: "查看评审",
+    APPROVAL: "继续交付",
+    REJECTION: "按建议修复",
+    ERROR: "查看错误"
+  };
+
+  return ctas[messageType as ProtocolTone] || "查看详情";
+}
+
+function getAgentLane(message: Message): "orchestrator" | "specialist" | "system" {
+  if (message.senderType !== "AGENT") {
+    return "system";
+  }
+
+  return message.senderId === "agent_orchestrator" ? "orchestrator" : "specialist";
 }
 
 function getReferenceMessageId(message: Message): string | null {
@@ -102,20 +131,20 @@ function getAutoTriggerStatus(
   const approvalStatus = getApprovalStatus(approval ?? suggestion.pendingApproval);
   if (approvalStatus === "CONSUMED") {
     return {
-      label: "Collaboration started",
+      label: "协作已启动",
       tone: "done",
       canRun: false,
-      actionLabel: "Started",
-      detail: "The confirmation request has been consumed by Orchestrator."
+      actionLabel: "已启动",
+      detail: "Orchestrator 已消费确认请求，并开始执行协作流程。"
     };
   }
 
   if (approvalStatus === "CANCELLED" || approvalStatus === "EXPIRED") {
     return {
-      label: approvalStatus === "CANCELLED" ? "Confirmation cancelled" : "Confirmation expired",
+      label: approvalStatus === "CANCELLED" ? "确认已取消" : "确认已过期",
       tone: "pending",
       canRun: true,
-      actionLabel: "Create Confirmation Again",
+      actionLabel: "重新创建确认",
       detail: suggestion.reason
     };
   }
@@ -123,28 +152,28 @@ function getAutoTriggerStatus(
   if (suggestion.requireApproval) {
     if (!approvalStatus) {
       return {
-        label: "Start collaboration from this message",
+        label: "从这条消息启动协作",
         tone: "pending",
         canRun: true,
-        actionLabel: "Create Confirmation",
+        actionLabel: "创建协作确认",
         detail: suggestion.reason
       };
     }
 
     return {
-      label: approvalStatus === "APPROVED" ? "Approved and ready" : "Confirmation required",
+      label: approvalStatus === "APPROVED" ? "已确认，等待启动" : "需要确认协作",
       tone: approvalStatus === "APPROVED" ? "ready" : "pending",
       canRun: true,
-      actionLabel: approvalStatus === "APPROVED" ? "Run Approved Collaboration" : "Approve & Run",
+      actionLabel: approvalStatus === "APPROVED" ? "启动已确认协作" : "确认并启动",
       detail: suggestion.reason
     };
   }
 
   return {
-    label: "Collaboration suggested",
+    label: "建议启动协作",
     tone: "ready",
     canRun: true,
-    actionLabel: "Start Collaboration",
+    actionLabel: "启动协作",
     detail: suggestion.reason
   };
 }
@@ -152,7 +181,7 @@ function getAutoTriggerStatus(
 function getTaskSummary(message: Message): string {
   const normalized = (message.content || "").replace(/\s+/g, " ").trim();
   if (!normalized) {
-    return "Use the attached context as the task request.";
+    return "使用附件和上下文作为任务需求。";
   }
 
   return normalized.length > 120 ? `${normalized.slice(0, 120)}...` : normalized;
@@ -207,16 +236,16 @@ function getExpectedArtifacts(message: Message): string[] {
 }
 
 function getContextSources(message: Message): string[] {
-  const sources = ["Recent conversation"];
+  const sources = ["最近会话"];
 
   if (message.replyToMessageId || message.quotedMessageId) {
-    sources.push("Quoted message");
+    sources.push("引用消息");
   }
   if ((message.attachments ?? []).length > 0) {
-    sources.push("Attachments");
+    sources.push("附件");
   }
   if ((message.mentionedAgentIds ?? []).length > 0 || message.targetAgentId) {
-    sources.push("@Agent target");
+    sources.push("@Agent 目标");
   }
 
   return sources;
@@ -260,6 +289,7 @@ export function MessageBubble({
   const referenceMessageId = getReferenceMessageId(message);
   const artifactIds = message.artifactIds.map((artifactId) => formatId(artifactId)).filter(Boolean);
   const protocolLabel = getProtocolLabel(message.messageType);
+  const agentLane = getAgentLane(message);
   const attachments = message.attachments ?? [];
   const autoTriggerStatus = getAutoTriggerStatus(autoTriggerSuggestion, autoTriggerApproval);
   const pendingTriggerApproval = autoTriggerApproval ?? autoTriggerSuggestion?.pendingApproval ?? null;
@@ -273,7 +303,10 @@ export function MessageBubble({
       className={`message-row message-row--${message.senderType.toLowerCase()} ${highlighted ? "message-row--highlighted" : ""}`}
       data-testid="message-row"
     >
-      <div className={`message-bubble message-bubble--${variant}`} data-testid="message-bubble">
+      <div
+        className={`message-bubble message-bubble--${variant} message-bubble--lane-${agentLane}`}
+        data-testid="message-bubble"
+      >
         <div className="message-bubble__header">
           <span className="message-bubble__sender">
             <span>{senderLabel}</span>
@@ -283,30 +316,34 @@ export function MessageBubble({
             {message.senderType === "AGENT" && agentStepLabel ? (
               <span className="message-agent-step">{agentStepLabel}</span>
             ) : null}
-            {protocolLabel ? <span className={`message-protocol-pill message-protocol-pill--${protocolLabel.toLowerCase()}`}>{protocolLabel}</span> : null}
+            {protocolLabel ? (
+              <span className={`message-protocol-pill message-protocol-pill--${protocolLabel.toLowerCase()}`}>
+                {protocolLabel}
+              </span>
+            ) : null}
           </span>
           <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
         </div>
+
+        {protocolLabel ? (
+          <div className={`message-protocol-card message-protocol-card--${protocolLabel.toLowerCase()}`}>
+            <div>
+              <span className="message-protocol-card__label">{protocolLabel}</span>
+              <strong>{agentLane === "orchestrator" ? "Orchestrator 协调消息" : "Specialist Agent 协作消息"}</strong>
+              <p>{getProtocolDescription(protocolLabel)}</p>
+            </div>
+            <span className="message-protocol-card__cta">{getProtocolCta(protocolLabel)}</span>
+          </div>
+        ) : null}
+
         <div className="message-bubble__actions">
-          <button
-            type="button"
-            className="message-action-button"
-            onClick={() => onCopyMessage(message)}
-          >
+          <button type="button" className="message-action-button" onClick={() => onCopyMessage(message)}>
             复制
           </button>
-          <button
-            type="button"
-            className="message-action-button"
-            onClick={() => onQuoteMessage(message)}
-          >
+          <button type="button" className="message-action-button" onClick={() => onQuoteMessage(message)}>
             引用
           </button>
-          <button
-            type="button"
-            className="message-action-button"
-            onClick={() => onReplyMessage(message)}
-          >
+          <button type="button" className="message-action-button" onClick={() => onReplyMessage(message)}>
             回复
           </button>
           {message.senderType === "USER" ? (
@@ -337,20 +374,18 @@ export function MessageBubble({
           >
             {pinnedContextId ? "已固定 / 取消固定" : "固定到 Context"}
           </button>
-          <button
-            type="button"
-            className="message-action-button"
-            onClick={() => onSaveAsMemory(message)}
-          >
+          <button type="button" className="message-action-button" onClick={() => onSaveAsMemory(message)}>
             保存为记忆
           </button>
         </div>
+
         {message.senderType === "USER" && (message.targetAgentId || (message.mentionedAgentIds?.length ?? 0) > 0) ? (
           <div className="message-target-agent" data-testid="message-target-agent">
             <span>发送给：</span>
             <span className="message-target-agent-name">@{targetAgentLabel || message.targetAgentId}</span>
           </div>
         ) : null}
+
         {autoTriggerStatus ? (
           <div
             className={`message-auto-trigger message-auto-trigger--${autoTriggerStatus.tone}`}
@@ -372,11 +407,11 @@ export function MessageBubble({
             ) : null}
             <div className="message-auto-trigger__plan-grid">
               <div className="message-auto-trigger__plan-cell">
-                <span>Task summary</span>
+                <span>任务摘要</span>
                 <p>{getTaskSummary(message)}</p>
               </div>
               <div className="message-auto-trigger__plan-cell">
-                <span>Expected agents</span>
+                <span>预计参与 Agent</span>
                 <div className="message-auto-trigger__plan-chips">
                   {expectedAgents.map((agent) => (
                     <strong key={agent}>{agent}</strong>
@@ -384,7 +419,7 @@ export function MessageBubble({
                 </div>
               </div>
               <div className="message-auto-trigger__plan-cell">
-                <span>Expected artifacts</span>
+                <span>预计产物</span>
                 <div className="message-auto-trigger__plan-chips">
                   {expectedArtifacts.map((artifactType) => (
                     <strong key={artifactType}>{artifactType}</strong>
@@ -392,7 +427,7 @@ export function MessageBubble({
                 </div>
               </div>
               <div className="message-auto-trigger__plan-cell">
-                <span>Context sources</span>
+                <span>上下文来源</span>
                 <p>{contextSources.join(" / ")}</p>
               </div>
             </div>
@@ -414,7 +449,7 @@ export function MessageBubble({
                 disabled={autoTriggerRunning}
                 onClick={() => onQuoteMessage(message)}
               >
-                Edit Request
+                编辑需求
               </button>
               {canCancelTriggerApproval && pendingTriggerApproval ? (
                 <button
@@ -424,7 +459,7 @@ export function MessageBubble({
                   disabled={autoTriggerRunning}
                   onClick={() => onCancelOrchestratorTrigger(pendingTriggerApproval.approvalId)}
                 >
-                  Cancel
+                  取消
                 </button>
               ) : null}
               <button
@@ -438,6 +473,7 @@ export function MessageBubble({
             </div>
           </div>
         ) : null}
+
         {referenceMessageId ? (
           <div className="message-reference-card">
             <div className="message-reference-card__header">
@@ -453,7 +489,9 @@ export function MessageBubble({
             {message.quotedMessageContent ? <p>{message.quotedMessageContent}</p> : null}
           </div>
         ) : null}
+
         <div className="message-bubble__body">{message.content}</div>
+
         {attachments.length > 0 ? (
           <div className="message-attachment-list" data-testid="message-attachment-list">
             {attachments.map((attachment, index) => (
@@ -480,13 +518,14 @@ export function MessageBubble({
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Download
+                    下载附件
                   </a>
                 ) : null}
               </article>
             ))}
           </div>
         ) : null}
+
         {artifactIds.length > 0 ? (
           <div className="message-bubble__artifacts">
             {artifactIds.map((artifactId) => (
@@ -501,6 +540,7 @@ export function MessageBubble({
             ))}
           </div>
         ) : null}
+
         {replyMessages.length > 0 ? (
           <div className="message-thread">
             <button type="button" className="message-thread__toggle" onClick={onToggleThread}>

@@ -41,7 +41,7 @@ export function ConversationList({
           <button
             type="button"
             key={formatId(conversation.id)}
-            className={`conversation-item ${isActive ? "conversation-item--active" : ""}`}
+            className={`conversation-item conversation-item--im ${isActive ? "conversation-item--active" : ""}`}
             onClick={() => onSelect(conversationId)}
           >
             <div className="conversation-item__row">
@@ -49,7 +49,8 @@ export function ConversationList({
               <span className="conversation-item__type">{displayConversationType(conversation.type)}</span>
             </div>
             <div className="conversation-item__meta">
-              {conversation.participantAgentIds.length} 个 Agent
+              <span>{conversation.participantAgentIds.length} 个 Agent</span>
+              <span>IM 协作会话</span>
             </div>
             <div className="conversation-item__time">{formatDateTime(conversation.updatedAt)}</div>
           </button>

@@ -86,8 +86,8 @@ function getStepQualityGateAction(step: TaskStep): { title: string; reason: stri
       (buildFailed ? step.artifactBuildValidationReason : null) ||
       step.artifactQualityReason ||
       step.adapterErrorMessage ||
-      "No detailed backend reason was returned.",
-    nextStep: "Open the produced artifact, copy this reason into the Revision instruction, then run review again."
+      "后端没有返回更详细的失败原因。",
+    nextStep: "打开关联产物，将失败原因写入 Revision 指令，生成修复版本后再次评审。"
   };
 }
 
@@ -483,7 +483,7 @@ export function TaskRunPanel({
   if (taskRuns.length === 0) {
     return (
       <div className="task-panel__empty">
-        No TaskRun yet. Send a task message, confirm collaboration, then execution steps will appear here.
+        暂无 TaskRun。发送任务消息并确认协作后，执行步骤会显示在这里。
       </div>
     );
   }
@@ -536,7 +536,7 @@ export function TaskRunPanel({
               </div>
               <div className="task-run-control-row">
                 <span className="task-run-control-row__hint">
-                  Stop skips later steps; Cancel discards late adapter output. Terminal runs reject control commands.
+                  Stop 会跳过后续步骤；Cancel 会丢弃迟到的 Adapter 输出。终态任务会拒绝控制命令。
                 </span>
                 <button
                   type="button"
@@ -547,7 +547,7 @@ export function TaskRunPanel({
                     void onStopTaskRun?.(taskRunId);
                   }}
                 >
-                  Stop Run
+                  停止后续步骤
                 </button>
                 <button
                   type="button"
@@ -558,9 +558,9 @@ export function TaskRunPanel({
                     void onCancelTaskRun?.(taskRunId);
                   }}
                 >
-                  Cancel Run
+                  取消运行
                 </button>
-                {!canControlRun ? <span className="task-run-control-row__hint">Control disabled for terminal runs.</span> : null}
+                {!canControlRun ? <span className="task-run-control-row__hint">终态任务不可再停止或取消。</span> : null}
               </div>
               <div className="task-run-card__goal">
                 {taskRun.taskPlan?.goal || "暂无任务计划目标。"}
@@ -660,31 +660,31 @@ export function TaskRunPanel({
                             <div className="step-streaming-preview__header">
                               <strong>
                                 {streamingPreview.status === "STREAMING"
-                                  ? "Streaming"
+                                  ? "流式生成中"
                                   : streamingPreview.status === "DISCARDED"
-                                    ? "Discarded partial output"
-                                    : "Partial output"}
+                                    ? "已丢弃的部分输出"
+                                    : "部分输出"}
                               </strong>
                               <span>
-                                {streamingPreview.adapterType || "Adapter"} / {streamingPreview.chunkCount} chunk{streamingPreview.chunkCount === 1 ? "" : "s"}
+                                {streamingPreview.adapterType || "Adapter"} / {streamingPreview.chunkCount} 个片段
                               </span>
                             </div>
                             <div>{summarizeAdapterResponse(streamingPreview.content)}</div>
                             {streamingPreview.finishReason ? (
                               <small>{streamingPreview.finishReason}</small>
                             ) : (
-                              <small>Preview only; final output is persisted after Artifact validation.</small>
+                              <small>仅用于实时预览；最终输出通过 Artifact 校验后才会持久化。</small>
                             )}
                           </div>
                         ) : null}
                         <div className="step-generated-artifacts">
                           {realAdapterArtifactCount > 0 ? (
                             <span className="artifact-source-badge artifact-source-badge--real-adapter">
-                              Real output used · {realAdapterArtifactCount}
+                              真实输出已采用 · {realAdapterArtifactCount}
                             </span>
                           ) : (
                             <span className="artifact-source-badge artifact-source-badge--static-template">
-                              Static template fallback
+                              静态模板 fallback
                             </span>
                           )}
                           {stepProducedArtifacts.slice(0, 3).map((artifact) => (
@@ -704,42 +704,42 @@ export function TaskRunPanel({
                                 : "artifact-source-badge--static-template"
                           }`}
                           >
-                            Real output: {step.realOutputUsed ? "USED" : "NOT_USED"}
+                            真实输出：{step.realOutputUsed ? "已采用" : "未采用"}
                           </span>
                           <span className="artifact-source-badge">
-                            Review retry/revise: {reviewRetryReviseState}
+                            评审修复链路：{reviewRetryReviseState}
                           </span>
                           <span className="artifact-source-badge">
-                            Parse: {step.artifactParseStatus || "NOT_ATTEMPTED"}
+                            解析：{step.artifactParseStatus || "NOT_ATTEMPTED"}
                           </span>
                           <span className="artifact-source-badge">
-                            Outcome: {step.realAdapterOutcome || "FALLBACK"}
+                            结果：{step.realAdapterOutcome || "FALLBACK"}
                           </span>
                           <span className="artifact-source-badge">
-                            Quality: {step.artifactQualityStatus || "NOT_EVALUATED"}
+                            质量：{step.artifactQualityStatus || "NOT_EVALUATED"}
                           </span>
                           <span className="artifact-source-badge">
-                            Build validation: {buildValidationStatus}
+                            构建校验：{buildValidationStatus}
                           </span>
                           <span className="artifact-source-badge">
-                            Quality score: {qualityScore}
+                            质量分：{qualityScore}
                           </span>
                         </div>
                         {step.artifactBuildValidationReason ? (
                           <div className="step-adapter-response">
-                            <strong>Build validation:</strong> {step.artifactBuildValidationReason}
+                            <strong>构建校验：</strong> {step.artifactBuildValidationReason}
                           </div>
                         ) : null}
                         {step.artifactQualityReason ? (
                           <div className="step-adapter-response">
-                            <strong>Artifact quality:</strong> {step.artifactQualityReason}
+                            <strong>产物质量：</strong> {step.artifactQualityReason}
                           </div>
                         ) : null}
                         {qualityGateAction ? (
                           <div className="quality-gate-action">
                             <strong>{qualityGateAction.title}</strong>
-                            <p>Failure reason: {qualityGateAction.reason}</p>
-                            <p>Fix path: {qualityGateAction.nextStep}</p>
+                            <p>失败原因：{qualityGateAction.reason}</p>
+                            <p>修复路径：{qualityGateAction.nextStep}</p>
                           </div>
                         ) : null}
                         {step.adapterErrorMessage ? (

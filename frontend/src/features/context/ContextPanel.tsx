@@ -95,6 +95,16 @@ function resolveInjectionMode(
 
 type ContextSearchStage = "LIST_GREP_READ" | "LIST_READ_FALLBACK" | "UNKNOWN";
 
+interface ContextStageSummary {
+  total: number;
+  listGrepRead: number;
+  listReadFallback: number;
+  unknown: number;
+  matchedTokenCount: number;
+  injectedCount: number;
+  topSourceType: string;
+}
+
 function resolveContextSearchStage(item: RetrievedContextItem): ContextSearchStage {
   const explicitStage = item.searchStage?.toUpperCase();
   if (explicitStage === "LIST_GREP_READ" || explicitStage === "LIST_READ_FALLBACK") {
@@ -137,14 +147,14 @@ function getContextSearchStageLabel(stage: ContextSearchStage): string {
 
 function getContextSearchStageDetail(stage: ContextSearchStage): string {
   if (stage === "LIST_GREP_READ") {
-    return "Exact keyword hit before read";
+    return "先命中关键词，再读取片段";
   }
 
   if (stage === "LIST_READ_FALLBACK") {
-    return "Candidate read without exact keyword hit";
+    return "无关键词命中，按候选窗口读取";
   }
 
-  return "Older snapshot without stage metadata";
+  return "旧快照缺少检索阶段元数据";
 }
 
 function getContextSearchPipeline(stage: ContextSearchStage, item: RetrievedContextItem): Array<{ label: string; detail: string }> {
@@ -152,17 +162,62 @@ function getContextSearchPipeline(stage: ContextSearchStage, item: RetrievedCont
   return [
     {
       label: "List",
-      detail: `candidate ${item.sourceType}:${item.sourceId}`
+      detail: `候选 ${item.sourceType}:${item.sourceId}`
     },
     {
       label: "Grep",
-      detail: hasKeywordHit ? `matched ${item.matchedTokens?.join(", ") || "keyword"}` : "no exact keyword hit"
+      detail: hasKeywordHit ? `命中 ${item.matchedTokens?.join(", ") || "keyword"}` : "未命中精确关键词"
     },
     {
       label: "Read",
-      detail: item.windowPolicy ? `window ${item.windowPolicy}` : "content snippet selected"
+      detail: item.windowPolicy ? `窗口 ${item.windowPolicy}` : "读取内容片段"
     }
   ];
+}
+
+function buildContextStageSummary(items: RetrievedContextItem[], taskRuns: TaskRun[], snapshot: ContextSnapshot): ContextStageSummary {
+  const sourceCounts = new Map<string, number>();
+
+  const summary = items.reduce<ContextStageSummary>(
+    (current, item) => {
+      const stage = resolveContextSearchStage(item);
+      sourceCounts.set(item.sourceType, (sourceCounts.get(item.sourceType) ?? 0) + 1);
+
+      return {
+        ...current,
+        listGrepRead: current.listGrepRead + (stage === "LIST_GREP_READ" ? 1 : 0),
+        listReadFallback: current.listReadFallback + (stage === "LIST_READ_FALLBACK" ? 1 : 0),
+        unknown: current.unknown + (stage === "UNKNOWN" ? 1 : 0),
+        matchedTokenCount: current.matchedTokenCount + (item.matchedTokens?.length ?? 0),
+        injectedCount: current.injectedCount + (resolveInjectionMode(snapshot, item, taskRuns) === "unmatched" ? 0 : 1)
+      };
+    },
+    {
+      total: items.length,
+      listGrepRead: 0,
+      listReadFallback: 0,
+      unknown: 0,
+      matchedTokenCount: 0,
+      injectedCount: 0,
+      topSourceType: "N/A"
+    }
+  );
+
+  const topSourceType =
+    Array.from(sourceCounts.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "N/A";
+
+  return {
+    ...summary,
+    topSourceType
+  };
+}
+
+function getScorePercent(score: number): number {
+  if (!Number.isFinite(score)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 export function ContextPanel({
@@ -268,7 +323,11 @@ export function ContextPanel({
           <div className="context-panel__empty">当前 TaskRun 暂无上下文快照。</div>
         ) : (
           <div className="context-card-list" data-testid="context-snapshot-list">
-            {contextSnapshots.map((snapshot) => (
+            {contextSnapshots.map((snapshot) => {
+              const retrievedItems = snapshot.retrievedContextItems ?? [];
+              const stageSummary = buildContextStageSummary(retrievedItems, taskRuns, snapshot);
+
+              return (
               <section className="context-card" key={formatId(snapshot.id)}>
                 <div className="context-card__header">
                   <strong>{formatId(snapshot.id)}</strong>
@@ -278,6 +337,38 @@ export function ContextPanel({
                 <div className="context-card__meta">
                   <span>{snapshot.includedMessageIds.length} 条消息</span>
                   <span>{snapshot.includedArtifactIds.length} 个产物</span>
+                </div>
+                <div className="context-search-overview" data-testid="context-search-overview">
+                  <div className="context-search-overview__header">
+                    <strong>检索流水线</strong>
+                    <span>List / Grep / Read</span>
+                  </div>
+                  <div className="context-search-overview__grid">
+                    <span>
+                      <strong>{stageSummary.total}</strong>
+                      <small>召回上下文</small>
+                    </span>
+                    <span>
+                      <strong>{stageSummary.listGrepRead}</strong>
+                      <small>关键词命中</small>
+                    </span>
+                    <span>
+                      <strong>{stageSummary.listReadFallback}</strong>
+                      <small>窗口回退</small>
+                    </span>
+                    <span>
+                      <strong>{stageSummary.matchedTokenCount}</strong>
+                      <small>matched tokens</small>
+                    </span>
+                    <span>
+                      <strong>{stageSummary.injectedCount}</strong>
+                      <small>已注入 Step</small>
+                    </span>
+                    <span>
+                      <strong>{stageSummary.topSourceType}</strong>
+                      <small>主要来源</small>
+                    </span>
+                  </div>
                 </div>
                 <div className="context-list-block">
                   <span className="context-list-block__label">固定上下文</span>
@@ -291,12 +382,13 @@ export function ContextPanel({
                     </ul>
                   )}
                 </div>
-                {snapshot.retrievedContextItems?.length ? (
+                {retrievedItems.length ? (
                   <div className="context-list-block">
-                    <span className="context-list-block__label">Retrieved Context</span>
+                    <span className="context-list-block__label">检索上下文</span>
                     <div className="retrieved-context-list">
-                      {snapshot.retrievedContextItems.map((item, index) => {
+                      {retrievedItems.map((item, index) => {
                         const searchStage = resolveContextSearchStage(item);
+                        const scorePercent = getScorePercent(item.score);
 
                         return (
                           <article
@@ -315,8 +407,8 @@ export function ContextPanel({
                                 {getContextSearchStageLabel(searchStage)}
                               </span>
                               <span>{getContextSearchStageDetail(searchStage)}</span>
-                              {item.windowPolicy ? <span>window {item.windowPolicy}</span> : null}
-                              {item.semanticBackend ? <span>semantic {item.semanticBackend}</span> : null}
+                              {item.windowPolicy ? <span>窗口 {item.windowPolicy}</span> : null}
+                              {item.semanticBackend ? <span>语义后端 {item.semanticBackend}</span> : null}
                             </div>
                             <div
                               className="retrieved-context-item__pipeline"
@@ -342,6 +434,12 @@ export function ContextPanel({
                               <span>injects into {resolveInjectionStepLabel(snapshot, item, taskRuns)}</span>
                               <span>match {resolveInjectionMode(snapshot, item, taskRuns)}</span>
                             </div>
+                            <div className="retrieved-context-item__score">
+                              <span>综合分 {Number.isFinite(item.score) ? item.score.toFixed(2) : "-"}</span>
+                              <div className="retrieved-context-item__score-track" aria-hidden="true">
+                                <i style={{ width: `${scorePercent}%` }} />
+                              </div>
+                            </div>
                             {item.matchedTokens?.length ? (
                               <div className="retrieved-context-item__tokens">
                                 {item.matchedTokens.map((token) => (
@@ -349,9 +447,9 @@ export function ContextPanel({
                                 ))}
                               </div>
                             ) : null}
-                            <p className="retrieved-context-item__reason">{item.reason || "No retrieval reason provided."}</p>
+                            <p className="retrieved-context-item__reason">{item.reason || "后端未返回检索原因。"}</p>
                             {item.semanticExplanation ? (
-                              <p className="retrieved-context-item__reason">Semantic: {item.semanticExplanation}</p>
+                              <p className="retrieved-context-item__reason">语义解释：{item.semanticExplanation}</p>
                             ) : null}
                             <p className="retrieved-context-item__content">{item.content}</p>
                           </article>
@@ -361,14 +459,15 @@ export function ContextPanel({
                   </div>
                 ) : (
                   <div className="context-list-block">
-                    <span className="context-list-block__label">Retrieved Context</span>
+                    <span className="context-list-block__label">检索上下文</span>
                     <p className="context-card__summary">
                       本次 TaskRun 没有命中可注入的检索上下文，或后端未返回 retrievedContextItems。
                     </p>
                   </div>
                 )}
               </section>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

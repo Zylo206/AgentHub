@@ -237,10 +237,10 @@ export function ChatInput({
       <div className="chat-input__actions">
         <div className="chat-input__hint-group">
           <span className="chat-input__hint">
-            Send a task message first. AgentHub will show a collaboration confirmation card before Orchestrator runs.
+            先发送任务消息。AgentHub 会先展示协作确认卡片，再启动 Orchestrator。
           </span>
           <span className="chat-input__hint">
-            Start with @AgentName to target one or more Agents.
+            以 @AgentName 开头可以指定一个或多个 Agent。
           </span>
         </div>
         <button

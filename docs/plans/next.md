@@ -111,6 +111,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: MemoryItem has an embedding provider/storage skeleton via `embeddingJson`; real embedding provider remains deferred.
    - `Done`: Context Search v2 keeps representative sources across recent messages, artifacts, memories, attachment previews, and task run summaries instead of letting one source type dominate ranking.
    - `Done`: ContextPanel now shows the List / Grep / Read pipeline per retrieved item, including matched tokens, read window, and semantic backend.
+   - `Done`: ContextPanel now adds a snapshot-level List / Grep / Read overview with recalled context count, keyword hit count, fallback read count, matched token count, injected step count, and top source type.
+   - `Done`: Adapter Quality Dashboard now has metric cards for observed scope, average success rate, fallback rate, real output acceptance, failure taxonomy, and highest-risk adapter.
    - Keep future spec changes aligned with the focused plans and `docs/collaboration/dev-log.md`.
    - Do not describe Mock / fixture / static / half-real behavior as full production capability.
 
@@ -126,6 +128,14 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Browser E2E now requires the Workspace collaboration primary action for the product path and does not use the manual debug run as its default fallback.
    - `Done`: Browser E2E passed on an isolated backend/frontend dev server and covers the IM-first path, approval gates, restore, deploy preview, audit timeline, and optional rejection scenario.
    - `Done`: backend CORS origins are configurable through `AGENTHUB_CORS_ALLOWED_ORIGINS`, so local validation ports do not require code edits.
+   - `Done`: Workspace P0 visual polish moved the UI toward a Chinese-first technical command center: unified design tokens, command-center shell, stronger protocol cards, streaming status, and quality gate trust surfaces.
+   - `Done`: Workspace P1 main-path polish strengthens the IM-first flow with clearer protocol cards, Orchestrator vs Specialist visual lanes, streaming status bars, IM-style Agent contacts, and highlighted conversation participants.
+   - `Done`: ArtifactPanel now has an Artifact Cockpit summary for source, quality gate, build validation, content size, snapshots, and deploy preview records.
+   - `Done`: Artifact Studio now has a Delivery Workbench with explanatory source / quality / build badges, expandable diagnostics, Diff risk summary, snapshot timeline, and release panel boundary copy.
+   - `Done`: `docs/ui-audit.md` now captures the independent UI audit for Workspace, MessageStream, Agent List, TaskRunPanel, ArtifactPanel, ContextPanel, Adapter Dashboard, and PreviewPage.
+   - `Done`: WorkspacePage has started component decomposition with `WorkspaceHeader` and `WorkspaceCollaborationToolbar`; the IM-first main path remains covered by Browser E2E.
+   - `Done`: PreviewPage now behaves more like an independent Preview Studio with trust status, source metadata, version-chain summary, content toolbar, and local-static preview boundary.
+   - `Done`: lightweight motion and responsive polish now covers Artifact Cockpit, Preview Studio, KPI cards, and narrow-screen stacked layouts.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**
@@ -137,6 +147,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 
 12. **Strengthen Artifact editing trust**
    - `Done`: Diff Summary now includes an apply-time trust check that explains approval, conflict, line impact, and snapshot/restore safety before users apply or force-apply a patch.
+   - `Done`: ArtifactPanel now surfaces the same trust model in the main delivery workbench before users reach Apply Diff, Restore, or Deploy controls.
+   - `Done`: ArtifactPanel has started component decomposition with `ArtifactDeliveryWorkbench`, `ArtifactDeployPanel`, and `ArtifactSnapshotTimeline`; approval and mutation handlers remain in the parent panel.
    - `Boundary`: line diff remains lightweight and conflict handling is explicit user approval, not automated semantic merge.
 
 ## Not Now

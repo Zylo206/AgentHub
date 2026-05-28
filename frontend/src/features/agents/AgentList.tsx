@@ -46,6 +46,16 @@ function formatRate(value?: number | null): string {
   return `${Math.round(value * 100)}%`;
 }
 
+function getAgentAvailabilityLabel(agent: Agent, descriptor: AdapterDescriptor | null): string {
+  if (descriptor?.status === "AVAILABLE") {
+    return "在线可路由";
+  }
+  if (agent.status === "ACTIVE") {
+    return "可用，必要时 fallback";
+  }
+  return "待配置";
+}
+
 export function AgentList({
   agents,
   adapterDescriptors,
@@ -66,16 +76,18 @@ export function AgentList({
       {agents.map((agent) => {
         const agentId = formatId(agent.id);
         const adapterDescriptor = findAdapterDescriptor(adapterDescriptors, agent.preferredAdapterType);
+        const availabilityClass = normalizeStatusClass(adapterDescriptor?.status || agent.status);
 
         return (
           <button
             type="button"
             key={agentId}
-            className={`agent-item ${selectedAgentId === agentId ? "agent-item--selected" : ""}`}
+            className={`agent-item agent-item--im ${selectedAgentId === agentId ? "agent-item--selected" : ""}`}
             onClick={() => onSelectAgent?.(agent)}
           >
             <div className="agent-item__row">
               <div className="agent-item__identity">
+                <span className={`agent-presence-dot agent-presence-dot--${availabilityClass}`} />
                 {agent.avatarUrl ? (
                   <img className="agent-avatar" src={agent.avatarUrl} alt={agent.name} />
                 ) : (
@@ -91,8 +103,9 @@ export function AgentList({
               </span>
             </div>
             <div className="agent-item__description">{agent.description}</div>
-            <div className="agent-preferred-adapter">
-              首选 Adapter：{agent.preferredAdapterType || "MOCK"}
+            <div className="agent-im-strip">
+              <strong>{getAgentAvailabilityLabel(agent, adapterDescriptor)}</strong>
+              <span>{agent.preferredAdapterType || "MOCK"}</span>
             </div>
             {adapterDescriptor ? (
               <div className="agent-adapter-health">
@@ -107,6 +120,10 @@ export function AgentList({
                 ) : null}
               </div>
             ) : null}
+            <div className="agent-capability-summary">
+              <span>{agent.capabilityTags.length} 个能力</span>
+              <span>{agent.toolTags.length} 个工具</span>
+            </div>
             {agent.capabilityTags.length > 0 ? (
               <div className="tag-row">
                 {renderLimitedTags(agent.capabilityTags, `${agentId}-cap`)}

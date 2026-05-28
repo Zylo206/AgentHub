@@ -9,21 +9,95 @@ import "../../styles/workspace.css";
 
 function getPreviewMode(artifact: Artifact): string {
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
-    return "HTML iframe";
+    return "HTML iframe 预览";
   }
   if (artifact.type === "CODE") {
-    return "Code preview";
+    return "代码预览";
   }
   if (artifact.type === "MARKDOWN") {
-    return "Markdown text";
+    return "Markdown 文本";
   }
   if (artifact.type === "REVIEW_REPORT") {
-    return "Review report";
+    return "评审报告";
   }
   if (artifact.type === "API_CONTRACT" || artifact.type === "DATA_MODEL") {
-    return "Structured text";
+    return "结构化文本";
   }
-  return "Text preview";
+  return "文本预览";
+}
+
+type PreviewTrustTone = "success" | "warning" | "danger" | "neutral";
+
+function isPreviewBlockingStatus(status?: string | null): boolean {
+  if (!status) {
+    return false;
+  }
+
+  const normalized = status.toUpperCase();
+  return normalized.includes("REJECT") || normalized.includes("FAIL") || normalized.includes("ERROR");
+}
+
+function getPreviewTrustTone(artifact: Artifact): PreviewTrustTone {
+  if (
+    isPreviewBlockingStatus(artifact.status) ||
+    isPreviewBlockingStatus(artifact.qualityStatus) ||
+    isPreviewBlockingStatus(artifact.buildValidationStatus)
+  ) {
+    return "danger";
+  }
+  if (artifact.sourceKind !== "REAL_ADAPTER" || artifact.realAdapterOutcome === "FALLBACK") {
+    return "warning";
+  }
+  if (artifact.sourceKind === "REAL_ADAPTER") {
+    return "success";
+  }
+
+  return "neutral";
+}
+
+function getPreviewTrustLabel(artifact: Artifact): string {
+  const tone = getPreviewTrustTone(artifact);
+
+  if (tone === "success") {
+    return "真实产物预览";
+  }
+  if (tone === "danger") {
+    return "门禁失败预览";
+  }
+  if (tone === "warning") {
+    return "Fallback / 静态预览";
+  }
+
+  return "本地预览";
+}
+
+function getPreviewTrustDescription(artifact: Artifact): string {
+  if (getPreviewTrustTone(artifact) === "danger") {
+    return "该 Artifact 存在质量、构建或评审风险，页面仅展示当前内容，不代表可交付状态。";
+  }
+  if (artifact.sourceKind === "REAL_ADAPTER") {
+    return "该页面展示真实 Adapter 产物的当前版本，并保留 AgentHub 的版本、来源和门禁信息。";
+  }
+
+  return "该页面展示本地静态 Preview URL，对应 Artifact 内容快照，不代表真实云部署或公网发布。";
+}
+
+function getPreviewNextAction(artifact: Artifact): string {
+  if (getPreviewTrustTone(artifact) === "danger") {
+    return "回到 Workspace 查看质量门禁原因，执行 Revision 后再重新评审。";
+  }
+  if (artifact.sourceKind === "REAL_ADAPTER") {
+    return "可作为真实 Adapter 产物候选继续审批、部署预览或加入交付记录。";
+  }
+  return "当前是静态 / fallback 预览，适合演示兜底；如需交付，请优先生成真实 Adapter 版本。";
+}
+
+function formatPreviewSize(content: string | null | undefined): string {
+  const length = (content || "").length;
+  if (length >= 1000) {
+    return `${(length / 1000).toFixed(1)}k chars`;
+  }
+  return `${length} chars`;
 }
 
 function renderPreviewContent(artifact: Artifact) {
@@ -117,6 +191,7 @@ export function PreviewPage() {
   }, [artifactId]);
 
   const previewMode = useMemo(() => (artifact ? getPreviewMode(artifact) : "-"), [artifact]);
+  const trustTone = useMemo(() => (artifact ? getPreviewTrustTone(artifact) : "neutral"), [artifact]);
   const versionEntries = useMemo(
     () => (artifact ? buildArtifactVersions(artifact, conversationArtifacts.length > 0 ? conversationArtifacts : [artifact]) : []),
     [artifact, conversationArtifacts]
@@ -128,7 +203,8 @@ export function PreviewPage() {
       <header className="preview-page__topbar">
         <div>
           <p className="eyebrow">AgentHub Preview</p>
-          <h1>Artifact 静态预览</h1>
+          <h1>Artifact 预览工作台</h1>
+          <span>本地 Preview URL · 版本链 · 来源门禁 · 内容快照</span>
         </div>
         <Link className="secondary-button" to="/workspace">
           返回工作台
@@ -137,12 +213,12 @@ export function PreviewPage() {
 
       {loading ? (
         <section className="preview-page__state">
-          <strong>Loading artifact preview...</strong>
+          <strong>正在加载 Artifact 预览...</strong>
           <span>正在读取 Artifact 内容。</span>
         </section>
       ) : errorMessage ? (
         <section className="preview-page__state preview-page__state--error">
-          <strong>Artifact not found</strong>
+          <strong>未找到 Artifact</strong>
           <span>{errorMessage}</span>
           <Link className="primary-button" to="/workspace">
             返回工作台
@@ -152,7 +228,7 @@ export function PreviewPage() {
         <section className="preview-page__card">
           <div className="preview-page__meta">
             <div>
-              <p className="eyebrow">Static demo preview</p>
+              <p className="eyebrow">本地静态预览</p>
               <h2>{artifact.title}</h2>
               <p>{formatId(artifact.id)}</p>
             </div>
@@ -173,57 +249,108 @@ export function PreviewPage() {
             </div>
           </div>
 
-          <dl className="preview-page__details">
-            <div>
-              <dt>Language</dt>
-              <dd>{artifact.language || "plain"}</dd>
+          <section className={`preview-page__studio preview-page__studio--${trustTone}`} data-testid="preview-studio">
+            <div className="preview-page__studio-hero">
+              <div>
+                <span className="preview-page__studio-eyebrow">Preview Studio</span>
+                <strong>{getPreviewTrustLabel(artifact)}</strong>
+                <p>{getPreviewTrustDescription(artifact)}</p>
+              </div>
+              <span>{artifact.realAdapterOutcome || "FALLBACK"}</span>
             </div>
-            <div>
-              <dt>Preview mode</dt>
-              <dd>{previewMode}</dd>
+            <div className="preview-page__studio-grid">
+              <article>
+                <span>来源</span>
+                <strong>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</strong>
+                <small>{artifact.sourceAdapterType || "无外部 Adapter"}</small>
+              </article>
+              <article>
+                <span>门禁</span>
+                <strong>{artifact.qualityStatus || "NOT_EVALUATED"}</strong>
+                <small>{artifact.buildValidationStatus || "BUILD_NOT_EVALUATED"}</small>
+              </article>
+              <article>
+                <span>版本链</span>
+                <strong>{versionEntries.length} 个版本</strong>
+                <small>当前 v{artifact.version}</small>
+              </article>
+              <article>
+                <span>内容体量</span>
+                <strong>{formatPreviewSize(artifact.content)}</strong>
+                <small>{previewMode}</small>
+              </article>
             </div>
-            <div>
-              <dt>Updated</dt>
-              <dd>{new Date(artifact.updatedAt).toLocaleString()}</dd>
+            <div className="preview-page__boundary" data-testid="preview-boundary">
+              <div>
+                <span>交付边界</span>
+                <strong>{getPreviewNextAction(artifact)}</strong>
+              </div>
+              <p>
+                Preview 页面只读取后端 Artifact 内容，不执行真实构建、不发布公网地址，也不会绕过 Workspace 中的审批、审计和快照恢复链路。
+              </p>
             </div>
-            <div>
-              <dt>Source</dt>
-              <dd>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</dd>
-            </div>
-            <div>
-              <dt>Adapter</dt>
-              <dd>{artifact.sourceAdapterType || "-"}</dd>
-            </div>
-            <div>
-              <dt>Generation</dt>
-              <dd>{artifact.generationMode || "-"}</dd>
-            </div>
-          </dl>
+          </section>
 
-          <div className="preview-page__versions">
-            <div>
-              <strong>Version Switcher</strong>
-              <span>{versionEntries.length} version{versionEntries.length === 1 ? "" : "s"} in this artifact chain</span>
-            </div>
-            <div className="preview-page__version-list">
-              {versionEntries.map((entry) => {
-                const isActive = entry.artifactId === currentArtifactId;
-                return (
-                  <Link
-                    key={entry.artifactId}
-                    className={`preview-page__version-item ${isActive ? "preview-page__version-item--active" : ""}`}
-                    to={`/preview/${entry.artifactId}`}
-                  >
-                    <strong>v{entry.artifact.version}</strong>
-                    {entry.isRevision ? <span>Revision</span> : <span>Initial</span>}
-                    {entry.basedOnVersionLabel ? <small>based on {entry.basedOnVersionLabel}</small> : null}
-                  </Link>
-                );
-              })}
+          <div className="preview-page__workbench">
+            <dl className="preview-page__details">
+              <div>
+                <dt>语言</dt>
+                <dd>{artifact.language || "plain"}</dd>
+              </div>
+              <div>
+                <dt>预览模式</dt>
+                <dd>{previewMode}</dd>
+              </div>
+              <div>
+                <dt>更新时间</dt>
+                <dd>{new Date(artifact.updatedAt).toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>来源</dt>
+                <dd>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</dd>
+              </div>
+              <div>
+                <dt>Adapter</dt>
+                <dd>{artifact.sourceAdapterType || "-"}</dd>
+              </div>
+              <div>
+                <dt>生成模式</dt>
+                <dd>{artifact.generationMode || "-"}</dd>
+              </div>
+            </dl>
+
+            <div className="preview-page__versions">
+              <div>
+                <strong>版本切换</strong>
+                <span>当前版本链共 {versionEntries.length} 个版本</span>
+              </div>
+              <div className="preview-page__version-list">
+                {versionEntries.map((entry) => {
+                  const isActive = entry.artifactId === currentArtifactId;
+                  return (
+                    <Link
+                      key={entry.artifactId}
+                      className={`preview-page__version-item ${isActive ? "preview-page__version-item--active" : ""}`}
+                      to={`/preview/${entry.artifactId}`}
+                    >
+                      <strong>v{entry.artifact.version}</strong>
+                      {entry.isRevision ? <span>Revision</span> : <span>Initial</span>}
+                      {entry.basedOnVersionLabel ? <small>基于 {entry.basedOnVersionLabel}</small> : null}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
           <div className="preview-page__content">
+            <div className="preview-page__content-toolbar">
+              <div>
+                <strong>内容预览</strong>
+                <span>{artifact.title}</span>
+              </div>
+              <span>{previewMode}</span>
+            </div>
             {renderPreviewContent(artifact)}
           </div>
         </section>

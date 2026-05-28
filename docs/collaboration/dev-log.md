@@ -5286,3 +5286,260 @@
 
 - 在真实 Claude Code / Codex streaming 环境下分别运行 opt-in smoke，确认 cancellation 后没有 `REAL_ADAPTER` Artifact 落库。
 - 如需更强保证，可增加专门的 slow fixture / cancellation smoke 覆盖真实 late-result discard。
+
+## Phase 121：Workspace 中文化与 Command Center 视觉 P0
+
+### 目标
+
+- 将 `/workspace` 默认体验继续收敛为中文优先的 IM-first 协作工作台。
+- 按 technical command center + premium collaboration studio 方向提升视觉层级，但不改变三栏核心结构。
+- 强化 MessageStream、TaskRunPanel、ArtifactPanel 中协作状态、流式状态、质量门禁和修复路径的可读性。
+
+### 主要变更
+
+- 确认前端源码为 UTF-8，终端乱码来自 PowerShell 输出编码；页面文案继续按中文优先收敛。
+- `MessageStream` 空状态、streaming preview 状态和 chunk 说明改为中文。
+- `MessageBubble` 协作确认卡、任务摘要、预计 Agent、预计产物、上下文来源、编辑 / 取消 / 下载等主路径文案改为中文。
+- `WorkspacePage` 主 CTA、Debug / Advanced、手动调试 fallback 文案改为中文，继续弱化手动 demo-task 入口。
+- `TaskRunPanel` Stop / Cancel 说明、质量门禁失败原因、修复路径、真实输出 / 解析 / 质量 / 构建状态等改为中文。
+- `ArtifactPanel` 部署审批、fallback 原因、质量 / 构建说明、Approval Gate、Deploy Status、Safety Snapshot 等主路径文案改为中文。
+- `AdapterRoutingPanel` 与 `AdapterQualityDashboard` 关键说明改为中文。
+- `PreviewPage` 预览模式、详情字段、版本切换和错误 / loading 状态改为中文。
+- `global.css` 增加 command center 设计 token；`workspace.css` 增加 command center P0 视觉覆盖层，强化背景、面板、状态 badge、Agent protocol card、streaming 状态、质量门禁和 PreviewPage 的视觉层级。
+- `docs/plans/next.md` 同步本轮 P0 视觉收敛状态。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只做前端视觉与文案收敛，不改变后端 Orchestrator、Adapter、Artifact、Approval、Deploy 或 Realtime 业务语义。
+- Deploy Preview 仍是本地静态预览，不是真实云部署。
+- Streaming 文案仍明确为预览状态，最终 Artifact 仍以后端校验和持久化结果为准。
+
+### 遗留问题
+
+- 本轮未跑 Browser E2E；如继续改 Workspace、MessageStream、ArtifactPanel 或 PreviewPage，应运行 `node scripts/e2e-browser.mjs`。
+- `WorkspacePage.tsx` 仍然偏大，后续应继续拆分 feature-level 组件。
+- 部分深层技术字段仍保留英文枚举值，例如 `REAL_ADAPTER`、`REAL_FIRST`、`PARSE_FAILED`，这是为了与后端状态和 smoke 断言保持一致。
+
+### 下一步建议
+
+- 继续做 P1：ContextPanel 的 List / Grep / Read pipeline 可视化、Adapter Dashboard 指标卡化、ArtifactPanel cockpit 化和 PreviewPage polish。
+
+## Phase 122：Context Search Pipeline 与 Adapter Quality 指标卡
+
+### 目标
+
+- 增强 ContextPanel 的 List / Grep / Read 检索解释，让用户能直接看懂上下文是如何被召回、命中、读取并注入 TaskStep 的。
+- 将 Adapter Quality Dashboard 从表格型数据展示升级为顶部指标卡 + 明细表的观测面板。
+
+### 主要变更
+
+- `ContextPanel` 增加 snapshot 级检索流水线概览，展示召回上下文数、关键词命中数、窗口回退数、matched tokens、已注入 Step 数和主要来源类型。
+- `ContextPanel` 单条 retrieved context 增加综合分进度条，并保留 source rank、base / keyword / recency / importance / semantic score、matchedTokens、read window、semantic backend 和注入 Step 说明。
+- `AdapterQualityDashboard` 增加 KPI 指标卡：观测范围、平均成功率、平均 fallback、真实产物采纳、失败分类、最高风险 Adapter。
+- `workspace.css` 补充 Context Search overview、score meter、Adapter KPI cards 的 command center 风格样式和响应式布局。
+- `docs/plans/next.md` 同步本轮 P1 可解释 UI 状态。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只增强前端解释 UI，不改变后端 Context Retrieval、Adapter metrics、REAL_FIRST 或 fallback 语义。
+- Context Search 仍是 DB-backed Agentic Search + heuristic scoring；embedding/vector search 仍是可插拔后置能力。
+- Adapter 指标卡展示的是现有后端聚合指标和当前 TaskStep 观测，不代表所有真实外部 Agent 的长期生产质量。
+
+### 遗留问题
+
+- 本轮未运行 Browser E2E；若继续修改 Workspace 主链路，应运行 `node scripts/e2e-browser.mjs`。
+- Adapter Dashboard 仍可继续增强趋势图、时间窗口和 adapter-specific drilldown。
+- ContextPanel 后续可继续做 source filter、source preview 和注入链路跳转。
+
+## Phase 123：Artifact Cockpit 与 Preview Studio 产品化
+
+### 目标
+
+- 将 ArtifactPanel 从信息堆叠继续收敛为可读的产物 cockpit，让用户快速判断来源、质量、构建、安全快照和部署预览状态。
+- 将 `/preview/:artifactId` 从基础内容页继续打磨为独立 Preview Studio，明确展示本地静态预览边界、版本链和门禁状态。
+- 补充轻量 motion 与窄屏响应式规则，并跑 Browser E2E 做 UI 回归验证。
+
+### 主要变更
+
+- `ArtifactPanel` 增加 `Artifact Cockpit` 摘要区，聚合展示真实 / fallback 来源、REAL_ADAPTER outcome、质量门禁、构建校验、内容体量、安全快照数量和部署记录。
+- `PreviewPage` 增加 `Preview Studio` 区块和内容预览 toolbar，展示 trust status、sourceKind、sourceAdapterType、quality/build 状态、版本链数量和预览模式。
+- `workspace.css` 增加 cockpit / studio 的 command center 样式、状态色、入场动效和 720px 窄屏堆叠规则。
+- `docs/plans/next.md` 同步 Artifact cockpit、Preview studio 和 motion / responsive polish 的完成状态。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- Preview Studio 仍展示本地静态 Artifact 内容，不代表真实云部署或公网发布。
+- Artifact Cockpit 展示的是当前后端已有的 contract / quality / build / fallback metadata，不新增真实静态分析平台。
+
+### 遗留问题
+
+- 还没有做完整移动端视觉 QA；当前只是窄屏布局保护。
+- ArtifactPanel 仍可继续拆分为更小的 cockpit / revision / deploy / snapshot 子组件，降低组件体积。
+
+### 下一步建议
+
+- 将 Browser E2E 继续作为 Workspace / ArtifactPanel / PreviewPage 大改后的固定 UI 回归门禁。
+
+### 下一步建议
+
+- 继续做 ArtifactPanel cockpit 化与 PreviewPage 独立预览工作台 polish。
+
+## Phase 124：Artifact Cockpit Handoff 与 Preview Studio Polish 验证
+
+### 目标
+
+- 继续增强 ArtifactPanel cockpit 化，让产物来源、质量门禁、构建校验、快照、部署和下一步动作更容易理解。
+- 继续打磨 `/preview/:artifactId` 为独立预览工作台，明确本地静态 Preview 的边界。
+- 用 Browser E2E 验证 Workspace / Artifact / Approval / Restore / Deploy / Preview 主路径没有回归。
+
+### 主要变更
+
+- `ArtifactPanel` 在 Artifact Cockpit 中新增“下一步建议”和“交付路径”区域，展示真实输出、质量门禁、构建校验、预览发布的当前状态。
+- `PreviewPage` 将标题收敛为“Artifact 预览工作台”，新增交付边界说明，并把元数据与版本切换组织成更像独立工作台的双栏区域。
+- `workspace.css` 补充 cockpit handoff、delivery flow、Preview boundary、Preview workbench 的 command-center 样式、轻量动效和窄屏堆叠规则。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- 启动本地 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- Preview Studio 仍是本地静态 Artifact 预览，不是真实云部署或公网发布。
+- Artifact Cockpit 继续展示现有 contract / quality / build / fallback metadata，不新增真实静态分析平台。
+- 本轮没有修改后端业务语义、Artifact 生成、审批、部署或 Adapter 执行逻辑。
+
+### 遗留问题
+
+- ArtifactPanel 组件仍偏大，后续可以拆分为 cockpit、revision、deploy、snapshot、diff 子组件。
+- 当前 responsive polish 是窄屏布局保护，不是完整移动端适配。
+
+### 下一步建议
+
+- 继续把 Browser E2E 作为 Workspace、ArtifactPanel、PreviewPage 大改后的固定 UI 回归门禁。
+
+## Phase 125：Workspace 主路径产品化与 IM 协作视觉增强
+
+### 目标
+
+- 按 IM-first 主路径继续弱化调试面板感，让“发送任务 -> 确认协作 -> 多 Agent 回复 -> Artifact”成为更自然的默认体验。
+- 增强 MessageStream 中 Agent 协作消息的协议视觉，区分 Orchestrator 与 Specialist Agent。
+- 让 Conversation / Agent 侧栏更像 IM 联系人与群聊成员列表，突出 status、capability 和 adapter health。
+
+### 主要变更
+
+- `MessageBubble` 重写为中文可读文案，并新增协议卡片层：`TASK / RESULT / REVIEW / APPROVAL / REJECTION / ERROR` 均有说明与行动提示。
+- `MessageBubble` 增加 Orchestrator / Specialist lane class，视觉上区分协调消息和专家 Agent 消息。
+- `MessageStream` 空状态、loading、streaming preview 文案改为中文，并将 streaming chunk / partial / discarded 展示为轻量状态条。
+- `AgentList` 调整为 IM 联系人样式，增加 presence dot、在线 / fallback 状态、adapter health、能力 / 工具数量摘要。
+- `ConversationList` 调整会话卡片文案和 IM 协作会话提示。
+- `WorkspacePage` 将当前参与 Agent 标题改为“当前群聊成员”，并把 Audit / Realtime 文案中文化。
+- `workspace.css` 增加协议卡片、streaming 状态条、IM Agent 联系人、会话卡片、参与者高亮与窄屏保护样式。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- 启动本地 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只修改前端展示和主路径信息架构，不改变 Orchestrator、Adapter、Artifact、Approval、Deploy 或 Realtime 的后端语义。
+- Streaming 状态条仍是预览态；最终 Artifact 仍以后端 contract / quality / build 校验结果为准。
+- Agent 联系人显示 adapter health 和 fallback 状态，不代表所有外部 Agent 都真实可用。
+
+### 遗留问题
+
+- `WorkspacePage` 和部分 feature 组件仍然偏大，后续应继续拆分以降低维护成本。
+- 当前是 Web 端响应式保护，不是完整移动端产品化。
+
+### 下一步建议
+
+- 继续用 Browser E2E 作为 Workspace / MessageStream / AgentList 大改后的固定 UI 回归门禁。
+
+## Phase 126：Artifact Studio 交付工作台视觉升级
+
+### 目标
+
+- 将 ArtifactPanel 从卡片堆叠继续收敛为“产物交付工作台”，让用户快速判断来源、质量、构建、Diff 风险、快照和发布预览状态。
+- 强化 Apply Diff、Restore Snapshot、Deploy Preview 前的风险和边界说明。
+- 保持现有 Artifact、Approval、Snapshot、Deploy、Preview 业务语义不变，只升级前端信息架构和视觉表达。
+
+### 主要变更
+
+- `ArtifactPanel` 新增 Delivery Workbench 区块，集中展示 Source / Quality / Build 三类解释型 badge。
+- 新增可展开 Diagnostic Panel，展示 sourceAdapter、generationMode、TaskStep、quality reason、build reason 和 fallback reason。
+- 新增操作风险摘要卡，分别解释 Diff 风险、Snapshot / Restore 安全策略和 Deploy Preview 本地静态边界。
+- Deploy Status Card 升级为 release panel，展示 target、status、artifact version、audit 说明、preview URL 和本地静态预览边界。
+- Snapshot 列表升级为 safety checkpoint timeline，强调 Restore 会经过 Approval Gate 并生成新版本。
+- `workspace.css` 补充 delivery workbench、diagnostic panel、risk card、snapshot timeline、release panel 的 command-center 样式、轻量动效和窄屏堆叠规则。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- 启动本地 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮不新增真实云部署；Deploy Preview 仍是本地静态预览。
+- Diagnostic Panel 展示的是当前后端已有 metadata，不新增真实静态分析、真实构建平台或真实安全扫描。
+- Snapshot / Restore 继续依赖现有 Approval Gate 和后端 snapshot 语义，不实现 Git 级 checkout 或复杂 merge UI。
+
+### 遗留问题
+
+- ArtifactPanel 组件仍偏大，后续可拆分为 cockpit、diagnostics、revision、deploy、snapshot、diff 子组件。
+- 当前 responsive polish 是窄屏布局保护，不是完整移动端产品化。
+
+### 下一步建议
+
+- 若继续做 Artifact Studio 产品化，优先拆分组件并增加更稳定的 `data-testid` 覆盖 diagnostic / release / snapshot timeline。
+
+## Phase 127：UI Audit 固化与前端大组件拆分起步
+
+### 目标
+
+- 将此前 taste-skill 设计审计从阶段性 dev-log 记录中抽出，形成独立 UI audit 文档。
+- 开始拆分过大的 `ArtifactPanel` 和 `WorkspacePage`，降低后续视觉和产品化迭代的维护成本。
+- 保持现有 Workspace、Artifact、Approval、Restore、Deploy Preview 和 Browser E2E 主路径不回归。
+
+### 主要变更
+
+- 新增 `docs/ui-audit.md`，记录 AgentHub 当前 UI 方向、保留项、各区域完成度、边界和下一步 UI 建议。
+- 新增 `ArtifactDeliveryWorkbench`，承接 Artifact Cockpit、Source / Quality / Build badge、Diagnostic Panel、Diff / Snapshot / Deploy 风险摘要。
+- 新增 `ArtifactDeployPanel`，承接 Deploy Status / Release Panel 展示和 Preview URL 操作。
+- 新增 `ArtifactSnapshotTimeline`，承接 Safety Checkpoint timeline 和 Restore 入口展示。
+- 新增 `WorkspaceHeader`，承接当前会话标题、群聊成员、Action Audit 和 Realtime 状态条。
+- 新增 `WorkspaceCollaborationToolbar`，承接 IM-first 协作主 CTA、Debug / Advanced fallback 和主路径 flow guide。
+- `ArtifactPanel` 保留状态、审批、Apply Diff、Restore、Deploy 的业务处理函数；`WorkspacePage` 保留数据加载、事件处理和主布局编排。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是前端结构拆分与 UI audit 固化，不新增真实部署、真实静态分析、真实杀毒、真实移动端或新的后端能力。
+- 拆分后的子组件仍展示现有 metadata 和状态，不改变 Orchestrator、Adapter、Approval、Artifact 或 Realtime 语义。
+
+### 遗留问题
+
+- `WorkspacePage` 仍然偏大，后续可继续拆分 selected agent banner、right panel layout、SSE wiring 和 action handlers。
+- `ArtifactPanel` 仍可继续拆分 revision box、approval gate、diff apply 和 content preview。
+- `docs/ui-audit.md` 是当前审计基线，后续大规模 UI 改动应同步更新。
+
+### 下一步建议
+
+- 优先继续拆分 `WorkspacePage` 的数据加载 / realtime / action handlers，或拆分 `ArtifactPanel` 的 revision / approval / content preview 子组件。

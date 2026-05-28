@@ -83,10 +83,10 @@ export function AdapterRoutingPanel({ adapterDescriptors, selectedAgent }: Adapt
       <div className="adapter-routing-panel__header">
         <div>
           <strong>Adapter 路由解释</strong>
-          <p>候选池按 health 40% / success rate 25% / fallback penalty 20% / preferred bonus 15% 评分。</p>
+          <p>候选池按健康度 40% / 成功率 25% / fallback 惩罚 20% / 首选加权 15% 评分。</p>
         </div>
         <span className="adapter-routing-panel__selected">
-          selected {selectedCandidate?.adapterType || "MOCK"}
+          当前选择 {selectedCandidate?.adapterType || "MOCK"}
         </span>
       </div>
 
@@ -104,11 +104,11 @@ export function AdapterRoutingPanel({ adapterDescriptors, selectedAgent }: Adapt
             </div>
             <div className="adapter-routing-card__score">{candidate.totalScore.toFixed(1)}</div>
             <div className="adapter-routing-card__metrics">
-              <span>health {candidate.healthScore.toFixed(0)}</span>
-              <span>success {candidate.successRateScore.toFixed(0)}</span>
-              <span>fallback penalty {candidate.fallbackPenaltyScore.toFixed(0)}</span>
-              <span>preferred bonus {candidate.preferredBonusScore.toFixed(0)}</span>
-              <span>attempts {candidate.routeAttempts}</span>
+              <span>健康 {candidate.healthScore.toFixed(0)}</span>
+              <span>成功 {candidate.successRateScore.toFixed(0)}</span>
+              <span>fallback 惩罚 {candidate.fallbackPenaltyScore.toFixed(0)}</span>
+              <span>首选加权 {candidate.preferredBonusScore.toFixed(0)}</span>
+              <span>尝试 {candidate.routeAttempts}</span>
             </div>
           </article>
         ))}
