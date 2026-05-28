@@ -7,10 +7,22 @@ const VERIFY_CONVERSATION_ID = process.env.AGENTHUB_JDBC_VERIFY_CONVERSATION_ID 
 const VERIFY_TASK_RUN_ID = process.env.AGENTHUB_JDBC_VERIFY_TASK_RUN_ID || "";
 const VERIFY_ARTIFACT_ID = process.env.AGENTHUB_JDBC_VERIFY_ARTIFACT_ID || "";
 const VERIFY_ATTACHMENT_ID = process.env.AGENTHUB_JDBC_VERIFY_ATTACHMENT_ID || "";
+const VERIFY_DEPLOYMENT_ID = process.env.AGENTHUB_JDBC_VERIFY_DEPLOYMENT_ID || "";
+const VERIFY_SNAPSHOT_ID = process.env.AGENTHUB_JDBC_VERIFY_SNAPSHOT_ID || "";
 const VERIFY_AGENT_ID = process.env.AGENTHUB_JDBC_VERIFY_AGENT_ID || "";
 const VERIFY_MEMORY_ID = process.env.AGENTHUB_JDBC_VERIFY_MEMORY_ID || "";
 const VERIFY_APPROVAL_ID = process.env.AGENTHUB_JDBC_VERIFY_APPROVAL_ID || "";
 const VERIFY_AUDIT_ID = process.env.AGENTHUB_JDBC_VERIFY_AUDIT_ID || "";
+
+function assertJdbcHealth(health) {
+  if (health?.status !== "UP") {
+    throw new Error(`unexpected health response: ${JSON.stringify(health)}`);
+  }
+  if (String(health.persistenceMode || "").toLowerCase() !== "jdbc") {
+    throw new Error(`backend persistenceMode expected jdbc, got ${health.persistenceMode || "(missing)"}`);
+  }
+  pass("health check confirms jdbc persistence mode");
+}
 
 function pass(message) {
   console.log(`[PASS] ${message}`);
@@ -63,10 +75,7 @@ async function runVerifyMode() {
   console.log("Expected backend mode: jdbc");
 
   const health = await request("/api/health");
-  if (health?.status !== "UP") {
-    throw new Error(`unexpected health response: ${JSON.stringify(health)}`);
-  }
-  pass("health check");
+  assertJdbcHealth(health);
 
   if (!VERIFY_CONVERSATION_ID) {
     throw new Error("AGENTHUB_JDBC_VERIFY_CONVERSATION_ID is required in verify mode");
@@ -139,6 +148,22 @@ async function runVerifyMode() {
   }
   pass(`artifacts persisted after restart: ${artifacts.length}`);
 
+  const artifactSnapshots = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/artifact-snapshots`);
+  if (!Array.isArray(artifactSnapshots) || artifactSnapshots.length === 0) {
+    throw new Error("artifact snapshots were not loaded after restart");
+  }
+  if (VERIFY_SNAPSHOT_ID && !artifactSnapshots.some((snapshot) => snapshot.snapshotId === VERIFY_SNAPSHOT_ID)) {
+    throw new Error(`artifact snapshot ${VERIFY_SNAPSHOT_ID} was not loaded after restart`);
+  }
+  const requiredSnapshotOperations = ["DEMO_REVISION", "APPLY_DIFF", "DEMO_DEPLOY"];
+  const missingSnapshotOperations = requiredSnapshotOperations.filter((operationType) =>
+    !artifactSnapshots.some((snapshot) => snapshot.operationType === operationType)
+  );
+  if (missingSnapshotOperations.length > 0) {
+    throw new Error(`artifact snapshots after restart missing operations: ${missingSnapshotOperations.join(", ")}`);
+  }
+  pass(`artifact snapshots persisted after restart: ${artifactSnapshots.length}`);
+
   const taskRuns = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/task-runs`);
   if (!Array.isArray(taskRuns) || taskRuns.length === 0) {
     throw new Error("task runs were not loaded after restart");
@@ -197,6 +222,18 @@ async function runVerifyMode() {
   }
   pass(`action audits persisted after restart: ${actionAudits.length}`);
 
+  const deployments = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/deployments`);
+  if (!Array.isArray(deployments) || deployments.length === 0) {
+    throw new Error("deployments were not loaded after restart");
+  }
+  if (VERIFY_DEPLOYMENT_ID && !deployments.some((deployment) => deployment.deploymentId === VERIFY_DEPLOYMENT_ID)) {
+    throw new Error(`deployment ${VERIFY_DEPLOYMENT_ID} was not loaded after restart`);
+  }
+  if (!deployments.some((deployment) => deployment.status === "SUCCESS" && deployment.previewUrl)) {
+    throw new Error("deployments after restart did not include a successful preview deployment");
+  }
+  pass(`deployments persisted after restart: ${deployments.length}`);
+
   const conversationSnapshots = await request(`/api/conversations/${VERIFY_CONVERSATION_ID}/context-snapshots`);
   if (!Array.isArray(conversationSnapshots) || conversationSnapshots.length === 0) {
     throw new Error("conversation context snapshots were not loaded after restart");
@@ -234,25 +271,32 @@ function runCreateMode() {
   console.log("  AGENTHUB_JDBC_VERIFY_TASK_RUN_ID=<run_id>");
   console.log("  AGENTHUB_JDBC_VERIFY_ARTIFACT_ID=<artifact_id>");
   console.log("  AGENTHUB_JDBC_VERIFY_ATTACHMENT_ID=<attachment_id> (optional; first attachment is used if omitted)");
+  console.log("  AGENTHUB_JDBC_VERIFY_DEPLOYMENT_ID=<deployment_id> (optional)");
+  console.log("  AGENTHUB_JDBC_VERIFY_SNAPSHOT_ID=<snapshot_id> (optional)");
   console.log("  AGENTHUB_JDBC_VERIFY_AGENT_ID=<agent_id> (optional)");
   console.log("  AGENTHUB_JDBC_VERIFY_MEMORY_ID=<memory_id> (optional)");
   console.log("  AGENTHUB_JDBC_VERIFY_APPROVAL_ID=<approval_id> (optional)");
   console.log("  AGENTHUB_JDBC_VERIFY_AUDIT_ID=<audit_id> (optional)");
 
-  const child = spawn(process.execPath, ["scripts/smoke-test.mjs"], {
-    stdio: "inherit",
-    env,
-    shell: false
-  });
+  request("/api/health")
+    .then(assertJdbcHealth)
+    .then(() => {
+      const child = spawn(process.execPath, ["scripts/smoke-test.mjs"], {
+        stdio: "inherit",
+        env,
+        shell: false
+      });
 
-  child.on("exit", (code, signal) => {
-    if (signal) {
-      console.error(`[FAIL] JDBC smoke test terminated by signal ${signal}`);
-      process.exitCode = 1;
-      return;
-    }
-    process.exitCode = code ?? 1;
-  });
+      child.on("exit", (code, signal) => {
+        if (signal) {
+          console.error(`[FAIL] JDBC smoke test terminated by signal ${signal}`);
+          process.exitCode = 1;
+          return;
+        }
+        process.exitCode = code ?? 1;
+      });
+    })
+    .catch((error) => fail("JDBC create-mode preflight failed", error));
 }
 
 if (VERIFY_CONVERSATION_ID || VERIFY_TASK_RUN_ID || VERIFY_ARTIFACT_ID) {

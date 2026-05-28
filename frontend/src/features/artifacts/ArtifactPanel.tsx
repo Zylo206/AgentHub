@@ -148,6 +148,58 @@ function getArtifactFallbackReason(artifact: Artifact): string | null {
   return null;
 }
 
+function isBlockingValidationStatus(status?: string | null): boolean {
+  if (!status) {
+    return false;
+  }
+
+  const normalized = status.toUpperCase();
+  return normalized.includes("REJECT") || normalized.includes("FAIL") || normalized.includes("ERROR");
+}
+
+function buildQualityRevisionInstruction(artifact: Artifact): string | null {
+  const reasons = [
+    artifact.qualityReason ? `Address reviewer feedback: ${artifact.qualityReason}` : null,
+    isBlockingValidationStatus(artifact.buildValidationStatus)
+      ? `Fix build validation status: ${artifact.buildValidationStatus}`
+      : null,
+    artifact.sourceKind && artifact.sourceKind !== "REAL_ADAPTER"
+      ? `Replace fallback output (${displayArtifactSourceKind(artifact.sourceKind)}) with a validated revision.`
+      : null
+  ].filter(Boolean);
+
+  if (reasons.length === 0) {
+    return null;
+  }
+
+  return `${reasons.join(" ")} Create a new revision that can pass review, quality evaluation, and build validation.`;
+}
+
+function getArtifactGateAction(
+  artifact: Artifact,
+  fallbackReason: string | null
+): { title: string; reason: string; nextStep: string } | null {
+  const qualityRejected = isBlockingValidationStatus(artifact.qualityStatus);
+  const buildFailed = isBlockingValidationStatus(artifact.buildValidationStatus);
+  const fallbackKept = Boolean(fallbackReason);
+
+  if (!qualityRejected && !buildFailed && !fallbackKept) {
+    return null;
+  }
+
+  const failedGates = [
+    qualityRejected ? `Quality evaluator: ${artifact.qualityStatus}` : null,
+    buildFailed ? `Build validation: ${artifact.buildValidationStatus}` : null,
+    fallbackKept ? "Fallback artifact is being shown" : null
+  ].filter(Boolean);
+
+  return {
+    title: failedGates.join(" · "),
+    reason: artifact.qualityReason || fallbackReason || "No detailed backend reason was returned.",
+    nextStep: "Use the prefilled Revision instruction below, create a revision, then re-run review/build validation."
+  };
+}
+
 function renderArtifactContent(artifact: Artifact) {
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
     return (
@@ -211,6 +263,9 @@ export function ArtifactPanel({
   const selectedVersionEntry =
     versionEntries.find((entry) => entry.artifactId === selectedArtifactId) ?? null;
   const selectedArtifactFallbackReason = selectedArtifact ? getArtifactFallbackReason(selectedArtifact) : null;
+  const selectedArtifactGateAction = selectedArtifact
+    ? getArtifactGateAction(selectedArtifact, selectedArtifactFallbackReason)
+    : null;
 
   function buildBaseArtifactAffectedItems(artifact: Artifact): string[] {
     return [
@@ -254,7 +309,11 @@ export function ArtifactPanel({
   }
 
   useEffect(() => {
-    setRevisionInstruction(selectedArtifact?.revisionInstruction || PRODUCT_REVISION_INSTRUCTION);
+    setRevisionInstruction(
+      selectedArtifact?.revisionInstruction ||
+        (selectedArtifact ? buildQualityRevisionInstruction(selectedArtifact) : null) ||
+        PRODUCT_REVISION_INSTRUCTION
+    );
     setArtifactOperationMessage(null);
     setPendingApproval(null);
   }, [selectedArtifact]);
@@ -559,6 +618,9 @@ export function ArtifactPanel({
                     {selectedArtifact.qualityStatus || "UNKNOWN"}
                   </p>
                 ) : null}
+                <p className="artifact-preview__line">
+                  Real Adapter outcome: {selectedArtifact.realAdapterOutcome || "FALLBACK"}
+                </p>
                 {selectedArtifact.sourceKind === "REAL_ADAPTER" ? (
                   <p className="artifact-preview__line">Build validation: {formatBuildValidationValue(selectedArtifact)}</p>
                 ) : null}
@@ -568,6 +630,13 @@ export function ArtifactPanel({
                 ) : null}
                 {selectedArtifact.qualityReason ? (
                   <p className="artifact-preview__line">Quality reason: {selectedArtifact.qualityReason}</p>
+                ) : null}
+                {selectedArtifactGateAction ? (
+                  <div className="quality-gate-action artifact-preview__gate-action">
+                    <strong>{selectedArtifactGateAction.title}</strong>
+                    <p>Failure reason: {selectedArtifactGateAction.reason}</p>
+                    <p>Fix path: {selectedArtifactGateAction.nextStep}</p>
+                  </div>
                 ) : null}
                 {selectedVersionEntry?.parentArtifact ? (
                   <p className="artifact-preview__line revision-origin">

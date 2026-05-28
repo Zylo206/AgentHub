@@ -46,6 +46,18 @@ export function DiffSummaryPanel({
   const hasConflict = conflictArtifactId === artifactId;
   const visibleDiffEntries = summary.lineDiffEntries.slice(0, MAX_VISIBLE_DIFF_LINES);
   const hiddenLineCount = Math.max(summary.lineDiffEntries.length - visibleDiffEntries.length, 0);
+  const riskItems = [
+    canApplyDiff
+      ? "需要后端 Approval Gate 批准后才会 materialize 新产物。"
+      : "当前版本没有可应用的真实行级 Diff。",
+    hasConflict
+      ? "检测到最新已应用产物冲突；普通 Apply 会被阻止，Force Apply 必须显式确认。"
+      : "未检测到当前 revision 与最新已应用产物的冲突标记。",
+    summary.hasRealLineDiff
+      ? `行级影响：新增 ${summary.lineDiffStats.added} 行，删除 ${summary.lineDiffStats.removed} 行，估算修改 ${summary.lineDiffStats.changed} 处。`
+      : "没有可展示的行级影响统计。",
+    "Apply / Force Apply / Restore 都会通过 Artifact Snapshot 保留安全回滚点。"
+  ];
 
   return (
     <section className="diff-summary">
@@ -90,6 +102,22 @@ export function DiffSummaryPanel({
           </button>
         </div>
       ) : null}
+
+      <div className={`diff-trust-card ${hasConflict ? "diff-trust-card--warning" : ""}`}>
+        <div>
+          <strong>应用前可信度检查</strong>
+          <p>
+            {hasConflict
+              ? "当前 Diff 存在冲突风险，建议先查看最新已应用产物或通过 Force Apply 审批确认风险。"
+              : "当前 Diff 可以通过常规审批路径应用；系统仍会记录快照、审计和行级影响。"}
+          </p>
+        </div>
+        <ul>
+          {riskItems.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
 
       <div className="diff-summary-section">
         <span className="diff-summary-section__label">修改指令</span>

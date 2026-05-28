@@ -254,7 +254,7 @@ $env:AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE="true"
 node scripts/smoke-test.mjs
 ```
 
-The script cannot introspect the backend process mode directly; this flag asserts that the same create / query / upload / download / task / artifact flow succeeds while the backend is launched with JDBC configuration.
+The default smoke checks `/api/health.persistenceMode` when `AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true`; if the backend is not running with the JDBC profile, the smoke exits with a clear failure instead of treating memory-mode success as JDBC coverage.
 
 The explicit schema file is available at `backend/src/main/resources/schema-jdbc.sql`. Run it against the target MySQL-compatible database before starting the backend if you want deterministic local setup instead of relying only on repository auto-create behavior.
 
@@ -274,10 +274,12 @@ $env:AGENTHUB_JDBC_VERIFY_CONVERSATION_ID="<conv_id>"
 $env:AGENTHUB_JDBC_VERIFY_TASK_RUN_ID="<run_id>"
 $env:AGENTHUB_JDBC_VERIFY_ARTIFACT_ID="<artifact_id>"
 $env:AGENTHUB_JDBC_VERIFY_ATTACHMENT_ID="<attachment_id>" # optional; first attachment is used if omitted
+$env:AGENTHUB_JDBC_VERIFY_DEPLOYMENT_ID="<deployment_id>" # optional
+$env:AGENTHUB_JDBC_VERIFY_SNAPSHOT_ID="<snapshot_id>" # optional
 node scripts/jdbc-smoke-test.mjs
 ```
 
-This query-only mode verifies Conversation, Message, Attachment metadata and download, TaskRun, Artifact, PinnedContext, ContextSnapshot, and HandoffSummary records after restart. It still does not make JDBC the default profile.
+This query-only mode verifies Conversation, Message, Attachment metadata and download, TaskRun, Artifact, ArtifactSnapshot, Deployment, PinnedContext, ContextSnapshot, HandoffSummary, Memory, ApprovalRequest, and ActionAuditLog records after restart. It still does not make JDBC the default profile.
 
 Context retrieval uses DB-backed Agentic Search by default: the backend lists scoped candidates, greps exact keywords across Message / Artifact / Memory / Attachment preview / TaskRun summary sources, then reads authoritative snippets before scoring them. The heuristic semantic backend remains the default. To exercise the optional embedding backend switch without requiring an external provider, start the backend with:
 
@@ -400,7 +402,7 @@ The current control semantics are execution-aware for Orchestrator steps: `CANCE
 
 ## Browser E2E
 
-`e2e-browser.mjs` is a lightweight Playwright wrapper that seeds a browser-test conversation through the API, uploads a small real text attachment, then verifies the rendered Workspace, message attachment card, Adapter quality dashboard, retrieved context explanation, Orchestrator explain panel, Stop / Cancel run controls, artifact preview, approval affected summary, restore approval flow, Action Audit panel, deploy status card, and static preview page.
+`e2e-browser.mjs` is a lightweight Playwright wrapper that drives the IM-first Workspace flow: create a conversation, send a multi-Agent task with a real text attachment, require the Workspace collaboration primary action, then verify the rendered Workspace, message attachment card, Adapter quality dashboard, retrieved context explanation, Orchestrator explain panel, Stop / Cancel run controls, artifact preview, approval affected summary, diff apply, restore approval flow, Action Audit panel, deploy status card, static preview page, and the rejection protocol.
 
 The wrapper can use `playwright-core`, `playwright`, or `@playwright/test` from the frontend package. The lightest path is `playwright-core` plus the local Microsoft Edge browser channel:
 
@@ -424,11 +426,11 @@ $env:AGENTHUB_FRONTEND_BASE_URL="http://127.0.0.1:5173"
 $env:AGENTHUB_E2E_BROWSER_CHANNEL="msedge"
 $env:AGENTHUB_E2E_HEADLESS="false"
 $env:AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL="true"
-$env:AGENTHUB_E2E_EXPECT_REJECTION="true" # optional API-seeded REJECTION protocol assertion
+$env:AGENTHUB_E2E_EXPECT_REJECTION="false" # optional: disable default API-seeded REJECTION protocol assertion
 node scripts/e2e-browser.mjs
 ```
 
-The browser E2E requires backend and frontend to already be running. It does not start servers, does not call real LLM providers, and does not perform an external deployment.
+The browser E2E requires backend and frontend to already be running. If the frontend uses a non-default port, start the backend with `AGENTHUB_CORS_ALLOWED_ORIGINS` including that frontend origin. It does not start servers, does not call real LLM providers, does not use the manual demo/debug toolbar path, and does not perform an external deployment.
 
 ## OpenAI-compatible / DeepSeek Adapter
 

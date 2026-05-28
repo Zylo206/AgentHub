@@ -13,7 +13,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: contract validation, quality evaluator, build validation, fallback reasons, TaskStep metadata, Artifact metadata, and Adapter Quality Dashboard are wired through.
    - `Done`: OpenAI-compatible, Claude Code, and Codex opt-in smoke scripts classify `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` outcomes instead of returning generic failures.
    - `Done`: TaskStep fallback/quality reason now records contract-class failures as `PARSE_FAILED` and non-real-output fallback as `FALLBACK`.
+   - `Done`: TaskStep and Artifact expose a derived `realAdapterOutcome` field so UI and scripts can read a single `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` result.
    - `Active`: keep monitoring real provider parse failure, quality failure, build failure, and fallback patterns across more task types.
+   - `Done`: Adapter Quality Dashboard now reads backend aggregate rates for real acceptance, total failure, parse failure, quality failure, and build failure instead of only deriving signals from currently loaded TaskSteps.
    - Real provider validation must be opt-in and must not commit keys.
 
 2. **Maintain REAL_FIRST primary Artifact rules**
@@ -68,6 +70,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: local MySQL-compatible create / restart verify passed with the JDBC profile on port `18087`.
    - `Done`: restart verification confirmed Conversation, Message, Attachment metadata + download, Artifact, TaskRun, PinnedContext, ContextSnapshot, and HandoffSummary persisted after backend restart.
    - `Done`: JDBC repositories and schema now cover Agent, ApprovalRequest, and ActionAuditLog; real MySQL restart verification covered agents, approval requests, action audits, memories, task steps, and attachments.
+   - `Done`: JDBC repositories and schema now also cover Deployment and ArtifactSnapshot; `jdbc-smoke-test.mjs` restart verify checks deployment preview records and snapshot operation history.
+   - `Done`: real MySQL create / restart verify passed again with Deployment and ArtifactSnapshot coverage on a temporary JDBC database.
    - `Boundary`: this validates schema and repository create/query/update/restart paths; it does not make MySQL the default runtime.
    - The memory profile must remain the default stable path.
 
@@ -76,6 +80,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: `CANCEL_RUN` ends as `CANCELLED`; `STOP_RUN` ends as `STOPPED`.
    - `Done`: Orchestrator steps check the control token before delay, before adapter execution, and after adapter execution; late adapter results are discarded.
    - `Done`: opt-in SSE smoke with artificial step delay verified active cancel and active stop behavior locally.
+   - `Done`: TaskRunPanel explains Stop vs Cancel semantics in-product: Stop skips later steps, Cancel discards late adapter output, and terminal runs reject control commands.
    - `Boundary`: non-streaming Java HTTP calls already in flight are not forcibly interrupted; results are discarded when the control token is observed.
    - Keep ActionAuditLog, RealtimeRunState, and TaskRunPanel in sync.
 
@@ -86,14 +91,24 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: ContextPanel displays List / Grep / Read retrieval stage chips.
    - `Done`: MemoryItem has an embedding provider/storage skeleton via `embeddingJson`; real embedding provider remains deferred.
    - `Done`: Context Search v2 keeps representative sources across recent messages, artifacts, memories, attachment previews, and task run summaries instead of letting one source type dominate ranking.
+   - `Done`: ContextPanel now shows the List / Grep / Read pipeline per retrieved item, including matched tokens, read window, and semantic backend.
    - Keep future spec changes aligned with the focused plans and `docs/collaboration/dev-log.md`.
    - Do not describe Mock / fixture / static / half-real behavior as full production capability.
 
 10. **Converge the default IM-first collaboration path**
    - `Done`: Workspace now promotes the latest task message's Orchestrator trigger confirmation as the primary action.
+   - `Done`: message-level Orchestrator auto-trigger now defaults to enabled with approval required, so matched task messages create a confirmation request without auto-running.
    - `Done`: the previous `Run Demo Task` entry is visually weakened and labeled as a manual debug fallback.
    - `Done`: user message rerun action no longer exposes `Demo Task` as the primary product language.
+   - `Done`: Workspace now shows an in-product flow guide: send task message -> confirm collaboration -> Orchestrator run -> Artifact / Approval / Preview.
+   - `Done`: Browser E2E now requires the Workspace collaboration primary action for the product path and does not use the manual debug run as its default fallback.
+   - `Done`: Browser E2E passed on an isolated backend/frontend dev server and covers the IM-first path, approval gates, restore, deploy preview, audit timeline, and optional rejection scenario.
+   - `Done`: backend CORS origins are configurable through `AGENTHUB_CORS_ALLOWED_ORIGINS`, so local validation ports do not require code edits.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
+
+11. **Strengthen Artifact editing trust**
+   - `Done`: Diff Summary now includes an apply-time trust check that explains approval, conflict, line impact, and snapshot/restore safety before users apply or force-apply a patch.
+   - `Boundary`: line diff remains lightweight and conflict handling is explicit user approval, not automated semantic merge.
 
 ## Not Now
 

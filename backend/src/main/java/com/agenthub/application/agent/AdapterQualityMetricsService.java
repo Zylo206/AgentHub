@@ -225,12 +225,26 @@ public class AdapterQualityMetricsService {
             long buildFailures,
             double successRate,
             double fallbackRate,
+            double realAcceptanceRate,
+            double parseFailureRate,
+            double qualityFailureRate,
+            double buildFailureRate,
+            double totalFailureRate,
+            String healthLabel,
             String lastQualityStatus,
             String lastQualityReason,
             String updatedAt) {
 
         static AdapterQualityMetricsView from(AgentAdapterType adapterType, AdapterQualityMetrics value) {
             long attempts = Math.max(0, value.attempts());
+            long totalFailures = value.parseFailures() + value.qualityFailures() + value.buildFailures();
+            double successRate = rate(value.successes(), attempts);
+            double fallbackRate = rate(value.fallbacks(), attempts);
+            double realAcceptanceRate = rate(value.realOutputAccepted(), attempts);
+            double parseFailureRate = rate(value.parseFailures(), attempts);
+            double qualityFailureRate = rate(value.qualityFailures(), attempts);
+            double buildFailureRate = rate(value.buildFailures(), attempts);
+            double totalFailureRate = rate(totalFailures, attempts);
             return new AdapterQualityMetricsView(
                     adapterType.name(),
                     attempts,
@@ -240,11 +254,34 @@ public class AdapterQualityMetricsService {
                     value.parseFailures(),
                     value.qualityFailures(),
                     value.buildFailures(),
-                    attempts == 0 ? 0 : (double) value.successes() / attempts,
-                    attempts == 0 ? 0 : (double) value.fallbacks() / attempts,
+                    successRate,
+                    fallbackRate,
+                    realAcceptanceRate,
+                    parseFailureRate,
+                    qualityFailureRate,
+                    buildFailureRate,
+                    totalFailureRate,
+                    healthLabel(attempts, successRate, fallbackRate, totalFailureRate),
                     value.lastQualityStatus(),
                     value.lastQualityReason(),
                     value.updatedAt());
+        }
+
+        private static double rate(long numerator, long denominator) {
+            return denominator <= 0 ? 0 : (double) Math.max(0, numerator) / denominator;
+        }
+
+        private static String healthLabel(long attempts, double successRate, double fallbackRate, double totalFailureRate) {
+            if (attempts == 0) {
+                return "NO_OBSERVATIONS";
+            }
+            if (totalFailureRate >= 0.4 || fallbackRate >= 0.5) {
+                return "NEEDS_ATTENTION";
+            }
+            if (successRate >= 0.8 && totalFailureRate <= 0.1) {
+                return "STABLE";
+            }
+            return "WATCH";
         }
     }
 

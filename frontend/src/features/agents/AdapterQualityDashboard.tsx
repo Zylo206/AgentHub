@@ -11,9 +11,12 @@ interface AdapterQualityDashboardProps {
 interface AdapterQualityRow {
   adapterType: string;
   status: string;
+  healthLabel?: string | null;
   routeAttempts: number;
   successRate: number | null;
   fallbackRate: number | null;
+  realAcceptanceRate: number | null;
+  totalFailureRate: number | null;
   observedSteps: number;
   parseFailures: number;
   qualityFailures: number;
@@ -62,9 +65,12 @@ function buildRows(
     byAdapter.set(descriptor.adapterType, {
       adapterType: descriptor.adapterType,
       status: descriptor.status,
+      healthLabel: null,
       routeAttempts: descriptor.routeAttempts ?? 0,
       successRate: typeof descriptor.successRate === "number" ? descriptor.successRate : null,
       fallbackRate: typeof descriptor.fallbackRate === "number" ? descriptor.fallbackRate : null,
+      realAcceptanceRate: null,
+      totalFailureRate: null,
       observedSteps: 0,
       parseFailures: 0,
       qualityFailures: 0,
@@ -81,9 +87,12 @@ function buildRows(
       {
         adapterType: metrics.adapterType,
         status: "OBSERVED",
+        healthLabel: null,
         routeAttempts: 0,
         successRate: null,
         fallbackRate: null,
+        realAcceptanceRate: null,
+        totalFailureRate: null,
         observedSteps: 0,
         parseFailures: 0,
         qualityFailures: 0,
@@ -100,6 +109,9 @@ function buildRows(
     row.realOutputAccepted = metrics.realOutputAccepted;
     row.successRate = metrics.successRate;
     row.fallbackRate = metrics.fallbackRate;
+    row.realAcceptanceRate = metrics.realAcceptanceRate ?? null;
+    row.totalFailureRate = metrics.totalFailureRate ?? null;
+    row.healthLabel = metrics.healthLabel ?? null;
     row.lastQualityStatus = metrics.lastQualityStatus;
     row.lastQualityReason = metrics.lastQualityReason;
     byAdapter.set(metrics.adapterType, row);
@@ -116,9 +128,12 @@ function buildRows(
       {
         adapterType,
         status: "OBSERVED",
+        healthLabel: null,
         routeAttempts: 0,
         successRate: null,
         fallbackRate: null,
+        realAcceptanceRate: null,
+        totalFailureRate: null,
         observedSteps: 0,
         parseFailures: 0,
         qualityFailures: 0,
@@ -170,7 +185,7 @@ export function AdapterQualityDashboard({
       <div className="adapter-quality-dashboard__header">
         <div>
           <strong>Adapter Quality Dashboard</strong>
-          <p>Tracks route history and current TaskStep artifact quality signals.</p>
+          <p>Backend aggregate metrics plus route history. Values survive restart when metrics persistence is enabled.</p>
         </div>
         <span>{rows.length} adapters</span>
       </div>
@@ -178,29 +193,31 @@ export function AdapterQualityDashboard({
       <div className="adapter-quality-table">
         <div className="adapter-quality-table__row adapter-quality-table__row--head">
           <span>Adapter</span>
-          <span>Status</span>
+          <span>Health</span>
           <span>Attempts</span>
           <span>Success</span>
           <span>Fallback</span>
-          <span>Observed steps</span>
           <span>Real accepted</span>
-          <span>Parse failures</span>
-          <span>Quality failures</span>
-          <span>Build failures</span>
+          <span>Failure rate</span>
+          <span>Failures</span>
           <span>Last reason</span>
         </div>
         {rows.map((row) => (
           <div className="adapter-quality-table__row" key={row.adapterType}>
             <strong>{row.adapterType}</strong>
-            <span>{row.status}</span>
-            <span>{row.routeAttempts}</span>
+            <span title={`Adapter status: ${row.status}`}>{row.healthLabel || row.status}</span>
+            <span title={`${row.routeAttempts} route attempts / ${row.observedSteps} observed quality attempts`}>
+              {row.routeAttempts} / {row.observedSteps}
+            </span>
             <span>{formatRate(row.successRate)}</span>
             <span>{formatRate(row.fallbackRate)}</span>
-            <span>{row.observedSteps}</span>
-            <span>{row.realOutputAccepted}</span>
-            <span>{row.parseFailures}</span>
-            <span>{row.qualityFailures}</span>
-            <span>{row.buildFailures}</span>
+            <span title={`${row.realOutputAccepted} accepted real adapter outputs`}>
+              {row.realOutputAccepted} ({formatRate(row.realAcceptanceRate)})
+            </span>
+            <span>{formatRate(row.totalFailureRate)}</span>
+            <span title="parse / quality / build failures">
+              {row.parseFailures} / {row.qualityFailures} / {row.buildFailures}
+            </span>
             <span title={row.lastQualityReason || ""}>{row.lastQualityStatus || "N/A"}</span>
           </div>
         ))}

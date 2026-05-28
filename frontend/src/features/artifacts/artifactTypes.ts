@@ -20,6 +20,7 @@ export interface Artifact {
   qualityStatus?: string | null;
   qualityReason?: string | null;
   qualityScore?: number | null;
+  realAdapterOutcome?: "ACCEPTED" | "QUALITY_FAILED" | "BUILD_FAILED" | "FALLBACK" | string | null;
   createdAt: string;
   updatedAt: string;
 }

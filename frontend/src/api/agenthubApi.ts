@@ -165,6 +165,12 @@ export interface AdapterQualityMetrics {
   buildFailures: number;
   successRate: number;
   fallbackRate: number;
+  realAcceptanceRate?: number;
+  parseFailureRate?: number;
+  qualityFailureRate?: number;
+  buildFailureRate?: number;
+  totalFailureRate?: number;
+  healthLabel?: string | null;
   lastQualityStatus?: string | null;
   lastQualityReason?: string | null;
   updatedAt?: string | null;

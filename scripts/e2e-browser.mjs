@@ -12,7 +12,7 @@ const HEADLESS = process.env.AGENTHUB_E2E_HEADLESS !== "false";
 const SLOW_MO = Number(process.env.AGENTHUB_E2E_SLOW_MO || 0);
 const BROWSER_CHANNEL = process.env.AGENTHUB_E2E_BROWSER_CHANNEL || "msedge";
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
-const EXPECT_REJECTION = process.env.AGENTHUB_E2E_EXPECT_REJECTION === "true";
+const EXPECT_REJECTION = process.env.AGENTHUB_E2E_EXPECT_REJECTION !== "false";
 const TEST_MARKER = `browser-e2e-main-${Date.now()}`;
 const TEST_ATTACHMENT_FILE_NAME = "browser-e2e-ui-brief.md";
 const TEST_PROMPT_BODY = [
@@ -369,35 +369,57 @@ async function clickAutoTriggerIfAvailable(page) {
   return true;
 }
 
+async function clickWorkspaceCollaborationCtaIfAvailable(page) {
+  const primaryButton = page.locator(".workspace-main__collaboration-actions .primary-button").first();
+  const visible = await primaryButton.isVisible().catch(() => false);
+  if (!visible) {
+    return false;
+  }
+  try {
+    const enabledButton = await waitForLocatorEnabled(primaryButton, "workspace collaboration primary action", 10000);
+    await enabledButton.click();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function clickWorkspaceCollaborationCta(page) {
+  const clicked = await clickWorkspaceCollaborationCtaIfAvailable(page);
+  if (!clicked) {
+    throw new Error("Workspace collaboration primary action is not visible and enabled");
+  }
+}
+
+async function approveCollaborationGateIfVisible(page) {
+  const gate = page.locator(".approval-gate").first();
+  const visible = await gate.isVisible().catch(() => false);
+  if (!visible) {
+    return false;
+  }
+  await approveCurrentGate(page, "workspace collaboration");
+  return true;
+}
+
 async function triggerTaskRunFromUi(page, conversationId) {
   const beforeRuns = await request(`/api/conversations/${conversationId}/task-runs`);
   const beforeRunIds = new Set(beforeRuns.map((taskRun) => getIdValue(taskRun.id)));
 
-  let triggerPath = "manual Demo Task";
-  if (await clickAutoTriggerIfAvailable(page)) {
-    triggerPath = "auto-trigger collaboration";
-    try {
-      await waitForApiState(
-        "auto-triggered TaskRun",
-        () => request(`/api/conversations/${conversationId}/task-runs`),
-        (taskRuns) => taskRuns.find((taskRun) => !beforeRunIds.has(getIdValue(taskRun.id))),
-        8000,
-        500
-      );
-    } catch {
-      if (EXPECT_AUTO_TRIGGER_APPROVAL) {
-        await clickAutoTriggerIfAvailable(page);
-      } else {
-        triggerPath = "auto-trigger approval confirmation";
-        await clickAutoTriggerIfAvailable(page);
-      }
-    }
-  } else {
-    const runButton = await waitForLocatorEnabled(
-      page.locator(".workspace-main__toolbar .secondary-button"),
-      "Run Demo Task button"
+  let triggerPath = "workspace collaboration primary action";
+  await clickWorkspaceCollaborationCta(page);
+  try {
+    await waitForApiState(
+      "primary-action TaskRun",
+      () => request(`/api/conversations/${conversationId}/task-runs`),
+      (taskRuns) => taskRuns.find((taskRun) => !beforeRunIds.has(getIdValue(taskRun.id))),
+      8000,
+      500
     );
-    await runButton.click();
+  } catch (error) {
+    if (!await approveCollaborationGateIfVisible(page)) {
+      throw error;
+    }
+    triggerPath = "workspace collaboration approval confirmation";
   }
 
   const taskRun = await waitForApiState(
@@ -595,6 +617,7 @@ async function runBrowserE2e() {
     const sentMessage = await step("UI sends multi-agent message with uploaded attachment", () =>
       sendMessageWithAttachmentFromUi(page, conversationId, agents, tempAttachment.filePath)
     );
+    await waitForVisible(page, ".workspace-main__flow-guide", "IM-first collaboration flow guide");
     await step("retrieval context seeded from UI message", () =>
       seedRetrievalContextFromMessage(conversationId, sentMessage.message)
     );

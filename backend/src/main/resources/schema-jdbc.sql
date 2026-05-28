@@ -191,6 +191,38 @@ CREATE TABLE IF NOT EXISTS agenthub_pinned_contexts (
     INDEX idx_agenthub_pinned_contexts_conversation_created (conversation_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS agenthub_artifact_snapshots (
+    snapshot_id VARCHAR(128) PRIMARY KEY,
+    artifact_id VARCHAR(128) NOT NULL,
+    conversation_id VARCHAR(128) NOT NULL,
+    task_run_id VARCHAR(128) NULL,
+    title VARCHAR(255) NOT NULL,
+    type VARCHAR(64) NOT NULL,
+    status VARCHAR(64) NOT NULL,
+    language VARCHAR(64) NULL,
+    content MEDIUMTEXT,
+    version INT NOT NULL,
+    operation_type VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NULL,
+    INDEX idx_agenthub_artifact_snapshots_conversation_created (conversation_id, created_at),
+    INDEX idx_agenthub_artifact_snapshots_artifact_created (artifact_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_deployments (
+    deployment_id VARCHAR(128) PRIMARY KEY,
+    artifact_id VARCHAR(128) NOT NULL,
+    conversation_id VARCHAR(128) NOT NULL,
+    task_run_id VARCHAR(128) NULL,
+    artifact_title VARCHAR(255) NOT NULL,
+    deploy_target VARCHAR(64) NOT NULL,
+    status VARCHAR(64) NOT NULL,
+    preview_url VARCHAR(512) NOT NULL,
+    message TEXT,
+    created_at TIMESTAMP NULL,
+    INDEX idx_agenthub_deployments_conversation_created (conversation_id, created_at),
+    INDEX idx_agenthub_deployments_artifact_created (artifact_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS agenthub_memory_items (
     memory_id VARCHAR(128) PRIMARY KEY,
     conversation_id VARCHAR(128) NOT NULL,

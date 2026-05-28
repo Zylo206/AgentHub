@@ -1528,6 +1528,17 @@ export function WorkspacePage() {
           </div>
         </div>
 
+        <div className="workspace-main__flow-guide" aria-label="Agent collaboration flow">
+          <span>主路径</span>
+          <strong>发送任务消息</strong>
+          <em>→</em>
+          <strong>确认协作</strong>
+          <em>→</em>
+          <strong>Orchestrator 执行</strong>
+          <em>→</em>
+          <strong>查看 Artifact / 审批 / Preview</strong>
+        </div>
+
         <div className="selected-agent-banner">
           {selectedAgent ? (
             <>

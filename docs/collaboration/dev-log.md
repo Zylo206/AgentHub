@@ -4710,9 +4710,11 @@
 ### 主要变更
 
 - Workspace 消息流工具栏新增基于最新用户任务消息的主 CTA，直接复用现有 Orchestrator trigger suggestion / ApprovalRequest / run 链路。
+- 后端消息级 Orchestrator auto-trigger 默认改为 enabled + require approval；命中任务关键词时只创建确认请求，不自动执行。
 - 主 CTA 根据当前确认状态展示“创建协作确认 / 批准并启动协作 / 已批准，启动协作”等状态化文案。
 - 原 `Run Demo Task` 按钮改为低优先级 `调试：手动运行`，并通过 title 明确它是本地验证和调试用的手动兜底入口。
 - MessageBubble 中用户消息的重新运行操作改为“从此消息重新运行”，避免继续把 Demo Task 暴露为主产品语言。
+- Workspace 新增主流程导引：发送任务消息 -> 确认协作 -> Orchestrator 执行 -> 查看 Artifact / 审批 / Preview。
 - 样式新增 `workspace-main__collaboration-actions` 和 quiet secondary button，保持三栏布局不变。
 
 ### 验证方式
@@ -4721,7 +4723,7 @@
 
 ### 静态 / Mock / Placeholder 部分
 
-- 本轮只收敛前端默认体验，不改后端 API。
+- 本轮不新增后端 API；后端消息级 auto-trigger 默认配置调整为 enabled + require approval，用于支撑 IM-first 主路径。
 - 手动 demo-task API 仍保留，用于 smoke test、调试和 fallback 验证。
 - 消息触发协作仍复用现有规则化 Orchestrator、Approval、MOCK fallback 和静态兜底能力；不代表真实自主 Agent 调度已完全生产化。
 
@@ -4735,3 +4737,99 @@
 
 - 扩展 browser E2E，覆盖默认主 CTA 的 create approval / approve / run 状态变化。
 - 后续可以在 ChatInput 附近增加轻量提示，解释“发送任务消息后由 Orchestrator 建议协作”的默认流程。
+
+## Phase 107：生产增强验证覆盖收敛
+
+### 目标
+
+- 将 Browser E2E 常态化方向对齐到 IM-first 主路径，优先验证 Workspace 协作主 CTA，而不是继续默认点击手动 demo-task。
+- 补齐 MySQL/JDBC profile 对 Deployment 和 ArtifactSnapshot 的持久化验证覆盖。
+- 保持 Codex / Claude Code headless Adapter 的独立 smoke 作为更深 Agent 接入的验收入口。
+
+### 主要变更
+
+- `scripts/e2e-browser.mjs` 新增 Workspace 主协作 CTA 点击路径：必须通过消息触发协作主按钮创建/批准确认并等待 TaskRun，不再把手动调试入口作为产品主路径 fallback。
+- Browser E2E 增加主流程导引条可见性断言，覆盖 workspace、multi-agent message、attachment、context、approval、diff、deploy preview、restore 和 optional rejection 的产品路径。
+- 新增 `JdbcArtifactSnapshotRepository`，在 JDBC profile 下持久化 Artifact revision / apply diff / deploy / restore 前后的安全快照。
+- 新增 `JdbcDeploymentRepository`，在 JDBC profile 下持久化静态部署记录和 Preview URL。
+- memory 版 ArtifactSnapshot / Deployment repository 增加 `agenthub.persistence.mode=memory` 条件，避免 JDBC profile 下双 repository 冲突。
+- `schema-jdbc.sql` 补充 `agenthub_artifact_snapshots` 和 `agenthub_deployments` 初始化表。
+- `/api/health` 增加 `persistenceMode`，JDBC smoke 在 `AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true` 时会拒绝 memory-mode 误判。
+- `scripts/jdbc-smoke-test.mjs` 的 restart verify 增加 ArtifactSnapshot 操作历史和 Deployment preview 记录断言。
+- TaskStep / Artifact 增加派生 `realAdapterOutcome`，前端统一展示 `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`，减少真实 Adapter 输出质量状态分散在多个字段里的理解成本。
+- 后端 CORS allowed origins 改为 `AGENTHUB_CORS_ALLOWED_ORIGINS` 可配置，避免 Browser E2E 或本地前端临时端口被硬编码 5173 限制阻断。
+- `scripts/README.md` 同步 Browser E2E 和 JDBC restart verify 的生产增强覆盖范围。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `node --check scripts/jdbc-smoke-test.mjs`
+- `node --check scripts/codex-smoke-test.mjs`
+- `node --check scripts/claude-code-smoke-test.mjs`
+- `node --check scripts/real-adapter-smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- MySQL/JDBC 实库验证：临时 backend `18121`、frontend `5179`、MySQL 临时库 `agenthub_jdbc_verify_*`，`node scripts/jdbc-smoke-test.mjs` create 与 restart verify 通过；重启后 Conversation、Message、Attachment、Artifact、ArtifactSnapshot、Deployment、TaskRun、TaskStep、ContextSnapshot、PinnedContext、Memory、ApprovalRequest、ActionAuditLog、HandoffSummary 可查询。
+- Browser E2E：临时 backend `18122`、frontend dev server `5180`，`node scripts/e2e-browser.mjs` 通过；覆盖 Workspace 主协作 CTA、附件、TaskRun、Agent protocol、ContextPanel、Artifact revision、Apply Diff approval、Deploy preview、Restore、Action Audit、Preview 页面和 optional REJECTION。
+
+### 静态 / Mock / Placeholder 部分
+
+- Browser E2E 仍要求本地 backend / frontend 预先启动，不负责启动服务。
+- Deployment 持久化覆盖的是当前 static preview deployment，不是真实 Vercel / Netlify / Docker / Kubernetes 发布。
+- MySQL/JDBC profile 仍是 opt-in 验证路径，默认 runtime 继续使用 memory。
+- Codex / Claude Code 仍是 headless Artifact-only Adapter；默认 smoke 不依赖本机 CLI 或真实外部 Agent。
+
+### 遗留问题
+
+- OpenCode 深度接入仍后置。
+- 本轮没有执行 OpenAI-compatible / Codex / Claude Code 真实 Adapter smoke；这些仍保持 opt-in 验证入口。
+
+### 下一步建议
+
+- 将 `node scripts/e2e-browser.mjs` 纳入后续大改后的常态 UI 回归。
+- 下次真实 Adapter Sprint 分别跑 OpenAI-compatible、Codex、Claude Code smoke，继续观察 `realAdapterOutcome` 分类和 fallback reason。
+
+## Phase 108：P1 产品可信度增强
+
+### 目标
+
+- 在不重写主链路的前提下，增强 Stop / Cancel、Adapter Quality、Context Search 和 Artifact 编辑的产品可解释性。
+- 让用户和后续 Agent 更容易判断真实、半真实、fallback 和静态能力边界。
+
+### 主要变更
+
+- Adapter Quality 后端聚合视图新增 real acceptance rate、parse failure rate、quality failure rate、build failure rate、total failure rate 和 health label。
+- Adapter Quality Dashboard 改为优先展示后端长期聚合指标，同时保留 route attempts / observed quality attempts 的对照。
+- ContextPanel 为每条 Retrieved Context 增加 List / Grep / Read pipeline 展示，明确候选列举、关键词命中和读取窗口。
+- Diff Summary 增加应用前可信度检查，说明 Approval Gate、冲突风险、行级影响和 Snapshot / Restore 安全边界。
+- TaskRunPanel 增加 Stop / Cancel 语义提示，明确 Stop 跳过后续 step，Cancel 丢弃 late adapter output，terminal run 拒绝控制命令。
+- `docs/plans/next.md` 同步 P1 产品可信度增强状态。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/sse-smoke-test.mjs`
+- `node --check scripts/smoke-test.mjs`
+- 临时当前源码后端 `18131`：`node scripts/smoke-test.mjs` 通过。
+- 临时当前源码后端 `18132`：`node scripts/sse-smoke-test.mjs` 通过。
+- 临时当前源码后端 `18133` + `agenthub.orchestrator.step-delay-millis=1800`：`AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_CANCEL=true` 和 `AGENTHUB_SSE_SMOKE_EXPECT_ACTIVE_STOP=true` 通过。
+
+### 静态 / Mock / Placeholder 部分
+
+- Stop / Cancel 仍不能硬中断已经在途的非流式 Java HTTP 调用；结果在 token 被观察后丢弃。
+- Adapter Quality Dashboard 是后端聚合指标，不代表真实 provider 永远稳定产出高质量代码。
+- Context Search 仍以 DB-backed Agentic Search 和 heuristic scoring 为主，embedding / vector search 未默认启用。
+- Diff trust check 是轻量行级 patch 风险说明，不是语义级 merge 或完整冲突自动修复。
+
+### 遗留问题
+
+- 仍需在真实慢任务 / 真实 adapter 场景下持续跑 active Stop / Cancel opt-in 验证。
+- Browser E2E 尚未专门断言本轮新增的 Dashboard rate、Context pipeline 和 Diff trust check。
+- Adapter Quality 聚合仍是本地 snapshot 文件，不是多节点长期指标系统。
+
+### 下一步建议
+
+- 将本轮新增 UI 信号纳入 browser E2E 断言。
+- 继续用真实 OpenAI-compatible / Codex / Claude Code smoke 观察 Adapter quality metrics 的长期趋势。

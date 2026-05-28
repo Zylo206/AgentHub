@@ -315,6 +315,32 @@ public class Artifact {
         return qualityReason;
     }
 
+    public String getRealAdapterOutcome() {
+        if (isFailureStatus(buildValidationStatus, "BUILD_FAILED", "FAILED")) {
+            return "BUILD_FAILED";
+        }
+        if (isFailureStatus(qualityStatus, "QUALITY_FAILED", "REJECTED")) {
+            return "QUALITY_FAILED";
+        }
+        if (sourceKind == ArtifactSourceKind.REAL_ADAPTER) {
+            return "ACCEPTED";
+        }
+        return "FALLBACK";
+    }
+
+    private static boolean isFailureStatus(String value, String... markers) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String normalized = value.toUpperCase();
+        for (String marker : markers) {
+            if (normalized.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

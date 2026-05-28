@@ -147,6 +147,24 @@ function getContextSearchStageDetail(stage: ContextSearchStage): string {
   return "Older snapshot without stage metadata";
 }
 
+function getContextSearchPipeline(stage: ContextSearchStage, item: RetrievedContextItem): Array<{ label: string; detail: string }> {
+  const hasKeywordHit = stage === "LIST_GREP_READ" || Boolean(item.matchedTokens?.length);
+  return [
+    {
+      label: "List",
+      detail: `candidate ${item.sourceType}:${item.sourceId}`
+    },
+    {
+      label: "Grep",
+      detail: hasKeywordHit ? `matched ${item.matchedTokens?.join(", ") || "keyword"}` : "no exact keyword hit"
+    },
+    {
+      label: "Read",
+      detail: item.windowPolicy ? `window ${item.windowPolicy}` : "content snippet selected"
+    }
+  ];
+}
+
 export function ContextPanel({
   taskSpec,
   taskRuns,
@@ -298,6 +316,14 @@ export function ContextPanel({
                               <span>{getContextSearchStageDetail(searchStage)}</span>
                               {item.windowPolicy ? <span>window {item.windowPolicy}</span> : null}
                               {item.semanticBackend ? <span>semantic {item.semanticBackend}</span> : null}
+                            </div>
+                            <div className="retrieved-context-item__pipeline" aria-label="Context search pipeline">
+                              {getContextSearchPipeline(searchStage, item).map((stageItem) => (
+                                <span key={`${item.sourceType}-${item.sourceId}-${stageItem.label}`}>
+                                  <strong>{stageItem.label}</strong>
+                                  <small>{stageItem.detail}</small>
+                                </span>
+                              ))}
                             </div>
                             <div className="retrieved-context-item__meta">
                               {item.sourceRank ? <span>rank #{item.sourceRank}</span> : null}

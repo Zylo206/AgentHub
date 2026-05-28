@@ -56,6 +56,37 @@ function getReviewRetryReviseLabel(step: TaskStep): string {
   return "REJECTED";
 }
 
+function isBlockingValidationStatus(status?: string | null): boolean {
+  if (!status) {
+    return false;
+  }
+
+  const normalized = status.toUpperCase();
+  return normalized.includes("REJECT") || normalized.includes("FAIL") || normalized.includes("ERROR");
+}
+
+function getStepQualityGateAction(step: TaskStep): { title: string; reason: string; nextStep: string } | null {
+  const qualityRejected = isBlockingValidationStatus(step.artifactQualityStatus);
+  const buildFailed = isBlockingValidationStatus(step.artifactBuildValidationStatus);
+  const parseFailed = isBlockingValidationStatus(step.artifactParseStatus);
+
+  if (!qualityRejected && !buildFailed && !parseFailed) {
+    return null;
+  }
+
+  const failedGates = [
+    qualityRejected ? "Reviewer / quality evaluator rejected the artifact" : null,
+    buildFailed ? `Build validation returned ${step.artifactBuildValidationStatus}` : null,
+    parseFailed ? `Artifact parse returned ${step.artifactParseStatus}` : null
+  ].filter(Boolean);
+
+  return {
+    title: failedGates.join(" · "),
+    reason: step.artifactQualityReason || step.adapterErrorMessage || "No detailed backend reason was returned.",
+    nextStep: "Open the produced artifact, copy this reason into the Revision instruction, then run review again."
+  };
+}
+
 function getAdapterDisplay(step: TaskStep) {
   const preferred = step.preferredAdapterType || step.adapterType || null;
   const actual = step.actualAdapterType || step.adapterType || null;
@@ -499,6 +530,9 @@ export function TaskRunPanel({
                 </span>
               </div>
               <div className="task-run-control-row">
+                <span className="task-run-control-row__hint">
+                  Stop skips later steps; Cancel discards late adapter output. Terminal runs reject control commands.
+                </span>
                 <button
                   type="button"
                   className="secondary-button"
@@ -566,6 +600,7 @@ export function TaskRunPanel({
                   const buildValidationStatus = formatBuildValidationValue(step.artifactBuildValidationStatus);
                   const reviewRetryReviseState = getReviewRetryReviseLabel(step);
                   const streamingPreview = streamingPreviewsByStepId[stepId] || null;
+                  const qualityGateAction = getStepQualityGateAction(step);
 
                   return (
                     <button
@@ -670,6 +705,9 @@ export function TaskRunPanel({
                             Parse: {step.artifactParseStatus || "NOT_ATTEMPTED"}
                           </span>
                           <span className="artifact-source-badge">
+                            Outcome: {step.realAdapterOutcome || "FALLBACK"}
+                          </span>
+                          <span className="artifact-source-badge">
                             Quality: {step.artifactQualityStatus || "NOT_EVALUATED"}
                           </span>
                           <span className="artifact-source-badge">
@@ -682,6 +720,13 @@ export function TaskRunPanel({
                         {step.artifactQualityReason ? (
                           <div className="step-adapter-response">
                             <strong>Artifact quality:</strong> {step.artifactQualityReason}
+                          </div>
+                        ) : null}
+                        {qualityGateAction ? (
+                          <div className="quality-gate-action">
+                            <strong>{qualityGateAction.title}</strong>
+                            <p>Failure reason: {qualityGateAction.reason}</p>
+                            <p>Fix path: {qualityGateAction.nextStep}</p>
                           </div>
                         ) : null}
                         {step.adapterErrorMessage ? (

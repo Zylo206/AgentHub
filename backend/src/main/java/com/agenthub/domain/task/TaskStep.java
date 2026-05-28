@@ -352,6 +352,35 @@ public class TaskStep {
         return artifactQualityReason;
     }
 
+    public String getRealAdapterOutcome() {
+        if (isFailureStatus(artifactParseStatus, "PARSE_FAILED", "INVALID_JSON", "MALFORMED_JSON")) {
+            return "PARSE_FAILED";
+        }
+        if (isFailureStatus(artifactBuildValidationStatus, "BUILD_FAILED", "FAILED")) {
+            return "BUILD_FAILED";
+        }
+        if (isFailureStatus(artifactQualityStatus, "QUALITY_FAILED", "REJECTED")) {
+            return "QUALITY_FAILED";
+        }
+        if (realOutputUsed) {
+            return "ACCEPTED";
+        }
+        return "FALLBACK";
+    }
+
+    private static boolean isFailureStatus(String value, String... markers) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String normalized = value.toUpperCase();
+        for (String marker : markers) {
+            if (normalized.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public List<ArtifactId> getProducedArtifactIds() {
         return producedArtifactIds;
     }
