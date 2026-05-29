@@ -319,6 +319,43 @@ function OrchestratorExplainPanel({
   const hasParallelExecution = parallelExecutionGroups.length > 0;
   const plannerDisplay = getPlannerDisplay(taskRun, hasParallelExecution);
   const decisionLog = taskRun.orchestratorDecisionLog ?? null;
+  const acceptedRealOutputs = taskRun.steps.filter((step) => step.realAdapterOutcome === "ACCEPTED").length;
+  const approvalAuditSummary =
+    taskRun.status === "BLOCKED"
+      ? "当前任务被质量门禁阻塞，后续修复应走 Revision / Approval / Audit 链路。"
+      : "高风险操作继续由 ApprovalRequest 与 ActionAuditLog 记录，TaskRun 只展示执行事实。";
+  const decisionHighlights = [
+    {
+      label: "Planner",
+      value: decisionLog?.decisionMode || plannerDisplay.label,
+      detail: decisionLog?.plannerDecision || plannerDisplay.plannerReasoning || taskRun.taskPlan?.goal || "规则化计划已生成。"
+    },
+    {
+      label: "Router",
+      value: `${taskRun.steps.length} steps`,
+      detail: decisionLog?.routingDecision || "按 selectedAgent、mentionedAgents、tool capability 与 adapter health 路由。"
+    },
+    {
+      label: "Executor",
+      value: hasParallelExecution ? "并行 batch" : "顺序执行",
+      detail: decisionLog?.executionDecision || "执行层记录 adapter、fallback、build validation 与 step runtime。"
+    },
+    {
+      label: "Aggregator",
+      value: `${producedArtifacts.length} artifacts`,
+      detail: decisionLog?.aggregationDecision || taskRun.resultSummary || "聚合产物、协议消息与最终摘要。"
+    },
+    {
+      label: "Fallback",
+      value: `${fallbackCount} fallback`,
+      detail: decisionLog?.fallbackDecision || `${acceptedRealOutputs} 个真实 Adapter 输出被采纳，其余保持静态 / MOCK 兜底。`
+    },
+    {
+      label: "Approval / Audit",
+      value: displayStatus(taskRun.status),
+      detail: approvalAuditSummary
+    }
+  ];
 
   return (
     <section className="orchestrator-explain-panel" data-testid="orchestrator-explain-panel" aria-label="Orchestrator 决策链">
@@ -330,6 +367,16 @@ function OrchestratorExplainPanel({
         <span className="orchestrator-mode-pill">
           {decisionLog?.decisionMode || plannerDisplay.label}
         </span>
+      </div>
+
+      <div className="orchestrator-decision-rail" aria-label="Planner Router Executor Aggregator Fallback Approval Audit">
+        {decisionHighlights.map((item, index) => (
+          <article className="orchestrator-decision-rail__item" key={item.label}>
+            <span>{String(index + 1).padStart(2, "0")} · {item.label}</span>
+            <strong>{item.value}</strong>
+            <small>{item.detail}</small>
+          </article>
+        ))}
       </div>
 
       <div className="orchestrator-stage-grid">

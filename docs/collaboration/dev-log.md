@@ -5543,3 +5543,42 @@
 ### 下一步建议
 
 - 优先继续拆分 `WorkspacePage` 的数据加载 / realtime / action handlers，或拆分 `ArtifactPanel` 的 revision / approval / content preview 子组件。
+
+## Phase 128：Context / Orchestrator Explain 与 Preview Studio 产品化
+
+### 目标
+
+- 将 ContextPanel 的检索解释收敛为更清晰的 `List / Grep / Read -> Scoring -> Injected Step` 三段链路。
+- 让 Orchestrator Explain 面板突出 `Planner / Router / Executor / Aggregator / Fallback / Approval / Audit` 的决策顺序。
+- 将 Adapter Quality Dashboard 从普通表格增强为指标驾驶舱。
+- 将 `/preview/:artifactId` 继续打磨为独立 Artifact Preview Studio，并补充前端设计 token。
+
+### 主要变更
+
+- `ContextPanel` 为每个 retrieved context 增加三段式 explain chain，展示召回方式、score breakdown 和注入到哪个 TaskStep。
+- `TaskRunPanel` 的 Orchestrator Explain 增加 decision rail，集中展示 Planner、Router、Executor、Aggregator、Fallback、Approval / Audit。
+- `AdapterQualityDashboard` 增加 Quality Command strip 和 per-adapter success meter，用于突出 success、fallback、risk adapter 和质量门禁。
+- `PreviewPage` 增加 metadata bar、release-style version switcher、presentation mode 文案，并区分 CODE / MARKDOWN / WEB_PREVIEW 等展示模式。
+- `global.css` 增加 AgentHub design tokens：colors、elevation、radius、spacing、status 和 motion timing。
+- `workspace.css` 增加 explain rail、quality cockpit、preview metadata、version release 和窄屏堆叠样式。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是前端可解释性和视觉产品化，不新增真实检索算法、真实静态分析、真实部署平台或新的后端决策字段。
+- Context explain 仍展示后端已返回的 heuristic / DB-backed Agentic Search metadata，不代表默认启用 embedding 或向量检索。
+- PreviewPage 仍是本地静态 Artifact 预览页，不代表真实云部署。
+
+### 遗留问题
+
+- `WorkspacePage`、`TaskRunPanel`、`ContextPanel` 仍可继续拆分子组件。
+- Adapter Quality Dashboard 展示后端聚合和当前 TaskStep 数据，但不是完整 APM / observability 系统。
+- PreviewPage 已有产品化结构，但移动端仍只是响应式保护，不是独立移动端体验。
+
+### 下一步建议
+
+- 继续拆分 `TaskRunPanel` 的 Orchestrator Explain 和 Adapter Routing 子组件，降低后续决策面板迭代成本。

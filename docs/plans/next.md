@@ -112,7 +112,10 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Context Search v2 keeps representative sources across recent messages, artifacts, memories, attachment previews, and task run summaries instead of letting one source type dominate ranking.
    - `Done`: ContextPanel now shows the List / Grep / Read pipeline per retrieved item, including matched tokens, read window, and semantic backend.
    - `Done`: ContextPanel now adds a snapshot-level List / Grep / Read overview with recalled context count, keyword hit count, fallback read count, matched token count, injected step count, and top source type.
+   - `Done`: ContextPanel now adds a three-stage explain chain per retrieved item: List / Grep / Read -> Scoring -> Injected Step.
    - `Done`: Adapter Quality Dashboard now has metric cards for observed scope, average success rate, fallback rate, real output acceptance, failure taxonomy, and highest-risk adapter.
+   - `Done`: Adapter Quality Dashboard now has a Quality Command strip and per-adapter success meter so it reads as an operational quality cockpit, not only a table.
+   - `Done`: Orchestrator Explain now has a decision rail for Planner, Router, Executor, Aggregator, Fallback, and Approval / Audit.
    - Keep future spec changes aligned with the focused plans and `docs/collaboration/dev-log.md`.
    - Do not describe Mock / fixture / static / half-real behavior as full production capability.
 
@@ -135,6 +138,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: `docs/ui-audit.md` now captures the independent UI audit for Workspace, MessageStream, Agent List, TaskRunPanel, ArtifactPanel, ContextPanel, Adapter Dashboard, and PreviewPage.
    - `Done`: WorkspacePage has started component decomposition with `WorkspaceHeader` and `WorkspaceCollaborationToolbar`; the IM-first main path remains covered by Browser E2E.
    - `Done`: PreviewPage now behaves more like an independent Preview Studio with trust status, source metadata, version-chain summary, content toolbar, and local-static preview boundary.
+   - `Done`: PreviewPage now adds a metadata bar, release-style version switcher, and presentation modes for code, document, structured text, and HTML preview.
+   - `Done`: Global frontend design tokens now include color, elevation, radius, spacing, status, and motion primitives for future command-center surfaces.
    - `Done`: lightweight motion and responsive polish now covers Artifact Cockpit, Preview Studio, KPI cards, and narrow-screen stacked layouts.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 

@@ -26,6 +26,34 @@ function getPreviewMode(artifact: Artifact): string {
   return "文本预览";
 }
 
+function getPresentationMode(artifact: Artifact): { label: string; description: string } {
+  if (artifact.type === "CODE") {
+    return {
+      label: "Source Code Mode",
+      description: "以只读代码块展示原始源码，适合检查构建门禁、复制和回到 Workspace 做 Revision。"
+    };
+  }
+
+  if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
+    return {
+      label: "HTML Preview Mode",
+      description: "使用 iframe srcDoc 展示 HTML 快照；仍是本地静态预览，不代表真实云部署。"
+    };
+  }
+
+  if (artifact.type === "MARKDOWN" || artifact.type === "REVIEW_REPORT") {
+    return {
+      label: "Document Mode",
+      description: "以文档预览方式展示 Markdown / Review Report，保留原始文本和审计上下文。"
+    };
+  }
+
+  return {
+    label: "Structured Text Mode",
+    description: "以结构化文本展示 API Contract、Data Model 或其他产物内容。"
+  };
+}
+
 type PreviewTrustTone = "success" | "warning" | "danger" | "neutral";
 
 function isPreviewBlockingStatus(status?: string | null): boolean {
@@ -191,6 +219,7 @@ export function PreviewPage() {
   }, [artifactId]);
 
   const previewMode = useMemo(() => (artifact ? getPreviewMode(artifact) : "-"), [artifact]);
+  const presentationMode = useMemo(() => (artifact ? getPresentationMode(artifact) : null), [artifact]);
   const trustTone = useMemo(() => (artifact ? getPreviewTrustTone(artifact) : "neutral"), [artifact]);
   const versionEntries = useMemo(
     () => (artifact ? buildArtifactVersions(artifact, conversationArtifacts.length > 0 ? conversationArtifacts : [artifact]) : []),
@@ -247,6 +276,33 @@ export function PreviewPage() {
                 </span>
               ) : null}
             </div>
+          </div>
+
+          <div className="preview-page__metadata-bar" aria-label="Artifact preview metadata">
+            <span>
+              <strong>Type</strong>
+              {displayArtifactType(artifact.type)}
+            </span>
+            <span>
+              <strong>Version</strong>
+              v{artifact.version}
+            </span>
+            <span>
+              <strong>Source</strong>
+              {displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}
+            </span>
+            <span>
+              <strong>Adapter</strong>
+              {artifact.sourceAdapterType || "N/A"}
+            </span>
+            <span>
+              <strong>Quality</strong>
+              {artifact.qualityStatus || "NOT_EVALUATED"}
+            </span>
+            <span>
+              <strong>Mode</strong>
+              {presentationMode?.label || previewMode}
+            </span>
           </div>
 
           <section className={`preview-page__studio preview-page__studio--${trustTone}`} data-testid="preview-studio">
@@ -321,8 +377,8 @@ export function PreviewPage() {
 
             <div className="preview-page__versions">
               <div>
-                <strong>版本切换</strong>
-                <span>当前版本链共 {versionEntries.length} 个版本</span>
+                <strong>发布版本</strong>
+                <span>当前版本链共 {versionEntries.length} 个可预览版本</span>
               </div>
               <div className="preview-page__version-list">
                 {versionEntries.map((entry) => {
@@ -333,8 +389,9 @@ export function PreviewPage() {
                       className={`preview-page__version-item ${isActive ? "preview-page__version-item--active" : ""}`}
                       to={`/preview/${entry.artifactId}`}
                     >
+                      <small>{isActive ? "CURRENT RELEASE" : "RELEASE CANDIDATE"}</small>
                       <strong>v{entry.artifact.version}</strong>
-                      {entry.isRevision ? <span>Revision</span> : <span>Initial</span>}
+                      {entry.isRevision ? <span>Revision build</span> : <span>Initial build</span>}
                       {entry.basedOnVersionLabel ? <small>基于 {entry.basedOnVersionLabel}</small> : null}
                     </Link>
                   );
@@ -346,10 +403,10 @@ export function PreviewPage() {
           <div className="preview-page__content">
             <div className="preview-page__content-toolbar">
               <div>
-                <strong>内容预览</strong>
+                <strong>{presentationMode?.label || "内容预览"}</strong>
                 <span>{artifact.title}</span>
               </div>
-              <span>{previewMode}</span>
+              <span>{presentationMode?.description || previewMode}</span>
             </div>
             {renderPreviewContent(artifact)}
           </div>

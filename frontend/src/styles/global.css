@@ -29,6 +29,36 @@
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
+  --agenthub-color-canvas: #0f172a;
+  --agenthub-color-canvas-soft: #111c33;
+  --agenthub-color-surface: #ffffff;
+  --agenthub-color-surface-raised: #fbfdff;
+  --agenthub-color-surface-muted: #f5f7fb;
+  --agenthub-color-border: rgba(148, 163, 184, 0.28);
+  --agenthub-color-border-strong: rgba(71, 85, 105, 0.24);
+  --agenthub-color-text: #0f172a;
+  --agenthub-color-text-muted: #64748b;
+  --agenthub-status-success: #16a34a;
+  --agenthub-status-info: #2563eb;
+  --agenthub-status-warning: #d97706;
+  --agenthub-status-danger: #dc2626;
+  --agenthub-status-neutral: #475569;
+  --agenthub-elevation-panel: 0 18px 45px rgba(15, 23, 42, 0.10);
+  --agenthub-elevation-pop: 0 24px 70px rgba(15, 23, 42, 0.16);
+  --agenthub-radius-xs: 6px;
+  --agenthub-radius-sm: 10px;
+  --agenthub-radius-md: 14px;
+  --agenthub-radius-lg: 20px;
+  --agenthub-radius-xl: 28px;
+  --agenthub-space-1: 4px;
+  --agenthub-space-2: 8px;
+  --agenthub-space-3: 12px;
+  --agenthub-space-4: 16px;
+  --agenthub-space-5: 20px;
+  --agenthub-space-6: 24px;
+  --agenthub-motion-fast: 140ms ease;
+  --agenthub-motion-normal: 220ms ease;
+  --agenthub-motion-slow: 360ms ease;
 }
 
 html,

@@ -5404,6 +5404,175 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.70);
 }
 
+/* Taste-skill P3/P4: explainability rails, quality cockpit and Preview Studio surfaces. */
+.retrieved-context-item__explain-chain,
+.orchestrator-decision-rail,
+.adapter-quality-command-strip,
+.preview-page__metadata-bar {
+  display: grid;
+  gap: var(--agenthub-space-3);
+}
+
+.retrieved-context-item__explain-chain {
+  grid-template-columns: 1.1fr 0.8fr 1.1fr;
+  margin-top: 10px;
+}
+
+.retrieved-context-item__explain-chain section,
+.orchestrator-decision-rail__item,
+.adapter-quality-command-strip,
+.preview-page__metadata-bar {
+  border: 1px solid var(--agenthub-color-border);
+  border-radius: var(--agenthub-radius-md);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.retrieved-context-item__explain-chain section {
+  min-width: 0;
+  padding: 10px;
+}
+
+.retrieved-context-item__explain-chain span,
+.orchestrator-decision-rail__item span,
+.adapter-quality-command-strip span,
+.preview-page__metadata-bar strong {
+  color: var(--agenthub-color-text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.retrieved-context-item__explain-chain strong,
+.orchestrator-decision-rail__item strong,
+.adapter-quality-command-strip strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--agenthub-color-text);
+  font-size: 13px;
+  letter-spacing: -0.02em;
+}
+
+.retrieved-context-item__explain-chain small,
+.orchestrator-decision-rail__item small,
+.adapter-quality-command-strip p {
+  display: block;
+  margin-top: 4px;
+  color: var(--agenthub-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.orchestrator-decision-rail {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 14px 0;
+}
+
+.orchestrator-decision-rail__item {
+  position: relative;
+  overflow: hidden;
+  min-height: 112px;
+  padding: 12px;
+}
+
+.orchestrator-decision-rail__item::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--agenthub-status-info), var(--agenthub-status-success));
+}
+
+.adapter-quality-command-strip {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  margin: 12px 0;
+  padding: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28%),
+    linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.9));
+}
+
+.adapter-quality-command-strip__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.adapter-quality-command-strip__metrics span {
+  padding: 7px 10px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.82);
+  color: var(--primary);
+}
+
+.adapter-quality-table__meter {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  height: 5px;
+  margin-bottom: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.20);
+}
+
+.adapter-quality-table__meter b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--agenthub-status-info), var(--agenthub-status-success));
+}
+
+.preview-page__metadata-bar {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  padding: 14px 24px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+}
+
+.preview-page__metadata-bar span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.preview-page__metadata-bar strong {
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.preview-page__version-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.preview-page__version-item::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: rgba(148, 163, 184, 0.44);
+}
+
+.preview-page__version-item--active::before {
+  background: linear-gradient(180deg, var(--agenthub-status-info), var(--agenthub-status-success));
+}
+
+.preview-page__content-toolbar > span {
+  max-width: 560px;
+  text-align: right;
+  line-height: 1.45;
+}
+
 @media (max-width: 720px) {
   .message-protocol-card,
   .message-stream-status-bar__header,
@@ -5411,5 +5580,20 @@
   .agent-capability-summary {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .retrieved-context-item__explain-chain,
+  .orchestrator-decision-rail,
+  .adapter-quality-command-strip,
+  .preview-page__metadata-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .adapter-quality-command-strip__metrics {
+    justify-content: flex-start;
+  }
+
+  .preview-page__content-toolbar > span {
+    text-align: left;
   }
 }

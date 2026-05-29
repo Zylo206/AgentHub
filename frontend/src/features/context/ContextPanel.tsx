@@ -175,6 +175,18 @@ function getContextSearchPipeline(stage: ContextSearchStage, item: RetrievedCont
   ];
 }
 
+function getScoreBreakdownLabel(item: RetrievedContextItem): string {
+  const parts = [
+    typeof item.baseScore === "number" ? `base ${item.baseScore.toFixed(1)}` : null,
+    typeof item.keywordScore === "number" ? `keyword ${item.keywordScore.toFixed(1)}` : null,
+    typeof item.recencyScore === "number" ? `recency ${item.recencyScore.toFixed(1)}` : null,
+    typeof item.importanceScore === "number" ? `importance ${item.importanceScore.toFixed(1)}` : null,
+    typeof item.semanticScore === "number" ? `semantic ${item.semanticScore.toFixed(1)}` : null
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" / ") : "后端未返回拆分分数，使用综合 score。";
+}
+
 function buildContextStageSummary(items: RetrievedContextItem[], taskRuns: TaskRun[], snapshot: ContextSnapshot): ContextStageSummary {
   const sourceCounts = new Map<string, number>();
 
@@ -421,6 +433,27 @@ export function ContextPanel({
                                   <small>{stageItem.detail}</small>
                                 </span>
                               ))}
+                            </div>
+                            <div className="retrieved-context-item__explain-chain">
+                              <section>
+                                <span>01 · List / Grep / Read</span>
+                                <strong>{getContextSearchStageLabel(searchStage)}</strong>
+                                <small>
+                                  {item.matchedTokens?.length
+                                    ? `Grep 命中 ${item.matchedTokens.length} 个 token`
+                                    : "未命中精确关键词，使用候选窗口回退"}
+                                </small>
+                              </section>
+                              <section>
+                                <span>02 · Scoring</span>
+                                <strong>{Number.isFinite(item.score) ? item.score.toFixed(2) : "-"}</strong>
+                                <small>{getScoreBreakdownLabel(item)}</small>
+                              </section>
+                              <section>
+                                <span>03 · Injected Step</span>
+                                <strong>{resolveInjectionStepLabel(snapshot, item, taskRuns)}</strong>
+                                <small>{resolveInjectionMode(snapshot, item, taskRuns)}</small>
+                              </section>
                             </div>
                             <div className="retrieved-context-item__meta">
                               {item.sourceRank ? <span>rank #{item.sourceRank}</span> : null}

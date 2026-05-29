@@ -74,6 +74,14 @@ function formatCount(value: number): string {
   return Number.isFinite(value) ? String(value) : "0";
 }
 
+function toPercent(value: number | null): number {
+  if (value === null || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(value * 100)));
+}
+
 function averageRate(rows: AdapterQualityRow[], selector: (row: AdapterQualityRow) => number | null): number | null {
   const values = rows
     .map(selector)
@@ -281,6 +289,22 @@ export function AdapterQualityDashboard({
         <span>{rows.length} 个 Adapter</span>
       </div>
 
+      <div className="adapter-quality-command-strip" aria-label="Adapter quality command strip">
+        <div>
+          <span>Quality Command</span>
+          <strong>真实产物采纳 / fallback / failure taxonomy</strong>
+          <p>
+            这里不是简单状态表，而是 Adapter 进入 REAL_FIRST 主产物前的质量门禁：contract、quality、build、
+            fallback reason 都必须可解释。
+          </p>
+        </div>
+        <div className="adapter-quality-command-strip__metrics">
+          <span>Success {formatRate(summary.averageSuccessRate)}</span>
+          <span>Fallback {formatRate(summary.averageFallbackRate)}</span>
+          <span>Risk {summary.highestRiskAdapter?.adapterType || "N/A"}</span>
+        </div>
+      </div>
+
       <div className="adapter-quality-kpis" aria-label="Adapter quality summary">
         <article className="adapter-quality-kpi adapter-quality-kpi--neutral">
           <span>观测范围</span>
@@ -350,7 +374,12 @@ export function AdapterQualityDashboard({
             <span title={row.safetyPolicies.join(" | ") || "暂无安全策略元数据"}>
               {row.safetyPolicies.some((policy) => policy.includes("workspace-write-disabled")) ? "禁止写工作区" : "N/A"}
             </span>
-            <span title={row.lastQualityReason || ""}>{row.lastQualityStatus || "N/A"}</span>
+            <span title={row.lastQualityReason || ""}>
+              <i className="adapter-quality-table__meter" aria-hidden="true">
+                <b style={{ width: `${toPercent(row.successRate)}%` }} />
+              </i>
+              {row.lastQualityStatus || "N/A"}
+            </span>
           </div>
         ))}
       </div>
