@@ -211,12 +211,55 @@ export function createConversation(title: string, type: "SINGLE" | "GROUP"): Pro
   });
 }
 
-export function getConversations(): Promise<Conversation[]> {
-  return request<Conversation[]>("/api/conversations");
+export interface GetConversationsOptions {
+  query?: string;
+  includeArchived?: boolean;
+}
+
+export function getConversations(options: GetConversationsOptions = {}): Promise<Conversation[]> {
+  const params = new URLSearchParams();
+  if (options.query?.trim()) {
+    params.set("query", options.query.trim());
+  }
+  if (options.includeArchived) {
+    params.set("includeArchived", "true");
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request<Conversation[]>(`/api/conversations${suffix}`);
 }
 
 export function getConversation(conversationId: string): Promise<Conversation> {
   return request<Conversation>(`/api/conversations/${conversationId}`);
+}
+
+export function pinConversation(conversationId: string): Promise<Conversation> {
+  return request<Conversation>(`/api/conversations/${conversationId}/pin`, {
+    method: "POST"
+  });
+}
+
+export function unpinConversation(conversationId: string): Promise<Conversation> {
+  return request<Conversation>(`/api/conversations/${conversationId}/unpin`, {
+    method: "POST"
+  });
+}
+
+export function archiveConversation(conversationId: string): Promise<Conversation> {
+  return request<Conversation>(`/api/conversations/${conversationId}/archive`, {
+    method: "POST"
+  });
+}
+
+export function unarchiveConversation(conversationId: string): Promise<Conversation> {
+  return request<Conversation>(`/api/conversations/${conversationId}/unarchive`, {
+    method: "POST"
+  });
+}
+
+export function markConversationRead(conversationId: string): Promise<Conversation> {
+  return request<Conversation>(`/api/conversations/${conversationId}/read`, {
+    method: "POST"
+  });
 }
 
 export function sendMessage(

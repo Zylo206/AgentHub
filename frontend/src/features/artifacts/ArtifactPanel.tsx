@@ -737,7 +737,18 @@ export function ArtifactPanel({
         {loadingArtifacts ? (
           <div className="panel-empty">正在加载产物...</div>
         ) : artifacts.length === 0 ? (
-          <div className="panel-empty">从任务消息确认 Agent 协作后，产物会显示在这里。</div>
+          <div className="panel-empty artifact-empty-state">
+            <span className="artifact-empty-state__mark" aria-hidden="true">
+              A
+            </span>
+            <strong>等待产物生成</strong>
+            <p>从任务消息确认 Agent 协作后，代码、文档、评审报告和预览产物会汇入这里。</p>
+            <div className="artifact-empty-state__chips">
+              <span>CODE</span>
+              <span>MARKDOWN</span>
+              <span>REVIEW</span>
+            </div>
+          </div>
         ) : (
           <div className="artifact-card-list" data-testid="artifact-card-list">
             {artifacts.map((artifact) => {
@@ -765,9 +776,28 @@ export function ArtifactPanel({
         {loadingArtifactDetail ? (
           <div className="panel-empty">正在加载产物详情...</div>
         ) : !selectedArtifact ? (
-          <div className="panel-empty">选择一个产物后查看内容。</div>
+          <div className="panel-empty artifact-empty-state artifact-empty-state--detail">
+            <span className="artifact-empty-state__mark" aria-hidden="true">
+              ↗
+            </span>
+            <strong>选择产物进入交付工作台</strong>
+            <p>这里会展示来源、质量门禁、构建校验、Diff、Snapshot、审批和 Deploy Preview。</p>
+            <div className="artifact-empty-state__steps">
+              <span>质量</span>
+              <span>Diff</span>
+              <span>审批</span>
+              <span>预览</span>
+            </div>
+          </div>
         ) : (
           <div className="artifact-preview">
+            <div className="artifact-inspector-tabs" aria-label="Artifact inspector sections">
+              <span className="artifact-inspector-tabs__item artifact-inspector-tabs__item--active">概览</span>
+              <span className="artifact-inspector-tabs__item">版本 {versionEntries.length}</span>
+              <span className="artifact-inspector-tabs__item">快照 {snapshots.length}</span>
+              <span className="artifact-inspector-tabs__item">部署 {deployments.length}</span>
+              <span className="artifact-inspector-tabs__item">关联 {Math.max(versionEntries.length - 1, 0)}</span>
+            </div>
             <div className="artifact-preview__meta">
               <div>
                 <strong>{selectedArtifact.title}</strong>

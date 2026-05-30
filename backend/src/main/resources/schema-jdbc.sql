@@ -9,9 +9,15 @@ CREATE TABLE IF NOT EXISTS agenthub_conversations (
     title VARCHAR(512) NOT NULL,
     type VARCHAR(64) NOT NULL,
     participant_agent_ids_json TEXT,
+    pinned BOOLEAN DEFAULT FALSE,
+    archived BOOLEAN DEFAULT FALSE,
+    unread_count INT DEFAULT 0,
+    last_read_at TIMESTAMP NULL,
+    last_message_at TIMESTAMP NULL,
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL,
-    INDEX idx_agenthub_conversations_updated_at (updated_at)
+    INDEX idx_agenthub_conversations_updated_at (updated_at),
+    INDEX idx_agenthub_conversations_inbox (archived, pinned, last_message_at, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS agenthub_agents (

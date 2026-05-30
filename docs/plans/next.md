@@ -141,6 +141,13 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: PreviewPage now adds a metadata bar, release-style version switcher, and presentation modes for code, document, structured text, and HTML preview.
    - `Done`: Global frontend design tokens now include color, elevation, radius, spacing, status, and motion primitives for future command-center surfaces.
    - `Done`: lightweight motion and responsive polish now covers Artifact Cockpit, Preview Studio, KPI cards, and narrow-screen stacked layouts.
+   - `Done`: Conversation management now has backend fields and APIs for pin, archive, unarchive, mark read, unread count, last message activity, and server-side query filtering.
+   - `Done`: Workspace conversation list now exposes server search, show archived, pin/unpin, archive/restore, unread badge, and activity-first ordering.
+   - `Done`: Workspace conversation list now uses IM-style filters for all, unread, pinned, and archived conversations; Browser E2E covers search, pin, archive, and restore.
+   - `Done`: API smoke now validates conversation pin/search/archive/unarchive and unread/read marker behavior.
+   - `Done`: MessageStream now has a unified Message Action Bar for copy, quote, reply, pin, memory, rerun, and Agent reply regeneration.
+   - `Done`: Message cards now expose type ribbons and richer attachment / Artifact cards, including image and PPT weak-capability boundaries.
+   - `Done`: `docs/spec/message-interaction-spec.md` captures stable message type, action, thread, and weak media boundaries.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**

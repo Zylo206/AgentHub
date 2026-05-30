@@ -841,3 +841,250 @@ a:focus-visible {
     text-align: center;
   }
 }
+
+/* Build Web Apps redesign: premium IM command-center shell. */
+:root {
+  --agenthub-command-bg: #07111f;
+  --agenthub-command-bg-2: #0b1728;
+  --agenthub-command-panel: rgba(12, 24, 42, 0.86);
+  --agenthub-command-panel-soft: rgba(15, 30, 52, 0.68);
+  --agenthub-command-line: rgba(137, 167, 204, 0.22);
+  --agenthub-command-line-strong: rgba(96, 165, 250, 0.46);
+  --agenthub-command-text: #f7fbff;
+  --agenthub-command-muted: #9fb2cc;
+  --agenthub-command-accent: #2f7dff;
+  --agenthub-command-cyan: #22d3ee;
+  --agenthub-command-green: #22c55e;
+  --agenthub-command-amber: #f59e0b;
+  --agenthub-command-red: #ef4444;
+  --agenthub-command-shadow: 0 24px 80px rgba(0, 8, 22, 0.44);
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% -10%, rgba(47, 125, 255, 0.28), transparent 28%),
+    radial-gradient(circle at 84% -12%, rgba(34, 211, 238, 0.18), transparent 24%),
+    linear-gradient(180deg, #06101e 0%, #0a1424 48%, #0d1726 100%);
+  color: var(--agenthub-command-text);
+  font-family:
+    "Microsoft YaHei UI",
+    "PingFang SC",
+    "Noto Sans SC",
+    "Segoe UI",
+    sans-serif;
+  text-rendering: geometricPrecision;
+}
+
+.app-shell {
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.028) 1px, transparent 1px),
+    radial-gradient(circle at 18% 0%, rgba(47, 125, 255, 0.25), transparent 32%),
+    radial-gradient(circle at 88% 10%, rgba(34, 211, 238, 0.14), transparent 28%),
+    linear-gradient(180deg, #07111f 0%, #0b1422 100%);
+  background-size: 38px 38px, 38px 38px, auto, auto, auto;
+}
+
+.app-header {
+  height: 64px;
+  border-bottom: 1px solid var(--agenthub-command-line);
+  background:
+    linear-gradient(90deg, rgba(5, 12, 24, 0.98), rgba(8, 17, 31, 0.94)),
+    rgba(7, 17, 31, 0.96);
+  box-shadow: 0 18px 48px rgba(0, 8, 22, 0.38);
+}
+
+.app-header__mark {
+  border-radius: 12px;
+  border-color: rgba(96, 165, 250, 0.48);
+  background:
+    radial-gradient(circle at 30% 22%, rgba(125, 211, 252, 0.7), transparent 38%),
+    linear-gradient(135deg, #1d4ed8, #0f172a 78%);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12), 0 16px 34px rgba(37, 99, 235, 0.36);
+}
+
+.app-header__title {
+  color: #ffffff;
+  letter-spacing: -0.03em;
+}
+
+.app-header__subtitle {
+  color: var(--agenthub-command-muted);
+}
+
+.app-header__status span {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(15, 30, 52, 0.72);
+  color: #dceafe;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.app-header__nav {
+  border-color: rgba(137, 167, 204, 0.20);
+  background: rgba(12, 24, 42, 0.82);
+}
+
+.app-nav-link {
+  color: #c7d4e8;
+}
+
+.app-nav-link--active {
+  background: linear-gradient(180deg, #f8fbff, #e7effb);
+  color: #07111f;
+  box-shadow: 0 12px 28px rgba(0, 8, 22, 0.34);
+}
+
+/* Screenshot fidelity pass: top bar mirrors the supplied AgentHub IM mockup. */
+.app-header {
+  display: grid;
+  grid-template-columns: 300px minmax(360px, 1fr) auto auto auto auto;
+  gap: 14px;
+  padding: 0 18px;
+}
+
+.app-header__brand {
+  flex: unset;
+  min-width: 0;
+}
+
+.app-header__mark {
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+}
+
+.app-header__subtitle {
+  display: none;
+}
+
+.app-header__mission {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f8fbff;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.app-header__mission-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header__live-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 999px;
+  background: rgba(22, 163, 74, 0.12);
+  color: #22c55e;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 4px 10px;
+}
+
+.app-header__live-dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+}
+
+.app-header__timer {
+  color: #9fb2cc;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-header__status span {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+.app-header__status span:nth-child(1) {
+  background: linear-gradient(135deg, #60a5fa, #1d4ed8);
+}
+
+.app-header__status span:nth-child(2) {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+}
+
+.app-header__status span:nth-child(3) {
+  background: linear-gradient(135deg, #34d399, #047857);
+}
+
+.app-header__status span:nth-child(4) {
+  background: linear-gradient(135deg, #f59e0b, #92400e);
+}
+
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-header__actions button {
+  height: 34px;
+  border: 1px solid rgba(137, 167, 204, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 30, 52, 0.78);
+  color: #dceafe;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 0 14px;
+}
+
+.app-header__window-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #8fa4c2;
+  font-size: 18px;
+  line-height: 1;
+  padding-left: 8px;
+}
+
+.app-header__window-controls span {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+}
+
+.app-header__window-controls span:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+}
+
+@media (max-width: 1180px) {
+  .app-header {
+    grid-template-columns: 220px minmax(0, 1fr) auto;
+  }
+
+  .app-header__status,
+  .app-header__actions,
+  .app-header__window-controls {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-header {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .app-header__mission,
+  .app-header__nav {
+    width: 100%;
+  }
+}

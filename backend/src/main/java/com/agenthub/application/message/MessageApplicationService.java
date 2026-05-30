@@ -6,7 +6,9 @@ import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
 import com.agenthub.domain.artifact.ArtifactId;
+import com.agenthub.domain.conversation.Conversation;
 import com.agenthub.domain.conversation.ConversationId;
+import com.agenthub.domain.conversation.ConversationRepository;
 import com.agenthub.domain.message.Message;
 import com.agenthub.domain.message.MessageAttachment;
 import com.agenthub.domain.message.MessageId;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 public class MessageApplicationService {
 
     private final MessageRepository messageRepository;
+    private final ConversationRepository conversationRepository;
     private final AgentApplicationService agentApplicationService;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final IdGenerator idGenerator;
@@ -29,11 +32,13 @@ public class MessageApplicationService {
 
     public MessageApplicationService(
             MessageRepository messageRepository,
+            ConversationRepository conversationRepository,
             AgentApplicationService agentApplicationService,
             RealtimeEventPublisher realtimeEventPublisher,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.messageRepository = messageRepository;
+        this.conversationRepository = conversationRepository;
         this.agentApplicationService = agentApplicationService;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.idGenerator = idGenerator;
@@ -119,6 +124,7 @@ public class MessageApplicationService {
                 normalizedAttachments,
                 timeProvider.now());
         Message saved = messageRepository.save(message);
+        touchConversationActivity(saved, false);
         publishMessageCreated(saved);
         return saved;
     }
@@ -160,6 +166,7 @@ public class MessageApplicationService {
                 artifactIds == null ? List.of() : artifactIds,
                 timeProvider.now());
         Message saved = messageRepository.save(message);
+        touchConversationActivity(saved, true);
         publishMessageCreated(saved);
         return saved;
     }
@@ -179,6 +186,7 @@ public class MessageApplicationService {
                 artifactIds,
                 timeProvider.now());
         Message saved = messageRepository.save(message);
+        touchConversationActivity(saved, true);
         publishMessageCreated(saved);
         return saved;
     }
@@ -218,8 +226,16 @@ public class MessageApplicationService {
                 originalMessage.getArtifactIds(),
                 timeProvider.now());
         Message saved = messageRepository.save(regeneratedMessage);
+        touchConversationActivity(saved, true);
         publishMessageCreated(saved);
         return saved;
+    }
+
+    private void touchConversationActivity(Message message, boolean incrementUnread) {
+        Conversation conversation = conversationRepository.findById(message.getConversationId())
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Conversation not found: " + message.getConversationId().value()));
+        conversationRepository.save(conversation.touchMessageActivity(message.getCreatedAt(), incrementUnread));
     }
 
     private void publishMessageCreated(Message message) {

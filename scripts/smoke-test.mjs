@@ -513,6 +513,47 @@ async function runSmokeTest() {
   const initialParticipantIds = assertBuiltInParticipants(conversation, "created conversation");
   pass(`conversation participants initialized: ${initialParticipantIds.join(", ")}`);
 
+  const managementConversation = await request("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({
+      title: `Smoke Management Conversation ${Date.now()}`,
+      type: "GROUP"
+    })
+  });
+  const managementConversationId = requireValue(
+    getIdValue(managementConversation.id),
+    "managementConversationId missing"
+  );
+  const pinnedConversation = await request(`/api/conversations/${managementConversationId}/pin`, { method: "POST" });
+  if (pinnedConversation.pinned !== true) {
+    throw new Error("pin conversation did not persist pinned=true");
+  }
+  await request(`/api/conversations/${managementConversationId}/unpin`, { method: "POST" });
+  const managementMessage = await request(`/api/conversations/${managementConversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      content: "conversation-server-search-token"
+    })
+  });
+  requireValue(getIdValue(managementMessage.id), "management message id missing");
+  const searchedConversations = await request(
+    "/api/conversations?query=conversation-server-search-token&includeArchived=true"
+  );
+  if (!searchedConversations.some((item) => getIdValue(item.id) === managementConversationId)) {
+    throw new Error("conversation server search did not match message content");
+  }
+  await request(`/api/conversations/${managementConversationId}/archive`, { method: "POST" });
+  const defaultConversationsAfterArchive = await request("/api/conversations");
+  if (defaultConversationsAfterArchive.some((item) => getIdValue(item.id) === managementConversationId)) {
+    throw new Error("archived conversation should be hidden from default list");
+  }
+  const archivedConversations = await request("/api/conversations?includeArchived=true");
+  if (!archivedConversations.some((item) => getIdValue(item.id) === managementConversationId && item.archived === true)) {
+    throw new Error("archived conversation missing when includeArchived=true");
+  }
+  await request(`/api/conversations/${managementConversationId}/unarchive`, { method: "POST" });
+  pass("conversation pin/search/archive/unarchive management validated");
+
   const uploadedAttachment = await uploadSmokeAttachment(conversationId);
   pass(`attachment uploaded: ${uploadedAttachment.attachmentId}`);
 
@@ -790,7 +831,15 @@ async function runSmokeTest() {
 
   const refreshedConversation = await request(`/api/conversations/${conversationId}`);
   const refreshedParticipantIds = assertBuiltInParticipants(refreshedConversation, "refreshed conversation");
+  if (typeof refreshedConversation.unreadCount !== "number" || refreshedConversation.unreadCount < 1) {
+    throw new Error(`conversation unreadCount expected to increase after agent replies, got ${refreshedConversation.unreadCount}`);
+  }
+  const readConversation = await request(`/api/conversations/${conversationId}/read`, { method: "POST" });
+  if (readConversation.unreadCount !== 0 || !readConversation.lastReadAt) {
+    throw new Error(`conversation read marker did not reset unread state: ${JSON.stringify(readConversation)}`);
+  }
   pass(`conversation participants loaded: ${refreshedParticipantIds.length}`);
+  pass("conversation unread/read marker validated");
 
   const contextSnapshots = await request(`/api/task-runs/${taskRunId}/context-snapshots`);
   const rerunContextSnapshots = await request(`/api/task-runs/${rerunTaskRunId}/context-snapshots`);

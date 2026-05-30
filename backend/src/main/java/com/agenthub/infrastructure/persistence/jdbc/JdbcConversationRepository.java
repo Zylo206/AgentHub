@@ -28,8 +28,9 @@ public class JdbcConversationRepository implements ConversationRepository {
     public Conversation save(Conversation conversation) {
         String sql = """
                 REPLACE INTO agenthub_conversations
-                (id, title, type, participant_agent_ids_json, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (id, title, type, participant_agent_ids_json, pinned, archived, unread_count,
+                 last_read_at, last_message_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open();
                 var statement = connection.prepareStatement(sql)) {
@@ -38,8 +39,13 @@ public class JdbcConversationRepository implements ConversationRepository {
             statement.setString(3, conversation.getType().name());
             statement.setString(4, JdbcSerializationSupport.toJson(
                     conversation.getParticipantAgentIds().stream().map(AgentId::value).toList()));
-            statement.setTimestamp(5, JdbcSerializationSupport.timestamp(conversation.getCreatedAt()));
-            statement.setTimestamp(6, JdbcSerializationSupport.timestamp(conversation.getUpdatedAt()));
+            statement.setBoolean(5, conversation.isPinned());
+            statement.setBoolean(6, conversation.isArchived());
+            statement.setInt(7, conversation.getUnreadCount());
+            statement.setTimestamp(8, JdbcSerializationSupport.timestamp(conversation.getLastReadAt()));
+            statement.setTimestamp(9, JdbcSerializationSupport.timestamp(conversation.getLastMessageAt()));
+            statement.setTimestamp(10, JdbcSerializationSupport.timestamp(conversation.getCreatedAt()));
+            statement.setTimestamp(11, JdbcSerializationSupport.timestamp(conversation.getUpdatedAt()));
             statement.executeUpdate();
             return conversation;
         } catch (SQLException exception) {
@@ -94,6 +100,11 @@ public class JdbcConversationRepository implements ConversationRepository {
                 JdbcSerializationSupport.stringList(resultSet.getString("participant_agent_ids_json")).stream()
                         .map(AgentId::new)
                         .toList(),
+                resultSet.getBoolean("pinned"),
+                resultSet.getBoolean("archived"),
+                resultSet.getInt("unread_count"),
+                JdbcSerializationSupport.instant(resultSet.getTimestamp("last_read_at")),
+                JdbcSerializationSupport.instant(resultSet.getTimestamp("last_message_at")),
                 JdbcSerializationSupport.instant(resultSet.getTimestamp("created_at")),
                 JdbcSerializationSupport.instant(resultSet.getTimestamp("updated_at")));
     }
@@ -107,12 +118,35 @@ public class JdbcConversationRepository implements ConversationRepository {
                         title VARCHAR(512) NOT NULL,
                         type VARCHAR(64) NOT NULL,
                         participant_agent_ids_json TEXT,
+                        pinned BOOLEAN DEFAULT FALSE,
+                        archived BOOLEAN DEFAULT FALSE,
+                        unread_count INT DEFAULT 0,
+                        last_read_at TIMESTAMP NULL,
+                        last_message_at TIMESTAMP NULL,
                         created_at TIMESTAMP,
                         updated_at TIMESTAMP
                     )
                     """);
+            ensureColumn(connection, "agenthub_conversations", "pinned", "BOOLEAN DEFAULT FALSE");
+            ensureColumn(connection, "agenthub_conversations", "archived", "BOOLEAN DEFAULT FALSE");
+            ensureColumn(connection, "agenthub_conversations", "unread_count", "INT DEFAULT 0");
+            ensureColumn(connection, "agenthub_conversations", "last_read_at", "TIMESTAMP NULL");
+            ensureColumn(connection, "agenthub_conversations", "last_message_at", "TIMESTAMP NULL");
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to initialize conversation schema", exception);
+        }
+    }
+
+    private void ensureColumn(Connection connection, String tableName, String columnName, String definition)
+            throws SQLException {
+        var metadata = connection.getMetaData();
+        try (ResultSet resultSet = metadata.getColumns(connection.getCatalog(), null, tableName, columnName)) {
+            if (resultSet.next()) {
+                return;
+            }
+        }
+        try (var statement = connection.createStatement()) {
+            statement.executeUpdate("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + definition);
         }
     }
 }

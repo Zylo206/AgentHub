@@ -130,7 +130,7 @@ export function ChatInput({
             <p>{quotedMessage.content}</p>
             <span>{formatId(quotedMessage.id)}</span>
           </div>
-          <button type="button" className="ghost-button" onClick={onClearQuote}>
+          <button type="button" className="ghost-button" data-testid="chat-quote-clear" onClick={onClearQuote}>
             取消引用
           </button>
         </div>
@@ -139,7 +139,7 @@ export function ChatInput({
         className="chat-input__textarea"
         data-testid="chat-input-textarea"
         rows={4}
-        placeholder="Describe a task for AgentHub Agents to collaborate on..."
+        placeholder="发送消息，@Agent 或描述你的需求..."
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}

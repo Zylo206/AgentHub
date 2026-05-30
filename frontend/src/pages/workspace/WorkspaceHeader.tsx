@@ -39,6 +39,14 @@ export function WorkspaceHeader({
           <span>消息流 · TaskRun · Artifact</span>
         </div>
       </div>
+      {currentConversation ? (
+        <div className="workspace-session-strip" aria-label="当前会话状态">
+          <span className="workspace-session-strip__status">运行中</span>
+          <span>当前链路：Orchestrator → Specialist Agents → Reviewer</span>
+          <span>{actionAuditCount} 条审计记录</span>
+          <span>{realtimeStatus}</span>
+        </div>
+      ) : null}
       <div className="workspace-capability-strip" aria-label="IM capabilities">
         <span>文本 / 代码块</span>
         <span>文件附件</span>

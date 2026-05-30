@@ -309,6 +309,29 @@ async function createWorkspaceConversation(page) {
   );
 }
 
+async function verifyConversationManagementUi(page, conversation) {
+  const conversationId = requireValue(getIdValue(conversation.id), "conversationId missing for conversation management");
+  const conversationSelector = `[data-conversation-id="${conversationId}"]`;
+  const searchTerm = String(conversation.title || "Demo").slice(0, 18);
+
+  await page.getByTestId("conversation-search-input").fill(searchTerm);
+  await waitForVisible(page, conversationSelector, "searched conversation");
+  await page.getByTestId("conversation-search-clear").click();
+  await waitForVisible(page, conversationSelector, "conversation after search clear");
+
+  await page.locator(conversationSelector).getByTestId("conversation-pin-button").click();
+  await page.getByTestId("conversation-filter-pinned").click();
+  await waitForVisible(page, conversationSelector, "pinned conversation filter");
+
+  await page.locator(conversationSelector).getByTestId("conversation-archive-button").click();
+  await page.getByTestId("conversation-filter-archived").click();
+  await waitForVisible(page, conversationSelector, "archived conversation filter");
+  await page.locator(conversationSelector).getByTestId("conversation-restore-button").click();
+  await page.getByTestId("conversation-filter-all").click();
+  await waitForVisible(page, conversationSelector, "restored conversation in all filter");
+  await page.locator(conversationSelector).click();
+}
+
 function buildMentionPrompt(agents) {
   const namedAgents = agents.filter((agent) => agent.name?.trim()).slice(0, 2);
   if (namedAgents.length < 2) {
@@ -359,6 +382,39 @@ async function seedRetrievalContextFromMessage(conversationId, message) {
       })
     });
   }
+}
+
+async function verifyMessageActionBar(page) {
+  const messageRow = page.locator("[data-testid='message-row']").filter({ hasText: TEST_MARKER }).first();
+  await messageRow.getByTestId("message-action-bar").waitFor({ state: "visible", timeout: 10000 });
+  await messageRow.getByTestId("message-type-ribbon").waitFor({ state: "visible", timeout: 10000 });
+  await messageRow.scrollIntoViewIfNeeded();
+  await messageRow.getByTestId("message-copy-button").click();
+  await messageRow.getByTestId("message-quote-button").click();
+  await page.locator(".chat-quote-preview").waitFor({ state: "visible", timeout: 10000 });
+  await page.getByTestId("chat-quote-clear").click();
+  await messageRow.getByTestId("message-reply-button").click();
+  await page.locator(".chat-quote-preview").waitFor({ state: "visible", timeout: 10000 });
+  await page.getByTestId("chat-quote-clear").click();
+  await messageRow.getByTestId("message-pin-button").click();
+  await messageRow.getByTestId("message-memory-button").click();
+  await waitForVisible(page, "[data-testid='message-attachment-card']", "message attachment type card");
+}
+
+async function verifyAgentRegenerateAction(page, conversationId) {
+  const beforeMessages = await request(`/api/conversations/${conversationId}/messages`);
+  const regenerateButton = await waitForLocatorEnabled(
+    page.getByTestId("message-regenerate-button").first(),
+    "Agent reply regenerate button",
+    10000
+  );
+  await regenerateButton.click();
+  await waitForApiState(
+    "regenerated Agent reply from browser action",
+    () => request(`/api/conversations/${conversationId}/messages`),
+    (messages) => messages.length > beforeMessages.length ? messages : null,
+    20000
+  );
 }
 
 async function verifyContextPanel(page, conversationId) {
@@ -637,6 +693,9 @@ async function runBrowserE2e() {
 
     const conversation = await step("workspace creates and selects a conversation", () => createWorkspaceConversation(page));
     const conversationId = requireValue(getIdValue(conversation.id), "conversationId missing");
+    await step("conversation list supports search, pin, archive and restore", () =>
+      verifyConversationManagementUi(page, conversation)
+    );
 
     const sentMessage = await step("UI sends multi-agent message with uploaded attachment", () =>
       sendMessageWithAttachmentFromUi(page, conversationId, agents, tempAttachment.filePath)
@@ -648,10 +707,12 @@ async function runBrowserE2e() {
     await waitForVisible(page, "[data-testid='message-stream']", "message stream");
     await waitForVisible(page, "[data-testid='message-target-agent']", "multi-agent target label");
     await waitForVisible(page, "[data-testid='message-attachment-card']", "message attachment card");
+    await step("Message Action Bar supports copy, quote, reply, pin and memory", () => verifyMessageActionBar(page));
 
     await step("UI triggers collaboration run", () => triggerTaskRunFromUi(page, conversationId));
     await waitForVisible(page, "[data-testid='task-run-panel']", "TaskRun panel");
     await waitForVisible(page, ".message-bubble--agent-protocol", "agent protocol message");
+    await step("Agent reply can be regenerated from Message Action Bar", () => verifyAgentRegenerateAction(page, conversationId));
     await waitForVisible(page, ".adapter-quality-dashboard", "adapter quality dashboard");
     await page.getByTestId("stop-run-button").first().waitFor({ state: "visible", timeout: 10000 });
     await page.getByTestId("cancel-run-button").first().waitFor({ state: "visible", timeout: 10000 });

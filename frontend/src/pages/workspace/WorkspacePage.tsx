@@ -30,6 +30,9 @@ import {
   getPinnedContextsByConversation,
   getTaskRunsByConversation,
   getTaskSpecsByConversation,
+  archiveConversation,
+  markConversationRead,
+  pinConversation,
   pinMessageAsContext,
   regenerateAgentReply,
   runOrchestratorFromMessage,
@@ -38,6 +41,8 @@ import {
   sendMessage,
   stopTaskRun,
   uploadConversationAttachment,
+  unarchiveConversation,
+  unpinConversation,
   unpinContext
 } from "../../api/agenthubApi";
 import type { AdapterQualityMetrics } from "../../api/agenthubApi";
@@ -64,7 +69,7 @@ import type {
   TaskSpec,
   TaskStep
 } from "../../features/chat/chatTypes";
-import { ConversationList } from "../../features/conversations/ConversationList";
+import { ConversationList, type ConversationFilter } from "../../features/conversations/ConversationList";
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import { ContextPanel } from "../../features/context/ContextPanel";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../../features/context/contextTypes";
@@ -316,6 +321,8 @@ export function WorkspacePage() {
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [conversationQuery, setConversationQuery] = useState("");
+  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
   const [selectedTaskRunId, setSelectedTaskRunId] = useState<string | null>(null);
   const [selectedTaskStepId, setSelectedTaskStepId] = useState<string | null>(null);
   const [showAllArtifacts, setShowAllArtifacts] = useState(true);
@@ -440,6 +447,27 @@ export function WorkspacePage() {
     const preferredAdapterType = selectedAgent.preferredAdapterType || "MOCK";
     return adapterDescriptors.find((descriptor) => descriptor.adapterType === preferredAdapterType) ?? null;
   }, [adapterDescriptors, selectedAgent]);
+
+  const loadConversationIndex = useCallback(
+    async (query = conversationQuery, filter = conversationFilter) => {
+      setLoadingConversations(true);
+      try {
+        const includeArchived = filter === "ARCHIVED";
+        const conversationData = await getConversations({ query, includeArchived });
+        setConversations(conversationData);
+        setCurrentConversationId((previousId) => {
+          if (previousId && conversationData.some((conversation) => getIdValue(conversation.id) === previousId)) {
+            return previousId;
+          }
+          return getIdValue(conversationData[0]?.id) || null;
+        });
+        return conversationData;
+      } finally {
+        setLoadingConversations(false);
+      }
+    },
+    [conversationQuery, conversationFilter]
+  );
 
   const loadInitialData = useCallback(async () => {
     setErrorMessage(null);
@@ -632,6 +660,7 @@ export function WorkspacePage() {
       realtimeRefreshTimerRef.current = window.setTimeout(() => {
         realtimeRefreshTimerRef.current = null;
         void loadConversationData(currentConversationId);
+        void loadConversationIndex();
         void getActiveRealtimeState(currentConversationId)
           .then((state) => {
             if (!closed) {
@@ -742,7 +771,7 @@ export function WorkspacePage() {
       }
       setRealtimeStatus("DISCONNECTED");
     };
-  }, [currentConversationId, loadConversationData]);
+  }, [currentConversationId, loadConversationData, loadConversationIndex]);
 
   useEffect(() => {
     if (!selectedTaskRunId) {
@@ -830,6 +859,77 @@ export function WorkspacePage() {
     }
   }
 
+  async function handleConversationQueryChange(nextQuery: string) {
+    setConversationQuery(nextQuery);
+    setErrorMessage(null);
+    try {
+      await loadConversationIndex(nextQuery, conversationFilter);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleConversationFilterChange(nextFilter: ConversationFilter) {
+    setConversationFilter(nextFilter);
+    setErrorMessage(null);
+    try {
+      await loadConversationIndex(conversationQuery, nextFilter);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleSelectConversation(conversationId: string) {
+    setCurrentConversationId(conversationId);
+    try {
+      const updatedConversation = await markConversationRead(conversationId);
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          getIdValue(conversation.id) === conversationId ? updatedConversation : conversation
+        )
+      );
+    } catch (error) {
+      console.warn("Failed to mark conversation as read.", error);
+    }
+  }
+
+  async function handleToggleConversationPinned(conversation: Conversation) {
+    const conversationId = getIdValue(conversation.id);
+    setErrorMessage(null);
+    try {
+      if (conversation.pinned) {
+        await unpinConversation(conversationId);
+      } else {
+        await pinConversation(conversationId);
+      }
+      await loadConversationIndex();
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleArchiveConversation(conversation: Conversation) {
+    const conversationId = getIdValue(conversation.id);
+    setErrorMessage(null);
+    try {
+      await archiveConversation(conversationId);
+      await loadConversationIndex();
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleRestoreConversation(conversation: Conversation) {
+    const conversationId = getIdValue(conversation.id);
+    setErrorMessage(null);
+    try {
+      await unarchiveConversation(conversationId);
+      await loadConversationIndex();
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
   async function handleSendMessage() {
     if (!currentConversationId || (!draftMessage.trim() && draftAttachments.length === 0)) {
       return;
@@ -870,6 +970,7 @@ export function WorkspacePage() {
         setSelectedAgent(parsedMention.matchedAgent);
       }
       await loadConversationData(currentConversationId);
+      await loadConversationIndex();
       setDraftMessage("");
       setDraftAttachments([]);
       setQuotedMessage(null);
@@ -1425,27 +1526,34 @@ export function WorkspacePage() {
             disabled={creatingConversation}
             onClick={handleCreateDemoConversation}
           >
-            {creatingConversation ? "创建中..." : "创建 Demo 会话"}
+            {creatingConversation ? "创建中..." : "+ 新建对话"}
           </button>
         </div>
 
         <div className="workspace-sidebar__body">
           <section className="workspace-section">
             <div className="section-header">
-              <h3>会话</h3>
+              <h3>近期会话</h3>
               <span>{conversations.length}</span>
             </div>
             <ConversationList
               conversations={conversations}
               currentConversationId={currentConversationId}
               loading={loadingConversations}
-              onSelect={setCurrentConversationId}
+              query={conversationQuery}
+              filter={conversationFilter}
+              onQueryChange={handleConversationQueryChange}
+              onFilterChange={handleConversationFilterChange}
+              onSelect={handleSelectConversation}
+              onTogglePinned={handleToggleConversationPinned}
+              onArchive={handleArchiveConversation}
+              onRestore={handleRestoreConversation}
             />
           </section>
 
           <section className="workspace-section">
             <div className="section-header">
-              <h3>Agent 联系人</h3>
+              <h3>我的 Agent</h3>
               <span>{agents.length}</span>
             </div>
             <AgentList
@@ -1533,7 +1641,9 @@ export function WorkspacePage() {
           <MessageStream
             messages={messages}
             agents={agents}
+            artifacts={artifacts}
             pinnedContexts={pinnedContexts}
+            memorySourceIds={new Set(memories.filter((memory) => memory.sourceType === "MESSAGE").map((memory) => memory.sourceId))}
             loading={loadingMessages}
             rerunningMessageId={rerunningMessageId}
             regeneratingMessageId={regeneratingMessageId}

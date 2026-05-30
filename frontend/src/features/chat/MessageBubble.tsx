@@ -1,5 +1,6 @@
 import type { ApprovalRequest } from "../approval/approvalTypes";
-import type { Message, OrchestratorTriggerSuggestion } from "./chatTypes";
+import type { Artifact } from "../artifacts/artifactTypes";
+import type { LightweightAttachment, Message, OrchestratorTriggerSuggestion } from "./chatTypes";
 import { getAttachmentDownloadUrl } from "../../api/agenthubApi";
 import { formatId, getIdValue } from "../../utils/id";
 
@@ -10,6 +11,8 @@ interface MessageBubbleProps {
   agentStepLabel?: string | null;
   targetAgentLabel?: string | null;
   pinnedContextId?: string | null;
+  savedAsMemory?: boolean;
+  artifacts?: Artifact[];
   rerunning?: boolean;
   regenerating?: boolean;
   autoTriggerSuggestion?: OrchestratorTriggerSuggestion | null;
@@ -255,6 +258,70 @@ function isDownloadableAttachment(attachmentId?: string | null): boolean {
   return Boolean(attachmentId && !attachmentId.startsWith("demo-") && !attachmentId.startsWith("local-"));
 }
 
+function getMessageKind(message: Message, attachments: Message["attachments"], artifacts: Artifact[]): {
+  label: string;
+  detail: string;
+  tone: string;
+} {
+  if (message.messageType === "DEPLOY_STATUS") {
+    return { label: "Deploy Status", detail: "部署状态卡 / 本地 Preview URL", tone: "deploy" };
+  }
+  if (message.messageType === "ARTIFACT_CARD" || artifacts.length > 0) {
+    return { label: "Artifact", detail: "产物卡片 / 可选择预览", tone: "artifact" };
+  }
+  if (message.messageType === "TASK_STATUS") {
+    return { label: "Task Status", detail: "任务状态 / 执行进度", tone: "task" };
+  }
+  if (message.messageType === "TASK_SPEC") {
+    return { label: "Task Spec", detail: "任务规格 / 协作输入", tone: "task" };
+  }
+  if ((attachments ?? []).length > 0) {
+    return { label: "Attachment", detail: "文件附件预览 / 下载", tone: "attachment" };
+  }
+  if (message.content.includes("Diff") || message.content.includes("diff") || message.content.includes("增删")) {
+    return { label: "Diff", detail: "变更摘要 / 风险判断", tone: "diff" };
+  }
+  if (message.content.includes("/preview/") || message.content.includes("Preview URL")) {
+    return { label: "Preview", detail: "预览卡片 / 本地静态页面", tone: "preview" };
+  }
+  return { label: "Text", detail: "文本消息 / 可复制引用", tone: "text" };
+}
+
+function getAttachmentKind(attachment: LightweightAttachment): {
+  label: string;
+  boundary: string;
+  tone: string;
+} {
+  const contentType = String(attachment.contentType || attachment.mimeType || "").toLowerCase();
+  const fileName = attachment.fileName.toLowerCase();
+
+  if (contentType.startsWith("image/") || /\.(png|jpg|jpeg|gif|webp|svg)$/.test(fileName)) {
+    return { label: "图片附件", boundary: "文件附件预览：暂不做图片编辑或 OCR。", tone: "image" };
+  }
+  if (
+    contentType.includes("presentation") ||
+    contentType.includes("powerpoint") ||
+    /\.(ppt|pptx)$/.test(fileName)
+  ) {
+    return { label: "PPT 附件", boundary: "文件附件预览：暂不做 PPT 在线渲染。", tone: "ppt" };
+  }
+  if (contentType.startsWith("text/") || /\.(md|txt|json|yaml|yml|csv)$/.test(fileName)) {
+    return { label: "文本附件", boundary: "显示文本摘要，原文件可下载。", tone: "text" };
+  }
+  return { label: "文件附件", boundary: "仅展示 metadata / download，不做富媒体渲染。", tone: "file" };
+}
+
+function getSourceLabel(sourceKind?: string | null): string {
+  if (!sourceKind) {
+    return "UNKNOWN_SOURCE";
+  }
+  return sourceKind;
+}
+
+function getQualityLabel(artifact: Artifact): string {
+  return artifact.realAdapterOutcome || artifact.qualityStatus || artifact.status || "UNKNOWN";
+}
+
 export function MessageBubble({
   message,
   senderLabel,
@@ -262,6 +329,8 @@ export function MessageBubble({
   agentStepLabel,
   targetAgentLabel,
   pinnedContextId,
+  savedAsMemory = false,
+  artifacts = [],
   rerunning,
   regenerating,
   autoTriggerSuggestion,
@@ -291,6 +360,7 @@ export function MessageBubble({
   const protocolLabel = getProtocolLabel(message.messageType);
   const agentLane = getAgentLane(message);
   const attachments = message.attachments ?? [];
+  const messageKind = getMessageKind(message, attachments, artifacts);
   const autoTriggerStatus = getAutoTriggerStatus(autoTriggerSuggestion, autoTriggerApproval);
   const pendingTriggerApproval = autoTriggerApproval ?? autoTriggerSuggestion?.pendingApproval ?? null;
   const canCancelTriggerApproval = pendingTriggerApproval?.status?.toUpperCase() === "PENDING";
@@ -325,6 +395,15 @@ export function MessageBubble({
           <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
         </div>
 
+        <div className={`message-type-ribbon message-type-ribbon--${messageKind.tone}`} data-testid="message-type-ribbon">
+          <span>{messageKind.label}</span>
+          <strong>{messageKind.detail}</strong>
+          {pinnedContextId ? <em>已固定</em> : null}
+          {savedAsMemory ? <em>已保存记忆</em> : null}
+          {rerunning ? <em>重跑中</em> : null}
+          {regenerating ? <em>再生成中</em> : null}
+        </div>
+
         {protocolLabel ? (
           <div className={`message-protocol-card message-protocol-card--${protocolLabel.toLowerCase()}`}>
             <div>
@@ -336,20 +415,26 @@ export function MessageBubble({
           </div>
         ) : null}
 
-        <div className="message-bubble__actions">
-          <button type="button" className="message-action-button" onClick={() => onCopyMessage(message)}>
+        <div className="message-action-bar" data-testid="message-action-bar">
+          <div className="message-action-bar__label">
+            <span>Message Action Bar</span>
+            <strong>{message.senderType === "AGENT" ? "Agent 回复操作" : message.senderType === "USER" ? "用户消息操作" : "系统消息操作"}</strong>
+          </div>
+          <div className="message-action-bar__buttons">
+          <button type="button" className="message-action-button" data-testid="message-copy-button" onClick={() => onCopyMessage(message)}>
             复制
           </button>
-          <button type="button" className="message-action-button" onClick={() => onQuoteMessage(message)}>
+          <button type="button" className="message-action-button" data-testid="message-quote-button" onClick={() => onQuoteMessage(message)}>
             引用
           </button>
-          <button type="button" className="message-action-button" onClick={() => onReplyMessage(message)}>
+          <button type="button" className="message-action-button" data-testid="message-reply-button" onClick={() => onReplyMessage(message)}>
             回复
           </button>
           {message.senderType === "USER" ? (
             <button
               type="button"
               className="message-action-button message-action-button--primary"
+              data-testid="message-rerun-button"
               disabled={rerunning}
               onClick={() => onRerunFromMessage(message)}
             >
@@ -360,6 +445,7 @@ export function MessageBubble({
             <button
               type="button"
               className="message-action-button message-action-button--primary"
+              data-testid="message-regenerate-button"
               disabled={regenerating}
               onClick={() => onRegenerateAgentReply(message)}
             >
@@ -369,14 +455,21 @@ export function MessageBubble({
           <button
             type="button"
             className={`message-action-button message-pin-button ${pinnedContextId ? "message-pin-button--active" : ""}`}
+            data-testid="message-pin-button"
             onClick={() => onTogglePin(messageId, pinnedContextId)}
             aria-pressed={Boolean(pinnedContextId)}
           >
             {pinnedContextId ? "已固定 / 取消固定" : "固定到 Context"}
           </button>
-          <button type="button" className="message-action-button" onClick={() => onSaveAsMemory(message)}>
-            保存为记忆
+          <button
+            type="button"
+            className={`message-action-button ${savedAsMemory ? "message-action-button--active" : ""}`}
+            data-testid="message-memory-button"
+            onClick={() => onSaveAsMemory(message)}
+          >
+            {savedAsMemory ? "已保存记忆" : "保存为记忆"}
           </button>
+          </div>
         </div>
 
         {message.senderType === "USER" && (message.targetAgentId || (message.mentionedAgentIds?.length ?? 0) > 0) ? (
@@ -475,9 +568,11 @@ export function MessageBubble({
         ) : null}
 
         {referenceMessageId ? (
-          <div className="message-reference-card">
+          <div className="message-reference-card" data-testid="message-reference-card">
             <div className="message-reference-card__header">
-              <span>{message.replyToMessageId ? "回复" : "引用"}：{referenceMessageId}</span>
+              <span>
+                {message.senderType === "AGENT" ? "关联 / 再生成来源" : message.replyToMessageId ? "回复" : "引用"}：{referenceMessageId}
+              </span>
               <button
                 type="button"
                 className="message-reference-card__jump"
@@ -494,56 +589,80 @@ export function MessageBubble({
 
         {attachments.length > 0 ? (
           <div className="message-attachment-list" data-testid="message-attachment-list">
-            {attachments.map((attachment, index) => (
-              <article
-                className="message-attachment-card"
-                data-testid="message-attachment-card"
-                key={attachment.attachmentId || attachment.id || `${attachment.fileName}-${index}`}
-              >
-                <div className="message-attachment-card__header">
-                  <strong>{attachment.fileName}</strong>
-                  <span>{attachment.source || "ATTACHMENT"}</span>
-                </div>
-                <div className="message-attachment-card__meta">
-                  {attachment.contentType || attachment.mimeType ? <span>{attachment.contentType || attachment.mimeType}</span> : null}
-                  {typeof (attachment.size ?? attachment.sizeBytes) === "number" ? (
-                    <span>{attachment.size ?? attachment.sizeBytes} bytes</span>
+            {attachments.map((attachment, index) => {
+              const attachmentKind = getAttachmentKind(attachment);
+              return (
+                <article
+                  className={`message-attachment-card message-attachment-card--${attachmentKind.tone}`}
+                  data-testid="message-attachment-card"
+                  key={attachment.attachmentId || attachment.id || `${attachment.fileName}-${index}`}
+                >
+                  <div className="message-attachment-card__header">
+                    <div>
+                      <span className="message-attachment-card__kind">{attachmentKind.label}</span>
+                      <strong>{attachment.fileName}</strong>
+                    </div>
+                    <span>{attachment.source || "ATTACHMENT"}</span>
+                  </div>
+                  <div className="message-attachment-card__meta">
+                    {attachment.contentType || attachment.mimeType ? <span>{attachment.contentType || attachment.mimeType}</span> : null}
+                    {typeof (attachment.size ?? attachment.sizeBytes) === "number" ? (
+                      <span>{attachment.size ?? attachment.sizeBytes} bytes</span>
+                    ) : null}
+                    <span>{attachmentKind.boundary}</span>
+                  </div>
+                  {attachment.contentPreview || attachment.previewText ? <p>{attachment.contentPreview || attachment.previewText}</p> : null}
+                  {isDownloadableAttachment(attachment.attachmentId) ? (
+                    <a
+                      className="message-attachment-card__download"
+                      href={getAttachmentDownloadUrl(attachment.attachmentId as string)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      下载附件
+                    </a>
                   ) : null}
-                </div>
-                {attachment.contentPreview || attachment.previewText ? <p>{attachment.contentPreview || attachment.previewText}</p> : null}
-                {isDownloadableAttachment(attachment.attachmentId) ? (
-                  <a
-                    className="message-attachment-card__download"
-                    href={getAttachmentDownloadUrl(attachment.attachmentId as string)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    下载附件
-                  </a>
-                ) : null}
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         ) : null}
 
         {artifactIds.length > 0 ? (
-          <div className="message-bubble__artifacts">
-            {artifactIds.map((artifactId) => (
-              <button
-                key={artifactId}
-                type="button"
-                className="artifact-link"
-                onClick={() => onSelectArtifact(artifactId)}
-              >
-                打开 {artifactId}
-              </button>
-            ))}
+          <div className="message-bubble__artifacts" data-testid="message-artifact-card-list">
+            {artifactIds.map((artifactId) => {
+              const artifact = artifacts.find((item) => getIdValue(item.id) === artifactId);
+              return (
+                <article className="message-artifact-card" data-testid="message-artifact-card" key={artifactId}>
+                  <div className="message-artifact-card__header">
+                    <div>
+                      <span>Artifact</span>
+                      <strong>{artifact?.title || artifactId}</strong>
+                    </div>
+                    <em>{artifact?.type || "UNKNOWN"}</em>
+                  </div>
+                  <div className="message-artifact-card__meta">
+                    <span>来源：{getSourceLabel(artifact?.sourceKind)}</span>
+                    <span>质量：{artifact ? getQualityLabel(artifact) : "UNKNOWN"}</span>
+                    {artifact?.language ? <span>语言：{artifact.language}</span> : null}
+                  </div>
+                  <div className="message-artifact-card__actions">
+                    <button type="button" className="artifact-link" onClick={() => onSelectArtifact(artifactId)}>
+                      选择产物
+                    </button>
+                    <a className="artifact-link artifact-link--preview" href={`/preview/${artifactId}`} target="_blank" rel="noreferrer">
+                      打开 Preview
+                    </a>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         ) : null}
 
         {replyMessages.length > 0 ? (
-          <div className="message-thread">
-            <button type="button" className="message-thread__toggle" onClick={onToggleThread}>
+          <div className="message-thread" data-testid="message-thread">
+            <button type="button" className="message-thread__toggle" data-testid="message-thread-toggle" onClick={onToggleThread}>
               {threadExpanded ? "隐藏回复线程" : `查看 ${replyMessages.length} 条回复`}
             </button>
             {threadExpanded ? (

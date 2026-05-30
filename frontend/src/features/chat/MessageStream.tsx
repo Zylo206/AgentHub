@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { Agent } from "../agents/agentTypes";
+import type { Artifact } from "../artifacts/artifactTypes";
 import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { PinnedContext } from "../context/contextTypes";
 import { MessageBubble } from "./MessageBubble";
@@ -10,7 +11,9 @@ import { displayAgentRole } from "../../utils/displayLabels";
 interface MessageStreamProps {
   messages: Message[];
   agents: Agent[];
+  artifacts: Artifact[];
   pinnedContexts: PinnedContext[];
+  memorySourceIds: Set<string>;
   loading: boolean;
   rerunningMessageId?: string | null;
   regeneratingMessageId?: string | null;
@@ -111,6 +114,12 @@ function getStreamingPreviews(streamingPreviewsByStepId: Record<string, Streamin
     .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
 }
 
+function artifactIdsToArtifacts(artifactIds: Message["artifactIds"], artifactsById: Map<string, Artifact>): Artifact[] {
+  return artifactIds
+    .map((artifactId) => artifactsById.get(getIdValue(artifactId)))
+    .filter((artifact): artifact is Artifact => Boolean(artifact));
+}
+
 function getStreamingStatusLabel(status: StreamingPreviewState["status"]): string {
   if (status === "DISCARDED") {
     return "已丢弃的流式片段";
@@ -124,7 +133,9 @@ function getStreamingStatusLabel(status: StreamingPreviewState["status"]): strin
 export function MessageStream({
   messages,
   agents,
+  artifacts,
   pinnedContexts,
+  memorySourceIds,
   loading,
   rerunningMessageId,
   regeneratingMessageId,
@@ -147,6 +158,12 @@ export function MessageStream({
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(() => new Set());
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const artifactsById = useMemo(() => {
+    const mapped = new Map<string, Artifact>();
+    artifacts.forEach((artifact) => mapped.set(getIdValue(artifact.id), artifact));
+    return mapped;
+  }, [artifacts]);
 
   const repliesByMessageId = useMemo(() => {
     const grouped = new Map<string, Message[]>();
@@ -191,8 +208,17 @@ export function MessageStream({
   if (messages.length === 0) {
     return (
       <div className="panel-empty panel-empty--collaboration">
+        <span className="panel-empty__orb" aria-hidden="true">
+          IM
+        </span>
         <strong>从任务消息开始</strong>
         <p>发送需求后，AgentHub 会生成协作确认卡片；确认后 Orchestrator 会启动多 Agent 协作。</p>
+        <div className="panel-empty__steps" aria-label="协作流程">
+          <span>发送任务</span>
+          <span>确认协作</span>
+          <span>Agent 回复</span>
+          <span>产物交付</span>
+        </div>
         <div className="panel-empty__examples">
           <span>生成一个 React 登录页，同时输出 README 并做质量检查。</span>
           <span>@Frontend Builder @Reviewer 优化这个 UI 并检查代码质量。</span>
@@ -234,6 +260,8 @@ export function MessageStream({
                     pinnedContext.sourceId === messageId
                 )?.id ?? null
               }
+              savedAsMemory={memorySourceIds.has(messageId)}
+              artifacts={artifactIdsToArtifacts(message.artifactIds, artifactsById)}
               rerunning={rerunningMessageId === messageId}
               regenerating={regeneratingMessageId === messageId}
               autoTriggerSuggestion={triggerSuggestionsByMessageId[messageId] ?? null}

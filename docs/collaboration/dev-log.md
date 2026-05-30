@@ -5693,3 +5693,271 @@
 ### 下一步建议
 
 - 若继续按“IM 聊天式交互”评分项推进，下一步优先做 Conversation 置顶 / 归档 / 服务端搜索 / 最近活跃排序的真实模型和 UI 闭环。
+
+## Phase 132：Workspace IM 空状态与 Artifact 工作台观感优化
+
+### 目标
+
+- 继续优化 `/workspace` 的第一屏观感，减少空白面板和普通后台卡片感。
+- 让用户在没有会话或没有产物时，也能理解主路径：发送任务、确认协作、多 Agent 回复、产物交付。
+- 保持已有业务链路、API、Orchestrator、Artifact、Approval 和 Deploy Preview 不变。
+
+### 主要变更
+
+- `MessageStream` 的空状态增加 IM 标识、协作流程步骤和任务示例，让空会话更像产品引导而不是空白面板。
+- `ArtifactPanel` 的产物列表和详情空状态升级为交付工作台占位，展示 CODE / MARKDOWN / REVIEW、质量、Diff、审批、预览等交付语义。
+- `workspace.css` 增加空状态 visual treatment、orb / checkpoint / chip 样式、Artifact empty workbench surface 和 hover / depth polish。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 额外生成 `/workspace` desktop 截图，并确认 console error 为空。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是 UI 和空状态体验优化，不新增后端置顶、归档、服务端搜索、未读计数或真实移动端能力。
+- 产物空状态中的交付能力说明基于当前已实现的 Artifact / Diff / Approval / Preview 链路，不代表真实云部署。
+
+### 遗留问题
+
+- 对话列表仍缺真实置顶、归档、服务端搜索和未读计数。
+- 极窄屏、超多 Agent、超多 Artifact 和真实 Adapter 失败矩阵仍需继续做视觉 QA。
+
+### 下一步建议
+
+- 若继续提升 IM 产品感，优先做 Conversation 置顶 / 归档 / 最近活跃排序 / 服务端搜索，而不是继续只改静态视觉。
+
+## Phase 133：Conversation 管理后端与 Workspace 闭环
+
+### 目标
+
+- 补齐课题 IM 对话列表中的最小产品化能力：置顶、归档、服务端搜索、未读计数和最近活跃排序。
+- 保持现有 Workspace、MessageStream、Orchestrator、Artifact、Approval、Deploy Preview 主链路不变。
+
+### 主要变更
+
+- `Conversation` 增加 `pinned`、`archived`、`unreadCount`、`lastReadAt`、`lastMessageAt` 字段。
+- Conversation API 增加 `query` / `includeArchived` 列表参数，以及 pin / unpin / archive / unarchive / read 操作。
+- Message 写入后会更新会话最近消息时间；Agent / System 消息会增加未读计数，用户选中会话后可标记已读。
+- JDBC schema 和 repository 同步新增字段，并保留 memory profile 默认行为。
+- Workspace 会话侧栏增加服务端搜索、显示归档、置顶 / 归档 / 恢复操作、未读 badge 和活动时间展示。
+- `scripts/smoke-test.mjs` 增加会话置顶、消息内容搜索、归档可见性和已读重置断言。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/smoke-test.mjs`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 服务端搜索 v1 使用会话标题、类型、ID、参与 Agent 和消息内容的轻量匹配，不是完整 IM 全文检索系统。
+- 未读计数是当前单用户工作台语义，不是多用户、多设备、推送级 unread 系统。
+- 归档是工作台列表过滤，不是企业级权限、保留策略或数据生命周期管理。
+
+### 遗留问题
+
+- 置顶 / 归档 / 未读尚未接入多用户身份模型。
+- 搜索还没有高亮、服务端分页或复杂排序权重。
+- 极大量会话下仍需要分页和索引策略。
+
+### 下一步建议
+
+- 若继续推进 IM 产品化，可做服务端分页、搜索高亮和未读状态的多设备语义；否则优先回到真实 Agent 输出质量、MySQL profile 或 Browser E2E 常态化。
+
+## Phase 134：Build Web Apps 视觉重设计与 IM Command Center 收敛
+
+### 目标
+
+- 重新设计 AgentHub 前端观感，让 `/workspace` 更像中文优先的类 IM 多 Agent 协作平台。
+- 保留当前业务能力、测试选择器、Workspace 主路径、Artifact、Approval、Preview 和 Adapter 可观测性。
+- 改善页面背景、字体可见性、消息流层级、Artifact 工作台和 Preview Studio 的整体一致性。
+
+### 主要变更
+
+- 使用 Build Web Apps 前端设计流程生成了一版主屏设计参考，方向为 `premium technical command center + IM collaboration studio`。
+- `global.css` 增加深色 command-center shell token、全局背景、顶部导航、品牌 mark 和状态 chip 的重设计。
+- `workspace.css` 增加 Workspace 三栏深色玻璃面板体系，强化会话/Agent 联系人、协作确认、MessageStream、ChatInput、Artifact 工作台、Adapter / Context / Audit 面板和 PreviewPage。
+- 修复重设计后残留的白色输入区、低对比 flow guide、Artifact 空状态标题等可见性问题。
+- 不引入 UI 组件库，不改 API，不改 Orchestrator / Adapter / Artifact 业务逻辑。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 使用 Playwright 临时截图检查 `/workspace` 1440x900 视口，并在检查后清理临时截图。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是前端视觉和信息层级重设计，不新增真实部署、真实多端或真实外部 Agent 能力。
+- UI 中的静态 Preview、Mock fallback、fixture、半真实 Adapter 边界保持不变。
+- 视觉检查覆盖当前桌面主视口和 E2E 主路径，不代表完整移动端设计定稿。
+
+### 遗留问题
+
+- 仍可继续做极窄屏、超大数据量、所有真实 Adapter 输出组合下的视觉 QA。
+- 当前重设计主要通过 CSS 覆盖实现，后续可继续拆分 Workspace / ArtifactPanel 的大组件来降低维护成本。
+
+### 下一步建议
+
+- 若继续产品化前端，建议做一次窄屏 QA 和组件拆分；若回到生产能力，优先继续真实 Agent 输出稳定性或 MySQL/JDBC 验证。
+
+## Phase 135：参考图 1:1 Workspace 视觉复刻与主路径回归
+
+### 目标
+
+- 按用户提供的 AgentHub IM 协作截图继续收敛 `/workspace`，让页面更接近深色类 IM 多 Agent 协作产品。
+- 保持现有消息触发协作、附件、Approval、Artifact、Preview、E2E 选择器和业务链路不变。
+
+### 主要变更
+
+- 顶部栏增加当前协作任务、运行状态、计时、Agent 头像组、邀请 Agent 和更多操作入口的视觉结构。
+- Workspace 三栏改为更贴近截图的无间距深色布局：左侧会话/Agent 联系人，中间协作消息流，右侧产物工作台。
+- Sidebar、MessageStream、Agent 协议卡、ChatInput、Conversation participants、Artifact 面板继续统一为 command-center 暗色视觉。
+- 将附件输入区压缩为紧凑工具区，保留上传/手动附件能力，避免抢占消息流主视图。
+- 修复 1280px 视口下三栏过早折叠导致主协作按钮不可见的问题。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 使用 Playwright 临时截图检查 `/workspace` 1600x1000 视口，并在检查后清理临时截图。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是视觉复刻和产品主路径可见性优化，不新增真实部署、真实多端、真实 token streaming 或多节点事件总线。
+- 顶部计时和 Agent 头像组是当前工作台视觉状态表达，不代表新增多用户实时会议系统。
+- 静态 Preview、Mock fallback、fixture 和半真实 Adapter 边界保持不变。
+
+### 遗留问题
+
+- 与参考图仍存在数据内容差异，因为页面使用当前真实组件和运行时数据，而不是硬编码静态截图。
+- 极窄屏、超长会话、超多 Artifact 和所有真实 Adapter 输出组合仍可继续做视觉 QA。
+
+### 下一步建议
+
+- 若继续做 UI，可把当前 CSS 覆盖逐步沉淀为更小的 Workspace / Artifact 子组件；若回到生产能力，优先继续真实 Agent 输出稳定性和 MySQL/JDBC 验证。
+
+## Phase 136：Workspace 密度、IM 消息流与 Artifact Inspector 继续收敛
+
+### 目标
+
+- 继续按参考图优化 `/workspace`：提高信息密度、强化聊天产品感、增强右侧 Artifact inspector，并补齐顶部窗口控制氛围。
+- 保持消息触发协作、附件上传、Approval、Diff、Restore、Deploy Preview 和 Browser E2E 主链路不变。
+
+### 主要变更
+
+- 顶部栏增加窗口控制视觉元素，并进一步压缩任务标题、运行状态、Agent 头像和操作入口的间距。
+- Workspace Header 隐藏重复的审计 / 实时状态行，保留更紧凑的会话参与 Agent 展示和状态 strip。
+- MessageStream 降低消息卡、协议 pill、操作按钮、协作确认卡和输入区高度，使中间区域更接近 IM 协作流。
+- ChatInput 保留附件上传和手动附件能力，但压缩为更紧凑的工具区，减少对消息流的遮挡。
+- ArtifactPanel 增加 inspector tabs，并压缩 Cockpit、Diagnostic、Diff、Snapshot、Deploy 面板的垂直空间，让右侧更像一体化产物 inspector。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 使用 Playwright 临时截图检查 `/workspace` 1600x1000 视口，并在检查后清理临时截图。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮仍是前端视觉和交互密度优化，不新增真实部署、真实多端、真实 token streaming 或多节点事件总线。
+- 顶部窗口控制是 Web 产品视觉语义，不代表新增桌面客户端能力。
+- 右侧 inspector tabs 是信息组织增强，不改变 Artifact 数据模型或后端 API。
+
+### 遗留问题
+
+- 当前仍通过 CSS 覆盖完成较多视觉收敛，后续若继续 UI 工程化，建议拆分 Workspace 和 ArtifactPanel 的大组件。
+- 极窄屏和超长真实 Agent 输出组合仍需专项视觉 QA。
+
+### 下一步建议
+
+- 若继续视觉方向，优先做窄屏 QA 和组件拆分；若回到生产化能力，优先做真实 Agent 输出稳定性、MySQL/JDBC 验证或 Stop/Cancel 长任务验证。
+
+## Phase 137：Conversation IM 管理增强与 E2E 覆盖
+
+### 目标
+
+- 将会话列表从 Demo 列表推进为更接近 IM 的会话管理入口。
+- 支持用户在 `/workspace` 内完成服务端搜索、全部 / 未读 / 置顶 / 归档过滤、置顶、归档、恢复和已读清零主流程。
+
+### 主要变更
+
+- `ConversationList` 增加 IM 风格 filter tabs：全部、未读、置顶、归档，并保留服务端搜索输入。
+- 搜索框增加清空操作，减少用户手动删除关键词的成本。
+- Workspace 按当前 filter 调用 `GET /api/conversations?query=&includeArchived=`，归档视图只在需要时包含 archived 会话。
+- SSE 刷新时同步刷新 conversation index，让非当前会话的未读与最近活跃状态更及时。
+- 修复 `loadConversationIndex` 独立调用后 loading 状态不复位的问题。
+- Browser E2E 增加会话搜索、置顶、归档和恢复路径验证。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- `cd backend && mvn -q -DskipTests package`
+- 启动临时 backend / frontend 后运行 `node scripts/smoke-test.mjs`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是会话管理产品化增强，不新增真实部署、真实多端、真实 token streaming 或多节点事件总线。
+- 未读计数仍依赖当前后端会话状态和 realtime refresh，不是跨设备推送系统。
+- 归档 / 置顶是当前内存或 JDBC profile 下的会话状态能力，默认 demo 仍可使用 memory profile。
+
+### 遗留问题
+
+- Browser E2E 已覆盖搜索、置顶、归档和恢复；未读 badge 的跨会话实时场景仍主要由 API smoke 覆盖。
+- 会话列表仍未做服务端分页，超大量会话时需要后续补分页或游标。
+
+### 下一步建议
+
+- 若继续推进 IM 产品化，建议补会话服务端分页、未读跨会话 E2E 场景和更细的会话操作菜单。
+
+## Phase 138：Message Action Bar 与消息类型分层产品化
+
+### 目标
+
+- 将 MessageStream 从普通消息展示推进为更像 IM 协作产品的消息中心。
+- 统一每条消息上的复制、引用、回复、pin、记忆、重跑和 Agent 回复再生成入口。
+- 让文本、附件、Artifact、Diff、Deploy Status、Preview 和 Agent protocol 消息的类型边界更清晰。
+
+### 主要变更
+
+- `MessageBubble` 增加统一 `Message Action Bar`，并为 copy / quote / reply / pin / memory / rerun / regenerate 增加稳定 `data-testid`。
+- 消息卡增加 type ribbon，展示 Text / Attachment / Artifact / Diff / Deploy Status / Preview 等类型语义和当前操作状态。
+- 附件卡片增加图片、PPT、文本、通用文件分类，明确图片不做编辑 / OCR、PPT 不做在线渲染。
+- Artifact 消息卡从裸 artifactId 升级为 title、type、sourceKind、quality、language、select 和 preview 入口。
+- 引用卡增加定位入口和更清晰的关联 / 再生成来源表达；thread indicator 保持内联轻量模式。
+- Browser E2E 增加 Message Action Bar、引用、回复、pin、memory 和 Agent 回复再生成路径验证。
+- 新增 `docs/spec/message-interaction-spec.md` 固化消息类型、操作、thread 和弱媒体边界。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- 图片仍按附件预览处理，不做图片编辑、OCR 或视觉理解。
+- PPT 仍按附件 metadata / download 处理，不做在线幻灯片渲染。
+- Deploy Preview 仍是本地静态预览，不是真实云部署。
+- 本轮不改 Orchestrator 主链路，不新增后端消息协议 API。
+
+### 遗留问题
+
+- 完整 Slack 式 thread 侧栏未实现。
+- Diff / Deploy 消息的深度卡片仍主要由 ArtifactPanel 和 Deploy Status Card 承接。
+- 图片缩略图、PDF / PPT 轻量预览可作为后续增强。
+
+### 下一步建议
+
+- 若继续推进消息产品化，建议补完整 thread 侧栏、图片缩略图和更强的 Diff / Deploy 消息内联卡片。

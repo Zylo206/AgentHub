@@ -5,6 +5,11 @@ export interface Conversation {
   title: string;
   type: string;
   participantAgentIds: IdValue[];
+  pinned?: boolean;
+  archived?: boolean;
+  unreadCount?: number;
+  lastReadAt?: string | null;
+  lastMessageAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
