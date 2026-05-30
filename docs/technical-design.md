@@ -1,335 +1,622 @@
-# AgentHub 技术设计 V1.0
+# AgentHub 技术设计文档 V1.0
 
 ## 1. 总体架构
 
-AgentHub 当前采用前后端分离架构，目标是支撑一个可运行、可解释、可 fallback 的多 Agent 协作 MVP。
+AgentHub 采用前后端分离架构：
 
 ```text
-React Workspace
-  -> REST API
-  -> OrchestratorService
-  -> TaskPlanner / AgentRouter / AgentStepExecutor / ResultAggregator
-  -> TaskGraph / ExecutionBatch
-  -> AgentExecutorService
-  -> AgentAdapterRegistry
-  -> MOCK / OPENAI_COMPATIBLE / CLI Adapter
-  -> Domain Repository
-  -> Message / TaskRun / Context / Artifact / Approval / Audit
+React + Vite Workspace
+  -> REST API / SSE / WebSocket control
+  -> Spring Boot API layer
+  -> Application services
+  -> Domain models
+  -> Infrastructure adapters / repositories / storage
 ```
 
-当前不是生产级平台架构。核心设计目标是：
+设计目标：
 
-- 让 IM 式交互、多 Agent 协作、Artifact 迭代和部署预览形成闭环。
-- 明确展示 Planner / Router / Executor / Aggregator 的决策链。
-- 在真实 Adapter、LLM Planner、Deploy 不可用时保持 Mock fallback 稳定。
-- 为后续 MySQL、SSE、真实部署、深度 Agent 平台接入预留边界。
+- 支撑 IM-first 多 Agent 协作主链路。
+- 支撑 Orchestrator 的规划、路由、执行、聚合。
+- 支撑 Artifact 的生成、修订、Diff、审批、预览。
+- 支撑真实 Adapter 和 Mock fallback 共存。
+- 支撑 memory 默认运行和 JDBC/MySQL opt-in 验证。
+- 支撑可解释、可回归、可继续产品化的 MVP 后期架构。
 
-## 2. 前端架构
+## 2. 技术栈
 
-前端位于 `frontend/`，使用 React + Vite + TypeScript。
-
-主要模块：
-
-- `src/pages/workspace`：IM Workspace 主页面。
-- `src/pages/agents`：Agent Builder 和 Adapter Test Panel。
-- `src/pages/preview`：`/preview/:artifactId` 静态 Artifact 预览页。
-- `src/features/chat`：ChatInput、MessageStream、MessageBubble、TaskRunPanel。
-- `src/features/context`：ContextPanel。
-- `src/features/artifacts`：ArtifactPanel、VersionHistory、DiffSummary、Snapshot、Deploy、Audit。
-- `src/api/agenthubApi.ts`：统一 REST API client，使用原生 `fetch`。
-
-前端负责：
-
-- 解析 selectedAgent 和消息开头单/多 `@AgentName`。
-- 展示 `targetAgentId / mentionedAgentIds` 对消息和 TaskRun 的影响。
-- 展示 Agent 协作消息协议：`TASK / RESULT / REVIEW / APPROVAL / ERROR` 已进入默认链路；`REJECTION` 枚举已保留，但 reviewer rejection / retry 执行闭环仍未完成。
-- 展示 TaskGraph、ExecutionBatch、Adapter fallback、OrchestratorDecisionLog。
-- 承载 Artifact 预览、Revision、Apply Diff、Approval Gate、Deploy Preview、Action Audit。
-
-## 3. 后端架构
-
-后端位于 `backend/`，使用 Spring Boot 3 + Java 17。
-
-主要分层：
-
-- `api`：REST Controller。
-- `application`：应用服务和编排逻辑。
-- `domain`：领域模型。
-- `infrastructure`：Adapter、内存 Repository、本地 JSON Memory 存储。
-
-关键应用服务：
-
-- `OrchestratorService`：demo-task、revision 主入口。
-- `TaskPlanner`：RuleBased / LLM Planner。
-- `AgentRouter`：selectedAgent、mentionedAgents、Tool Capability 路由。
-- `AgentStepExecutor`：执行 Agent request，写入 TaskStep adapter 字段。
-- `ResultAggregator`：聚合 TaskRun summary 和 Orchestrator message。
-- `AgentExecutorService` / `AgentAdapterRegistry`：Adapter 调用和 fallback。
-- `ContextRetrievalService`：规则化上下文检索。
-- `ApprovalApplicationService` / `ActionAuditApplicationService`：审批与审计。
-- `DeploymentApplicationService`：静态 deploy simulation。
-
-## 4. 核心领域模型
-
-| 模型 | 用途 |
+| 层 | 技术 |
 |---|---|
-| Agent | 内置或自建 Agent，包含 role、prompt、capabilityTags、toolTags、preferredAdapterType |
-| Conversation | IM 会话，包含 participantAgentIds |
-| Message | 文本和 Agent 协作消息，包含 targetAgentId、mentionedAgentIds、reply/quote/pin 关系 |
-| TaskSpec | Orchestrator 对用户需求的结构化任务描述 |
-| TaskRun | 一次编排执行，包含 TaskPlan、TaskGraph、DecisionLog、resultSummary |
-| TaskStep | 单个 Agent step，记录 assignedAgent、adapter、fallback、parallel group、inputContext |
-| Artifact | 代码、文档、API 契约、评审报告、REAL_ADAPTER 输出、Apply Diff 结果 |
-| ContextSnapshot | 本轮 TaskRun 使用的上下文快照 |
-| HandoffSummary | Agent 间交接记录 |
-| MemoryItem | 长期记忆 MVP，本地 JSON 持久化 + 规则检索 |
-| ApprovalRequest | 高风险操作的后端强制审批 |
-| ActionAuditLog | 操作审计时间线 |
-| DeploymentRecord | 静态部署模拟结果 |
+| Frontend | React + Vite + TypeScript |
+| Backend | Spring Boot 3 + Java 17 |
+| API | REST + `ApiResponse` |
+| Realtime | SSE + WebSocket control plane |
+| Persistence | memory 默认；JDBC/MySQL opt-in |
+| Adapter | MOCK、OPENAI_COMPATIBLE、CLAUDE_CODE、CODEX、OPEN_CODE |
+| Verification | Node smoke scripts、Browser E2E、Maven build、Vite build |
 
-## 5. Orchestrator 设计
+## 3. 后端分层
 
-### Planner
+后端位于 `backend/src/main/java/com/agenthub`。
 
-`TaskPlanner` 支持两种模式：
+### 3.1 API layer
 
-- `RULE_BASED`：默认稳定模式，根据用户输入、selectedAgent、mentionedAgents 生成 OrchestratorPlan。
-- `LLM`：通过 OPENAI_COMPATIBLE 调用真实模型，要求返回 `OrchestratorPlan.v1` JSON，schema 校验失败后 fallback。
+`api/` 负责 REST Controller：
 
-`PlannerPromptBuilder` 将 LLM Planner prompt 分层：
+- 不承载业务逻辑。
+- 统一返回 `ApiResponse`。
+- 将请求委托给 application service。
 
-- base capability
-- role instruction
-- available agents
-- conversation context
-- retrieved context
-- artifact history
-- output schema
-- fallback policy
+主要 API 领域：
+
+- agents
+- adapters
+- conversations
+- messages
+- task-runs
+- artifacts
+- artifact snapshots
+- approvals
+- action audits
+- attachments
+- deployments
+- realtime events
+
+### 3.2 Application layer
+
+`application/` 负责用例编排：
+
+- Orchestrator。
+- Agent 管理。
+- Context / Memory。
+- Artifact mutation。
+- Approval / Audit。
+- Deployment。
+- Attachment。
+- Realtime。
+
+重点服务：
+
+- `OrchestratorService`
+- `TaskPlanner`
+- `AgentRouter`
+- `AdapterRoutingService`
+- `AgentStepExecutor`
+- `ResultAggregator`
+- `ContextRetrievalService`
+- `ContextSearchService`
+- `ApprovalApplicationService`
+- `ActionAuditApplicationService`
+- `DeploymentApplicationService`
+- `RealtimeEventPublisher`
+
+### 3.3 Domain layer
+
+`domain/` 存放领域模型：
+
+- `Conversation`
+- `Message`
+- `Agent`
+- `TaskSpec`
+- `TaskRun`
+- `TaskStep`
+- `TaskGraph`
+- `ExecutionBatch`
+- `Artifact`
+- `ArtifactSnapshot`
+- `ContextSnapshot`
+- `PinnedContext`
+- `MemoryItem`
+- `HandoffSummary`
+- `ApprovalRequest`
+- `ActionAuditLog`
+- `AttachmentRecord`
+- `DeploymentRecord`
+
+### 3.4 Infrastructure layer
+
+`infrastructure/` 负责外部系统和存储实现：
+
+- Agent Adapter 实现。
+- CLI runner。
+- memory repository。
+- JDBC repository。
+- 本地文件附件存储。
+- Adapter quality metrics。
+- fixture / fallback 支持。
+
+## 4. 前端架构
+
+前端位于 `frontend/`。
+
+### 4.1 路由
+
+- `/workspace`：主工作台。
+- `/agents`：Agent Builder / Adapter Test。
+- `/preview/:artifactId`：静态 Artifact Preview Studio。
+
+### 4.2 核心模块
+
+- `frontend/src/pages/workspace/WorkspacePage.tsx`
+- `frontend/src/features/chat/`
+- `frontend/src/features/agents/`
+- `frontend/src/features/artifacts/`
+- `frontend/src/features/context/`
+- `frontend/src/pages/preview/PreviewPage.tsx`
+- `frontend/src/api/agenthubApi.ts`
+
+### 4.3 前端约束
+
+- API 调用统一经过 `agenthubApi.ts`。
+- 不引入 axios、Redux、Zustand、UI 组件库。
+- UI 使用现有 CSS 和设计 tokens。
+- Browser E2E 依赖稳定 `data-testid`，不要随意删除。
+
+## 5. Orchestrator 执行链路
+
+核心链路：
+
+```text
+Message / Manual request
+  -> Trigger suggestion / Approval
+  -> OrchestratorService
+  -> TaskPlanner
+  -> AgentRouter
+  -> AdapterRoutingService
+  -> AgentStepExecutor
+  -> AgentAdapterRegistry
+  -> ResultAggregator
+  -> Message / TaskRun / Artifact / Context / Audit
+```
+
+### 5.1 Planner
+
+Planner 模式：
+
+- `RULE_BASED`：默认稳定模式。
+- `LLM`：通过 OpenAI-compatible Provider 生成 `OrchestratorPlan.v1`，失败 fallback。
+
+Prompt Layering：
+
+- base capability。
+- role instruction。
+- available agents。
+- conversation context。
+- retrieved context。
+- artifact history。
+- output schema。
+- fallback policy。
 
 LLM Planner 只生成计划，不直接生成最终 Artifact。
 
-### Router
+### 5.2 Router
 
-`AgentRouter` 的优先级：
+Router 输入：
 
-1. 显式 selectedAgent 用于第一个 step。
-2. `mentionedAgentIds` 会让多个 Agent 进入 TaskGraph。
-3. 默认 step 使用 `requiredSkill -> ToolCapabilityRegistry -> Agent` 打分选择 Agent。
-4. 无匹配时回退到内置 Agent 角色默认策略。
+- selectedAgent。
+- targetAgentId。
+- mentionedAgentIds。
+- participant agents。
+- requiredSkill。
+- tool capability。
+- preferredAdapter。
+- Adapter health / success rate / fallback rate。
 
-`ToolCapabilityRegistry` 当前是静态映射：
+Router 输出：
 
-- `code / code_editor / react` -> CODE / FRONTEND_ARTIFACT_GENERATION
-- `preview / ui` -> WEB_PREVIEW / ARTIFACT_PREVIEW
-- `review / review_checker` -> REVIEW_REPORT / QUALITY_REVIEW
-- `api / contract_writer / schema_designer` -> API_CONTRACT_DESIGN
-- `deploy` -> DEPLOY_PREVIEW
+- selected agent。
+- selected adapter。
+- routingReason。
+- score evidence。
+- fallback reason。
 
-这不是完整工具执行系统，只是路由评分依据。
+当前 Router 已支持多个 `@Agent` 进入 TaskGraph，而不是只影响第一个 step。
 
-### Executor
+### 5.3 Executor
 
-`OrchestratorService` 将 step command 按依赖关系调度：
+Executor 支持：
 
-- 同一 parallel group 内使用 `CompletableFuture` 执行。
-- 有 `dependsOnStepOrders` 的 step 等待依赖完成。
-- Adapter 失败时由 `AgentAdapterRegistry` fallback 到 MOCK。
-- TaskStep 记录 preferredAdapter、actualAdapter、adapterStatus、fallbackReason、routingReason。
+- TaskGraph。
+- ExecutionBatch。
+- `CompletableFuture` 并行 batch。
+- dependsOnStepOrders。
+- Stop / Cancel token。
+- adapter fallback。
+- late result discard。
 
-当前已经具备执行层并行语义，但不是完整动态 DAG 引擎。
+边界：
 
-### Aggregator
+- 非流式 HTTP 调用已经发出后，不保证硬中断底层请求。
+- Cancel 后 late result 不落 Artifact。
+- 当前不是完整动态 DAG 引擎。
 
-`ResultAggregator` 和 `OrchestratorDecisionLog` 负责输出：
+### 5.4 Aggregator
 
-- TaskRun resultSummary。
-- Planner / Router / Executor / Aggregator 决策链。
-- fallback 统计。
-- Artifact 数量和来源说明。
+Aggregator 输出：
 
-前端 Orchestrator explain panel 优先展示后端结构化 DecisionLog，而不是只靠前端推断。
+- TaskRun result summary。
+- Orchestrator summary message。
+- produced Artifact IDs。
+- fallback statistics。
+- DecisionLog。
 
-## 6. Agent Adapter 层
+## 6. Adapter 设计
 
-Adapter 统一接口通过 `AgentAdapterRegistry` 管理。
+Adapter 统一由 `AgentAdapterRegistry` 管理。
 
-当前 Adapter：
+### 6.1 Adapter 类型
 
-- `MOCK`：默认稳定兜底。
-- `OPENAI_COMPATIBLE`：支持 OpenAI-style `/chat/completions`，可接 DeepSeek 等服务。
-- `CODEX`：CLI 探测型 Adapter。
-- `CLAUDE_CODE`：CLI 探测型 Adapter。
-- `OPEN_CODE`：CLI 探测型 Adapter。
+| Adapter | 当前状态 |
+|---|---|
+| MOCK | 默认稳定 fallback |
+| OPENAI_COMPATIBLE | 支持真实 OpenAI-compatible Provider、REAL_FIRST、streaming opt-in |
+| CLAUDE_CODE | headless Artifact-only v1 |
+| CODEX | headless Artifact-only v1 |
+| OPEN_CODE | probe / fallback |
 
-Adapter 状态：
+### 6.2 Artifact Contract
 
-- AVAILABLE
-- DISABLED
-- MISCONFIGURED
-- PLACEHOLDER
-- ERROR
+真实输出必须是 JSON object：
 
-失败策略：
+```json
+{
+  "assistantMessage": "string",
+  "artifacts": [
+    {
+      "title": "string",
+      "type": "CODE|MARKDOWN|REVIEW_REPORT|API_CONTRACT|DATA_MODEL|WEB_PREVIEW",
+      "language": "string",
+      "content": "string",
+      "summary": "string"
+    }
+  ]
+}
+```
 
-- preferred Adapter 不可用、失败、超时或 fallback 时，不阻断 demo-task。
-- TaskStep 和 MessageStream 均显示 fallback 信息。
-- 非 MOCK 且未 fallback 的成功响应可被 `AdapterArtifactExtractor` 解析为 REAL_ADAPTER Artifact。
+拒绝条件：
 
-## 7. Artifact 与真实输出链路
+- 普通文本输出。
+- Markdown fence 包裹 JSON。
+- 缺字段。
+- Artifact type 非枚举。
+- content 为空或过短。
+- CODE content 不像源码。
+- CLI wrapper / logs 混入 Artifact content。
 
-Artifact 支持：
+### 6.3 REAL_FIRST
 
-- 静态模板产物：LoginPage、README、API Contract、Review Report。
-- REAL_ADAPTER Artifact：真实 / 半真实 Adapter 成功输出并满足 contract 时生成。
-- USER_REVISION：用户 revision 生成的新版本。
-- ACCEPTED：Apply Diff / Force Apply 后生成的新版本。
-- DEPLOY_PREVIEW：静态部署预览记录。
+`REAL_FIRST` 行为：
 
-Artifact 功能：
+- 非 MOCK Adapter 成功。
+- 输出通过 contract validator。
+- 输出通过 quality evaluator。
+- 可选 CODE build validation 通过或记录状态。
+- 主 Artifact 使用 `sourceKind=REAL_ADAPTER`。
+- 静态模板 Artifact 保留为 archived fallback evidence。
 
-- Preview。
-- Version History。
-- line diff。
-- Diff Summary。
-- Apply Diff / Force Apply。
-- Snapshot / Restore。
-- Copy / Download。
-- `/preview/:artifactId` 本地预览页。
+失败时：
 
-当前仍保留静态模板兜底。下一阶段目标是 REAL_FIRST：真实 Adapter 成功时优先成为主 Artifact。
+- 不生成假 `REAL_ADAPTER`。
+- 记录 `PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`。
+- 使用静态模板兜底。
 
-## 8. Context / Memory
+## 7. Claude Code / Codex headless 接入
 
-上下文来源：
+### 7.1 共同原则
 
-- recent messages
-- pinned messages
-- MemoryItem
-- artifacts
-- previous TaskRun summary
+- Artifact-only。
+- 使用 `ProcessBuilder`。
+- prompt 通过 stdin 或隔离目录传入。
+- 工作目录固定在 `.agenthub/*-runs/{requestId}`。
+- 不直接写 AgentHub workspace。
+- 不使用危险权限开关。
+- 最终输出必须走 Artifact Contract。
+- 支持 fixture smoke 和 real CLI smoke。
 
-`ContextRetrievalService` 当前使用规则检索：
+### 7.2 Claude Code
 
-- conversation scope
-- source type priority
-- recency
-- importance
-- keyword match
+支持：
 
-结果写入：
+- `json`。
+- `stream-json`。
+- fixture mode。
+- real CLI mode。
+- streaming chunk preview。
+- Stop / Cancel 后丢弃 late output。
 
-- TaskStep.inputContext。
+边界：
+
+- 不是 Claude Code 交互终端。
+- 不是 workspace-write 模式。
+
+### 7.3 Codex
+
+支持：
+
+- `codex exec` headless。
+- read-only sandbox。
+- output schema。
+- streaming opt-in。
+- fixture mode。
+- real CLI smoke。
+
+边界：
+
+- 不是 Codex Desktop GUI 自动化。
+- 不是完整外部 Agent session 管理。
+
+## 8. Context Search / Memory
+
+### 8.1 Context Search
+
+默认检索策略是 DB-backed Agentic Search：
+
+1. `List / Glob`：列候选。
+2. `Grep`：关键词匹配。
+3. `Read`：读取权威内容片段。
+4. `Scoring`：启发式打分。
+5. `Inject`：注入 TaskStep。
+
+覆盖来源：
+
+- Message。
+- Artifact。
+- MemoryItem。
+- PinnedContext。
+- Attachment preview。
+- TaskRun summary。
+
+### 8.2 FULLTEXT 和 Embedding
+
+当前能力：
+
+- memory profile：内存检索。
+- JDBC profile：SQL LIKE + LIMIT。
+- MySQL FULLTEXT：opt-in，不替代 LIKE。
+- embeddingJson：存储骨架。
+- semantic backend：默认 heuristic。
+
+边界：
+
+- 默认不依赖 embedding provider。
+- 不引入 ES / OpenSearch / pgvector / Milvus。
+- MySQL 是权威业务库，不是专业向量库。
+
+## 9. Artifact Lifecycle
+
+Artifact 生命周期：
+
+```text
+Generated
+  -> Preview
+  -> Revision
+  -> Version History
+  -> Diff Summary
+  -> Apply / Force Apply
+  -> Snapshot
+  -> Restore
+  -> Deploy Preview
+```
+
+Artifact sourceKind：
+
+- `REAL_ADAPTER`
+- `STATIC_TEMPLATE`
+- `MOCK_FALLBACK`
+- `USER_REVISION`
+- `DEPLOY_PREVIEW`
+
+关键约束：
+
+- Artifact mutation 必须考虑 Snapshot。
+- 高风险操作必须走 Approval。
+- Diff / Apply 需要风险摘要。
+- Restore 创建新版本，不覆盖旧版本。
+
+## 10. Approval / Audit
+
+高风险 API 强制校验 `approvalId`：
+
+- apply diff。
+- force apply diff。
+- demo deploy。
+- restore snapshot。
+
+校验规则：
+
+- approval 存在。
+- 状态为 `APPROVED`。
+- actionType / targetType / targetId / conversationId 匹配。
+- 执行成功后标记 `CONSUMED`。
+
+ActionAuditLog 用于：
+
+- 操作时间线。
+- 审批轨迹。
+- stop / cancel 记录。
+- fallback / rejected 记录。
+
+## 11. Realtime
+
+### 11.1 SSE
+
+SSE 事件用于刷新提示：
+
+- `MESSAGE_CREATED`
+- `TASK_RUN_CREATED`
+- `TASK_RUN_UPDATED`
+- `TASK_STEP_UPDATED`
+- `ARTIFACT_CREATED`
+- `ARTIFACT_UPDATED`
+- `APPROVAL_UPDATED`
+- `ACTION_AUDIT_CREATED`
+- `DEPLOYMENT_CREATED`
+- `ADAPTER_STREAM_CHUNK`
+
+SSE 特性：
+
+- conversation 维度连接。
+- Last-Event-ID replay。
+- heartbeat。
+- active realtime state。
+
+### 11.2 WebSocket Control Plane
+
+WebSocket 当前用于：
+
+- STOP_RUN。
+- CANCEL_RUN。
+
+边界：
+
+- 不是完整双向聊天系统。
+- 不做多节点事件总线。
+- token chunk 不作为权威数据源。
+
+## 12. Persistence
+
+### 12.1 Memory profile
+
+默认 profile：
+
+- 无外部依赖。
+- 支撑本地 demo 和 smoke。
+- 不保证重启后完整保留所有数据。
+
+### 12.2 JDBC / MySQL profile
+
+JDBC profile 支持：
+
+- Conversation。
+- Message。
+- Agent。
+- AttachmentRecord。
+- Artifact。
+- ArtifactSnapshot。
+- DeploymentRecord。
+- TaskSpec / TaskRun / TaskStep。
 - ContextSnapshot。
-- ContextPanel。
+- PinnedContext。
+- HandoffSummary。
+- MemoryItem。
+- ApprovalRequest。
+- ActionAuditLog。
 
-MemoryItem 使用本地 JSON 文件持久化，不是 MySQL / 向量数据库 / 生产级长期记忆。
+验证入口：
 
-## 9. Approval / Audit / Deploy
+- `scripts/mysql-init-profile.mjs`
+- `scripts/jdbc-smoke-test.mjs`
 
-高风险操作必须带 `approvalId`：
+边界：
 
-- Apply Diff
-- Force Apply Diff
-- Demo Deploy
-- Restore Snapshot
+- 不默认切换 MySQL。
+- 没有 Flyway / Liquibase migration system。
+- JDBC sprint 验证的是 schema / repository / restart verify，不是完整生产数据库治理。
 
-ApprovalRequest 生命周期：
+## 13. Attachment
 
-- PENDING
-- APPROVED
-- CANCELLED
-- CONSUMED
-- EXPIRED
+附件能力：
 
-ActionAuditLog 记录：
+- 上传。
+- 本地文件存储。
+- metadata。
+- checksumSha256。
+- visibility。
+- ownerUserId。
+- storageKey。
+- scanStatus。
+- deletedAt。
+- download。
+- contentPreview。
 
-- approval created / approved / cancelled / consumed / rejected
-- apply diff
-- force apply
-- deploy
-- restore
+安全骨架：
 
-Deploy 当前是静态模拟：
+- `AttachmentAccessGuard`
+- `AttachmentCleanupService`
+- `AttachmentScanService`
 
-- 不调用外部网络。
-- 不接 Vercel / Netlify / Docker。
-- 生成本地 preview URL。
-- Preview 页面展示 Artifact 内容。
+边界：
 
-## 10. API 与验证
+- 默认 scan 是 no-op。
+- 未实现真实杀毒。
+- 未实现多租户权限体系。
 
-关键 API 覆盖：
+## 14. API 入口
 
-- `/api/health`
-- `/api/agents`
-- `/api/adapters`
-- `/api/conversations`
-- `/api/conversations/{conversationId}/messages`
-- `/api/conversations/{conversationId}/messages/{messageId}/orchestrator-run`
-- `/api/conversations/{conversationId}/messages/{messageId}/orchestrator-trigger-suggestion`
-- `/api/conversations/{conversationId}/demo-task`
-- `/api/conversations/{conversationId}/task-runs`
-- `/api/conversations/{conversationId}/artifacts`
-- `/api/conversations/{conversationId}/pinned-contexts`
-- `/api/conversations/{conversationId}/memories`
-- `/api/artifacts/{artifactId}/demo-revision`
-- `/api/artifacts/{artifactId}/apply-diff`
-- `/api/artifacts/{artifactId}/force-apply-diff`
-- `/api/artifacts/{artifactId}/demo-deploy`
-- `/api/artifact-snapshots/{snapshotId}/restore`
-- `/api/conversations/{conversationId}/approval-requests`
-- `/api/approval-requests/{approvalId}/approve`
-- `/api/approval-requests/{approvalId}/cancel`
-- `/api/conversations/{conversationId}/action-audits`
+关键 API：
 
-Message-level Orchestrator run 在 `agenthub.orchestrator.auto-trigger.enabled=true` 且 `require-approval=true` 时，对用户消息必须携带已批准的 `approvalId`。默认配置关闭 auto-trigger，因此手动 demo-task 主链路不受影响。
+- `GET /api/health`
+- `GET /api/adapters`
+- `POST /api/adapters/{adapterType}/execute`
+- `GET /api/conversations`
+- `POST /api/conversations`
+- `POST /api/conversations/{conversationId}/messages`
+- `POST /api/conversations/{conversationId}/messages/{messageId}/orchestrator-run`
+- `POST /api/conversations/{conversationId}/messages/{messageId}/orchestrator-trigger-suggestion`
+- `POST /api/conversations/{conversationId}/demo-task`
+- `GET /api/conversations/{conversationId}/task-runs`
+- `GET /api/conversations/{conversationId}/artifacts`
+- `POST /api/artifacts/{artifactId}/apply-diff`
+- `POST /api/artifacts/{artifactId}/force-apply-diff`
+- `POST /api/artifacts/{artifactId}/demo-deploy`
+- `POST /api/artifact-snapshots/{snapshotId}/restore`
+- `GET /api/conversations/{conversationId}/events`
 
-验证命令：
+## 15. 验证命令
+
+常用命令：
 
 ```powershell
 cd backend
-mvn -q -DskipTests package
-
-cd ../frontend
-npm run build
-
-cd ..
-node scripts/smoke-test.mjs
+mvn clean package -DskipTests
 ```
 
-smoke test 是 API 级验证，不是浏览器 E2E。默认 smoke 只验证稳定 MVP 主链路；真实 Adapter、REAL_FIRST、REJECTION、auto-trigger approval、Adapter stats persistence 需要通过环境变量显式开启扩展断言。
+```powershell
+cd frontend
+npm run build
+```
 
-## 11. 当前技术边界
+```powershell
+node scripts/smoke-test.mjs
+node scripts/sse-smoke-test.mjs
+node scripts/jdbc-smoke-test.mjs
+node scripts/real-adapter-smoke-test.mjs
+node scripts/claude-code-smoke-test.mjs
+node scripts/codex-smoke-test.mjs
+node scripts/e2e-browser.mjs
+```
 
-- 内存 Repository 仍是主要存储，MemoryItem 仅本地 JSON 持久化。
-- 无 MySQL。
-- 无 WebSocket / SSE。
-- 无真实部署平台。
-- 无完整动态 DAG 引擎。
-- 无企业级 RBAC / 多人审批。
-- 无文件附件 / 图片 / PPT 完整链路。
-- Codex / Claude Code / OpenCode 不是深度真实接入。
-- Tool Capability 不是真实 tool invocation。
+验证原则：
 
-Current boundary update: memory remains the default persistence mode, while the JDBC profile has repository implementations and a fresh-initialization SQL file. SSE is implemented as a single-node server-push refresh channel. The project still does not implement WebSocket bidirectional control, real token streaming, a multi-node event bus, or a real external deployment platform. `REAL_FIRST` is opt-in and quality-gated: valid JSON artifacts from a non-MOCK Adapter can become the primary `REAL_ADAPTER` output, while invalid or low-quality output falls back to static templates.
+- 默认 smoke 不依赖真实 API key。
+- 真实 Provider smoke 必须 opt-in。
+- Browser E2E 是 UI 回归，不替代 API smoke。
+- JDBC smoke 是 profile 验证，不表示默认切换 MySQL。
 
-## 12. Adapter Health Stats Persistence
+## 16. 当前技术边界
 
-`AgentAdapterRegistry` 的路由画像不再只保存在进程内存中。当前实现使用轻量本地 JSON snapshot：
+| 能力 | 当前边界 |
+|---|---|
+| 真实部署 | 未接 Vercel / Netlify / Docker / Kubernetes |
+| 桌面端 / 移动端 | 未实现 |
+| 多节点事件总线 | 未实现 |
+| 完整 token streaming | 非默认，仍是体验增强 |
+| MySQL 默认运行 | 未默认启用 |
+| Embedding / Vector Search | 仅保留可插拔边界 |
+| 图片 / PPT 富媒体 | 附件弱能力 |
+| 企业级 RBAC | 未实现 |
+| 完整 Workflow Canvas | 未实现 |
+| 完整动态 DAG | 未实现 |
 
-- 默认启用：`agenthub.adapters.stats.persistence.enabled=true`
-- 默认路径：`./.agenthub/adapter-route-stats.json`
-- 环境变量覆盖：`AGENTHUB_ADAPTER_STATS_PERSISTENCE_ENABLED` / `AGENTHUB_ADAPTER_STATS_PERSISTENCE_PATH`
+## 17. 技术验收标准
 
-Snapshot 记录每个 Adapter 的 `attempts / successes / fallbacks / failures`。应用启动时会加载历史 snapshot，Adapter 执行完成后写回完整 snapshot。写入失败只记录 warning，不影响 Adapter 执行、Mock fallback 或 Orchestrator 主链路。
+V1.0 技术设计对应的验收标准：
 
-`AgentRouter` 继续通过 `AgentExecutorService.routeStats(...)` 读取同一份画像，并将 `historyScore` 与 `fallbackPenalty` 纳入路由评分。该持久化只服务本地 demo 和重启后的评分连续性，不接 MySQL，也不引入外部依赖。
-## 13. Realtime / REAL_FIRST / JDBC Verification Boundary
-
-- `REAL_FIRST` is an opt-in generation mode. When a non-MOCK Adapter succeeds and returns a valid Artifact JSON contract, the primary Artifact should use `sourceKind=REAL_ADAPTER`; static template Artifacts remain as archived fallback evidence.
-- `scripts/smoke-test.mjs` keeps the default path stable without API keys. `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true` enables the stricter real-output assertion.
-- JDBC persistence remains profile-based. The same smoke flow can be used as a JDBC profile check when the backend is launched with `AGENTHUB_PERSISTENCE_MODE=jdbc` and the script is run with `AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true`.
-- Context Retrieval v4 exposes score breakdown and `semanticScore`; the default semantic backend is still heuristic and not a vector database.
-- SSE is implemented as a single-node server-push refresh channel. `scripts/sse-smoke-test.mjs` verifies event delivery, `Last-Event-ID` replay, and realtime state recovery.
-- Not implemented in this layer: WebSocket bidirectional control, real LLM token streaming, multi-node event bus, or real external deployment.
+- 默认 memory + mock/static fallback 可稳定运行。
+- Orchestrator 决策链可解释。
+- 多 `@Agent` 能进入 TaskGraph。
+- 真实 Adapter 输出必须经过 contract / quality / build 门禁。
+- 高风险 Artifact 操作必须经过 Approval / Audit。
+- Context Search 输出可解释。
+- SSE 刷新和 Stop / Cancel 状态可回归验证。
+- Browser E2E 覆盖 IM-first 主路径。
+- 文档明确真实、半真实、fixture、mock、static preview 的边界。

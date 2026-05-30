@@ -6033,3 +6033,79 @@
 ### 下一步建议
 
 - 若继续增强 Agent Builder，可增加“创建后直接跳回 Workspace 并自动填充 @Agent”的快捷操作。
+
+## Phase 141：文档 V1.0 产品设计与技术设计整理
+
+### 目标
+
+- 将 AgentHub 当前产品能力、技术架构、验证入口和真实 / 半真实 / 静态边界整理成中文 V1.0 文档。
+- 修复核心产品设计和技术设计文档中的编码损坏问题，避免后续 Agent 读取失真内容。
+
+### 主要变更
+
+- 重写 `docs/product-design.md`，覆盖产品定位、阶段判断、用户主路径、Conversation、Agent、自建 Agent、多 Agent 协作、消息操作、Context、Artifact Studio、Approval / Audit、Deploy Preview、Realtime 和未完成边界。
+- 重写 `docs/technical-design.md`，覆盖前后端架构、后端分层、Orchestrator、Adapter、REAL_FIRST、Claude Code / Codex headless 接入、Context Search、Artifact lifecycle、Approval / Audit、Realtime、JDBC / MySQL profile、Attachment 和验证命令。
+- 新增 `docs/spec/index.md`，作为稳定 spec 入口，集中指向 multi-agent、message、artifact、adapter、context、approval、MySQL profile 等规格文档。
+- 更新 `docs/README.md`，把 docs 目录入口调整为中文 V1.0 文档索引。
+- 更新 `docs/plans/next.md`，标记 V1.0 产品设计、技术设计、spec index 和 docs index 已完成。
+
+### 验证方式
+
+- `git diff --check`
+
+### 静态 / Mock / Placeholder 部分
+
+- 文档明确保留当前边界：默认仍支持 memory + mock/static fallback；真实 Provider、MySQL、Claude Code、Codex、streaming 和 JDBC profile 都是 opt-in 验证路径。
+- Deploy Preview 仍是本地静态预览，不是真实 Vercel / Netlify / Docker / Kubernetes 部署。
+- Context Search 默认仍是 DB-backed Agentic Search + heuristic scoring，不是默认 embedding / vector search。
+
+### 遗留问题
+
+- README 根目录尚未做完整 V1.0 改写，本轮只整理 docs 目录内产品设计、技术设计和 spec 入口。
+- Demo 视频脚本仍未进入当前优先级。
+- 多端、真实云部署、多节点事件总线和生产级权限体系仍未完成。
+
+### 下一步建议
+
+- 若继续文档收敛，下一轮可整理 root `README.md`、`docs/collaboration/demo-checklist.md` 和 spec 之间的交叉引用，形成完整交付包。
+
+## Phase 142：Browser E2E 边缘状态与 Adapter 质量 Outcome 收敛
+
+### 目标
+
+- 将 Browser E2E 从主路径验证扩展到关键边缘状态：Reviewer REJECTION 修复后再评审、真实 Adapter fallback、Context Search 命中不同 source。
+- 将 OpenAI-compatible、Claude Code、Codex 的真实输出质量指标收敛为统一 outcome taxonomy，避免 UI 只看到零散 parse / quality / build 字段。
+
+### 主要变更
+
+- `scripts/e2e-browser.mjs` 新增 Context Search source diversity 验证，要求已 seed 的主链路能检索到多个上下文来源。
+- `scripts/e2e-browser.mjs` 新增真实 Adapter fallback edge 验证：当存在不可用的非 MOCK Adapter 时，创建 preferredAdapter Agent 并确认 fallback 被 TaskStep 和 quality metrics 记录；如果本机所有非 MOCK Adapter 都可用，则明确跳过该边缘断言。
+- `scripts/e2e-browser.mjs` 扩展 REJECTION 场景：触发 `BLOCKED / REJECTION` 后执行 Artifact Revision，并验证 re-review 回到 `COMPLETED / ACCEPTED`。
+- `AdapterQualityMetricsService` 增加统一 `lastOutcome / outcomeSummary`，覆盖 `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`。
+- `AdapterQualityDashboard` 增加 Outcome 列，展示统一 outcome、accepted / fallback / failed 数量和最近 parse / build 状态。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- 启动隔离 backend/frontend 后运行 `node scripts/e2e-browser.mjs`
+  - 通过：REJECTION -> Revision -> accepted re-review
+  - 通过：真实 Adapter fallback edge 分类，本机验证路径为 `CLAUDE_CODE -> MOCK`
+  - 通过：Context Search 命中 `PINNED_MESSAGE / MEMORY / ATTACHMENT / RECENT_MESSAGE`
+
+### 静态 / Mock / Placeholder 部分
+
+- Browser E2E 中的 fallback edge 是条件验证：只有本机存在不可用的非 MOCK Adapter 时才强制跑 fallback 分支。
+- REJECTION 修复后再评审仍使用现有 demo revision / reviewer gate，不代表完整自动代码修复系统。
+- Context Search source diversity 验证的是 DB-backed Agentic Search + heuristic scoring，不是 embedding / vector search。
+
+### 遗留问题
+
+- Adapter quality metrics 已统一 outcome 展示，但长期趋势仍是当前聚合口径，不是独立时序指标系统。
+- Browser E2E 已覆盖本轮新增边缘状态，但仍不替代真实 OpenAI-compatible、Claude Code、Codex 的 opt-in provider smoke。
+
+### 下一步建议
+
+- 若继续推进真实输出质量，可把 outcome taxonomy 进一步接入真实 Adapter smoke 报告汇总。
+- 若继续推进 UI 质量门禁，可把本轮 Browser E2E 边缘状态加入 `scripts/verify-local.mjs` 的常规报告摘要。

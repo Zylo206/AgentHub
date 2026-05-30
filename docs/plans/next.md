@@ -19,6 +19,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: TaskStep and Artifact now expose explicit build validation reason fields instead of forcing UI, smoke, and reviewer gates to parse build failure details from quality reason text.
    - `Active`: keep monitoring real provider parse failure, quality failure, build failure, and fallback patterns across more task types.
    - `Done`: Adapter Quality Dashboard now reads backend aggregate rates for real acceptance, total failure, parse failure, quality failure, and build failure instead of only deriving signals from currently loaded TaskSteps.
+   - `Done`: Adapter quality metrics now expose a unified `lastOutcome / outcomeSummary` taxonomy for `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`, shared by OpenAI-compatible, Claude Code, and Codex paths.
    - Real provider validation must be opt-in and must not commit keys.
 
 2. **Maintain REAL_FIRST primary Artifact rules**
@@ -103,6 +104,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - Keep ActionAuditLog, RealtimeRunState, and TaskRunPanel in sync.
 
 9. **Keep plans and docs synchronized**
+   - `Done`: `docs/product-design.md` and `docs/technical-design.md` have been rewritten as Chinese V1.0 documents with current product, architecture, verification, and boundary status.
+   - `Done`: `docs/spec/index.md` now provides a stable entrypoint for multi-agent, message interaction, Artifact, Adapter, Context, Approval, and MySQL profile specs.
+   - `Done`: `docs/README.md` now points to the V1.0 product design, technical design, spec index, next plan, dev-log, and demo checklist.
    - P0 specs for multi-agent chat, artifact lifecycle, adapter output, context/memory, and approval/audit are now captured under `docs/spec/`.
    - `Done`: `docs/spec/context-search-spec.md` captures the Context Search contract: DB-backed Agentic Search, ranking, read window, FULLTEXT opt-in, embedding boundary, and ContextPanel explain requirements.
    - `Done`: Context Retrieval now uses DB-backed Agentic Search as the default retrieval shape: List / Grep / Read, with heuristic semantic scoring and optional embedding boundary retained.
@@ -113,6 +117,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: ContextPanel now shows the List / Grep / Read pipeline per retrieved item, including matched tokens, read window, and semantic backend.
    - `Done`: ContextPanel now adds a snapshot-level List / Grep / Read overview with recalled context count, keyword hit count, fallback read count, matched token count, injected step count, and top source type.
    - `Done`: ContextPanel now adds a three-stage explain chain per retrieved item: List / Grep / Read -> Scoring -> Injected Step.
+   - `Done`: Browser E2E now asserts Context Search retrieves multiple source types across message, memory, artifact, attachment, or TaskRun summary sources when seeded by the main collaboration path.
    - `Done`: Adapter Quality Dashboard now has metric cards for observed scope, average success rate, fallback rate, real output acceptance, failure taxonomy, and highest-risk adapter.
    - `Done`: Adapter Quality Dashboard now has a Quality Command strip and per-adapter success meter so it reads as an operational quality cockpit, not only a table.
    - `Done`: Orchestrator Explain now has a decision rail for Planner, Router, Executor, Aggregator, Fallback, and Approval / Audit.
@@ -160,6 +165,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: high-risk UI surfaces now expose stable `data-testid` hooks for the IM-first path, message confirmation, attachments, TaskRun / Orchestrator explain, context retrieval, approvals, diff, deploy, restore, audit, and artifacts.
    - `Done`: Browser E2E failure diagnostics now print the current URL and write screenshot plus console summary under `.agenthub/e2e-browser/`.
    - `Done`: `scripts/verify-local.mjs` provides a local gate that runs API smoke, SSE smoke, and Browser E2E in sequence.
+   - `Done`: Browser E2E now covers edge states for REJECTION -> Revision -> accepted re-review, real Adapter fallback classification, and Context Search source diversity.
    - `Boundary`: Browser E2E validates UI integration; it does not replace API smoke, SSE smoke, JDBC/MySQL smoke, or opt-in real Adapter smoke.
 
 12. **Strengthen Artifact editing trust**

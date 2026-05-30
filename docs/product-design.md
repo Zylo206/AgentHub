@@ -1,378 +1,474 @@
-# AgentHub 产品设计文档
+# AgentHub 产品设计文档 V1.0
 
 ## 1. 产品定位
 
-AgentHub 是一个以 IM Workspace 为主入口的多 Agent 协作平台原型。
+AgentHub 是一个 **IM-first 多 Agent 协作平台产品化原型**。
 
-它不是普通 Chatbot，也不是以 Workflow Canvas 为主入口的编排工具。当前产品形态强调：
+用户像使用即时通讯工具一样创建会话、选择或 `@` Agent、发送任务消息，并由 Orchestrator 组织多个 Agent 完成网页、代码、API 文档、评审报告等 Artifact 的生成、评审、修改和预览。
 
-- 用户通过聊天发起任务
-- Orchestrator 负责任务拆解和路由
-- Specialist Agent 负责执行不同子任务
-- Artifact 是后续迭代的核心对象
-- Context / Handoff 必须可见，而不是黑盒
+当前版本不是完整生产级多 Agent 平台，也不是纯静态 Demo。它已经形成可运行主链路：
 
-## 2. 目标用户
+- IM Workspace
+- Agent 联系人和自建 Agent
+- 单 Agent / 多 Agent `@` 路由
+- Orchestrator 规划、路由、执行、聚合
+- 多 Agent 协作消息流
+- Context / Memory / Context Search
+- Artifact Studio
+- Revision / Diff / Apply / Snapshot / Restore
+- Approval / Audit
+- Deploy Preview
+- SSE 实时刷新
+- OpenAI-compatible / Claude Code / Codex 的 Artifact-only Adapter 链路
+- API smoke、SSE smoke、Browser E2E、JDBC smoke、真实 Adapter smoke
 
-当前版本面向两类用户：
+## 2. 产品阶段
 
-- 比赛评审和导师
-  - 关注产品是否真正体现多 Agent 协作
-  - 关注 AI 协作记录是否完整
-- 产品 / 工程混合型开发者
-  - 需要在聊天中组织任务
-  - 需要围绕代码、文档、评审报告做迭代
+当前阶段：**MVP 后期到产品化原型阶段**。
 
-## 3. 核心痛点
+| 维度 | 当前判断 |
+|---|---|
+| 主链路 | 已跑通，支持阶段性演示 |
+| 产品体验 | 正在从调试入口收敛到 IM 主路径 |
+| 真实能力 | 部分真实，仍保留 Mock / static fallback |
+| 生产能力 | 有骨架和验证入口，但未默认生产化 |
+| 下一阶段重点 | 稳定真实 Agent 输出、质量门禁、MySQL profile、UI E2E 常态化 |
 
-传统 Chatbot 产品主要存在以下问题：
+## 3. 目标用户
 
-- 任务拆解不可见
-- 多 Agent 协作关系不可见
-- Context 交接不可见
-- 产物只是聊天回复附件，不是可持续迭代对象
-- 用户自建 Agent 很难真正进入执行链路
+### 3.1 比赛评审 / 答辩场景
 
-## 4. 产品目标
+关注点：
 
-当前阶段的产品目标不是做全量平台，而是做一个可演示、可解释、可迭代的 MVP：
+- 是否体现“多 Agent 协作平台”而不是普通 Chatbot。
+- 是否能解释 Orchestrator、Adapter、Artifact、Context 的架构。
+- 是否有可运行 Demo、技术文档、AI 协作记录和验证脚本。
 
-- 用 IM Workspace 作为主入口
-- 让 Orchestrator / TaskRun / TaskStep 可见
-- 让 ContextSnapshot / HandoffSummary 可见
-- 让 Artifact 能被预览、修订、版本演进
-- 让自定义 Agent 从“能创建”进入“可见执行链路”
+### 3.2 AI 工程产品使用者
 
-## 5. 核心用户流程
+关注点：
 
-当前最重要的用户流程是：
+- 能否通过聊天发起任务。
+- 能否看到多个 Agent 如何分工。
+- 能否持续修改和预览产物。
+- 能否知道失败原因、fallback 原因和下一步操作。
 
-1. 创建或选择会话
-2. 选择 Agent，或在输入框中使用 `@AgentName`
-3. 发送消息
-4. 运行 demo-task
-5. 查看 TaskRun / TaskStep
-6. 查看 assigned Agent 与 adapter fallback
-7. 查看 Context / Handoff
-8. 查看 Artifact
-9. 发起 Artifact revision
-10. 查看版本演进与 Diff Summary
+### 3.3 开发者 / 产研协作者
 
-## 6. 页面结构
+关注点：
 
-### `/workspace`
+- 能否创建自定义 Agent。
+- 能否选择 tool capability 和 preferred adapter。
+- 能否基于上下文、记忆、附件和历史产物继续协作。
+- 能否安全地 Apply Diff、Restore、Deploy Preview。
+
+## 4. 核心产品原则
+
+1. **IM-first**：主路径必须从发送消息开始，而不是从调试按钮开始。
+2. **Artifact-centered**：Agent 输出不是一次性回复，而是可预览、可修改、可部署预览的产物。
+3. **Explainable orchestration**：Planner、Router、Executor、Aggregator、Fallback 必须可解释。
+4. **Safe by default**：高风险操作必须经过 Approval Gate 和 Audit Log。
+5. **Fallback visible**：Mock、fixture、static fallback 不能伪装成真实能力。
+6. **Chinese-first UI**：默认面向中文演示和答辩，术语可保留英文枚举。
+
+## 5. 默认用户主路径
+
+当前推荐主路径：
+
+1. 打开 `/workspace`。
+2. 创建或选择 Conversation。
+3. 选择内置 Agent，或在 Agent Builder 创建自定义 Agent。
+4. 在 ChatInput 输入任务消息，例如：
+   - `帮我生成一个登录页，并让 Reviewer 检查质量`
+   - `@Frontend Specialist @Reviewer 做一个 React 用户表格并评审`
+5. Workspace 展示协作建议卡片。
+6. 用户点击 `Start Collaboration`。
+7. Orchestrator 生成计划并执行。
+8. MessageStream 展示 `TASK / RESULT / REVIEW / APPROVAL / REJECTION / ERROR` 协作消息。
+9. Artifact Studio 展示代码、文档、API Contract、Review Report。
+10. 用户执行 Revision、Apply Diff、Restore 或 Deploy Preview。
+11. `/preview/:artifactId` 展示本地静态 Artifact 预览。
+
+`Run Demo Task` 仍保留，但定位为 Debug / Advanced 入口，不是产品主 CTA。
+
+## 6. 信息架构
+
+### 6.1 Workspace
 
 三栏结构：
 
-- 左侧：Conversation List + Agent List
-- 中间：Message Stream + TaskRunPanel + ContextPanel + ChatInput
-- 右侧：ArtifactPanel
+- 左侧：Conversation List + Agent List。
+- 中间：MessageStream + ChatInput + TaskRun / Orchestrator Explain。
+- 右侧：Artifact Studio / Context / Quality / Deployment 等工作台面板。
 
-### `/agents`
+### 6.2 Preview Studio
 
-最小 Agent Builder：
+`/preview/:artifactId` 是独立预览工作台：
 
-- name
-- avatarUrl
-- systemPrompt
-- capabilityTags
-- toolTags
-- preferredAdapterType
+- Artifact metadata bar。
+- Version switcher。
+- Source / quality / status 信息。
+- CODE / MARKDOWN / REVIEW_REPORT / API_CONTRACT / DATA_MODEL / WEB_PREVIEW presentation mode。
+- 本地静态预览边界提示。
 
-## 7. IM Workspace 设计
+## 7. Conversation 设计
 
-IM Workspace 是当前产品的核心入口。
+当前 Conversation 已从 Demo 列表增强为 IM 会话管理：
 
-设计原则：
-
-- 所有主要操作都应围绕聊天流展开
-- 聊天不是结果展示层，而是任务发起和协作组织层
-- TaskRun、Context、Artifact 都需要嵌入在 Workspace 语义内
-
-当前 Workspace 已体现：
-
-- 对话列表
-- Agent 联系人列表
-- 任务发起
-- 消息目标 Agent 显示
-- 任务执行状态可视化
-- Artifact 侧栏查看与修订
-
-## 8. Agent List / Agent Builder 设计
-
-### Agent List
-
-Agent 以联系人形式展示，包含：
-
-- 头像或首字母占位
-- 名称
-- role
-- status
-- preferredAdapterType
-- capabilityTags
-- toolTags
-
-### Agent Builder
-
-当前是最小保存闭环，不是完整配置系统。
-
-它的价值在于：
-
-- 让“用户自建 Agent”不再停留在文档层
-- 能进入 Workspace 可见执行链路
-- 为后续 `@Agent` 和更复杂路由预留入口
-
-## 9. selectedAgent / @Agent 设计
-
-当前支持两种目标 Agent 指定方式：
-
-### 方式一：左侧 selectedAgent
-
-- 点击 Agent List 中的 Agent
-- Workspace 显示 Selected Agent banner
-- ChatInput 展示 `@Agent` token
-
-### 方式二：消息开头文本 `@AgentName`
-
-例如：
-
-```text
-@My Frontend Agent 帮我生成一个登录页面
-```
-
-当前规则：
-
-- 解析消息开头的 `@AgentName`
-- 支持消息开头连续多个 `@AgentName`，用于表达最小群聊目标
-- 单个目标时写入 `targetAgentId`，多个目标时写入 `mentionedAgentIds`
-- 文本 `@Agent` 优先级高于左侧 selectedAgent
-- 匹配失败时阻止消息发送并显示错误
-- 当前不解析消息中间自然语言 `@Agent`，也不代表完整群聊调度系统
-
-## 10. Orchestrator 协作设计
-
-当前 Orchestrator 的定位是：
-
-- 读取 source message
-- 推断 selectedAgent / mentioned agents / participants
-- 创建 TaskSpec
-- 创建 TaskRun / TaskStep
-- 调用 Agent Adapter 执行 step
-- 生成 Context / Handoff / Artifact
-- 输出 OrchestratorDecisionLog
-- 基于 TaskGraph / ExecutionBatch 展示并行执行语义
-
-需要明确：
-
-- 当前默认仍是规则化 Planner，LLM Planner 需要显式配置
-- 当前已有执行层并发 batch，但还不是完整动态 DAG 引擎
-- 但已经可以把“任务拆解 -> 执行 -> 交接 -> 产物”完整展示出来
-
-## 11. Context / Handoff 展示设计
-
-当前设计目标是让协作过程显式化。
-
-### ContextSnapshot 展示
-
-展示内容包括：
-
-- summary
-- pinnedContextItems
-- includedMessageIds
-- includedArtifactIds
-
-### HandoffSummary 展示
-
-展示内容包括：
-
-- sourceAgentId
-- targetAgentId
-- passedArtifactIds
-- keyDecisions
-- openIssues
-- summary
-
-作用：
-
-- 支撑 AI 协作能力评分点
-- 让评审看到“上下文交接不是黑盒”
-
-## 12. Artifact Preview / Revision 设计
-
-Artifact 是产品的第二核心对象，仅次于聊天流。
-
-当前支持：
-
-- 产物列表
-- 产物详情查看
-- revision 指令输入
-- revision TaskRun 生成
-- revision 后的新 Artifact 和新 Review Report
-
-当前重点是：
-
-- 让用户能看到“围绕已有 Artifact 持续迭代”
-- 强化 Artifact-centered iteration
-
-## 13. Version History / Diff Summary 设计
-
-### Version History
-
-当前基于：
-
-- `title`
-- `version`
-- `parentArtifactId`
-- `revisionInstruction`
-
-构建轻量 lineage 展示。
-
-### Diff Summary
-
-当前已经从纯静态摘要升级为轻量行级 diff，展示：
-
-- Revision Instruction
-- added / removed / unchanged 统计
-- changed items
-- risk
-- 一键 Apply Diff / Force Apply Diff 的入口
-
-设计目标是：
-
-- 先让“版本演进”清晰可见
-- 用轻量 patch apply 证明 Artifact 可以被操作
-- 后续再考虑 AST diff、代码编辑器、Git merge 或三方冲突解决
-
-## 14. Approval / Audit / Snapshot 设计
-
-当前高风险 Artifact 操作已经加入最小 HITL 能力：
-
-- Apply Diff
-- Force Apply Diff
-- Demo Deploy
-- Restore Snapshot
-
-设计原则：
-
-- 操作前展示 affected artifact / diff preview 摘要
-- 前端先创建 ApprovalRequest，再 approve，再执行高风险操作
-- 后端强制校验 `approvalId`，执行成功后标记为 `CONSUMED`
-- Action Audit 时间线展示 created / approved / cancelled / consumed / apply / deploy / restore 等记录
-- Artifact Snapshot 在 revision / apply / deploy / restore 等关键节点提供安全回退基础
+- 新建和切换会话。
+- 参与 Agent 展示。
+- pin / unpin。
+- archive / unarchive。
+- unreadCount。
+- lastReadAt / lastMessageAt。
+- 服务端 query 搜索。
+- 默认排序：pinned first + lastMessageAt desc。
 
 边界：
 
-- 当前 ApprovalRequest / Action Audit 仍是 MVP 能力，不是企业级多人审批系统
-- 当前没有用户身份、权限、审批队列或导出能力
-- Snapshot restore 是生成新 Artifact 版本，不是真实 Git checkout
+- 当前不是完整企业 IM。
+- 置顶、归档、未读是产品化会话管理能力，不包含多用户实时协同或权限体系。
 
-## 15. P0 / P1 / P2 范围
+## 8. Agent 设计
 
-### P0
+### 8.1 内置 Agent
 
-- 三栏 IM Workspace
-- demo-task 主链路
-- TaskRun / TaskStep
-- Context / Handoff
-- Artifact Preview
-- Artifact Revision
-- Version History / Diff Summary
-- Agent Builder 最小闭环
-- selectedAgent / `@Agent`
-- 多 `@Agent`
-- 群聊式 Agent 消息流
-- Context Retrieval / MemoryItem MVP
-- TaskGraph / ExecutionBatch
-- ApprovalRequest / Action Audit MVP
+内置 Agent 包括：
 
-### P1
+- Orchestrator
+- Frontend Specialist
+- Backend Specialist
+- Reviewer
+- Claude Code
+- Codex
+- OpenCode / MOCK fallback 等 Adapter 入口
 
-- 半真实 Agent Adapter 接入
-- 更清晰的 Orchestrator 规则化规划
-- Deploy Status Card 静态版
-- 更强的多 Agent 显式协作语义
-- Adapter Output Artifact
-- Prompt Layering / LLM Planner fallback
-- line diff / Apply Diff / Snapshot Restore
+Agent 联系人展示：
 
-### P2
+- 名称 / 头像或缩写。
+- role。
+- status。
+- capability。
+- preferredAdapter。
+- adapter health。
+- success rate / fallback rate。
 
-- 真实部署
-- 多端支持
-- 多人协作
-- WebSocket / SSE
-- MySQL 持久化
-- 复杂群聊调度
+### 8.2 自定义 Agent
 
-## 16. 当前已实现 / 未实现对照表
+Agent Builder 支持：
 
-### 已实现
+- 基本信息。
+- System Prompt。
+- capabilityTags。
+- tool capability：`code / review / api / preview / deploy / docs`。
+- preferredAdapter：`MOCK / OPENAI_COMPATIBLE / CLAUDE_CODE / CODEX / OPEN_CODE`。
 
-- IM Workspace
-- Conversation List
-- Agent List
-- Agent Builder
-- selectedAgent
-- 最小 `@Agent`
-- TaskRun / TaskStep
-- ContextSnapshot / HandoffSummary
-- Pinned Context / MemoryItem / Context Retrieval
-- Artifact Preview
-- Artifact Revision
-- Version History
-- Diff Summary
-- line diff / Apply Diff / Force Apply
-- Artifact Snapshot / Restore
-- Deploy Status Card / Preview Page
-- Approval Gate / Action Audit
-- TaskGraph / ExecutionBatch / OrchestratorDecisionLog
-- AI 协作开发记录
+当前能力：
 
-### 静态 Demo / Mock / Placeholder
+- 保存后出现在左侧 Agent List。
+- 可被 `@AgentName` 命中。
+- 可进入 `mentionedAgentIds`。
+- 可进入 TaskGraph 和 Router scoring。
 
-- demo-task 编排
-- Artifact revision 内容生成
-- Context / Handoff 内容生成
-- CLI 探测型 Codex / Claude Code / OpenCode Adapter
-- Deploy simulation
+边界：
 
-### 未实现
+- 不是完整对话式 Agent 创建。
+- Tool capability 是路由能力标签，不是真实工具调用系统。
 
-- 真实平台深度接入
-- 真实部署发布
-- 多端同步
-- 多人协作
-- 文件附件 / 图片
-- SSE / WebSocket
-- 企业级审批 / 权限 / 审计
+## 9. 多 Agent 协作设计
 
-## 17. 评分点对齐说明
+### 9.1 指定方式
 
-### AI 协作能力
+支持三种路径：
 
-当前优势明显：
+- 左侧 selectedAgent。
+- 消息开头单个 `@AgentName`。
+- 消息开头连续多个 `@AgentName`。
 
-- Spec / Skill / Rules / Collaboration 文档齐全
-- 工作流文档已沉淀
-- dev-log 可追踪每轮演进
+示例：
 
-### 功能完整度
+```text
+@Frontend Specialist @Reviewer 做一个用户表格组件并评审
+```
 
-当前 MVP 主线已经闭环，但群聊、多平台真实接入仍是硬缺口。
+### 9.2 Orchestrator 协作流程
 
-### 生成效果质量
+Orchestrator 负责：
 
-当前 UI 已有较强演示力，但产物质量仍受限于静态 Demo。
+- 识别任务。
+- 读取 selectedAgent / targetAgentId / mentionedAgentIds。
+- 结合 tool capability 选择 Agent。
+- 构造 TaskGraph / ExecutionBatch。
+- 调用 Adapter。
+- 聚合结果。
+- 生成多 Agent 协作消息。
+- 写入 Artifact、ContextSnapshot、HandoffSummary、DecisionLog。
 
-### 代码理解度
+### 9.3 协作消息协议
 
-领域模型、Orchestrator、Adapter、Context/Handoff 关系清晰，可用于答辩讲解。
+MessageStream 使用协议视觉区分：
 
-### 创新与产品感
+- `TASK`：计划、分派、执行开始。
+- `RESULT`：Specialist 输出结果。
+- `REVIEW`：Reviewer 检查。
+- `APPROVAL`：通过。
+- `REJECTION`：拒绝和修复建议。
+- `ERROR`：失败或 fallback。
 
-当前创新点主要体现在：
+边界：
 
-- IM Workspace 主入口
-- Context / Handoff 可见化
-- Artifact-centered iteration
-- 自定义 Agent 进入执行链路
+- 当前不是完全自治群聊。
+- 不是任意自然语言中间 `@` 解析。
+- 多 Agent 调度已有执行语义，但不是完整动态 DAG 平台。
+
+## 10. 消息与操作设计
+
+消息类型：
+
+- 文本消息。
+- 附件消息。
+- Artifact 消息。
+- Diff 消息。
+- Deploy Status 消息。
+- Preview 消息。
+- Agent protocol 消息。
+
+消息操作统一到 Message Action Bar：
+
+- copy。
+- quote。
+- reply。
+- pin。
+- save memory。
+- rerun / start collaboration。
+- regenerate Agent reply。
+
+边界：
+
+- 图片和 PPT 目前以附件 metadata / download 为主。
+- 未实现完整图片编辑、OCR、PPT 在线浏览器渲染。
+- 未实现完整 Slack 式 thread 侧栏。
+
+## 11. Context / Memory 设计
+
+上下文来源：
+
+- recent messages。
+- pinned messages。
+- MemoryItem。
+- Artifact。
+- Attachment contentPreview。
+- previous TaskRun summary。
+
+Context Search 使用 DB-backed Agentic Search 思路：
+
+1. List / Glob：按 conversation、sourceType、时间、状态列候选。
+2. Grep：关键词精确匹配。
+3. Read：读取权威内容片段。
+4. Scoring：启发式打分和解释。
+5. Injected Step：注入 TaskStep.inputContext。
+
+ContextPanel 展示：
+
+- sourceType。
+- score breakdown。
+- matchedTokens。
+- List / Grep / Read 阶段。
+- semantic backend。
+- injected TaskStep。
+
+边界：
+
+- 默认是 heuristic，不是向量数据库。
+- embedding backend 是可插拔边界，默认不依赖外部 embedding 服务。
+
+## 12. Artifact Studio 设计
+
+Artifact Studio 定位为 **产物交付工作台**。
+
+支持 Artifact 类型：
+
+- `CODE`
+- `MARKDOWN`
+- `REVIEW_REPORT`
+- `API_CONTRACT`
+- `DATA_MODEL`
+- `WEB_PREVIEW`
+
+核心能力：
+
+- Artifact list。
+- Artifact Cockpit。
+- Source badge：`REAL_ADAPTER / STATIC_TEMPLATE / MOCK_FALLBACK / USER_REVISION`。
+- Quality badge：`ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`。
+- Diagnostic Panel。
+- Version History。
+- Line Diff。
+- Apply Diff / Force Apply。
+- Snapshot timeline。
+- Restore。
+- Deploy Status release panel。
+- Copy / Download。
+
+边界：
+
+- 不使用 Monaco Editor。
+- Patch apply 是轻量实现，不是完整 Git merge。
+- Snapshot restore 生成新 Artifact 版本，不是覆盖原文件系统。
+
+## 13. 真实 Agent 输出设计
+
+真实 Adapter 输出必须遵循统一 JSON contract：
+
+```json
+{
+  "assistantMessage": "string",
+  "artifacts": [
+    {
+      "title": "string",
+      "type": "CODE|MARKDOWN|REVIEW_REPORT|API_CONTRACT|DATA_MODEL|WEB_PREVIEW",
+      "language": "string",
+      "content": "string",
+      "summary": "string"
+    }
+  ]
+}
+```
+
+当前已接入：
+
+- `OPENAI_COMPATIBLE`
+- `CLAUDE_CODE` headless Artifact-only v1
+- `CODEX` headless Artifact-only v1
+- `OPEN_CODE` probe / fallback
+- `MOCK`
+
+质量门禁：
+
+- contract validator。
+- quality evaluator。
+- optional CODE build validation。
+- fallback reason。
+- Adapter Quality Dashboard。
+
+边界：
+
+- 真实 provider 验证是 opt-in。
+- 默认 smoke 不依赖 API key。
+- `REAL_ADAPTER` 表示通过当前门禁，不代表代码一定生产可上线。
+
+## 14. Approval / Audit 设计
+
+高风险操作必须经过后端强制审批：
+
+- Apply Diff。
+- Force Apply Diff。
+- Demo Deploy。
+- Restore Snapshot。
+
+ApprovalRequest 生命周期：
+
+- `PENDING`
+- `APPROVED`
+- `CANCELLED`
+- `CONSUMED`
+- `EXPIRED`
+
+ActionAuditLog 记录：
+
+- approval created / approved / cancelled / consumed / rejected。
+- apply diff。
+- deploy。
+- restore。
+- regenerate。
+- stop / cancel。
+
+边界：
+
+- 当前不是企业级多人审批。
+- 没有 RBAC、组织权限、审计导出。
+
+## 15. Deploy Preview 设计
+
+当前 Deploy Preview 是本地静态预览闭环：
+
+- Deploy Status Card。
+- Preview URL。
+- Open Preview。
+- Copy URL。
+- `/preview/:artifactId`。
+- Version switcher。
+- WEB_PREVIEW iframe srcDoc。
+
+必须明确：
+
+- 不是 Vercel / Netlify / Docker / Kubernetes。
+- 不生成公网 URL。
+- 不做真实构建发布。
+
+## 16. Realtime 设计
+
+当前实时能力：
+
+- SSE server push。
+- Realtime event store。
+- Run state snapshot。
+- Last-Event-ID replay。
+- Workspace 自动刷新。
+- WebSocket control plane 用于 Stop / Cancel。
+
+边界：
+
+- SSE 是刷新提示，不是唯一数据源。
+- 不做多节点 event bus。
+- token streaming 是 opt-in preview，不做 token 级持久化。
+
+## 17. 验证与演示
+
+主要验证入口：
+
+- `node scripts/smoke-test.mjs`
+- `node scripts/sse-smoke-test.mjs`
+- `node scripts/jdbc-smoke-test.mjs`
+- `node scripts/real-adapter-smoke-test.mjs`
+- `node scripts/claude-code-smoke-test.mjs`
+- `node scripts/codex-smoke-test.mjs`
+- `node scripts/e2e-browser.mjs`
+- `node scripts/verify-local.mjs`
+
+Browser E2E 已作为 UI 主链路回归入口，覆盖：
+
+- Workspace。
+- 消息触发协作。
+- 自定义 Agent。
+- `@Agent` 路由。
+- Approval。
+- Restore。
+- Deploy Preview。
+- Preview Page。
+
+## 18. 当前未完成能力
+
+| 能力 | 当前边界 |
+|---|---|
+| 真实云部署 | 未实现 |
+| 桌面端 / 移动端 | 未实现 |
+| 完整多用户协同 | 未实现 |
+| 完整图片 / PPT 富媒体 | 弱能力，附件展示为主 |
+| 完整 token streaming | 非默认，仍是体验增强 |
+| 多节点事件总线 | 未实现 |
+| 生产级 MySQL 默认运行 | JDBC profile 可验证，但默认 memory |
+| 企业级权限 / 审计 | 未实现 |
+| 完整动态 DAG / Workflow Canvas | 未实现 |
+
+## 19. V1.0 产品验收标准
+
+V1.0 文档对应的产品验收标准：
+
+- 用户不看文档也能从 `/workspace` 走完“发任务 -> 确认协作 -> 多 Agent 回复 -> Artifact -> Approval -> Preview”。
+- 自定义 Agent 可以创建、展示、`@` 命中并进入路由。
+- Orchestrator 决策链可解释。
+- 真实 Adapter 输出和 fallback 原因可见。
+- Artifact 可以预览、修改、diff、apply、snapshot、restore、deploy preview。
+- 高风险操作必须有 Approval 和 Audit。
+- Browser E2E、API smoke、SSE smoke 能作为稳定回归入口。

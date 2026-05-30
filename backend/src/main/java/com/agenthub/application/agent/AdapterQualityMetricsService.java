@@ -72,8 +72,11 @@ public class AdapterQualityMetricsService {
             if (isQualityFailure(observation.qualityStatus())) {
                 row.qualityFailures.incrementAndGet();
             }
+            row.lastParseStatus = observation.parseStatus();
+            row.lastBuildValidationStatus = observation.buildValidationStatus();
             row.lastQualityStatus = observation.qualityStatus();
             row.lastQualityReason = observation.qualityReason();
+            row.lastOutcome = classifyOutcome(observation);
             row.updatedAt = timeProvider.now().toString();
             snapshot = snapshot();
         }
@@ -101,6 +104,28 @@ public class AdapterQualityMetricsService {
 
     private boolean isQualityFailure(String status) {
         return "REJECTED".equals(status) || "FAILED".equals(status);
+    }
+
+    private String classifyOutcome(QualityObservation observation) {
+        if (observation == null) {
+            return "UNKNOWN";
+        }
+        if (isParseFailure(observation.parseStatus())) {
+            return "PARSE_FAILED";
+        }
+        if (isBuildFailure(observation.buildValidationStatus())) {
+            return "BUILD_FAILED";
+        }
+        if (isQualityFailure(observation.qualityStatus())) {
+            return "QUALITY_FAILED";
+        }
+        if (observation.realOutputAccepted()) {
+            return "ACCEPTED";
+        }
+        if (observation.fallbackUsed() || "FALLBACK".equals(observation.qualityStatus())) {
+            return "FALLBACK";
+        }
+        return observation.adapterExecutionSucceeded() ? "NO_REAL_ARTIFACT" : "FALLBACK";
     }
 
     private Map<AgentAdapterType, AdapterQualityMetrics> snapshot() {
@@ -195,8 +220,11 @@ public class AdapterQualityMetricsService {
             long parseFailures,
             long qualityFailures,
             long buildFailures,
+            String lastParseStatus,
+            String lastBuildValidationStatus,
             String lastQualityStatus,
             String lastQualityReason,
+            String lastOutcome,
             String updatedAt) {
 
         static AdapterQualityMetrics from(MutableQualityMetrics value) {
@@ -208,8 +236,11 @@ public class AdapterQualityMetricsService {
                     value.parseFailures.get(),
                     value.qualityFailures.get(),
                     value.buildFailures.get(),
+                    value.lastParseStatus,
+                    value.lastBuildValidationStatus,
                     value.lastQualityStatus,
                     value.lastQualityReason,
+                    value.lastOutcome,
                     value.updatedAt);
         }
     }
@@ -231,8 +262,15 @@ public class AdapterQualityMetricsService {
             double buildFailureRate,
             double totalFailureRate,
             String healthLabel,
+            long acceptedOutcomes,
+            long fallbackOutcomes,
+            long failureOutcomes,
+            String outcomeSummary,
+            String lastParseStatus,
+            String lastBuildValidationStatus,
             String lastQualityStatus,
             String lastQualityReason,
+            String lastOutcome,
             String updatedAt) {
 
         static AdapterQualityMetricsView from(AgentAdapterType adapterType, AdapterQualityMetrics value) {
@@ -262,8 +300,15 @@ public class AdapterQualityMetricsService {
                     buildFailureRate,
                     totalFailureRate,
                     healthLabel(attempts, successRate, fallbackRate, totalFailureRate),
+                    value.realOutputAccepted(),
+                    value.fallbacks(),
+                    totalFailures,
+                    outcomeSummary(value),
+                    value.lastParseStatus(),
+                    value.lastBuildValidationStatus(),
                     value.lastQualityStatus(),
                     value.lastQualityReason(),
+                    value.lastOutcome(),
                     value.updatedAt());
         }
 
@@ -283,6 +328,31 @@ public class AdapterQualityMetricsService {
             }
             return "WATCH";
         }
+
+        private static String outcomeSummary(AdapterQualityMetrics value) {
+            if (value == null) {
+                return "UNKNOWN";
+            }
+            if (value.lastOutcome() != null && !value.lastOutcome().isBlank()) {
+                return value.lastOutcome();
+            }
+            if (value.realOutputAccepted() > 0) {
+                return "ACCEPTED";
+            }
+            if (value.parseFailures() > 0) {
+                return "PARSE_FAILED";
+            }
+            if (value.buildFailures() > 0) {
+                return "BUILD_FAILED";
+            }
+            if (value.qualityFailures() > 0) {
+                return "QUALITY_FAILED";
+            }
+            if (value.fallbacks() > 0) {
+                return "FALLBACK";
+            }
+            return "NO_OBSERVATIONS";
+        }
     }
 
     private static class MutableQualityMetrics {
@@ -293,8 +363,11 @@ public class AdapterQualityMetricsService {
         private final AtomicLong parseFailures = new AtomicLong();
         private final AtomicLong qualityFailures = new AtomicLong();
         private final AtomicLong buildFailures = new AtomicLong();
+        private String lastParseStatus;
+        private String lastBuildValidationStatus;
         private String lastQualityStatus;
         private String lastQualityReason;
+        private String lastOutcome;
         private String updatedAt;
 
         static MutableQualityMetrics from(SnapshotValue value) {
@@ -306,8 +379,11 @@ public class AdapterQualityMetricsService {
             metrics.parseFailures.set(Math.max(0, value.parseFailures));
             metrics.qualityFailures.set(Math.max(0, value.qualityFailures));
             metrics.buildFailures.set(Math.max(0, value.buildFailures));
+            metrics.lastParseStatus = value.lastParseStatus;
+            metrics.lastBuildValidationStatus = value.lastBuildValidationStatus;
             metrics.lastQualityStatus = value.lastQualityStatus;
             metrics.lastQualityReason = value.lastQualityReason;
+            metrics.lastOutcome = value.lastOutcome;
             metrics.updatedAt = value.updatedAt;
             return metrics;
         }
@@ -337,8 +413,11 @@ public class AdapterQualityMetricsService {
         public long parseFailures;
         public long qualityFailures;
         public long buildFailures;
+        public String lastParseStatus;
+        public String lastBuildValidationStatus;
         public String lastQualityStatus;
         public String lastQualityReason;
+        public String lastOutcome;
         public String updatedAt;
 
         static SnapshotValue from(AdapterQualityMetrics value) {
@@ -350,8 +429,11 @@ public class AdapterQualityMetricsService {
             snapshot.parseFailures = value.parseFailures();
             snapshot.qualityFailures = value.qualityFailures();
             snapshot.buildFailures = value.buildFailures();
+            snapshot.lastParseStatus = value.lastParseStatus();
+            snapshot.lastBuildValidationStatus = value.lastBuildValidationStatus();
             snapshot.lastQualityStatus = value.lastQualityStatus();
             snapshot.lastQualityReason = value.lastQualityReason();
+            snapshot.lastOutcome = value.lastOutcome();
             snapshot.updatedAt = value.updatedAt();
             return snapshot;
         }

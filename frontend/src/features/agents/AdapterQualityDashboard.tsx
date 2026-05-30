@@ -22,8 +22,15 @@ interface AdapterQualityRow {
   qualityFailures: number;
   buildFailures: number;
   realOutputAccepted: number;
+  acceptedOutcomes: number;
+  fallbackOutcomes: number;
+  failureOutcomes: number;
+  outcomeSummary?: string | null;
+  lastParseStatus?: string | null;
+  lastBuildValidationStatus?: string | null;
   lastQualityStatus?: string | null;
   lastQualityReason?: string | null;
+  lastOutcome?: string | null;
   supportedModes: string[];
   safetyPolicies: string[];
   capabilityDetails: Record<string, unknown>;
@@ -165,8 +172,15 @@ function buildRows(
       qualityFailures: 0,
       buildFailures: 0,
       realOutputAccepted: 0,
+      acceptedOutcomes: 0,
+      fallbackOutcomes: 0,
+      failureOutcomes: 0,
+      outcomeSummary: null,
+      lastParseStatus: null,
+      lastBuildValidationStatus: null,
       lastQualityStatus: null,
       lastQualityReason: null,
+      lastOutcome: null,
       supportedModes: descriptor.supportedModes ?? [],
       safetyPolicies: descriptor.safetyPolicies ?? [],
       capabilityDetails: descriptor.capabilityDetails ?? {}
@@ -190,8 +204,15 @@ function buildRows(
         qualityFailures: 0,
         buildFailures: 0,
         realOutputAccepted: 0,
+        acceptedOutcomes: 0,
+        fallbackOutcomes: 0,
+        failureOutcomes: 0,
+        outcomeSummary: null,
+        lastParseStatus: null,
+        lastBuildValidationStatus: null,
         lastQualityStatus: null,
         lastQualityReason: null,
+        lastOutcome: null,
         supportedModes: [],
         safetyPolicies: [],
         capabilityDetails: {}
@@ -202,13 +223,20 @@ function buildRows(
     row.qualityFailures = Math.max(row.qualityFailures, metrics.qualityFailures);
     row.buildFailures = Math.max(row.buildFailures, metrics.buildFailures);
     row.realOutputAccepted = metrics.realOutputAccepted;
+    row.acceptedOutcomes = metrics.acceptedOutcomes ?? metrics.realOutputAccepted;
+    row.fallbackOutcomes = metrics.fallbackOutcomes ?? metrics.fallbacks;
+    row.failureOutcomes = metrics.failureOutcomes ?? (metrics.parseFailures + metrics.qualityFailures + metrics.buildFailures);
     row.successRate = metrics.successRate;
     row.fallbackRate = metrics.fallbackRate;
     row.realAcceptanceRate = metrics.realAcceptanceRate ?? null;
     row.totalFailureRate = metrics.totalFailureRate ?? null;
     row.healthLabel = metrics.healthLabel ?? null;
+    row.outcomeSummary = metrics.outcomeSummary ?? null;
+    row.lastParseStatus = metrics.lastParseStatus ?? null;
+    row.lastBuildValidationStatus = metrics.lastBuildValidationStatus ?? null;
     row.lastQualityStatus = metrics.lastQualityStatus;
     row.lastQualityReason = metrics.lastQualityReason;
+    row.lastOutcome = metrics.lastOutcome ?? metrics.outcomeSummary ?? null;
     byAdapter.set(metrics.adapterType, row);
   });
 
@@ -234,8 +262,15 @@ function buildRows(
         qualityFailures: 0,
         buildFailures: 0,
         realOutputAccepted: 0,
+        acceptedOutcomes: 0,
+        fallbackOutcomes: 0,
+        failureOutcomes: 0,
+        outcomeSummary: null,
+        lastParseStatus: null,
+        lastBuildValidationStatus: null,
         lastQualityStatus: null,
         lastQualityReason: null,
+        lastOutcome: null,
         supportedModes: [],
         safetyPolicies: [],
         capabilityDetails: {}
@@ -348,6 +383,7 @@ export function AdapterQualityDashboard({
           <span>真实采纳</span>
           <span>失败率</span>
           <span>失败明细</span>
+          <span>Outcome</span>
           <span>模式</span>
           <span>策略</span>
           <span>最近原因</span>
@@ -367,6 +403,17 @@ export function AdapterQualityDashboard({
             <span>{formatRate(row.totalFailureRate)}</span>
             <span title="解析 / 质量 / 构建失败">
               {row.parseFailures} / {row.qualityFailures} / {row.buildFailures}
+            </span>
+            <span
+              title={[
+                `accepted=${row.acceptedOutcomes}`,
+                `fallback=${row.fallbackOutcomes}`,
+                `failed=${row.failureOutcomes}`,
+                `parse=${row.lastParseStatus || "N/A"}`,
+                `build=${row.lastBuildValidationStatus || "N/A"}`
+              ].join(" | ")}
+            >
+              {row.lastOutcome || row.outcomeSummary || "N/A"}
             </span>
             <span title={row.supportedModes.join(", ") || "暂无能力模式元数据"}>
               {row.supportedModes.slice(0, 2).join(", ") || "N/A"}

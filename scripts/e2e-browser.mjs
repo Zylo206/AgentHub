@@ -490,6 +490,115 @@ async function verifyContextPanel(page, conversationId) {
   }
 }
 
+function collectRetrievedSourceTypes(snapshots) {
+  const sourceTypes = new Set();
+  for (const snapshot of snapshots || []) {
+    for (const item of snapshot.retrievedContextItems || []) {
+      if (item?.sourceType) {
+        sourceTypes.add(item.sourceType);
+      }
+    }
+  }
+  return sourceTypes;
+}
+
+async function verifyContextSourceDiversity(conversationId) {
+  let snapshots = await request(`/api/conversations/${conversationId}/context-snapshots`);
+  let sourceTypes = collectRetrievedSourceTypes(snapshots);
+
+  if (sourceTypes.size < 2) {
+    const followUp = await request(`/api/conversations/${conversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({
+        content: [
+          `${TEST_MARKER}: context diversity follow-up.`,
+          `Use ${TEST_ATTACHMENT_FILE_NAME}, previous TaskRun summary, saved memory, and generated Artifact context.`,
+          "Keep verification-code login and review the current Artifact set."
+        ].join(" ")
+      })
+    });
+    const followUpMessageId = requireValue(getIdValue(followUp.id), "context diversity follow-up messageId missing");
+    await runOrchestratorFromMessageWithOptionalApproval(conversationId, followUpMessageId);
+    snapshots = await request(`/api/conversations/${conversationId}/context-snapshots`);
+    sourceTypes = collectRetrievedSourceTypes(snapshots);
+  }
+
+  if (sourceTypes.size < 2) {
+    throw new Error(
+      `expected Context Search to retrieve at least 2 source types, got ${Array.from(sourceTypes).join(", ") || "none"}`
+    );
+  }
+  pass(`Context Search source diversity covered: ${Array.from(sourceTypes).join(", ")}`);
+}
+
+async function verifyAdapterFallbackEdge() {
+  const adapters = await request("/api/adapters");
+  const fallbackCandidate = adapters.find((adapter) =>
+    adapter.adapterType !== "MOCK" && adapter.status !== "AVAILABLE"
+  );
+  if (!fallbackCandidate) {
+    pass("adapter fallback edge skipped because every non-MOCK adapter is currently AVAILABLE");
+    return;
+  }
+
+  const agent = await request("/api/agents", {
+    method: "POST",
+    body: JSON.stringify({
+      name: `E2E Fallback Agent ${TEST_MARKER}`,
+      systemPrompt: "Force adapter fallback coverage for Browser E2E.",
+      capabilityTags: ["fallback", "browser-e2e"],
+      toolTags: ["code"],
+      preferredAdapterType: fallbackCandidate.adapterType
+    })
+  });
+  const agentId = requireValue(getIdValue(agent.id), "fallback agentId missing");
+  const conversation = await request("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({ title: `E2E Adapter Fallback ${Date.now()}`, type: "GROUP" })
+  });
+  const conversationId = requireValue(getIdValue(conversation.id), "fallback conversationId missing");
+  const message = await request(`/api/conversations/${conversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      content: `@${agent.name} ${TEST_MARKER}: trigger adapter fallback edge for REAL_ADAPTER diagnostics.`
+    })
+  });
+  const messageId = requireValue(getIdValue(message.id), "fallback messageId missing");
+  const taskRun = await request(`/api/conversations/${conversationId}/demo-task`, {
+    method: "POST",
+    body: JSON.stringify({
+      messageId,
+      userInput: "Trigger fallback edge for unavailable preferred adapter.",
+      selectedAgentId: agentId
+    })
+  });
+  const fallbackStep = (taskRun.steps || []).find((step) =>
+    step.preferredAdapterType === fallbackCandidate.adapterType ||
+    step.assignedAgentId === agentId ||
+    getIdValue(step.assignedAgentId) === agentId
+  );
+  if (!fallbackStep) {
+    throw new Error(`fallback TaskRun did not include preferred adapter ${fallbackCandidate.adapterType}`);
+  }
+  const actualAdapter = fallbackStep.actualAdapterType || fallbackStep.adapterType || "";
+  const outcome = fallbackStep.realAdapterOutcome || "";
+  const hasFallbackEvidence =
+    actualAdapter === "MOCK" ||
+    fallbackStep.adapterStatus === "FALLBACK" ||
+    fallbackStep.adapterErrorMessage ||
+    outcome === "FALLBACK";
+  if (!hasFallbackEvidence) {
+    throw new Error(`expected adapter fallback evidence, got actual=${actualAdapter}, outcome=${outcome}`);
+  }
+
+  const qualityMetrics = await request("/api/adapters/quality-metrics");
+  const metric = qualityMetrics.find((item) => item.adapterType === fallbackCandidate.adapterType);
+  if (metric && (metric.fallbackOutcomes ?? metric.fallbacks ?? 0) < 1) {
+    throw new Error(`adapter fallback metric did not record fallback outcome for ${fallbackCandidate.adapterType}`);
+  }
+  pass(`adapter fallback edge covered: ${fallbackCandidate.adapterType} -> ${actualAdapter || outcome}`);
+}
+
 async function clickAutoTriggerIfAvailable(page) {
   const autoButton = page.getByTestId("message-start-collaboration").last();
   const visible = await autoButton.isVisible().catch(() => false);
@@ -703,7 +812,36 @@ async function seedOptionalRejectionScenario() {
   if (rejectionMessages.length === 0) {
     throw new Error("rejection scenario did not emit REJECTION protocol messages");
   }
-  pass(`optional rejection scenario covered: ${rejectionMessages.length} REJECTION messages`);
+
+  const artifacts = await request(`/api/conversations/${conversationId}/artifacts`);
+  const revisionCandidate =
+    artifacts.find((artifact) => artifact.type === "CODE" || artifact.artifactType === "CODE") ||
+    artifacts.find((artifact) => artifact.status !== "REJECTED") ||
+    artifacts[0];
+  const revisionArtifactId = requireValue(
+    getIdValue(revisionCandidate?.id),
+    "rejection recovery revision candidate artifact missing"
+  );
+  const revision = await request(`/api/artifacts/${revisionArtifactId}/demo-revision`, {
+    method: "POST",
+    body: JSON.stringify({
+      conversationId,
+      revisionInstruction: [
+        `${TEST_MARKER}: resolve reviewer blocker, remove rejection trigger,`,
+        "keep verification-code login, and rerun review for approval."
+      ].join(" ")
+    })
+  });
+  const revisionStatus = String(revision.taskRun?.status || "").toUpperCase();
+  if (revisionStatus !== "COMPLETED") {
+    throw new Error(`rejection recovery revision expected COMPLETED, got ${revisionStatus}`);
+  }
+  const reviewStatus = String(revision.reviewArtifact?.status || "").toUpperCase();
+  if (reviewStatus !== "ACCEPTED") {
+    throw new Error(`rejection recovery expected ACCEPTED review artifact, got ${reviewStatus}`);
+  }
+
+  pass(`optional rejection scenario covered and recovered: ${rejectionMessages.length} REJECTION messages`);
 }
 
 async function runBrowserE2e() {
@@ -776,6 +914,8 @@ async function runBrowserE2e() {
     }
     await waitForVisible(page, "[data-testid='orchestrator-explain-panel']", "orchestrator explain panel");
     await step("Context panel shows TaskRun snapshot", () => verifyContextPanel(page, conversationId));
+    await step("Context Search retrieves multiple source types", () => verifyContextSourceDiversity(conversationId));
+    await step("real Adapter fallback edge is classified", () => verifyAdapterFallbackEdge());
     await waitForVisible(page, "[data-testid='artifact-card']", "artifact card");
     await step("CODE artifact selected for revision", () => selectCodeArtifact(page, conversationId));
 
@@ -789,6 +929,10 @@ async function runBrowserE2e() {
       await waitForVisible(page, ".preview-page__content", "preview page content");
     });
 
+    if (EXPECT_REJECTION) {
+      await step("REJECTION retry/revise recovery path", () => seedOptionalRejectionScenario());
+    }
+
     if (consoleErrors.length > 0) {
       throw new Error(`browser console/page errors: ${consoleErrors.slice(0, 5).join(" | ")}`);
     }
@@ -798,10 +942,6 @@ async function runBrowserE2e() {
   } finally {
     await browser.close();
     await rm(tempAttachment.directory, { recursive: true, force: true });
-  }
-
-  if (EXPECT_REJECTION) {
-    await seedOptionalRejectionScenario();
   }
 
   pass("browser E2E completed");
