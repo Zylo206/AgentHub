@@ -57,6 +57,30 @@ function getAgentAvailabilityLabel(agent: Agent, descriptor: AdapterDescriptor |
   return "待配置";
 }
 
+function getAdapterIntegrationProfile(adapterType?: string | null): { label: string; description: string; className: string } {
+  if (adapterType === "OPENAI_COMPATIBLE" || adapterType === "CLAUDE_CODE" || adapterType === "CODEX") {
+    return {
+      label: "深接 v1",
+      description: "REAL_FIRST / Artifact contract / quality gate",
+      className: "agent-integration-pill--deep"
+    };
+  }
+
+  if (adapterType === "OPEN_CODE") {
+    return {
+      label: "Probe",
+      description: "仅探测，不作为本轮深接目标",
+      className: "agent-integration-pill--probe"
+    };
+  }
+
+  return {
+    label: "Fallback",
+    description: "稳定演示安全网",
+    className: "agent-integration-pill--fallback"
+  };
+}
+
 export function AgentList({
   agents,
   adapterDescriptors,
@@ -120,6 +144,7 @@ export function AgentList({
         const agentId = formatId(agent.id);
         const adapterDescriptor = findAdapterDescriptor(adapterDescriptors, agent.preferredAdapterType);
         const availabilityClass = normalizeStatusClass(adapterDescriptor?.status || agent.status);
+        const integrationProfile = getAdapterIntegrationProfile(agent.preferredAdapterType || adapterDescriptor?.adapterType);
 
         return (
           <button
@@ -149,6 +174,10 @@ export function AgentList({
             <div className="agent-im-strip">
               <strong>{getAgentAvailabilityLabel(agent, adapterDescriptor)}</strong>
               <span>{agent.preferredAdapterType || "MOCK"}</span>
+            </div>
+            <div className={`agent-integration-pill ${integrationProfile.className}`}>
+              <strong>{integrationProfile.label}</strong>
+              <span>{integrationProfile.description}</span>
             </div>
             {adapterDescriptor ? (
               <div className="agent-adapter-health">

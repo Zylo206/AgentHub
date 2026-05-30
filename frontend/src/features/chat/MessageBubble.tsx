@@ -1,5 +1,6 @@
 import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { Artifact } from "../artifacts/artifactTypes";
+import type { AgentCreationDraft } from "../agents/conversationalAgentDraft";
 import type { LightweightAttachment, Message, OrchestratorTriggerSuggestion } from "./chatTypes";
 import { getAttachmentDownloadUrl } from "../../api/agenthubApi";
 import { formatId, getIdValue } from "../../utils/id";
@@ -18,6 +19,8 @@ interface MessageBubbleProps {
   autoTriggerSuggestion?: OrchestratorTriggerSuggestion | null;
   autoTriggerApproval?: ApprovalRequest | null;
   autoTriggerRunning?: boolean;
+  agentCreationDraft?: AgentCreationDraft | null;
+  agentCreationRunning?: boolean;
   replyMessages?: Message[];
   threadExpanded?: boolean;
   highlighted?: boolean;
@@ -32,6 +35,8 @@ interface MessageBubbleProps {
   onConfirmOrchestratorTrigger: (message: Message) => void;
   onCancelOrchestratorTrigger: (approvalId: string) => void;
   onRefreshOrchestratorSuggestion: (message: Message) => void;
+  onConfirmAgentCreation: (messageId: string) => void;
+  onCancelAgentCreation: (messageId: string) => void;
   onToggleThread: () => void;
   onJumpToMessage: (messageId: string) => void;
 }
@@ -336,6 +341,8 @@ export function MessageBubble({
   autoTriggerSuggestion,
   autoTriggerApproval,
   autoTriggerRunning,
+  agentCreationDraft,
+  agentCreationRunning,
   replyMessages = [],
   threadExpanded = false,
   highlighted = false,
@@ -350,6 +357,8 @@ export function MessageBubble({
   onConfirmOrchestratorTrigger,
   onCancelOrchestratorTrigger,
   onRefreshOrchestratorSuggestion,
+  onConfirmAgentCreation,
+  onCancelAgentCreation,
   onToggleThread,
   onJumpToMessage
 }: MessageBubbleProps) {
@@ -569,6 +578,72 @@ export function MessageBubble({
                 onClick={() => onRefreshOrchestratorSuggestion(message)}
               >
                 刷新建议
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {agentCreationDraft ? (
+          <div className="message-agent-creation" data-testid="message-agent-creation-card">
+            <div className="message-agent-creation__header">
+              <div>
+                <strong>建议创建自定义 Agent</strong>
+                <p>已从这条消息生成 Agent 草案。确认后会进入左侧联系人，并可被 @Agent 路由到 TaskGraph。</p>
+              </div>
+              <span>{agentCreationDraft.preferredAdapterType}</span>
+            </div>
+            <div className="message-agent-creation__grid">
+              <div>
+                <span>名称</span>
+                <strong>{agentCreationDraft.name}</strong>
+              </div>
+              <div>
+                <span>能力</span>
+                <strong>{agentCreationDraft.capabilityTags.join(" / ")}</strong>
+              </div>
+              <div>
+                <span>工具</span>
+                <strong>{agentCreationDraft.toolTags.join(" / ")}</strong>
+              </div>
+              <div>
+                <span>来源</span>
+                <strong>{agentCreationDraft.draftSource || "UNKNOWN"}</strong>
+              </div>
+            </div>
+            <p className="message-agent-creation__prompt">{agentCreationDraft.systemPrompt}</p>
+            {agentCreationDraft.fallbackReason ? (
+              <p className="message-agent-creation__prompt">Fallback reason: {agentCreationDraft.fallbackReason}</p>
+            ) : null}
+            <div className="message-agent-creation__reasons">
+              {agentCreationDraft.reasoning.map((reason) => (
+                <span key={reason}>{reason}</span>
+              ))}
+            </div>
+            <div className="message-auto-trigger__actions">
+              <button
+                type="button"
+                className="message-action-button message-action-button--primary"
+                data-testid="message-confirm-agent-creation"
+                disabled={agentCreationRunning}
+                onClick={() => onConfirmAgentCreation(getIdValue(message.id))}
+              >
+                {agentCreationRunning ? "创建中..." : "确认创建 Agent"}
+              </button>
+              <button
+                type="button"
+                className="message-action-button"
+                disabled={agentCreationRunning}
+                onClick={() => onQuoteMessage(message)}
+              >
+                编辑描述
+              </button>
+              <button
+                type="button"
+                className="message-action-button"
+                disabled={agentCreationRunning}
+                onClick={() => onCancelAgentCreation(getIdValue(message.id))}
+              >
+                取消
               </button>
             </div>
           </div>

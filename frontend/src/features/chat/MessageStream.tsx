@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { Agent } from "../agents/agentTypes";
+import type { AgentCreationDraft } from "../agents/conversationalAgentDraft";
 import type { Artifact } from "../artifacts/artifactTypes";
 import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { PinnedContext } from "../context/contextTypes";
@@ -20,6 +21,8 @@ interface MessageStreamProps {
   triggerSuggestionsByMessageId?: Record<string, OrchestratorTriggerSuggestion | null>;
   approvalByMessageId?: Record<string, ApprovalRequest | null>;
   autoTriggerRunningMessageId?: string | null;
+  agentCreationDraftsByMessageId?: Record<string, AgentCreationDraft | null>;
+  agentCreationRunningMessageId?: string | null;
   onSelectArtifact: (artifactId: string) => void;
   onToggleMessagePin: (messageId: string, pinnedContextId?: string | null) => void;
   onSaveMessageAsMemory: (message: Message) => void;
@@ -31,6 +34,8 @@ interface MessageStreamProps {
   onConfirmOrchestratorTrigger: (message: Message) => void;
   onCancelOrchestratorTrigger: (approvalId: string) => void;
   onRefreshOrchestratorSuggestion: (message: Message) => void;
+  onConfirmAgentCreation: (messageId: string) => void;
+  onCancelAgentCreation: (messageId: string) => void;
   streamingPreviewsByStepId?: Record<string, StreamingPreviewState>;
 }
 
@@ -142,6 +147,8 @@ export function MessageStream({
   triggerSuggestionsByMessageId = {},
   approvalByMessageId = {},
   autoTriggerRunningMessageId,
+  agentCreationDraftsByMessageId = {},
+  agentCreationRunningMessageId,
   onSelectArtifact,
   onToggleMessagePin,
   onSaveMessageAsMemory,
@@ -153,6 +160,8 @@ export function MessageStream({
   onConfirmOrchestratorTrigger,
   onCancelOrchestratorTrigger,
   onRefreshOrchestratorSuggestion,
+  onConfirmAgentCreation,
+  onCancelAgentCreation,
   streamingPreviewsByStepId = {}
 }: MessageStreamProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(() => new Set());
@@ -267,6 +276,8 @@ export function MessageStream({
               autoTriggerSuggestion={triggerSuggestionsByMessageId[messageId] ?? null}
               autoTriggerApproval={approvalByMessageId[messageId] ?? null}
               autoTriggerRunning={autoTriggerRunningMessageId === messageId}
+              agentCreationDraft={agentCreationDraftsByMessageId[messageId] ?? null}
+              agentCreationRunning={agentCreationRunningMessageId === messageId}
               replyMessages={replyMessages}
               threadExpanded={expandedThreadIds.has(messageId)}
               highlighted={highlightedMessageId === messageId}
@@ -281,6 +292,8 @@ export function MessageStream({
               onConfirmOrchestratorTrigger={onConfirmOrchestratorTrigger}
               onCancelOrchestratorTrigger={onCancelOrchestratorTrigger}
               onRefreshOrchestratorSuggestion={onRefreshOrchestratorSuggestion}
+              onConfirmAgentCreation={onConfirmAgentCreation}
+              onCancelAgentCreation={onCancelAgentCreation}
               onToggleThread={() => toggleThread(messageId)}
               onJumpToMessage={jumpToMessage}
             />

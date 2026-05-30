@@ -6382,3 +6382,198 @@
 
 - 若继续生产化 Adapter 质量，可把 quality matrix 的汇总接入长期指标或本地报告。
 - 若继续增强 realtime 产品体验，可补 UI 可见性验证：Stop 后 MessageStream 显示 partial / discarded 状态。
+
+## Phase 149：AgentHub 托管的 Claude / Codex 多轮 Session Context
+
+### 目标
+
+- 让同一个 Conversation / Agent 能复用历史上下文、上次 Artifact、Review 结果和前序 TaskRun summary。
+- 支持用户对同一个 Artifact 继续说“继续修改 / 再优化 / 按刚才建议修”时，Claude Code / Codex headless Adapter 能收到前序摘要。
+- 保持边界：先由 AgentHub 自己管理 session context，不依赖外部 CLI 原生 session。
+
+### 主要变更
+
+- 新增 `ConversationSessionContextBuilder`。
+- Orchestrator 每个 `StepExecutionCommand` 自动注入 AgentHub-managed multi-turn session context。
+- 注入内容包括：
+  - 最近消息摘要。
+  - 最近 Artifact 摘要。
+  - Review Report 结果摘要。
+  - 近期 TaskRun summary。
+  - 当前 Agent continuity 说明。
+- Claude Code / Codex 已有 prompt contract 会读取 `contextItems` 和 `artifactSummaries`，因此无需打开 workspace-write 或外部 CLI native session。
+- `scripts/smoke-test.mjs` 新增断言：首个 TaskStep `inputContext` 必须包含 AgentHub-managed multi-turn session context。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `node --check scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮不实现 Claude Code / Codex 原生 session 复用。
+- 本轮不允许 CLI 直接修改 AgentHub workspace。
+- Session context 是摘要注入，不是长期向量记忆或 token 级历史持久化。
+- 默认 demo 仍可走 Mock / static fallback，真实 CLI 仍是 opt-in。
+
+### 下一步建议
+
+- 用真实 Claude Code / Codex CLI 跑一次“继续修改 / 按刚才建议修”的 REAL_FIRST smoke，观察是否能稳定生成新 Revision。
+- 若上下文过长，再增加按 Artifact / Review / Agent 的优先级裁剪策略。
+
+## Phase 150：REAL_ADAPTER Revision 主产物与 Reviewer Gate 闭环增强
+
+### 目标
+
+- 继续收敛真实 Adapter 输出质量、multi-turn session context、Reviewer gate、Artifact revision 四条主链路。
+- 让 Artifact Revision 不再只返回静态 revised Artifact；当 revision worker 产出合格 `REAL_ADAPTER` CODE Artifact 时，将其提升为本次 Revision 主版本。
+- Revision 后继续执行 Reviewer gate，使 build / quality / parse failure 能阻塞本次 revision TaskRun，并给出 retry / revise 指引。
+
+### 主要变更
+
+- `createAgentExecutedStep` 也接入 AgentHub-managed multi-turn session context，覆盖 Artifact Revision 的 frontend / reviewer step。
+- 新增 REAL_ADAPTER revision promotion：
+  - 只接受 `sourceKind=REAL_ADAPTER`。
+  - 只接受 CODE Artifact。
+  - 拒绝 build failed / quality rejected 的候选产物。
+  - 提升后保留 `parentArtifactId`、`revisionInstruction`、version、sourceAdapterType、generationMode、quality/build metadata。
+- Revision review report 会记录本轮 revision source、adapter、quality 状态。
+- Revision 后复用 `ReviewDecisionEvaluator`：
+  - 通过时 TaskRun 保持 `COMPLETED`。
+  - 拒绝时 TaskRun 标记 `BLOCKED`。
+  - 拒绝时创建 retry advice Artifact，并追加 Reviewer / Orchestrator `REJECTION` 协作消息。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `node --check scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 边界
+
+- 若真实 Adapter 没有合格 CODE 输出，Revision 仍回落到现有静态 revised Artifact。
+- Reviewer gate 仍是规则化质量门禁，不是完整 ESLint / unit test / static analysis 平台。
+- 本轮没有强跑真实 Claude / Codex CLI revision smoke；真实 CLI 仍需要 opt-in 环境。
+
+### 下一步建议
+
+- 补一个 opt-in real CLI revision smoke：先生成 Artifact，再用“按刚才建议修 / 继续优化”触发 Revision，断言主 revised Artifact 为 `REAL_ADAPTER`。
+- 若要进一步产品化，可在 ArtifactPanel 中突出“Revision 主产物来自真实 Adapter / 静态 fallback”的差异。
+
+## Phase 151：主流 Adapter 深接可见性与对话式创建 Agent
+
+### 目标
+
+- 除 OpenCode 外，继续把 OpenAI-compatible、Claude Code、Codex 的主流 Agent 平台接入从“技术可用”推进到“用户可理解”。
+- 把自建 Agent 从纯表单配置推进到轻量对话式创建：用户描述想要的协作成员，系统生成可检查草案，再确认创建。
+
+### 主要变更
+
+- Agent Builder 新增“对话式创建 Agent”区域：
+  - 用户输入自然语言描述。
+  - 前端规则解析出 Agent 名称、System Prompt、capabilityTags、toolTags、preferredAdapterType。
+  - 用户可把草案填入表单继续编辑，或直接确认创建 Agent。
+- Agent Builder 和 Agent 联系人卡新增主流 Adapter 深接标识：
+  - `OPENAI_COMPATIBLE / CLAUDE_CODE / CODEX` 标为深接 v1。
+  - `OPEN_CODE` 明确标为 probe-only，不作为本轮深接目标。
+- 保持现有 createAgent API、Router、TaskGraph、Mock fallback 和 AdapterRegistry 不变。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+
+### 静态 / Mock / Placeholder 边界
+
+- 对话式创建 v1 是规则解析草案，不调用真实 LLM 创建 Agent。
+- 本轮不做完整自然语言 Agent Builder，不做工具运行时系统。
+- OpenCode 仍是探测型接入，不包装成深度平台接入。
+
+## Phase 152：Workspace 内联对话式创建 Agent
+
+### 目标
+
+- 继续推进用户自建 Agent 和主流 Agent 平台接入的产品化程度。
+- 让用户不离开 `/workspace`，通过聊天消息触发“创建 Agent”草案，并在消息流内确认创建。
+
+### 主要变更
+
+- 新增 `conversationalAgentDraft` 前端模型与规则解析器。
+- Workspace 发送包含“创建 / 新建 / 生成 + Agent / 智能体 / 协作成员”的用户消息后，会在该消息下方显示 Agent 创建确认卡片。
+- 确认后复用现有 `createAgent` API 创建 Agent，刷新左侧 Agent 联系人列表，并把新 Agent 设为当前 selectedAgent。
+- MessageStream / MessageBubble 增加 Agent creation draft 展示与确认 / 取消操作。
+- 保持 Claude Code、Codex、OpenAI-compatible 深接 v1 标识；OpenCode 继续显示为 probe-only。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+
+### 静态 / Mock / Placeholder 边界
+
+- 这是规则解析的对话式创建 MVP，不是完整 LLM Agent Builder。
+- 创建后的执行仍走现有 Router、AdapterRegistry、REAL_FIRST、quality gate 与 fallback 链路。
+- 本轮不推进 OpenCode 深度接入。
+
+## Phase 153：后端自然语言 Agent Draft API
+
+### 目标
+
+- 把“对话式创建 Agent”从前端规则草案推进到后端统一能力。
+- 支持用户用自然语言设定自建 Agent 的 System Prompt、工具能力、preferred Adapter 和路由标签。
+- 默认环境仍可用，不强依赖真实 LLM。
+
+### 主要变更
+
+- 新增 `NaturalLanguageAgentDraftService`。
+- 新增 `POST /api/agents/draft`：
+  - 优先使用 `OPENAI_COMPATIBLE` 生成结构化 Agent draft。
+  - LLM 输出必须是 JSON 草案：`name / avatarUrl / systemPrompt / capabilityTags / toolTags / preferredAdapterType / reasoning`。
+  - 自动过滤不支持的 toolTags，禁止生成 `OPEN_CODE` 作为深接目标。
+  - 当 OpenAI-compatible 不可用、fallback、异常或 JSON 无效时，回退到确定性解析，并返回 `draftSource=RULE_BASED_FALLBACK` 与 fallback reason。
+- `/agents` Agent Builder 改为调用后端 draft API。
+- Workspace 内联 Agent 创建卡片也改为调用后端 draft API；API 不可达时才用前端 fallback。
+- `scripts/smoke-test.mjs` 新增默认断言：
+  - 自然语言 Agent draft 可生成。
+  - draft 包含 `systemPrompt` 和 `review` tool capability。
+  - draft 可被持久化为 custom Agent。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm run build`
+- `node --check scripts/smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 边界
+
+- OpenAI-compatible 真实自然语言创建是 opt-in；无真实 provider 时会稳定 fallback。
+- 这不是完整多轮 Agent Builder 对话状态机，仍是单轮自然语言 draft。
+- OpenCode 仍不推进深度接入。
+
+## Phase 154：聊天内创建 Agent 主链路 E2E 验证
+
+### 目标
+
+- 用完整 API smoke 和 Browser E2E 验证“聊天内创建 Agent -> 确认创建 -> 联系人刷新 -> @Agent 路由”主链路。
+- 保持 Browser E2E 作为 Workspace / MessageStream / Agent Builder 改动后的 UI 回归门禁。
+
+### 主要变更
+
+- `scripts/e2e-browser.mjs` 增加聊天内创建 Agent 覆盖：
+  - 在 `/workspace` 发送创建 Agent 请求。
+  - 等待内联 Agent 创建确认卡片。
+  - 点击确认创建。
+  - 校验新 Agent 出现在 API 和左侧联系人列表中。
+  - 继续走 @Agent 多 Agent 协作、Artifact、Approval、Preview 主链路。
+- 修正 REJECTION recovery E2E 指令，避免恢复步骤继续包含 `rejection / blocker` 等规则化拒绝触发词，导致恢复场景被再次判定为 `BLOCKED`。
+- 清理本轮 Browser E2E 失败诊断截图和日志，避免临时文件留在仓库。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- 默认端口启动 backend / frontend 后：
+  - `node scripts/smoke-test.mjs`
+  - `node scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 边界
+
+- Browser E2E 使用默认 memory + MOCK fallback 环境，不等同于真实外部 Adapter 验证。
+- 真实 OpenAI-compatible / Claude Code / Codex provider 仍通过各自 opt-in smoke 验证。
+- 聊天内创建 Agent 仍是单轮 draft + 确认创建，不是完整多轮 Agent Builder 状态机。

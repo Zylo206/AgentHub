@@ -358,6 +358,37 @@ async function verifyConversationManagementUi(page, conversation) {
   await page.locator(conversationSelector).click();
 }
 
+async function createCustomAgentFromChatMessage(page) {
+  const beforeAgents = await request("/api/agents");
+  const beforeIds = new Set(beforeAgents.map((agent) => getIdValue(agent.id)));
+  const prompt = [
+    `创建一个安全评审 Agent，标记 ${TEST_MARKER}。`,
+    "它负责 review、安全、质量门禁，优先使用 Claude Code，并具备 review 与 code 能力。"
+  ].join(" ");
+
+  await page.getByTestId("chat-input-textarea").fill(prompt);
+  await page.getByTestId("chat-send-button").click();
+  await waitForVisible(page, "[data-testid='message-agent-creation-card']", "inline Agent creation card");
+  await page.getByTestId("message-confirm-agent-creation").first().click();
+
+  const createdAgent = await waitForApiState(
+    "chat-created custom Agent",
+    () => request("/api/agents"),
+    (agents) => agents.find((agent) =>
+      !beforeIds.has(getIdValue(agent.id)) &&
+      (agent.toolTags || []).includes("review") &&
+      (agent.systemPrompt || "").length > 20
+    ),
+    30000
+  );
+
+  await page.getByTestId("workspace-sidebar").filter({ hasText: createdAgent.name }).waitFor({
+    state: "visible",
+    timeout: 10000
+  });
+  return createdAgent;
+}
+
 function buildMentionPrompt(agents, preferredAgent = null) {
   const normalizedPreferredId = getIdValue(preferredAgent?.id);
   const baseAgents = [
@@ -835,7 +866,7 @@ async function seedOptionalRejectionScenario() {
     body: JSON.stringify({
       conversationId,
       revisionInstruction: [
-        `${TEST_MARKER}: resolve reviewer blocker, remove rejection trigger,`,
+        `${TEST_MARKER}: apply the reviewer fix request, clear the risk wording,`,
         "keep verification-code login, and rerun review for approval."
       ].join(" ")
     })
@@ -883,7 +914,7 @@ async function runBrowserE2e() {
 
   try {
     const customAgent = await step("Agent Builder creates a custom routable Agent", () => createCustomAgentFromUi(page));
-    const agents = await step("agents loaded for multi-agent mention", () => request("/api/agents"));
+    let agents = await step("agents loaded for multi-agent mention", () => request("/api/agents"));
 
     await step("workspace route opens", async () => {
       await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
@@ -895,6 +926,13 @@ async function runBrowserE2e() {
     await step("conversation list supports search, pin, archive and restore", () =>
       verifyConversationManagementUi(page, conversation)
     );
+    const chatCreatedAgent = await step("chat message creates a custom Agent through inline confirmation", () =>
+      createCustomAgentFromChatMessage(page)
+    );
+    agents = await step("agents reloaded after chat-created custom Agent", () => request("/api/agents"));
+    if (!agents.some((agent) => getIdValue(agent.id) === getIdValue(chatCreatedAgent.id))) {
+      throw new Error("chat-created Agent was not present after reloading agents");
+    }
 
     const sentMessage = await step("UI sends @CustomAgent multi-agent message with uploaded attachment", () =>
       sendMessageWithAttachmentFromUi(page, conversationId, agents, tempAttachment.filePath, customAgent)

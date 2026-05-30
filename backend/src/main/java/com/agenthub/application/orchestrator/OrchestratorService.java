@@ -82,6 +82,7 @@ public class OrchestratorService {
     private final TaskPlanner taskPlanner;
     private final AgentRouter agentRouter;
     private final AgentStepExecutor agentStepExecutor;
+    private final ConversationSessionContextBuilder sessionContextBuilder;
     private final ReviewDecisionEvaluator reviewDecisionEvaluator;
     private final ResultAggregator resultAggregator;
     private final ActionAuditService actionAuditService;
@@ -107,6 +108,7 @@ public class OrchestratorService {
             TaskPlanner taskPlanner,
             AgentRouter agentRouter,
             AgentStepExecutor agentStepExecutor,
+            ConversationSessionContextBuilder sessionContextBuilder,
             ReviewDecisionEvaluator reviewDecisionEvaluator,
             ResultAggregator resultAggregator,
             ActionAuditService actionAuditService,
@@ -130,6 +132,7 @@ public class OrchestratorService {
         this.taskPlanner = taskPlanner;
         this.agentRouter = agentRouter;
         this.agentStepExecutor = agentStepExecutor;
+        this.sessionContextBuilder = sessionContextBuilder;
         this.reviewDecisionEvaluator = reviewDecisionEvaluator;
         this.resultAggregator = resultAggregator;
         this.actionAuditService = actionAuditService;
@@ -792,6 +795,50 @@ public class OrchestratorService {
                         "检查修改后的产物是否满足 revision 指令和验收标准。"),
                 now);
 
+        revisedArtifact = promoteRealRevisionArtifactIfAccepted(
+                frontendRevisionStep,
+                revisedArtifact,
+                originalArtifact,
+                revisionInstruction,
+                now);
+        reviewArtifact = withArtifactStatus(
+                reviewArtifact,
+                ArtifactStatus.ACCEPTED,
+                staticRevisionReviewReportContent(originalArtifact, revisedArtifact, revisionInstruction)
+                        + "\n\nRevision source: "
+                        + revisedArtifact.getSourceKind()
+                        + "; adapter="
+                        + (revisedArtifact.getSourceAdapterType() == null ? "n/a" : revisedArtifact.getSourceAdapterType())
+                        + "; quality="
+                        + (revisedArtifact.getQualityStatus() == null ? "n/a" : revisedArtifact.getQualityStatus())
+                        + ".",
+                now);
+        artifactRepository.save(reviewArtifact);
+        publishArtifactUpdated(reviewArtifact);
+        List<ArtifactId> revisionAffectedArtifactIds = List.of(
+                originalArtifact.getId(),
+                revisedArtifact.getId(),
+                reviewArtifact.getId());
+        ReviewDecision revisionReviewDecision = reviewDecisionEvaluator.evaluate(
+                revisionInstruction,
+                reviewerStep,
+                reviewArtifact,
+                artifactRepository.findByTaskRunId(taskRunId),
+                revisionAffectedArtifactIds);
+        Artifact retryAdviceArtifact = null;
+        if (revisionReviewDecision.rejected()) {
+            reviewArtifact = withArtifactStatus(
+                    reviewArtifact,
+                    ArtifactStatus.REJECTED,
+                    reviewArtifact.getContent() + "\n\n" + buildReviewDecisionMarkdown(revisionReviewDecision),
+                    now);
+            artifactRepository.save(reviewArtifact);
+            publishArtifactUpdated(reviewArtifact);
+            retryAdviceArtifact = createReviewRetryAdviceArtifact(conversationRef, taskRunId, revisionReviewDecision, now);
+            artifactRepository.save(retryAdviceArtifact);
+            publishArtifactCreated(retryAdviceArtifact);
+        }
+
         TaskPlan revisionPlan = new TaskPlan(
                 "修改选中产物并评审新版本。",
                 List.of(frontendRevisionStep, reviewerStep));
@@ -809,7 +856,7 @@ public class OrchestratorService {
                 taskRunId,
                 conversationRef,
                 taskSpec.getId(),
-                TaskRunStatus.COMPLETED,
+                revisionReviewDecision.rejected() ? TaskRunStatus.BLOCKED : TaskRunStatus.COMPLETED,
                 revisionPlan,
                 revisionSteps,
                 revisionTaskGraph,
@@ -848,7 +895,9 @@ public class OrchestratorService {
                 conversationRef,
                 taskRunId,
                 List.of(revisionMessage.getId()),
-                List.of(originalArtifact.getId(), revisedArtifact.getId(), reviewArtifact.getId()),
+                mergeArtifactIds(
+                        List.of(originalArtifact.getId(), revisedArtifact.getId(), reviewArtifact.getId()),
+                        retryAdviceArtifact == null ? List.of() : List.of(retryAdviceArtifact.getId())),
                 List.of(
                         "已为选中产物启用 Artifact-centered iteration",
                         "修改指令：" + revisionInstruction,
@@ -902,10 +951,13 @@ public class OrchestratorService {
                 conversationId,
                 BuiltInAgentIds.REVIEWER,
                 "评审 Agent 已完成 revision 检查，并为更新后的产物生成新的评审报告。");
+        appendReviewerRejectionLoopMessages(conversationId, reviewerStep, revisionReviewDecision);
         messageApplicationService.appendSystemMessage(
                 conversationId,
                 MessageType.TASK_STATUS,
-                "Revision TaskRun 已完成：2 个 TaskStep，2 个 revision 产物。",
+                revisionReviewDecision.rejected()
+                        ? "Revision TaskRun BLOCKED：Reviewer gate 需要先修复问题并重新评审。"
+                        : "Revision TaskRun 已完成：2 个 TaskStep，2 个 revision 产物。",
                 List.of());
         messageApplicationService.appendSystemMessage(
                 conversationId,
@@ -939,6 +991,11 @@ public class OrchestratorService {
             AgentAdapterType preferredAdapterType,
             String routingReason,
             Instant now) {
+        ConversationSessionContextBuilder.SessionContext sessionContext = sessionContextBuilder.build(
+                new ConversationId(conversationId),
+                agentId,
+                null,
+                now);
         return new AgentStepExecutor.StepExecutionCommand(
                 conversationId,
                 taskRunId,
@@ -949,10 +1006,10 @@ public class OrchestratorService {
                 systemPrompt,
                 taskDescription,
                 requiredSkill,
-                inputContext,
+                appendSessionInputContext(inputContext, sessionContext),
                 baseOutputContent,
-                contextItems,
-                artifactSummaries,
+                mergeSessionContextItems(contextItems, sessionContext),
+                mergeSessionArtifactSummaries(artifactSummaries, sessionContext),
                 producedArtifactIds,
                 preferredAdapterType,
                 stepPlan.parallelGroupKey(),
@@ -1051,6 +1108,11 @@ public class OrchestratorService {
             List<ArtifactId> producedArtifactIds,
             AgentAdapterType preferredAdapterType,
             Instant now) {
+        ConversationSessionContextBuilder.SessionContext sessionContext = sessionContextBuilder.build(
+                new ConversationId(conversationId),
+                agentId,
+                null,
+                now);
         if (agentStepExecutor != null) {
             return agentStepExecutor.execute(new AgentStepExecutor.StepExecutionCommand(
                     conversationId,
@@ -1062,10 +1124,10 @@ public class OrchestratorService {
                     systemPrompt,
                     taskDescription,
                     "DEMO_STEP",
-                    inputContext,
+                    appendSessionInputContext(inputContext, sessionContext),
                     baseOutputContent,
-                    contextItems,
-                    artifactSummaries,
+                    mergeSessionContextItems(contextItems, sessionContext),
+                    mergeSessionArtifactSummaries(artifactSummaries, sessionContext),
                     producedArtifactIds,
                     preferredAdapterType,
                     now));
@@ -1084,8 +1146,8 @@ public class OrchestratorService {
                         userInput,
                         systemPrompt,
                         taskDescription,
-                        contextItems,
-                        artifactSummaries,
+                        mergeSessionContextItems(contextItems, sessionContext),
+                        mergeSessionArtifactSummaries(artifactSummaries, sessionContext),
                         Map.of(
                                 "stepOrder", stepOrder,
                                 "demoMode", true)));
@@ -1102,7 +1164,7 @@ public class OrchestratorService {
                 new AgentId(agentId),
                 taskDescription,
                 TaskStepStatus.COMPLETED,
-                inputContext,
+                appendSessionInputContext(inputContext, sessionContext),
                 outputContent,
                 preferredAdapterType.name(),
                 adapterResponse.actualAdapterType() == null ? null : adapterResponse.actualAdapterType().name(),
@@ -1597,6 +1659,36 @@ public class OrchestratorService {
         return " User pinned context and long-term memory for this run: " + String.join(" | ", contextItems);
     }
 
+    private String appendSessionInputContext(
+            String inputContext,
+            ConversationSessionContextBuilder.SessionContext sessionContext) {
+        if (sessionContext == null || sessionContext.inputContextSummary() == null
+                || sessionContext.inputContextSummary().isBlank()) {
+            return inputContext;
+        }
+        return (inputContext == null ? "" : inputContext) + sessionContext.inputContextSummary();
+    }
+
+    private List<String> mergeSessionContextItems(
+            List<String> baseItems,
+            ConversationSessionContextBuilder.SessionContext sessionContext) {
+        List<String> mergedItems = new ArrayList<>(baseItems == null ? List.of() : baseItems);
+        if (sessionContext != null && sessionContext.contextItems() != null) {
+            mergedItems.addAll(sessionContext.contextItems());
+        }
+        return mergedItems;
+    }
+
+    private List<String> mergeSessionArtifactSummaries(
+            List<String> baseItems,
+            ConversationSessionContextBuilder.SessionContext sessionContext) {
+        List<String> mergedItems = new ArrayList<>(baseItems == null ? List.of() : baseItems);
+        if (sessionContext != null && sessionContext.artifactSummaries() != null) {
+            mergedItems.addAll(sessionContext.artifactSummaries());
+        }
+        return mergedItems;
+    }
+
     private List<String> mergePinnedContextItems(List<String> baseItems, List<String> pinnedContextItems) {
         List<String> mergedItems = new ArrayList<>(baseItems);
         mergedItems.addAll(pinnedContextItems);
@@ -1605,6 +1697,16 @@ public class OrchestratorService {
 
     private List<ArtifactId> artifactIdsOf(List<Artifact> artifacts) {
         return artifacts.stream().map(Artifact::getId).toList();
+    }
+
+    private List<ArtifactId> mergeArtifactIds(List<ArtifactId> baseIds, List<ArtifactId> extraIds) {
+        List<ArtifactId> mergedIds = new ArrayList<>(baseIds == null ? List.of() : baseIds);
+        if (extraIds != null) {
+            extraIds.stream()
+                    .filter(id -> id != null && !mergedIds.contains(id))
+                    .forEach(mergedIds::add);
+        }
+        return mergedIds;
     }
 
     private List<String> buildRunStateResourceRefs(TaskRun taskRun, List<Artifact> artifacts) {
@@ -1849,6 +1951,72 @@ public class OrchestratorService {
                 artifact.getQualityReason(),
                 artifact.getCreatedAt(),
                 now);
+    }
+
+    private Artifact promoteRealRevisionArtifactIfAccepted(
+            TaskStep revisionStep,
+            Artifact staticRevisionArtifact,
+            Artifact originalArtifact,
+            String revisionInstruction,
+            Instant now) {
+        if (revisionStep == null || revisionStep.getProducedArtifactIds() == null) {
+            return staticRevisionArtifact;
+        }
+        for (ArtifactId candidateId : revisionStep.getProducedArtifactIds()) {
+            if (candidateId == null || candidateId.equals(staticRevisionArtifact.getId())) {
+                continue;
+            }
+            Artifact candidate = artifactRepository.findById(candidateId).orElse(null);
+            if (!isAcceptedRealCodeArtifact(candidate)) {
+                continue;
+            }
+            Artifact promoted = new Artifact(
+                    candidate.getId(),
+                    candidate.getConversationId(),
+                    candidate.getTaskRunId(),
+                    originalArtifact.getId().value(),
+                    revisionInstruction,
+                    candidate.getTitle(),
+                    candidate.getType(),
+                    ArtifactStatus.UPDATED,
+                    candidate.getLanguage(),
+                    candidate.getContent(),
+                    originalArtifact.getVersion() + 1,
+                    candidate.getSourceKind(),
+                    candidate.getSourceAdapterType(),
+                    candidate.getSourceTaskStepId(),
+                    candidate.getGenerationMode(),
+                    candidate.getBuildValidationStatus(),
+                    candidate.getBuildValidationReason(),
+                    candidate.getQualityStatus(),
+                    candidate.getQualityScore(),
+                    appendQualityReason(candidate.getQualityReason(), "Promoted as the primary revision artifact."),
+                    candidate.getCreatedAt(),
+                    now);
+            artifactRepository.save(promoted);
+            publishArtifactUpdated(promoted);
+            return promoted;
+        }
+        return staticRevisionArtifact;
+    }
+
+    private boolean isAcceptedRealCodeArtifact(Artifact artifact) {
+        return artifact != null
+                && artifact.getSourceKind() == ArtifactSourceKind.REAL_ADAPTER
+                && artifact.getType() == ArtifactType.CODE
+                && artifact.getContent() != null
+                && !artifact.getContent().isBlank()
+                && !"FAILED".equalsIgnoreCase(artifact.getBuildValidationStatus())
+                && !"BUILD_FAILED".equalsIgnoreCase(artifact.getBuildValidationStatus())
+                && !"REJECTED".equalsIgnoreCase(artifact.getQualityStatus())
+                && !"QUALITY_FAILED".equalsIgnoreCase(artifact.getQualityStatus());
+    }
+
+    private String appendQualityReason(String currentReason, String addition) {
+        if (currentReason == null || currentReason.isBlank()) {
+            return addition;
+        }
+        return currentReason + "; " + addition;
     }
 
     private Artifact withArtifactQualityGateFailure(Artifact artifact, Instant now) {

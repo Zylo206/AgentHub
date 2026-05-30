@@ -1,6 +1,7 @@
 package com.agenthub.api.agent;
 
 import com.agenthub.application.agent.AgentApplicationService;
+import com.agenthub.application.agent.NaturalLanguageAgentDraftService;
 import com.agenthub.common.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -17,9 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class AgentController {
 
     private final AgentApplicationService agentApplicationService;
+    private final NaturalLanguageAgentDraftService naturalLanguageAgentDraftService;
 
-    public AgentController(AgentApplicationService agentApplicationService) {
+    public AgentController(
+            AgentApplicationService agentApplicationService,
+            NaturalLanguageAgentDraftService naturalLanguageAgentDraftService) {
         this.agentApplicationService = agentApplicationService;
+        this.naturalLanguageAgentDraftService = naturalLanguageAgentDraftService;
     }
 
     @GetMapping
@@ -44,6 +49,13 @@ public class AgentController {
                         request.preferredAdapterType()),
                 "Agent created");
     }
+
+    @PostMapping("/draft")
+    public ApiResponse<?> draftAgent(@Valid @RequestBody DraftAgentRequest request) {
+        return ApiResponse.success(
+                naturalLanguageAgentDraftService.draftFromNaturalLanguage(request.description()),
+                "Agent draft created");
+    }
 }
 
 record CreateAgentRequest(
@@ -53,4 +65,7 @@ record CreateAgentRequest(
         List<String> capabilityTags,
         List<String> toolTags,
         String preferredAdapterType) {
+}
+
+record DraftAgentRequest(@NotBlank String description) {
 }

@@ -461,6 +461,31 @@ async function runSmokeTest() {
   const agents = await request("/api/agents");
   const frontendAgent = agents.find((agent) => agent.name === "Frontend Builder");
   const reviewerAgent = agents.find((agent) => agent.name === "Reviewer");
+  const agentDraft = await request("/api/agents/draft", {
+    method: "POST",
+    body: JSON.stringify({
+      description: "创建一个安全评审 Agent，优先使用 Claude Code，负责 review、安全和质量门禁。"
+    })
+  });
+  if (!agentDraft.name || !agentDraft.systemPrompt || !Array.isArray(agentDraft.toolTags) || !agentDraft.toolTags.includes("review")) {
+    throw new Error(`natural-language agent draft invalid: ${JSON.stringify(agentDraft)}`);
+  }
+  if (!["LLM_OPENAI_COMPATIBLE", "RULE_BASED_FALLBACK"].includes(agentDraft.draftSource)) {
+    throw new Error(`unexpected agent draft source: ${agentDraft.draftSource}`);
+  }
+  const draftedAgent = await request("/api/agents", {
+    method: "POST",
+    body: JSON.stringify({
+      name: `${agentDraft.name} ${Date.now()}`,
+      avatarUrl: agentDraft.avatarUrl,
+      systemPrompt: agentDraft.systemPrompt,
+      capabilityTags: agentDraft.capabilityTags,
+      toolTags: agentDraft.toolTags,
+      preferredAdapterType: agentDraft.preferredAdapterType
+    })
+  });
+  const draftedAgentId = requireValue(getIdValue(draftedAgent.id), "drafted agent id missing");
+  pass(`natural-language agent draft created and persisted: ${draftedAgentId} (${agentDraft.draftSource})`);
   let fixtureOpenAiCodeAgentId = null;
   let fixtureOpenAiReviewAgentId = null;
   if (EXPECT_OPENAI_FIXTURE) {
@@ -748,6 +773,9 @@ async function runSmokeTest() {
   }
   if (!String(steps[0]?.inputContext || "").includes("Retrieved context")) {
     throw new Error("first task step inputContext did not include Context Retrieval v3 results");
+  }
+  if (!String(steps[0]?.inputContext || "").includes("AgentHub-managed multi-turn session")) {
+    throw new Error("first task step inputContext did not include AgentHub-managed multi-turn session context");
   }
   const decisionLog = taskRun.orchestratorDecisionLog;
   if (!decisionLog) {
@@ -1134,6 +1162,10 @@ async function runSmokeTest() {
   }
   if (!revision.taskRun?.orchestratorDecisionLog?.plannerDecision) {
     throw new Error("revision taskRun missing orchestratorDecisionLog");
+  }
+  const revisionSteps = Array.isArray(revision.taskRun?.steps) ? revision.taskRun.steps : [];
+  if (!String(revisionSteps[0]?.inputContext || "").includes("AgentHub-managed multi-turn session")) {
+    throw new Error("revision task step inputContext did not include AgentHub-managed multi-turn session context");
   }
   if (EXPECT_ANY_REVIEW_REJECTION) {
     if (revision.taskRun.status !== "COMPLETED") {

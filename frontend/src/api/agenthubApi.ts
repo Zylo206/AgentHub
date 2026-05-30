@@ -4,6 +4,7 @@ import type {
   Agent,
   ToolCapabilityKey
 } from "../features/agents/agentTypes";
+import type { AgentCreationDraft } from "../features/agents/conversationalAgentDraft";
 import type { Artifact } from "../features/artifacts/artifactTypes";
 import type { ArtifactSnapshot } from "../features/artifacts/artifactSnapshotTypes";
 import type { ActionAuditLog } from "../features/audit/auditTypes";
@@ -141,6 +142,13 @@ export interface CreateAgentRequest {
 
 export function getAgents(): Promise<Agent[]> {
   return request<Agent[]>("/api/agents");
+}
+
+export function draftAgentFromNaturalLanguage(description: string): Promise<AgentCreationDraft> {
+  return request<AgentCreationDraft>("/api/agents/draft", {
+    method: "POST",
+    body: JSON.stringify({ description })
+  });
 }
 
 export function createAgent(requestBody: CreateAgentRequest): Promise<Agent> {

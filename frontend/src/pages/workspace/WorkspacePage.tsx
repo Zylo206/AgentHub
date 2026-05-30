@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  createAgent,
   createConversation,
+  draftAgentFromNaturalLanguage,
   approveApprovalRequest,
   cancelApprovalRequest,
   cancelTaskRun,
@@ -50,6 +52,7 @@ import { AgentList } from "../../features/agents/AgentList";
 import { AdapterQualityDashboard } from "../../features/agents/AdapterQualityDashboard";
 import { AdapterRoutingPanel } from "../../features/agents/AdapterRoutingPanel";
 import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
+import { inferAgentCreationDraft, type AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
 import type { ArtifactSnapshot } from "../../features/artifacts/artifactSnapshotTypes";
@@ -314,6 +317,9 @@ export function WorkspacePage() {
   const [triggerSuggestionsByMessageId, setTriggerSuggestionsByMessageId] = useState<
     Record<string, OrchestratorTriggerSuggestion | null>
   >({});
+  const [agentCreationDraftsByMessageId, setAgentCreationDraftsByMessageId] = useState<
+    Record<string, AgentCreationDraft | null>
+  >({});
   const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [contextSnapshots, setContextSnapshots] = useState<ContextSnapshot[]>([]);
@@ -352,6 +358,7 @@ export function WorkspacePage() {
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [autoTriggerRunningMessageId, setAutoTriggerRunningMessageId] = useState<string | null>(null);
+  const [agentCreationRunningMessageId, setAgentCreationRunningMessageId] = useState<string | null>(null);
   const [revisingArtifact, setRevisingArtifact] = useState(false);
   const [deployingArtifact, setDeployingArtifact] = useState(false);
   const [restoringSnapshot, setRestoringSnapshot] = useState(false);
@@ -957,7 +964,7 @@ export function WorkspacePage() {
     setOperationMessage(null);
 
     try {
-      await sendMessage(
+      const sentMessage = await sendMessage(
         currentConversationId,
         contentToSend,
         targetAgent ? getIdValue(targetAgent.id) : null,
@@ -966,6 +973,25 @@ export function WorkspacePage() {
         referencedMessageId,
         draftAttachments
       );
+      const localAgentCreationDraft = inferAgentCreationDraft(contentToSend);
+      if (localAgentCreationDraft) {
+        const messageId = getIdValue(sentMessage.id);
+        let agentCreationDraft = localAgentCreationDraft;
+        try {
+          agentCreationDraft = await draftAgentFromNaturalLanguage(contentToSend);
+        } catch {
+          agentCreationDraft = {
+            ...localAgentCreationDraft,
+            draftSource: "CLIENT_RULE_BASED_FALLBACK",
+            fallbackReason: "Backend natural-language draft API was unavailable."
+          };
+        }
+        setAgentCreationDraftsByMessageId((current) => ({
+          ...current,
+          [messageId]: agentCreationDraft
+        }));
+        setOperationMessage("已识别为创建 Agent 请求，请在消息卡片中确认草案。");
+      }
       if (parsedMention.matchedAgent) {
         setSelectedAgent(parsedMention.matchedAgent);
       }
@@ -980,6 +1006,49 @@ export function WorkspacePage() {
     } finally {
       setSendingMessage(false);
     }
+  }
+
+  async function handleConfirmAgentCreation(messageId: string) {
+    const draft = agentCreationDraftsByMessageId[messageId];
+    if (!draft) {
+      return;
+    }
+
+    setAgentCreationRunningMessageId(messageId);
+    setErrorMessage(null);
+    setOperationMessage(null);
+
+    try {
+      const createdAgent = await createAgent({
+        name: draft.name,
+        avatarUrl: draft.avatarUrl,
+        systemPrompt: draft.systemPrompt,
+        capabilityTags: draft.capabilityTags,
+        toolTags: draft.toolTags,
+        preferredAdapterType: draft.preferredAdapterType
+      });
+      setAgents(await getAgents());
+      setSelectedAgent(createdAgent);
+      setAgentCreationDraftsByMessageId((current) => {
+        const next = { ...current };
+        delete next[messageId];
+        return next;
+      });
+      setOperationMessage(`已创建 ${createdAgent.name}。现在可以在输入框使用 @${createdAgent.name} 参与协作。`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setAgentCreationRunningMessageId(null);
+    }
+  }
+
+  function handleCancelAgentCreation(messageId: string) {
+    setAgentCreationDraftsByMessageId((current) => {
+      const next = { ...current };
+      delete next[messageId];
+      return next;
+    });
+    setOperationMessage("已取消本次 Agent 创建草案。");
   }
 
   async function handleUploadAttachments(files: File[]): Promise<LightweightAttachment[]> {
@@ -1650,6 +1719,8 @@ export function WorkspacePage() {
             triggerSuggestionsByMessageId={triggerSuggestionsByMessageId}
             approvalByMessageId={approvalByMessageId}
             autoTriggerRunningMessageId={autoTriggerRunningMessageId}
+            agentCreationDraftsByMessageId={agentCreationDraftsByMessageId}
+            agentCreationRunningMessageId={agentCreationRunningMessageId}
             streamingPreviewsByStepId={streamingPreviewsByStepId}
             onSelectArtifact={setSelectedArtifactId}
             onToggleMessagePin={handleToggleMessagePin}
@@ -1662,6 +1733,8 @@ export function WorkspacePage() {
             onConfirmOrchestratorTrigger={handleConfirmOrchestratorTrigger}
             onCancelOrchestratorTrigger={handleCancelApprovalRequest}
             onRefreshOrchestratorSuggestion={handleRefreshOrchestratorSuggestion}
+            onConfirmAgentCreation={handleConfirmAgentCreation}
+            onCancelAgentCreation={handleCancelAgentCreation}
           />
           <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
           <AdapterQualityDashboard

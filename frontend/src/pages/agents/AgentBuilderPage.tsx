@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createAgent, executeAdapter, getAdapters } from "../../api/agenthubApi";
+import { createAgent, draftAgentFromNaturalLanguage, executeAdapter, getAdapters } from "../../api/agenthubApi";
 import {
   TOOL_CAPABILITY_OPTIONS,
   type AdapterDescriptor,
@@ -7,6 +7,7 @@ import {
   type Agent,
   type ToolCapabilityKey
 } from "../../features/agents/agentTypes";
+import type { AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
 const ADAPTER_OPTIONS = ["MOCK", "CODEX", "CLAUDE_CODE", "OPEN_CODE", "OPENAI_COMPATIBLE"] as const;
@@ -46,6 +47,32 @@ function getFallbackAdapterOptions(): AdapterDescriptor[] {
     description: "",
     failureReason: null
   }));
+}
+
+const MAINSTREAM_DEEP_ADAPTERS = new Set(["OPENAI_COMPATIBLE", "CLAUDE_CODE", "CODEX"]);
+
+function getAdapterDepthProfile(adapterType?: string | null): { label: string; description: string; className: string } {
+  if (adapterType && MAINSTREAM_DEEP_ADAPTERS.has(adapterType)) {
+    return {
+      label: "深接 v1",
+      description: "Artifact-only、REAL_FIRST、Contract / Quality / Build gate、fallback reason 可观测。",
+      className: "agent-builder-depth-badge--deep"
+    };
+  }
+
+  if (adapterType === "OPEN_CODE") {
+    return {
+      label: "Probe",
+      description: "当前只做 CLI 探测和 fallback，不作为本轮主流平台深接目标。",
+      className: "agent-builder-depth-badge--probe"
+    };
+  }
+
+  return {
+    label: "Fallback",
+    description: "稳定演示安全网，不能包装成真实主流 Agent 平台。",
+    className: "agent-builder-depth-badge--fallback"
+  };
 }
 
 function stripJsonFence(content: string): string {
@@ -194,6 +221,10 @@ export function AgentBuilderPage() {
   const [testingAdapter, setTestingAdapter] = useState(false);
   const [adapterTestError, setAdapterTestError] = useState<string | null>(null);
   const [adapterTestResult, setAdapterTestResult] = useState<AdapterExecutionResponse | null>(null);
+  const [naturalAgentPrompt, setNaturalAgentPrompt] = useState("");
+  const [conversationalDraft, setConversationalDraft] = useState<AgentCreationDraft | null>(null);
+  const [creatingDraftAgent, setCreatingDraftAgent] = useState(false);
+  const [generatingAgentDraft, setGeneratingAgentDraft] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,6 +260,8 @@ export function AgentBuilderPage() {
     adapterOptions.find((descriptor) => descriptor.adapterType === preferredAdapterType) ?? null;
   const selectedTestAdapterDescriptor =
     adapterOptions.find((descriptor) => descriptor.adapterType === adapterTestType) ?? null;
+  const selectedAdapterDepthProfile = getAdapterDepthProfile(preferredAdapterType);
+  const selectedTestAdapterDepthProfile = getAdapterDepthProfile(adapterTestType);
   const parsedAdapterArtifacts = useMemo(
     () => parseAdapterArtifacts(adapterTestResult?.content),
     [adapterTestResult]
@@ -251,6 +284,62 @@ export function AgentBuilderPage() {
     setSelectedToolCapabilities((current) =>
       current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
     );
+  }
+
+  async function handleGenerateConversationalDraft() {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setGeneratingAgentDraft(true);
+    try {
+      setConversationalDraft(await draftAgentFromNaturalLanguage(naturalAgentPrompt));
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setGeneratingAgentDraft(false);
+    }
+  }
+
+  function handleApplyConversationalDraft() {
+    if (!conversationalDraft) {
+      return;
+    }
+    setName(conversationalDraft.name);
+    setAvatarUrl(conversationalDraft.avatarUrl);
+    setSystemPrompt(conversationalDraft.systemPrompt);
+    setCapabilityTags(conversationalDraft.capabilityTags.join(", "));
+    setSelectedToolCapabilities(conversationalDraft.toolTags as ToolCapabilityKey[]);
+    setToolTags("");
+    setPreferredAdapterType(conversationalDraft.preferredAdapterType);
+    setSuccessMessage("已把对话式草案填入下方表单；你可以继续微调后创建。");
+  }
+
+  async function handleCreateConversationalDraftAgent() {
+    if (!conversationalDraft) {
+      return;
+    }
+
+    setCreatingDraftAgent(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const agent = await createAgent({
+        name: conversationalDraft.name,
+        avatarUrl: conversationalDraft.avatarUrl,
+        systemPrompt: conversationalDraft.systemPrompt,
+        capabilityTags: conversationalDraft.capabilityTags,
+        toolTags: conversationalDraft.toolTags,
+        preferredAdapterType: conversationalDraft.preferredAdapterType
+      });
+      setCreatedAgent(agent);
+      setSuccessMessage("已根据对话式草案创建 Agent。回到 Workspace 后可直接 @ 它参与协作。");
+      setConversationalDraft(null);
+      setNaturalAgentPrompt("");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setCreatingDraftAgent(false);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -340,6 +429,91 @@ export function AgentBuilderPage() {
           <span>4. Preferred Adapter</span>
           <span>5. 在 Workspace @Agent</span>
         </div>
+
+        <section className="conversational-agent-panel" aria-label="Conversational Agent creation">
+          <div className="conversational-agent-panel__header">
+            <div>
+              <p className="eyebrow">对话式创建 Agent</p>
+              <h2>用一句话生成协作成员草案</h2>
+              <p>先用规则解析生成可检查草案，再确认创建；不调用外部模型，也不把 OpenCode 包装成深接平台。</p>
+            </div>
+            <span className="agent-builder-depth-badge agent-builder-depth-badge--deep">
+              Claude / Codex / OpenAI-compatible 深接 v1
+            </span>
+          </div>
+          <label className="agent-builder-field">
+            <span>描述你想创建的 Agent</span>
+            <textarea
+              data-testid="conversational-agent-prompt"
+              value={naturalAgentPrompt}
+              onChange={(event) => setNaturalAgentPrompt(event.target.value)}
+              placeholder="例如：创建一个安全评审 Agent，优先使用 Claude Code，负责 review、安全和质量门禁。"
+            />
+          </label>
+          <div className="conversational-agent-panel__actions">
+            <button
+              type="button"
+              className="secondary-button"
+              data-testid="conversational-agent-generate"
+              disabled={generatingAgentDraft || !naturalAgentPrompt.trim()}
+              onClick={handleGenerateConversationalDraft}
+            >
+              {generatingAgentDraft ? "生成中..." : "生成 Agent 草案"}
+            </button>
+            {conversationalDraft ? (
+              <>
+                <button type="button" className="secondary-button" onClick={handleApplyConversationalDraft}>
+                  填入下方表单
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  data-testid="conversational-agent-create"
+                  disabled={creatingDraftAgent}
+                  onClick={handleCreateConversationalDraftAgent}
+                >
+                  {creatingDraftAgent ? "创建中..." : "确认创建 Agent"}
+                </button>
+              </>
+            ) : null}
+          </div>
+          {conversationalDraft ? (
+            <div className="conversational-agent-draft" data-testid="conversational-agent-draft">
+              <div className="conversational-agent-draft__identity">
+                <span>{conversationalDraft.name.charAt(0).toUpperCase()}</span>
+                <div>
+                  <strong>{conversationalDraft.name}</strong>
+                  <p>{conversationalDraft.systemPrompt}</p>
+                </div>
+              </div>
+              <div className="conversational-agent-draft__grid">
+                <div>
+                  <span>Preferred Adapter</span>
+                  <strong>{conversationalDraft.preferredAdapterType}</strong>
+                  <em>{getAdapterDepthProfile(conversationalDraft.preferredAdapterType).label}</em>
+                </div>
+                <div>
+                  <span>Draft Source</span>
+                  <strong>{conversationalDraft.draftSource || "UNKNOWN"}</strong>
+                  {conversationalDraft.fallbackReason ? <em>{conversationalDraft.fallbackReason}</em> : null}
+                </div>
+                <div>
+                  <span>Capability</span>
+                  <strong>{conversationalDraft.capabilityTags.join(" / ")}</strong>
+                </div>
+                <div>
+                  <span>Tool Capability</span>
+                  <strong>{conversationalDraft.toolTags.join(" / ")}</strong>
+                </div>
+              </div>
+              <div className="conversational-agent-draft__reasons">
+                {conversationalDraft.reasoning.map((reason) => (
+                  <span key={reason}>{reason}</span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
 
         <div className="agent-builder-layout">
           <form className="agent-builder-form" onSubmit={handleSubmit}>
@@ -465,6 +639,10 @@ export function AgentBuilderPage() {
                     : displayStatus(selectedAdapterDescriptor?.status || "UNKNOWN")}
                 </span>
               </div>
+              <div className={`agent-builder-depth-badge ${selectedAdapterDepthProfile.className}`}>
+                <strong>{selectedAdapterDepthProfile.label}</strong>
+                <span>{selectedAdapterDepthProfile.description}</span>
+              </div>
               {selectedAdapterDescriptor?.description ? (
                 <div className="agent-builder-adapter-note">{selectedAdapterDescriptor.description}</div>
               ) : null}
@@ -542,6 +720,9 @@ export function AgentBuilderPage() {
             </div>
             <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(selectedTestAdapterDescriptor?.status || "unknown")}`}>
               {displayStatus(selectedTestAdapterDescriptor?.status || "UNKNOWN")}
+            </span>
+            <span className={`agent-builder-depth-badge ${selectedTestAdapterDepthProfile.className}`}>
+              {selectedTestAdapterDepthProfile.label}
             </span>
           </div>
 

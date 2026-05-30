@@ -23,6 +23,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Adapter quality metrics now expose a unified `lastOutcome / outcomeSummary` taxonomy for `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`, shared by OpenAI-compatible, Claude Code, and Codex paths.
    - `Done`: direct adapter execute results now also feed Adapter Quality Metrics, so `/api/adapters/{type}/execute` parse / fallback / accepted outcomes are visible outside TaskStep-created runs.
    - `Done`: `scripts/adapter-quality-matrix-smoke.mjs` now probes direct adapter execute across multiple task types and summarizes `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK / SKIPPED` by adapter.
+   - `Done`: Artifact Revision now promotes an accepted `REAL_ADAPTER` CODE output from the revision worker as the primary revised Artifact, while static revision output remains fallback.
    - Real provider validation must be opt-in and must not commit keys.
 
 2. **Maintain REAL_FIRST primary Artifact rules**
@@ -62,6 +63,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Claude Code prompt contract now requires a single raw JSON object, raw CODE source, no Markdown fences, no CLI wrapper/log content, and explicit Artifact type / summary fields.
    - `Done`: Claude Code contract failures are surfaced as `PARSE_FAILED`; quality/build failures remain visible through TaskStep and Artifact metadata.
    - `Done`: Claude Code streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, destroys the CLI process when cancellation is observed during stream-json reading, and discards final output after Stop / Cancel.
+   - `Done`: Claude Code now receives AgentHub-managed multi-turn session context through the standard prompt contract: recent messages, recent Artifacts, Review Report results, and previous TaskRun summaries are injected without relying on external CLI native sessions.
    - `Boundary`: fixture mode is not real Claude Code provider output; real CLI mode still requires local `claude` install and authentication.
    - `Boundary`: v1 is Artifact-only and does not allow Claude Code to modify the AgentHub workspace.
 
@@ -86,6 +88,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Codex prompt contract now requires a single raw JSON object, raw CODE source, no Markdown fences, no CLI wrapper/log content, and explicit Artifact type / summary fields.
    - `Done`: Codex contract failures are surfaced as `PARSE_FAILED`; quality/build failures remain visible through TaskStep and Artifact metadata.
    - `Done`: Codex streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, supports fixture stream previews for contract smoke, and discards final output after Stop / Cancel.
+   - `Done`: Codex now receives AgentHub-managed multi-turn session context through the standard prompt contract: recent messages, recent Artifacts, Review Report results, and previous TaskRun summaries are injected without relying on external CLI native sessions.
    - `Boundary`: this is not Codex Desktop GUI automation; the intended integration is headless / Artifact-only execution with fallback.
    - `Boundary`: default smoke must not require Codex, and Codex output must not bypass Artifact contract validation or quality gates.
 
@@ -95,6 +98,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: rejected review marks the TaskRun as `BLOCKED`, marks the Review Report `REJECTED`, emits `REJECTION` protocol messages, and creates retry/revise guidance.
    - `Done`: opt-in smoke with `AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION=true` verifies the rejection path and then verifies Artifact Revision returns to a `COMPLETED` / accepted review path.
    - `Done`: opt-in smoke with `AGENTHUB_SMOKE_EXPECT_REVIEW_QUALITY_REJECTION=true` verifies quality-gate rejection and revision recovery.
+   - `Done`: Artifact Revision now reuses the Reviewer gate after revision execution; build / quality / parse failures can block the revision TaskRun and emit retry / revise guidance.
    - `Boundary`: this is a rule-based review decision loop using available build/quality metadata; it is not a full static analysis engine or automatic code-fix system.
 
 7. **Run a JDBC / MySQL real database verification sprint**
@@ -178,6 +182,11 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: TaskRun / Orchestrator Explain now extracts routing evidence chips from `routingReason` instead of only exposing raw router text.
    - `Done`: Agent Builder now includes a visible creation flow for basic info, System Prompt, Tool Capability, preferred Adapter, and Workspace mention usage.
    - `Done`: Browser E2E now covers creating a custom Agent in Agent Builder, mentioning it in Workspace, seeing routing preview, and verifying it enters the TaskRun.
+   - `Done`: Agent Builder now has a lightweight conversational creation lane: natural language description -> rule-based Agent draft -> apply to form or confirm create.
+   - `Done`: Agent contacts and Agent Builder now mark `OPENAI_COMPATIBLE`, `CLAUDE_CODE`, and `CODEX` as deep-integration v1 surfaces, while `OPEN_CODE` remains explicitly labeled as probe-only.
+   - `Done`: Workspace message flow now recognizes "create Agent" style user messages and renders an inline Agent creation confirmation card; confirming creates the Agent through the existing API and refreshes the IM contact list.
+   - `Done`: Backend now owns natural-language Agent draft generation through `POST /api/agents/draft`: it tries `OPENAI_COMPATIBLE` for structured Agent creation and falls back to deterministic parsing when unavailable.
+   - `Done`: Default API smoke now verifies natural-language Agent draft creation, persisted custom Agent creation, tool capability mapping, and draft source classification.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**
@@ -186,6 +195,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Browser E2E failure diagnostics now print the current URL and write screenshot plus console summary under `.agenthub/e2e-browser/`.
    - `Done`: `scripts/verify-local.mjs` provides a local gate that runs API smoke, SSE smoke, and Browser E2E in sequence.
    - `Done`: Browser E2E now covers edge states for REJECTION -> Revision -> accepted re-review, real Adapter fallback classification, and Context Search source diversity.
+   - `Done`: Browser E2E now covers chat-message Agent creation: send create-Agent request, render inline confirmation card, confirm creation, refresh Agent contacts, and continue into @Agent routing.
    - `Boundary`: Browser E2E validates UI integration; it does not replace API smoke, SSE smoke, JDBC/MySQL smoke, or opt-in real Adapter smoke.
 
 12. **Strengthen Artifact editing trust**
