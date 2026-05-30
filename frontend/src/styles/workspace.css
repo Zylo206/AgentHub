@@ -5573,6 +5573,385 @@
   line-height: 1.45;
 }
 
+/* Taste-skill readability pass: stronger background depth and safer text contrast. */
+.workspace-page {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.24), transparent 30%),
+    radial-gradient(circle at 96% 12%, rgba(14, 165, 233, 0.16), transparent 32%),
+    linear-gradient(135deg, var(--command-bg), var(--command-bg-2));
+  background-size: 28px 28px, 28px 28px, auto, auto, auto;
+}
+
+.workspace-main {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(37, 99, 235, 0.07), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 250, 255, 0.98));
+}
+
+.workspace-artifacts {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.08), transparent 30%),
+    linear-gradient(180deg, #f6f9fe, #edf3fb);
+}
+
+.workspace-sidebar {
+  background:
+    radial-gradient(circle at 28% 0%, rgba(37, 99, 235, 0.24), transparent 32%),
+    radial-gradient(circle at 100% 18%, rgba(14, 165, 233, 0.10), transparent 30%),
+    linear-gradient(180deg, #08111f, #0f172a);
+}
+
+.workspace-brand p,
+.workspace-sidebar .section-header span,
+.conversation-item__preview,
+.agent-item__subtitle,
+.agent-im-strip,
+.agent-capability-summary {
+  color: #cbd5e1;
+}
+
+.workspace-main__header,
+.workspace-card,
+.task-run-card,
+.artifact-preview,
+.context-card,
+.approval-gate,
+.action-audit-card,
+.adapter-quality-dashboard,
+.orchestrator-explain-panel,
+.adapter-routing-panel {
+  color: var(--text-main);
+}
+
+.workspace-main__flow-guide,
+.message-protocol-card,
+.message-stream-status-bar,
+.retrieved-context-item__explain-chain section,
+.orchestrator-decision-rail__item,
+.adapter-quality-command-strip,
+.preview-page__metadata-bar {
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+.workspace-main__flow-guide,
+.message-bubble--agent,
+.message-bubble--task-spec,
+.message-bubble--agent-protocol {
+  color: var(--text-main);
+}
+
+.workspace-main__flow-guide,
+.chat-input,
+.message-bubble--agent,
+.message-bubble--task-spec,
+.message-bubble--agent-protocol,
+.artifact-card,
+.task-run-card,
+.context-card,
+.approval-gate,
+.action-audit-card {
+  border-color: rgba(174, 189, 206, 0.78);
+}
+
+.workspace-main__flow-guide,
+.message-bubble--agent,
+.message-bubble--task-spec,
+.message-bubble--agent-protocol,
+.artifact-card,
+.task-run-card,
+.context-card,
+.approval-gate,
+.action-audit-card {
+  background-color: rgba(255, 255, 255, 0.96);
+}
+
+.section-header span,
+.context-card__summary,
+.task-step-item__description,
+.artifact-preview__operation-message,
+.approval-gate__description,
+.approval-gate__affected li,
+.action-audit-card__summary,
+.retrieved-context-item__reason,
+.retrieved-context-item__content,
+.adapter-quality-dashboard__header p,
+.adapter-quality-dashboard__header span,
+.preview-page__content-toolbar span {
+  color: var(--text-muted);
+}
+
+.preview-page {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 15% 0%, rgba(37, 99, 235, 0.26), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgba(14, 165, 233, 0.14), transparent 30%),
+    linear-gradient(135deg, #06101e, #0b1728);
+  background-size: 30px 30px, 30px 30px, auto, auto, auto;
+}
+
+.preview-page__topbar h1,
+.preview-page__topbar .eyebrow {
+  color: #f8fafc;
+}
+
+.preview-page__topbar span {
+  color: #cbd5e1;
+}
+
+.preview-page__card,
+.preview-page__state {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+/* Taste-skill IM polish: contacts, chat flow and collaboration affordances. */
+.im-list-tools {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.im-search-box {
+  display: grid;
+  gap: 6px;
+}
+
+.im-search-box span {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.im-search-box input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.74);
+  color: #f8fafc;
+  padding: 10px 12px;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.im-search-box input::placeholder {
+  color: rgba(203, 213, 225, 0.66);
+}
+
+.im-search-box input:focus {
+  border-color: rgba(96, 165, 250, 0.74);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
+}
+
+.im-list-tools__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.im-list-tools__chips span {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 850;
+  padding: 4px 7px;
+}
+
+.conversation-list--im,
+.agent-list--im {
+  display: grid;
+  gap: 10px;
+}
+
+.conversation-item__identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.conversation-avatar {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.36);
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 30% 18%, rgba(96, 165, 250, 0.35), transparent 42%),
+    rgba(15, 23, 42, 0.62);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.conversation-item__identity div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.conversation-item__identity small {
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-item--im,
+.agent-item--im {
+  border-color: rgba(148, 163, 184, 0.18);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.84), rgba(15, 23, 42, 0.58));
+  color: #f8fafc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.conversation-item--im:hover,
+.agent-item--im:hover {
+  border-color: rgba(96, 165, 250, 0.42);
+  background:
+    linear-gradient(135deg, rgba(30, 41, 59, 0.94), rgba(15, 23, 42, 0.72));
+}
+
+.conversation-item--active,
+.agent-item--selected {
+  border-color: rgba(96, 165, 250, 0.70);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.22), transparent 36%),
+    linear-gradient(135deg, rgba(30, 64, 175, 0.52), rgba(15, 23, 42, 0.86));
+  box-shadow:
+    inset 4px 0 0 #60a5fa,
+    0 14px 34px rgba(2, 8, 23, 0.18);
+}
+
+.conversation-item__row strong,
+.agent-item__identity-text strong {
+  color: #ffffff;
+}
+
+.conversation-item__type,
+.conversation-item__time,
+.agent-item__description,
+.agent-item__meta,
+.agent-adapter-health__hint {
+  color: #cbd5e1;
+}
+
+.conversation-item__meta span,
+.agent-capability-summary,
+.agent-im-strip {
+  background: rgba(255, 255, 255, 0.08);
+  color: #dbeafe;
+}
+
+.workspace-main__hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.workspace-main__eyebrow {
+  display: inline-flex;
+  margin-bottom: 6px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workspace-main__mode-card {
+  display: grid;
+  flex: 0 0 auto;
+  min-width: 168px;
+  gap: 4px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.14), transparent 42%),
+    rgba(255, 255, 255, 0.78);
+  padding: 12px 14px;
+  text-align: right;
+}
+
+.workspace-main__mode-card strong {
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.workspace-main__mode-card span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.workspace-capability-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.workspace-capability-strip span {
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.86);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 5px 9px;
+}
+
+.workspace-main__toolbar--collaboration {
+  margin: 14px 18px 0;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.10), transparent 34%),
+    rgba(255, 255, 255, 0.84);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+}
+
+.workspace-main__flow-guide {
+  margin: 10px 18px 0;
+  border-color: rgba(37, 99, 235, 0.18);
+  background:
+    linear-gradient(90deg, rgba(239, 246, 255, 0.94), rgba(240, 253, 250, 0.84));
+}
+
+.message-stream {
+  padding-top: 14px;
+}
+
+.message-bubble {
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+}
+
+.message-bubble--user {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.message-bubble--agent,
+.message-bubble--agent-protocol {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.06), transparent 34%),
+    rgba(255, 255, 255, 0.98);
+}
+
 @media (max-width: 720px) {
   .message-protocol-card,
   .message-stream-status-bar__header,
@@ -5595,5 +5974,237 @@
 
   .preview-page__content-toolbar > span {
     text-align: left;
+  }
+
+  .workspace-main__hero {
+    flex-direction: column;
+  }
+
+  .workspace-main__mode-card {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+/* IM redesign v2: reduce dashboard-card feel and bring the chat collaboration path forward. */
+.workspace-page {
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.028) 1px, transparent 1px),
+    radial-gradient(circle at 28% 0%, rgba(37, 99, 235, 0.13), transparent 30%),
+    radial-gradient(circle at 92% 4%, rgba(14, 165, 233, 0.10), transparent 28%);
+  background-size: 34px 34px, 34px 34px, auto, auto;
+}
+
+.workspace-sidebar,
+.workspace-main,
+.workspace-artifacts {
+  isolation: isolate;
+}
+
+.workspace-main {
+  border-color: rgba(148, 163, 184, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(242, 247, 253, 0.96)),
+    radial-gradient(circle at 18% 0%, rgba(37, 99, 235, 0.08), transparent 36%);
+}
+
+.workspace-main__header {
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+  background:
+    radial-gradient(circle at 96% 12%, rgba(37, 99, 235, 0.10), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.92));
+}
+
+.workspace-main__hero {
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.12), transparent 38%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 247, 255, 0.88));
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+}
+
+.workspace-main__mode-card {
+  border-color: rgba(37, 99, 235, 0.18);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+  color: #e2e8f0;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+}
+
+.workspace-main__mode-card strong,
+.workspace-main__mode-card span {
+  color: #f8fafc;
+}
+
+.workspace-main__mode-card p {
+  color: #cbd5e1;
+}
+
+.workspace-capability-strip span {
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.workspace-main__content {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(59, 130, 246, 0.06), transparent 30%),
+    linear-gradient(180deg, rgba(248, 251, 255, 0.78), rgba(238, 244, 252, 0.72));
+}
+
+.message-stream {
+  position: relative;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.022) 1px, transparent 1px),
+    radial-gradient(circle at 6% 0%, rgba(37, 99, 235, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.94));
+  background-size: 30px 30px, 30px 30px, auto, auto;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.message-stream::before {
+  content: "Agent conversation";
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  align-self: flex-start;
+  margin: -6px 0 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.10em;
+  padding: 5px 9px;
+  text-transform: uppercase;
+  backdrop-filter: blur(12px);
+}
+
+.message-bubble {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.message-bubble:hover {
+  transform: translateY(-1px);
+}
+
+.message-bubble--user {
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.12), transparent 36%),
+    linear-gradient(135deg, #ffffff, #eef5ff);
+  color: #0f172a;
+}
+
+.message-bubble--agent,
+.message-bubble--agent-protocol {
+  border-color: rgba(148, 163, 184, 0.20);
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.07),
+    inset 3px 0 0 rgba(37, 99, 235, 0.34);
+}
+
+.message-protocol-card {
+  border-color: rgba(37, 99, 235, 0.18);
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.96));
+}
+
+.workspace-main__flow-guide {
+  border-color: rgba(37, 99, 235, 0.18);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.10), transparent 38%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.92));
+}
+
+.chat-input {
+  border-color: rgba(37, 99, 235, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.96));
+  box-shadow:
+    0 16px 40px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.workspace-artifacts {
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.024) 1px, transparent 1px),
+    radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.11), transparent 32%),
+    linear-gradient(180deg, #f8fbff, #edf4fb);
+  background-size: 32px 32px, 32px 32px, auto, auto;
+}
+
+.workspace-artifacts .section-header {
+  margin: 14px 14px 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.88));
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
+}
+
+.artifact-panel__sidebar,
+.artifact-panel__detail {
+  border-color: rgba(148, 163, 184, 0.22);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.06), transparent 34%),
+    rgba(255, 255, 255, 0.96);
+}
+
+.artifact-panel__detail {
+  box-shadow:
+    0 18px 44px rgba(15, 23, 42, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.artifact-card,
+.artifact-delivery-cockpit,
+.artifact-diagnostic-panel,
+.artifact-risk-summary,
+.artifact-snapshot-timeline,
+.deploy-status-card {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.artifact-card:hover,
+.artifact-delivery-cockpit:hover,
+.artifact-diagnostic-panel:hover,
+.artifact-risk-summary:hover,
+.artifact-snapshot-timeline:hover,
+.deploy-status-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.24);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.10);
+}
+
+@media (max-width: 720px) {
+  .workspace-page {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .workspace-main__hero,
+  .workspace-main__flow-guide,
+  .message-stream,
+  .chat-input,
+  .workspace-artifacts .section-header {
+    border-radius: 18px;
+  }
+
+  .message-stream::before {
+    display: none;
   }
 }

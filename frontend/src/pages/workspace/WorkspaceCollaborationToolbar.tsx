@@ -30,7 +30,7 @@ export function WorkspaceCollaborationToolbar({
       <div className="workspace-main__toolbar workspace-main__toolbar--collaboration">
         <div className="section-header">
           <h3>协作消息流</h3>
-          <span>发送任务后，通过消息卡片确认 Agent 协作。</span>
+          <span>像群聊一样发送任务，确认后由 Orchestrator 协调多个 Agent 回复。</span>
         </div>
         <div className="workspace-main__collaboration-actions" data-testid="workspace-collaboration-actions">
           <button
@@ -79,9 +79,9 @@ export function WorkspaceCollaborationToolbar({
         <em>→</em>
         <strong>确认协作</strong>
         <em>→</em>
-        <strong>Orchestrator 执行</strong>
+        <strong>多 Agent 回复</strong>
         <em>→</em>
-        <strong>查看 Artifact / 审批 / Preview</strong>
+        <strong>Artifact / Diff / Deploy</strong>
       </div>
     </>
   );

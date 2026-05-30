@@ -24,12 +24,28 @@ export function WorkspaceHeader({
 }: WorkspaceHeaderProps) {
   return (
     <div className="workspace-main__header">
-      <h2>{currentConversation?.title || "暂无活跃会话"}</h2>
-      <p>
-        {currentConversation
-          ? `${displayConversationType(currentConversation.type)} / ${currentConversation.participantAgentIds.length} 个 Agent`
-          : "创建一个 Demo 会话后开始 AgentHub 流程。"}
-      </p>
+      <div className="workspace-main__hero">
+        <div>
+          <span className="workspace-main__eyebrow">IM-first Multi-Agent Workspace</span>
+          <h2>{currentConversation?.title || "暂无活跃会话"}</h2>
+          <p>
+            {currentConversation
+              ? `${displayConversationType(currentConversation.type)} / ${currentConversation.participantAgentIds.length} 个 Agent · 通过消息触发协作、产物、审批和预览`
+              : "创建一个会话后，像 IM 群聊一样发送任务，AgentHub 会建议启动多 Agent 协作。"}
+          </p>
+        </div>
+        <div className="workspace-main__mode-card" aria-label="Current collaboration mode">
+          <strong>{currentConversation?.type === "GROUP" ? "群聊协作" : "单聊模式"}</strong>
+          <span>消息流 · TaskRun · Artifact</span>
+        </div>
+      </div>
+      <div className="workspace-capability-strip" aria-label="IM capabilities">
+        <span>文本 / 代码块</span>
+        <span>文件附件</span>
+        <span>Diff 视图</span>
+        <span>部署状态卡片</span>
+        <span>Pin 上下文</span>
+      </div>
       {currentConversation ? (
         <div className="conversation-participants conversation-participants--agents" data-testid="conversation-participants">
           <span className="conversation-participants__label">当前群聊成员</span>

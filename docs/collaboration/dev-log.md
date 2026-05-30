@@ -5582,3 +5582,114 @@
 ### 下一步建议
 
 - 继续拆分 `TaskRunPanel` 的 Orchestrator Explain 和 Adapter Routing 子组件，降低后续决策面板迭代成本。
+
+## Phase 129：页面背景与字体可见性优化
+
+### 目标
+
+- 优化 AgentHub 前端页面背景层次和字体可见性，让 Workspace / Preview 的 command-center 视觉更稳定、更易读。
+- 保持当前中文产品界面、IM-first 主路径、Artifact Studio、Preview Studio 和 E2E 主链路不变。
+
+### 主要变更
+
+- `global.css` 调整全局视觉 token：提高 `text-muted`、`text-soft`、border、shadow 和 page background 的对比度。
+- `global.css` 强化 body 和 app header 背景，降低浅灰背景导致的文字发虚问题。
+- `workspace.css` 增加 Workspace 背景网格、主工作区浅色 surface、右侧 Artifact 区背景和暗色 sidebar 对比优化。
+- `workspace.css` 强化弱文本、消息卡片、Context / Orchestrator / Adapter / Preview 相关区域的字体可见性。
+- `workspace.css` 强化 PreviewPage 暗色背景和顶部文字对比，保持本地静态预览边界说明。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 额外使用 Playwright 生成 desktop / mobile 截图，并确认 console error / pageerror 为空。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮只调整视觉样式，不修改后端、Orchestrator、Adapter、Artifact、Approval、Realtime 或真实部署能力。
+- 截图验证只覆盖当前主视口和一个窄屏视口，不代表完整移动端产品化。
+
+### 遗留问题
+
+- 仍可继续做细粒度视觉 QA，例如真实 Adapter 各种失败状态、极端长文本、超多 Artifact 和更多浏览器矩阵。
+
+### 下一步建议
+
+- 若继续前端产品化，优先结合真实数据量做高密度状态下的视觉 QA，而不是继续泛化改背景。
+
+## Phase 130：IM-first 多 Agent Workspace UI 产品化
+
+### 目标
+
+- 将 Workspace 进一步优化为类 IM 聊天的多 Agent 协作平台界面。
+- 强化左侧会话列表、Agent 联系人、中央协作消息流和主路径引导的产品感。
+- 保持现有 Conversation、Message、Orchestrator、Artifact、Approval、Deploy Preview 和 E2E 主链路不变。
+
+### 主要变更
+
+- `ConversationList` 增加本地搜索、最近活跃排序、群聊 / 单聊头像和会话能力标签。
+- `AgentList` 增加本地搜索，按 Agent 名称、描述、角色、Adapter、能力和工具标签过滤。
+- `WorkspaceHeader` 增加 IM-first workspace hero、当前协作模式卡片和文本 / 附件 / Diff / 部署 / Pin 上下文能力条。
+- `WorkspaceCollaborationToolbar` 调整主路径文案，强调“发送任务 -> 确认协作 -> 多 Agent 回复 -> Artifact / Diff / Deploy”。
+- `workspace.css` 增加 IM 搜索框、联系人卡片、会话头像、暗色侧栏 active 状态、主会话 header、能力条和聊天气泡层级样式。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 额外使用 Playwright 生成 desktop / mobile 截图，并确认 console error / pageerror 为空。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮是前端 UI 与本地搜索增强，不新增后端置顶、归档、服务端搜索或真实多窗口能力。
+- Conversation / Agent 搜索是当前前端数据内的本地过滤，不代表完整 IM 搜索系统。
+- 仍保留调试入口和 mock / fallback 主链路边界。
+
+### 遗留问题
+
+- 对话置顶、归档、服务端搜索、未读计数和完整消息操作仍可继续产品化。
+- 当前 responsive polish 是窄屏保护，不是移动端完整产品。
+
+### 下一步建议
+
+- 若继续按课题 IM 核心体验推进，优先做 Conversation 置顶 / 归档 / 搜索的真实后端模型与 UI 闭环。
+
+## Phase 131：IM Workspace 视觉再设计与运行回归验证
+
+### 目标
+
+- 继续降低 Workspace 的“后台面板感”，强化类 IM 多 Agent 协作产品的第一印象。
+- 修复顶部导航中文乱码，提升中文界面的演示可信度。
+- 在不改业务逻辑的前提下，优化 App shell、消息舞台、协作提示和 Artifact 工作台的视觉层级。
+
+### 主要变更
+
+- `AppLayout` 修复导航中文乱码，并将顶部区域升级为深色 command bar，增加品牌标识、能力状态和更清晰的主导航。
+- `global.css` 增加 IM product shell polish：强化全局背景、顶部导航、品牌 mark、能力状态 chip 和窄屏导航适配。
+- `workspace.css` 增加 IM redesign v2：强化 Workspace 背景网格、主会话舞台、消息气泡、协作提示、ChatInput、Artifact 区和交互 hover 状态。
+- 保留 `ConversationList` / `AgentList` 的本地搜索与 IM 联系人样式，不改变现有 API 或 Orchestrator 主链路。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+- 启动临时 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 额外生成 `/workspace` desktop 截图，并确认 console error 为空。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮仍是前端视觉产品化，不新增后端业务能力。
+- 本地搜索仍是前端过滤，不代表服务端 IM 搜索、置顶、归档或未读计数。
+- 截图验证覆盖当前主视口，不代表完整移动端产品完成。
+
+### 遗留问题
+
+- 真实 IM 能力仍缺服务端置顶 / 归档 / 搜索 / 未读计数。
+- 极窄屏和大量真实数据下的视觉 QA 仍可继续补充。
+- `WorkspacePage` 和 `ArtifactPanel` 仍可继续拆分以降低维护成本。
+
+### 下一步建议
+
+- 若继续按“IM 聊天式交互”评分项推进，下一步优先做 Conversation 置顶 / 归档 / 服务端搜索 / 最近活跃排序的真实模型和 UI 闭环。

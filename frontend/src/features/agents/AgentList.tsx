@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type { AdapterDescriptor, Agent } from "./agentTypes";
 import { formatId } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
@@ -63,6 +64,28 @@ export function AgentList({
   selectedAgentId,
   onSelectAgent
 }: AgentListProps) {
+  const [query, setQuery] = useState("");
+  const visibleAgents = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return agents;
+    }
+
+    return agents.filter((agent) =>
+      [
+        agent.name,
+        agent.description,
+        agent.role,
+        agent.status,
+        agent.preferredAdapterType,
+        ...agent.capabilityTags,
+        ...agent.toolTags
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery))
+    );
+  }, [agents, query]);
+
   if (loading) {
     return <div className="panel-empty">正在加载 Agent...</div>;
   }
@@ -72,8 +95,28 @@ export function AgentList({
   }
 
   return (
-    <div className="agent-list">
-      {agents.map((agent) => {
+    <div className="agent-list agent-list--im">
+      <div className="im-list-tools">
+        <label className="im-search-box">
+          <span>联系人</span>
+          <input
+            value={query}
+            placeholder="搜索 Agent / 能力 / 工具"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <div className="im-list-tools__chips" aria-label="Agent capabilities">
+          <span>@Agent</span>
+          <span>工具能力</span>
+          <span>Adapter fallback</span>
+        </div>
+      </div>
+
+      {visibleAgents.length === 0 ? (
+        <div className="panel-empty panel-empty--compact">没有匹配的 Agent。</div>
+      ) : null}
+
+      {visibleAgents.map((agent) => {
         const agentId = formatId(agent.id);
         const adapterDescriptor = findAdapterDescriptor(adapterDescriptors, agent.preferredAdapterType);
         const availabilityClass = normalizeStatusClass(adapterDescriptor?.status || agent.status);
