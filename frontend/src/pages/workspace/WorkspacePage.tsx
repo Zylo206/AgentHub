@@ -1696,6 +1696,7 @@ export function WorkspacePage() {
             value={draftMessage}
             disabled={!currentConversationId}
             sending={sendingMessage}
+            agents={agents}
             selectedAgent={selectedAgent}
             quotedMessage={quotedMessage}
             quoteMode={quoteMode}

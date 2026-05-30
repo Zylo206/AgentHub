@@ -1,12 +1,14 @@
-import { FormEvent, useRef } from "react";
+import { FormEvent, useMemo, useRef } from "react";
 import type { Agent } from "../agents/agentTypes";
 import type { LightweightAttachment, Message } from "./chatTypes";
-import { formatId } from "../../utils/id";
+import { parseLeadingAgentMention } from "./agentMention";
+import { formatId, getIdValue } from "../../utils/id";
 
 interface ChatInputProps {
   value: string;
   disabled: boolean;
   sending: boolean;
+  agents: Agent[];
   selectedAgent?: Agent | null;
   quotedMessage?: Message | null;
   quoteMode?: "quote" | "reply";
@@ -18,10 +20,27 @@ interface ChatInputProps {
   onSend: () => void;
 }
 
+function uniqueAgents(agents: Agent[]): Agent[] {
+  const seen = new Set<string>();
+  return agents.filter((agent) => {
+    const id = getIdValue(agent.id);
+    if (!id || seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
+
+function summarizeCapabilities(agents: Agent[]): string[] {
+  return Array.from(new Set(agents.flatMap((agent) => agent.toolTags || []).filter(Boolean))).slice(0, 6);
+}
+
 export function ChatInput({
   value,
   disabled,
   sending,
+  agents,
   selectedAgent,
   quotedMessage,
   quoteMode = "quote",
@@ -33,6 +52,55 @@ export function ChatInput({
   onSend
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const routingPreview = useMemo(() => {
+    const parsedMention = parseLeadingAgentMention(value, agents);
+    const mentionedAgents = parsedMention.error ? [] : parsedMention.matchedAgents;
+    const targetAgents = uniqueAgents(mentionedAgents.length > 0 ? mentionedAgents : selectedAgent ? [selectedAgent] : []);
+    const adapters = Array.from(new Set(targetAgents.map((agent) => agent.preferredAdapterType || "MOCK")));
+    const capabilities = summarizeCapabilities(targetAgents);
+
+    if (parsedMention.error) {
+      return {
+        mode: "MENTION_ERROR",
+        title: "Agent 指定有误",
+        detail: parsedMention.error,
+        agents: [],
+        adapters: [],
+        capabilities: []
+      };
+    }
+
+    if (targetAgents.length > 1) {
+      return {
+        mode: "MULTI_AGENT",
+        title: "To: 多 Agent 协作",
+        detail: "消息开头的多个 @Agent 会写入 mentionedAgentIds，并进入 Orchestrator 路由。",
+        agents: targetAgents,
+        adapters,
+        capabilities
+      };
+    }
+
+    if (targetAgents.length === 1) {
+      return {
+        mode: "SINGLE_AGENT",
+        title: `To: @${targetAgents[0].name}`,
+        detail: "该 Agent 会作为 targetAgentId / selectedAgent 优先参与首个路由决策。",
+        agents: targetAgents,
+        adapters,
+        capabilities
+      };
+    }
+
+    return {
+      mode: "AUTO_ROUTE",
+      title: "Orchestrator 自动分派",
+      detail: "未指定 Agent 时，将按任务意图、tool capability 和 Adapter 健康度选择内置或自建 Agent。",
+      agents: [],
+      adapters: ["MOCK fallback 可用"],
+      capabilities: []
+    };
+  }, [agents, selectedAgent, value]);
 
   function addAttachment(fileName: string, previewText = "") {
     const trimmedFileName = fileName.trim();
@@ -85,7 +153,7 @@ export function ChatInput({
           sizeBytes: file.size,
           contentPreview,
           previewText: contentPreview,
-          source: "LOCAL_DEMO" as const
+          source: "LOCAL_DEMO"
         };
       })
     );
@@ -113,16 +181,25 @@ export function ChatInput({
 
   return (
     <form className="chat-input" data-testid="chat-input" onSubmit={handleSubmit}>
-      <div className="chat-target-agent">
-        {selectedAgent ? (
-          <>
-            <span className="chat-target-agent-token">@{selectedAgent.name}</span>
-            <span className="chat-input__hint">通过 {selectedAgent.preferredAdapterType || "MOCK"}</span>
-          </>
-        ) : (
-          <span className="chat-input__hint">未选择目标 Agent</span>
-        )}
+      <div className={`chat-routing-preview chat-routing-preview--${routingPreview.mode.toLowerCase()}`} data-testid="chat-routing-preview">
+        <div>
+          <span>发送前路由预览</span>
+          <strong>{routingPreview.title}</strong>
+          <p>{routingPreview.detail}</p>
+        </div>
+        <div className="chat-routing-preview__chips">
+          {routingPreview.agents.map((agent) => (
+            <em key={getIdValue(agent.id)}>@{agent.name}</em>
+          ))}
+          {routingPreview.adapters.map((adapter) => (
+            <em key={adapter}>{adapter}</em>
+          ))}
+          {routingPreview.capabilities.map((capability) => (
+            <em key={capability}>{capability}</em>
+          ))}
+        </div>
       </div>
+
       {quotedMessage ? (
         <div className="chat-quote-preview">
           <div>
@@ -135,19 +212,21 @@ export function ChatInput({
           </button>
         </div>
       ) : null}
+
       <textarea
         className="chat-input__textarea"
         data-testid="chat-input-textarea"
         rows={4}
-        placeholder="发送消息，@Agent 或描述你的需求..."
+        placeholder="发送消息，@Agent 或描述你的任务需求..."
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       />
+
       <div className="chat-attachment-composer">
         <div className="chat-attachment-composer__header">
           <strong>轻量附件</strong>
-          <span>不上传文件，只发送文件名、大小、类型和文本预览。</span>
+          <span>支持真实上传和文本预览；图片 / PPT 当前按文件附件展示，不做富媒体编辑。</span>
         </div>
         <div className="chat-attachment-composer__grid">
           <input
@@ -234,13 +313,14 @@ export function ChatInput({
           </div>
         ) : null}
       </div>
+
       <div className="chat-input__actions">
         <div className="chat-input__hint-group">
           <span className="chat-input__hint">
-            先发送任务消息。AgentHub 会先展示协作确认卡片，再启动 Orchestrator。
+            先发送任务消息，AgentHub 会展示协作确认卡片，再启动 Orchestrator。
           </span>
           <span className="chat-input__hint">
-            以 @AgentName 开头可以指定一个或多个 Agent。
+            以 @AgentName 开头可指定一个或多个 Agent。
           </span>
         </div>
         <button

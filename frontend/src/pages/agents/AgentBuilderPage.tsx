@@ -333,16 +333,30 @@ export function AgentBuilderPage() {
           </div>
         </div>
 
+        <div className="agent-builder-flow" aria-label="Agent creation flow">
+          <span>1. 基本信息</span>
+          <span>2. System Prompt</span>
+          <span>3. Tool Capability</span>
+          <span>4. Preferred Adapter</span>
+          <span>5. 在 Workspace @Agent</span>
+        </div>
+
         <div className="agent-builder-layout">
           <form className="agent-builder-form" onSubmit={handleSubmit}>
             <label className="agent-builder-field">
               <span>Agent 名称</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="我的前端 Agent" />
+              <input
+                data-testid="agent-builder-name-input"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="我的前端 Agent"
+              />
             </label>
 
             <label className="agent-builder-field">
               <span>头像 URL</span>
               <input
+                data-testid="agent-builder-avatar-url"
                 value={avatarUrl}
                 onChange={(event) => setAvatarUrl(event.target.value)}
                 placeholder="https://example.com/avatar.png"
@@ -352,6 +366,7 @@ export function AgentBuilderPage() {
             <label className="agent-builder-field">
               <span>System Prompt</span>
               <textarea
+                data-testid="agent-builder-system-prompt"
                 value={systemPrompt}
                 onChange={(event) => setSystemPrompt(event.target.value)}
                 placeholder="你是一个前端专家，擅长 React、UI 和 CSS。"
@@ -362,6 +377,7 @@ export function AgentBuilderPage() {
               <label className="agent-builder-field">
                 <span>能力标签</span>
                 <input
+                  data-testid="agent-builder-capability-tags"
                   value={capabilityTags}
                   onChange={(event) => setCapabilityTags(event.target.value)}
                   placeholder="React, UI, CSS"
@@ -378,6 +394,7 @@ export function AgentBuilderPage() {
                   return (
                     <label
                       className={`tool-capability-card${checked ? " tool-capability-card--selected" : ""}`}
+                      data-testid={`tool-capability-${option.key}`}
                       key={option.key}
                     >
                       <input
@@ -413,6 +430,7 @@ export function AgentBuilderPage() {
             <label className="agent-builder-field">
               <span>兼容工具标签（可选）</span>
               <input
+                data-testid="agent-builder-tool-tags"
                 value={toolTags}
                 onChange={(event) => setToolTags(event.target.value)}
                 placeholder="例如 schema, task_planner；会与上方选择合并写入 toolTags"
@@ -421,7 +439,11 @@ export function AgentBuilderPage() {
 
             <label className="agent-builder-field">
               <span>首选 Adapter</span>
-              <select value={preferredAdapterType} onChange={(event) => setPreferredAdapterType(event.target.value)}>
+              <select
+                data-testid="agent-builder-preferred-adapter"
+                value={preferredAdapterType}
+                onChange={(event) => setPreferredAdapterType(event.target.value)}
+              >
                 {adapterOptions.map((option) => (
                   <option key={option.adapterType} value={option.adapterType}>
                     {option.adapterType} - {displayStatus(option.status)}
@@ -459,7 +481,7 @@ export function AgentBuilderPage() {
             </div>
 
             <div className="agent-builder-actions">
-              <button type="submit" className="primary-button" disabled={submitting || !name.trim()}>
+              <button type="submit" className="primary-button" data-testid="agent-builder-submit" disabled={submitting || !name.trim()}>
                 {submitting ? "创建中..." : "创建 Agent"}
               </button>
             </div>

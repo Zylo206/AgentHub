@@ -112,3 +112,10 @@
 - 真实 provider 失败、超时、schema 不合法或质量不合格时，必须 fallback。
 - CLI Adapter 当前只保证可探测、可配置、可 fallback。
 - REAL_ADAPTER 进入 Artifact 不代表代码一定生产可用，只代表通过当前 contract 和质量门禁。
+## Preferred Adapter Routing Rules
+
+- Agent Builder 中的 `preferredAdapterType` 是 AdapterRoutingService 的首选输入，但不是唯一强制结果。
+- Adapter 候选池仍会结合 health、success rate、fallback penalty 和 preferred bonus 选择实际 Adapter。
+- `TaskStep.routingReason` 应保留候选分数和选择原因，前端可展示 requiredSkill、selected Agent、preferredAdapter、selectedAdapter 和 fallback reason。
+- 如果 preferred Adapter 不可用，Registry 必须 fallback 到 MOCK，并在 TaskStep / Artifact / Adapter Dashboard 中暴露原因。
+- Boundary：preferredAdapter 不能绕过 Artifact contract validator、quality evaluator、build validation 或 Approval / Audit 链路。

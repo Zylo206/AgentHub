@@ -209,6 +209,33 @@ function parseAdapterCandidateScores(routingReason?: string | null): ParsedAdapt
     .filter((candidate): candidate is ParsedAdapterCandidateScore => Boolean(candidate));
 }
 
+function parseRoutingEvidence(routingReason?: string | null): Array<[string, string]> {
+  if (!routingReason) {
+    return [];
+  }
+
+  const keys = ["requiredSkill", "selectedAgent", "matchedCapability", "capabilityScore", "preferredAdapter", "selectedAdapter"];
+  return keys
+    .map((key) => {
+      const match = routingReason.match(new RegExp(`${key}=([^;|,\\]]+)`));
+      return match?.[1] ? [key, match[1].trim()] as [string, string] : null;
+    })
+    .filter((item): item is [string, string] => Boolean(item));
+}
+
+function displayRoutingKey(key: string): string {
+  const labels: Record<string, string> = {
+    requiredSkill: "所需能力",
+    selectedAgent: "命中 Agent",
+    matchedCapability: "命中工具",
+    capabilityScore: "能力分",
+    preferredAdapter: "首选 Adapter",
+    selectedAdapter: "选中 Adapter"
+  };
+
+  return labels[key] || key;
+}
+
 function AdapterRoutingExplainPanel({ taskRun }: { taskRun: TaskRun }) {
   const rows = taskRun.steps.flatMap((step) =>
     parseAdapterCandidateScores(step.routingReason).map((candidate) => ({
@@ -430,6 +457,15 @@ function OrchestratorExplainPanel({
                   ) : (
                     <small>dependsOn: none</small>
                   )}
+                  {parseRoutingEvidence(step.routingReason).length > 0 ? (
+                    <div className="orchestrator-route-evidence" data-testid="orchestrator-route-evidence">
+                      {parseRoutingEvidence(step.routingReason).map(([key, value]) => (
+                        <span key={`${step.stepOrder}-${key}`}>
+                          {displayRoutingKey(key)}：<strong>{value}</strong>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   {step.routingReason ? <small>{step.routingReason}</small> : null}
                 </div>
               );

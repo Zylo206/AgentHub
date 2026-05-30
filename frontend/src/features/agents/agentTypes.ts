@@ -13,25 +13,25 @@ export const TOOL_CAPABILITY_OPTIONS: ToolCapabilityOption[] = [
   {
     key: "code",
     label: "代码生成",
-    description: "生成或修改前端/代码类 Artifact",
+    description: "生成或修改前端 / 全栈代码类 Artifact",
     resolvedCapabilities: ["CODE", "FRONTEND_ARTIFACT_GENERATION"]
   },
   {
     key: "preview",
     label: "预览呈现",
-    description: "渲染 Web 预览并处理 Artifact 预览任务",
+    description: "处理 Web 预览、Artifact 预览和静态 Preview 任务",
     resolvedCapabilities: ["WEB_PREVIEW", "ARTIFACT_PREVIEW", "FRONTEND_ARTIFACT_GENERATION"]
   },
   {
     key: "review",
-    label: "质量审查",
-    description: "输出 Review 报告、质量检查和修订建议",
+    label: "质量评审",
+    description: "输出 Review 报告、质量检查和修复建议",
     resolvedCapabilities: ["REVIEW_REPORT", "QUALITY_REVIEW"]
   },
   {
     key: "deploy",
     label: "部署发布",
-    description: "处理部署、发布和预览发布流程",
+    description: "处理部署、发布状态和本地 Preview 发布流程",
     resolvedCapabilities: ["DEPLOYMENT", "DEPLOY_PREVIEW"]
   },
   {

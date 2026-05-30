@@ -473,9 +473,16 @@ export function MessageBubble({
         </div>
 
         {message.senderType === "USER" && (message.targetAgentId || (message.mentionedAgentIds?.length ?? 0) > 0) ? (
-          <div className="message-target-agent" data-testid="message-target-agent">
-            <span>发送给：</span>
-            <span className="message-target-agent-name">@{targetAgentLabel || message.targetAgentId}</span>
+          <div className="message-target-agent message-target-agent--routing" data-testid="message-target-agent">
+            <span>{(message.mentionedAgentIds?.length ?? 0) > 1 ? "多 Agent 路由：" : "路由目标："}</span>
+            <span className="message-target-agent-name">
+              @{targetAgentLabel || message.targetAgentId}
+            </span>
+            <small>
+              {(message.mentionedAgentIds?.length ?? 0) > 1
+                ? "写入 mentionedAgentIds，Orchestrator 会把这些 Agent 纳入 TaskGraph。"
+                : "写入 targetAgentId，作为 selectedAgent 优先路由。"}
+            </small>
           </div>
         ) : null}
 

@@ -148,6 +148,11 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: MessageStream now has a unified Message Action Bar for copy, quote, reply, pin, memory, rerun, and Agent reply regeneration.
    - `Done`: Message cards now expose type ribbons and richer attachment / Artifact cards, including image and PPT weak-capability boundaries.
    - `Done`: `docs/spec/message-interaction-spec.md` captures stable message type, action, thread, and weak media boundaries.
+   - `Done`: ChatInput now shows a send-time routing preview for single Agent, multi-Agent mention, and Orchestrator auto-route paths.
+   - `Done`: Workspace Agent contacts show readable capability, preferred Adapter, adapter health, success rate, and fallback rate.
+   - `Done`: TaskRun / Orchestrator Explain now extracts routing evidence chips from `routingReason` instead of only exposing raw router text.
+   - `Done`: Agent Builder now includes a visible creation flow for basic info, System Prompt, Tool Capability, preferred Adapter, and Workspace mention usage.
+   - `Done`: Browser E2E now covers creating a custom Agent in Agent Builder, mentioning it in Workspace, seeing routing preview, and verifying it enters the TaskRun.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**

@@ -97,3 +97,13 @@
 - 如果 Adapter 不可用，Agent step 仍可通过 MOCK fallback 完成。
 - 当前群聊协作是 Orchestrator 驱动的 MVP，不是完整自治 Agent 群聊。
 - 当前多 `@Agent` 解析只保证消息开头连续 mention，不承诺解析消息中间复杂语义。
+## Routing Preview / Agent Builder Rules
+
+- ChatInput 必须在发送前展示路由预览：`To: @Agent`、`To: 多 Agent 协作` 或 `Orchestrator 自动分派`。
+- 路由预览展示目标 Agent、首选 Adapter 和 tool capability，帮助用户理解消息会交给谁处理。
+- 单个 `@AgentName` 写入 `targetAgentId`，同时兼容 `mentionedAgentIds[0]`。
+- 多个开头连续 `@AgentName` 写入 `mentionedAgentIds`，后续由 Orchestrator 纳入 TaskGraph。
+- Agent Builder 创建的自定义 Agent 必须包含基本信息、System Prompt、tool capability 和 preferredAdapter。
+- 自定义 Agent 保存后应出现在 Workspace 联系人列表，并能被 `@AgentName` 命中。
+- TaskRun / Orchestrator Explain 应展示 Router 决策证据，例如 requiredSkill、matched capability、selected Agent、selected Adapter 和 fallback reason。
+- Boundary：当前不是完整自然语言 Agent 创建，也不是完整工具调用系统；tool capability 是路由用的轻量能力标签。

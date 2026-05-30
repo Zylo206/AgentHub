@@ -309,6 +309,31 @@ async function createWorkspaceConversation(page) {
   );
 }
 
+async function createCustomAgentFromUi(page) {
+  const agentName = `E2E Reviewer ${TEST_MARKER}`;
+  await page.goto(`${FRONTEND_BASE}/agents`, { waitUntil: "domcontentloaded" });
+  await waitForVisible(page, ".agent-builder-page", "Agent Builder page");
+  await page.getByTestId("agent-builder-name-input").fill(agentName);
+  await page.getByTestId("agent-builder-system-prompt").fill(
+    "You are a custom Agent created by Browser E2E. Focus on review, quality gates, and actionable feedback."
+  );
+  await page.getByTestId("agent-builder-capability-tags").fill("review, quality, browser-e2e");
+  await page.getByTestId("tool-capability-review").click();
+  await page.getByTestId("agent-builder-preferred-adapter").selectOption("MOCK");
+  await page.getByTestId("agent-builder-submit").click();
+
+  return waitForApiState(
+    "UI-created custom Agent",
+    () => request("/api/agents"),
+    (agents) => agents.find((agent) =>
+      agent.name === agentName &&
+      (agent.toolTags || []).includes("review") &&
+      (agent.preferredAdapterType || "") === "MOCK"
+    ),
+    20000
+  );
+}
+
 async function verifyConversationManagementUi(page, conversation) {
   const conversationId = requireValue(getIdValue(conversation.id), "conversationId missing for conversation management");
   const conversationSelector = `[data-conversation-id="${conversationId}"]`;
@@ -332,8 +357,13 @@ async function verifyConversationManagementUi(page, conversation) {
   await page.locator(conversationSelector).click();
 }
 
-function buildMentionPrompt(agents) {
-  const namedAgents = agents.filter((agent) => agent.name?.trim()).slice(0, 2);
+function buildMentionPrompt(agents, preferredAgent = null) {
+  const normalizedPreferredId = getIdValue(preferredAgent?.id);
+  const baseAgents = [
+    preferredAgent,
+    ...agents.filter((agent) => getIdValue(agent.id) !== normalizedPreferredId)
+  ].filter(Boolean);
+  const namedAgents = baseAgents.filter((agent) => agent.name?.trim()).slice(0, 2);
   if (namedAgents.length < 2) {
     throw new Error(`Need at least 2 agents for multi-agent mention, got ${namedAgents.length}`);
   }
@@ -341,9 +371,16 @@ function buildMentionPrompt(agents) {
   return { prompt: `${mentions} ${TEST_PROMPT_BODY}`, mentionedAgents: namedAgents };
 }
 
-async function sendMessageWithAttachmentFromUi(page, conversationId, agents, attachmentPath) {
-  const { prompt, mentionedAgents } = buildMentionPrompt(agents);
+async function sendMessageWithAttachmentFromUi(page, conversationId, agents, attachmentPath, preferredAgent = null) {
+  const { prompt, mentionedAgents } = buildMentionPrompt(agents, preferredAgent);
   await page.getByTestId("chat-input-textarea").fill(prompt);
+  await page.getByTestId("chat-routing-preview").waitFor({ state: "visible", timeout: 10000 });
+  if (preferredAgent?.name) {
+    await page.getByTestId("chat-routing-preview").filter({ hasText: preferredAgent.name }).waitFor({
+      state: "visible",
+      timeout: 10000
+    });
+  }
   await page.getByTestId("chat-attachment-file-input").setInputFiles(attachmentPath);
   await page.getByText(TEST_ATTACHMENT_FILE_NAME).first().waitFor({ state: "visible", timeout: 10000 });
   await page.getByTestId("chat-send-button").click();
@@ -363,6 +400,21 @@ async function sendMessageWithAttachmentFromUi(page, conversationId, agents, att
   await page.getByText(new RegExp(escapeRegExp(TEST_MARKER))).first().waitFor({ state: "visible", timeout: 10000 });
   await page.getByText(TEST_ATTACHMENT_FILE_NAME).first().waitFor({ state: "visible", timeout: 10000 });
   return { message, mentionedAgents };
+}
+
+async function verifyCustomAgentRouting(conversationId, customAgent) {
+  const customAgentId = requireValue(getIdValue(customAgent.id), "customAgentId missing");
+  await waitForApiState(
+    "custom Agent routed into TaskRun",
+    () => request(`/api/conversations/${conversationId}/task-runs`),
+    (taskRuns) => {
+      const matchingRun = taskRuns.find((taskRun) =>
+        (taskRun.steps || []).some((step) => getIdValue(step.assignedAgentId) === customAgentId)
+      );
+      return matchingRun || null;
+    },
+    20000
+  );
 }
 
 async function seedRetrievalContextFromMessage(conversationId, message) {
@@ -667,8 +719,6 @@ async function runBrowserE2e() {
       throw new Error(`Unexpected health status: ${JSON.stringify(health)}`);
     }
   });
-  const agents = await step("agents loaded for multi-agent mention", () => request("/api/agents"));
-
   const tempAttachment = await createTempAttachmentFile();
   const launchOptions = { headless: HEADLESS, slowMo: SLOW_MO };
   if (BROWSER_CHANNEL) {
@@ -686,6 +736,9 @@ async function runBrowserE2e() {
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
   try {
+    const customAgent = await step("Agent Builder creates a custom routable Agent", () => createCustomAgentFromUi(page));
+    const agents = await step("agents loaded for multi-agent mention", () => request("/api/agents"));
+
     await step("workspace route opens", async () => {
       await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
       await waitForVisible(page, "[data-testid='workspace-page']", "workspace page");
@@ -697,8 +750,8 @@ async function runBrowserE2e() {
       verifyConversationManagementUi(page, conversation)
     );
 
-    const sentMessage = await step("UI sends multi-agent message with uploaded attachment", () =>
-      sendMessageWithAttachmentFromUi(page, conversationId, agents, tempAttachment.filePath)
+    const sentMessage = await step("UI sends @CustomAgent multi-agent message with uploaded attachment", () =>
+      sendMessageWithAttachmentFromUi(page, conversationId, agents, tempAttachment.filePath, customAgent)
     );
     await waitForVisible(page, "[data-testid='workspace-flow-guide']", "IM-first collaboration flow guide");
     await step("retrieval context seeded from UI message", () =>
@@ -710,7 +763,9 @@ async function runBrowserE2e() {
     await step("Message Action Bar supports copy, quote, reply, pin and memory", () => verifyMessageActionBar(page));
 
     await step("UI triggers collaboration run", () => triggerTaskRunFromUi(page, conversationId));
+    await step("custom Agent is routed into TaskRun", () => verifyCustomAgentRouting(conversationId, customAgent));
     await waitForVisible(page, "[data-testid='task-run-panel']", "TaskRun panel");
+    await waitForVisible(page, "[data-testid='orchestrator-route-evidence']", "router evidence chips");
     await waitForVisible(page, ".message-bubble--agent-protocol", "agent protocol message");
     await step("Agent reply can be regenerated from Message Action Bar", () => verifyAgentRegenerateAction(page, conversationId));
     await waitForVisible(page, ".adapter-quality-dashboard", "adapter quality dashboard");

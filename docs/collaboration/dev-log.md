@@ -5961,3 +5961,75 @@
 ### 下一步建议
 
 - 若继续推进消息产品化，建议补完整 thread 侧栏、图片缩略图和更强的 Diff / Deploy 消息内联卡片。
+
+## Phase 139：Agent 选择、Tool Capability 与路由预览产品化
+
+### 目标
+
+- 将 `selectedAgent / targetAgentId / mentionedAgentIds` 从技术字段推进为用户可理解的 Agent 协作入口。
+- 让自建 Agent 的 System Prompt、tool capability 和 preferredAdapter 更清楚地影响 Workspace 路由表达。
+
+### 主要变更
+
+- ChatInput 增加发送前路由预览，区分 `To: @Agent`、多 Agent 协作和 Orchestrator 自动分派。
+- Agent 联系人列表修复中文显示，并展示 capability、preferredAdapter、Adapter health、success rate 和 fallback rate。
+- MessageBubble 中用户消息的目标 Agent 展示升级为路由目标说明，区分 `targetAgentId` 与多 Agent `mentionedAgentIds`。
+- TaskRunPanel 从 `routingReason` 提取 requiredSkill、matched capability、selected Agent、selected Adapter 等可读 evidence chips。
+- Agent Builder 增加创建流程提示，明确基本信息、System Prompt、Tool Capability、Preferred Adapter 和 Workspace `@Agent` 使用关系。
+- 同步 `multi-agent-chat-spec.md`、`adapter-output-spec.md` 和 `docs/plans/next.md`。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮不新增真实工具调用系统，tool capability 仍是路由用的轻量能力标签。
+- preferredAdapter 不绕过现有 AdapterRegistry、fallback、Artifact contract validator、quality evaluator 或 Approval / Audit。
+- MOCK fallback 仍是默认稳定演示边界。
+
+### 遗留问题
+
+- 自然语言式 Agent 创建未实现。
+- 更完整的 Router 决策 DTO 仍可后续由后端直接结构化输出，减少前端解析 `routingReason`。
+- Browser E2E 尚未新增完整 Agent Builder 创建自定义 Agent 的 UI 路径。
+
+### 下一步建议
+
+- 增加 Browser E2E：创建自定义 Agent、选择 capability、在 Workspace 中 `@Agent`、确认 routing preview 和 Agent 回复。
+
+## Phase 140：自定义 Agent 创建到路由验证 E2E
+
+### 目标
+
+- 将“创建自定义 Agent -> 在 Workspace 中 @Agent -> 验证路由”纳入浏览器级回归。
+- 确认 Agent Builder、ChatInput routing preview、MessageStream 目标展示和 TaskRun 路由证据是同一条可验证链路。
+
+### 主要变更
+
+- Agent Builder 表单增加稳定 `data-testid`：名称、System Prompt、能力标签、tool capability、preferredAdapter 和提交按钮。
+- Browser E2E 新增 UI 创建自定义 review Agent 的步骤，并强制选择 `review` tool capability 与 `MOCK` preferredAdapter。
+- Browser E2E 在 Workspace 中发送 `@CustomAgent @OtherAgent` 消息，验证 routing preview 展示自定义 Agent。
+- Browser E2E 在 Orchestrator 执行后检查自定义 Agent 进入 TaskRun step，并验证 Router evidence chips 可见。
+- `docs/plans/next.md` 同步标记该路径已纳入 UI 回归。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `cd frontend && npm.cmd run lint`
+- `cd frontend && npm.cmd run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- E2E 使用 `MOCK` preferredAdapter，验证的是自定义 Agent 路由链路，不依赖真实外部 LLM。
+- Tool capability 仍是轻量路由标签，不是真实工具执行系统。
+
+### 遗留问题
+
+- Browser E2E 仍未覆盖自然语言式 Agent 创建。
+- Router 决策证据仍部分来自 `routingReason` 文本解析，后续可升级为后端结构化 DTO。
+
+### 下一步建议
+
+- 若继续增强 Agent Builder，可增加“创建后直接跳回 Workspace 并自动填充 @Agent”的快捷操作。
