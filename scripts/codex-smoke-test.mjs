@@ -113,8 +113,19 @@ function assertDescriptorCapabilities(descriptor) {
     if (details.versionProbeStatus !== "PASSED") {
       throw new Error(`CODEX real CLI version probe did not pass: ${details.versionProbeFailure || "no reason"}`);
     }
-    if (details.supportsExec !== true || details.supportsOutputSchema !== true || details.supportsSandbox !== true) {
-      throw new Error(`CODEX real CLI missing required exec/schema/sandbox support: ${JSON.stringify(details)}`);
+    if (details.helpProbeStatus !== "PASSED") {
+      throw new Error(`CODEX real CLI help probe did not pass: ${details.helpProbeFailure || "no reason"}`);
+    }
+    if (
+      details.supportsExec !== true ||
+      details.supportsOutputSchema !== true ||
+      details.supportsOutputLastMessage !== true ||
+      details.supportsSandbox !== true
+    ) {
+      throw new Error(`CODEX real CLI missing required exec/schema/output/sandbox support: ${JSON.stringify(details)}`);
+    }
+    if (EXPECT_STREAMING && details.supportsJsonEvents !== true) {
+      throw new Error(`CODEX streaming smoke requires --json event support: ${JSON.stringify(details)}`);
     }
   }
   pass(`CODEX descriptor capabilities verified: modes=${modes.join(", ")}`);
@@ -461,8 +472,12 @@ async function run() {
   const { taskRun, events } = await runDemoTask(conversationId, messageId, agentId);
   const taskRunId = requireValue(getIdValue(taskRun.id), "taskRunId missing");
   pass(`demo task completed: ${taskRunId}, status=${taskRun.status}`);
-  if (taskRun.status !== "COMPLETED") {
-    throw classifiedError(`demo task expected COMPLETED, got ${taskRun.status}`, JSON.stringify(taskRun), OUTCOME.FALLBACK);
+  if (!["COMPLETED", "BLOCKED"].includes(taskRun.status)) {
+    throw classifiedError(
+      `demo task expected COMPLETED or BLOCKED with explainable review gate, got ${taskRun.status}`,
+      JSON.stringify(taskRun),
+      OUTCOME.FALLBACK
+    );
   }
   if (EXPECT_STREAMING) {
     assertStreamingEvents(taskRunId, events);

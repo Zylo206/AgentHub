@@ -90,6 +90,19 @@
 - `BUILD_FAILED`：CODE Artifact 在轻量 build / syntax validation 或 opt-in build smoke 中失败。
 - `FALLBACK`：provider 不可用、CLI 不可用、认证失败、超时、I/O 失败、fallback 到 MOCK。
 
+## Operational Failure Taxonomy
+
+Adapter 执行层失败必须和 Artifact 质量失败区分：
+
+- `NOT_INSTALLED`：本机 CLI 不存在或配置的 command 不可执行。
+- `NOT_AUTHENTICATED`：CLI 或 provider 未登录、无权限、API key 缺失或认证失败。
+- `PERMISSION_DENIED`：CLI 沙箱、文件权限或系统权限拒绝执行。
+- `TIMEOUT`：CLI / HTTP 调用超过配置超时时间。
+- `CANCELLED`：Stop / Cancel token 已触发，late chunks 或 late result 不得落入最终 Artifact。
+- `CONTRACT_INVALID`：Adapter 原始响应未通过 AgentHub Artifact JSON contract；进入 TaskStep / Artifact 质量语义时应映射为 `PARSE_FAILED`。
+
+这些执行层分类可以出现在 direct execute 诊断、`adapterErrorMessage`、CLI smoke 输出和 `/api/adapters` capability details 中。进入 Artifact 采纳链路时，用户界面仍应优先展示统一 outcome：`ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`。
+
 ## 关键流程
 
 1. Orchestrator 生成 TaskStep，并由 Router 选择 Agent 和 preferred Adapter。

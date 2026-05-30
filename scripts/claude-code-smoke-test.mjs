@@ -114,6 +114,15 @@ function assertDescriptorCapabilities(descriptor) {
     if (details.versionProbeStatus !== "PASSED") {
       throw new Error(`CLAUDE_CODE real CLI version probe did not pass: ${details.versionProbeFailure || "no reason"}`);
     }
+    if (details.helpProbeStatus !== "PASSED") {
+      throw new Error(`CLAUDE_CODE real CLI help probe did not pass: ${details.helpProbeFailure || "no reason"}`);
+    }
+    if (details.supportsPrint !== true || details.supportsJsonOutput !== true || details.supportsToolPolicy !== true) {
+      throw new Error(`CLAUDE_CODE real CLI missing print/json/tool-policy support: ${JSON.stringify(details)}`);
+    }
+    if (EXPECT_STREAMING && details.supportsStreamJson !== true) {
+      throw new Error(`CLAUDE_CODE streaming smoke requires stream-json support: ${JSON.stringify(details)}`);
+    }
     if (details.authenticationProbe !== "NOT_PROBED_EXECUTE_SMOKE_REQUIRED") {
       throw new Error(`unexpected authenticationProbe=${details.authenticationProbe || "missing"}`);
     }
@@ -420,8 +429,12 @@ async function run() {
   );
   const taskRunId = requireValue(getIdValue(taskRun.id), "taskRunId missing");
   pass(`demo task completed: ${taskRunId}, status=${taskRun.status}`);
-  if (taskRun.status !== "COMPLETED") {
-    throw classifiedError(`demo task expected COMPLETED, got ${taskRun.status}`, JSON.stringify(taskRun), OUTCOME.FALLBACK);
+  if (!["COMPLETED", "BLOCKED"].includes(taskRun.status)) {
+    throw classifiedError(
+      `demo task expected COMPLETED or BLOCKED with explainable review gate, got ${taskRun.status}`,
+      JSON.stringify(taskRun),
+      OUTCOME.FALLBACK
+    );
   }
   const steps = Array.isArray(taskRun.steps) ? taskRun.steps : [];
   const acceptedRealStep = steps.find(

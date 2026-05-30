@@ -34,6 +34,7 @@ public class CodexAgentAdapter implements AgentAdapter {
     private final boolean artifactOnly;
     private final Path workDir;
     private final boolean fixtureEnabled;
+    private final int fixtureStreamChunkDelayMillis;
 
     public CodexAgentAdapter(
             TimeProvider timeProvider,
@@ -50,7 +51,8 @@ public class CodexAgentAdapter implements AgentAdapter {
             @Value("${agenthub.adapters.codex.streaming-enabled:false}") boolean streamingEnabled,
             @Value("${agenthub.adapters.codex.artifact-only:true}") boolean artifactOnly,
             @Value("${agenthub.adapters.codex.work-dir:.agenthub/codex-runs}") String workDir,
-            @Value("${agenthub.adapters.codex.fixture-enabled:false}") boolean fixtureEnabled) {
+            @Value("${agenthub.adapters.codex.fixture-enabled:false}") boolean fixtureEnabled,
+            @Value("${agenthub.adapters.codex.fixture-stream-chunk-delay-millis:0}") int fixtureStreamChunkDelayMillis) {
         this.timeProvider = timeProvider;
         this.objectMapper = objectMapper;
         this.artifactContractValidator = artifactContractValidator;
@@ -66,6 +68,7 @@ public class CodexAgentAdapter implements AgentAdapter {
         this.artifactOnly = artifactOnly;
         this.workDir = Path.of(normalize(workDir, ".agenthub/codex-runs"));
         this.fixtureEnabled = fixtureEnabled;
+        this.fixtureStreamChunkDelayMillis = Math.max(0, fixtureStreamChunkDelayMillis);
     }
 
     @Override
@@ -122,6 +125,21 @@ public class CodexAgentAdapter implements AgentAdapter {
                     capabilityDetails("missing", availability.failureReason()));
         }
 
+        Map<String, Object> details = capabilityDetails("available", null);
+        String probeFailure = cliProbeFailure(details);
+        if (probeFailure != null) {
+            return new AgentAdapterDescriptor(
+                    AgentAdapterType.CODEX,
+                    AgentAdapterHealthStatus.MISCONFIGURED,
+                    true,
+                    false,
+                    "Codex CLI command exists but capability probing failed.",
+                    withFailureType(classifyFailure(probeFailure, ""), probeFailure),
+                    supportedModes(),
+                    safetyPolicies(),
+                    details);
+        }
+
         return new AgentAdapterDescriptor(
                 AgentAdapterType.CODEX,
                 AgentAdapterHealthStatus.AVAILABLE,
@@ -133,7 +151,7 @@ public class CodexAgentAdapter implements AgentAdapter {
                 null,
                 supportedModes(),
                 safetyPolicies(),
-                capabilityDetails("available", null));
+                details);
     }
 
     @Override
@@ -378,16 +396,37 @@ public class CodexAgentAdapter implements AgentAdapter {
                         : "UNKNOWN"),
                 Map.entry("versionProbeStatus", versionProbe.success() ? "PASSED" : "FAILED"),
                 Map.entry("versionProbeFailure", versionProbe.failureReason() == null ? "" : versionProbe.failureReason()),
+                Map.entry("helpProbeStatus", execHelpProbe.success() ? "PASSED" : "FAILED"),
+                Map.entry("helpProbeFailure", execHelpProbe.failureReason() == null ? "" : execHelpProbe.failureReason()),
                 Map.entry("supportsExec", helpOutput.contains("exec")),
                 Map.entry("supportsJsonEvents", helpOutput.contains("--json")),
                 Map.entry("supportsOutputSchema", helpOutput.contains("--output-schema")),
                 Map.entry("supportsOutputLastMessage", helpOutput.contains("--output-last-message")),
                 Map.entry("supportsSandbox", helpOutput.contains("--sandbox")),
                 Map.entry("authenticationProbe", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
+                Map.entry("authProbeStatus", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
                 Map.entry("streamingEnabled", streamingEnabled),
                 Map.entry("artifactOnly", artifactOnly),
                 Map.entry("workspaceWriteAllowed", false),
                 Map.entry("timeoutSeconds", timeoutSeconds));
+    }
+
+    private String cliProbeFailure(Map<String, Object> details) {
+        String versionStatus = String.valueOf(details.getOrDefault("versionProbeStatus", ""));
+        String helpStatus = String.valueOf(details.getOrDefault("helpProbeStatus", ""));
+        if ("PASSED".equals(versionStatus) && "PASSED".equals(helpStatus)) {
+            return null;
+        }
+        String versionFailure = String.valueOf(details.getOrDefault("versionProbeFailure", ""));
+        String helpFailure = String.valueOf(details.getOrDefault("helpProbeFailure", ""));
+        return "versionProbeStatus="
+                + versionStatus
+                + "; versionProbeFailure="
+                + versionFailure
+                + "; helpProbeStatus="
+                + helpStatus
+                + "; helpProbeFailure="
+                + helpFailure;
     }
 
     private String withCommandDiagnostics(String diagnostic, String commandMode, String status) {
@@ -424,7 +463,10 @@ public class CodexAgentAdapter implements AgentAdapter {
                 || normalized.contains("not valid json")) {
             return "CONTRACT_INVALID";
         }
-        if (normalized.contains("permission denied") || normalized.contains("access is denied")) {
+        if (normalized.contains("permission denied")
+                || normalized.contains("access is denied")
+                || normalized.contains("createprocess error=5")
+                || normalized.contains("拒绝访问")) {
             return "PERMISSION_DENIED";
         }
         if (normalized.contains("not available") || normalized.contains("cannot run program")) {
@@ -492,6 +534,18 @@ public class CodexAgentAdapter implements AgentAdapter {
             }
             String chunk = content.substring(offset, Math.min(content.length(), offset + chunkSize));
             publishStreamChunk(request, chunkIndex++, chunk, Math.min(content.length(), offset + chunk.length()));
+            sleepBetweenFixtureChunks();
+        }
+    }
+
+    private void sleepBetweenFixtureChunks() {
+        if (fixtureStreamChunkDelayMillis <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(fixtureStreamChunkDelayMillis);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
         }
     }
 

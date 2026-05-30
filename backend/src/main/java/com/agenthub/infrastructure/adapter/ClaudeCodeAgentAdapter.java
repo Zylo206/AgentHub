@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,6 +49,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
     private final String disallowedTools;
     private final Path workDir;
     private final boolean fixtureEnabled;
+    private final int fixtureStreamChunkDelayMillis;
 
     public ClaudeCodeAgentAdapter(
             TimeProvider timeProvider,
@@ -66,7 +68,8 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
             @Value("${agenthub.adapters.claude-code.allowed-tools:Read,Grep,Glob}") String allowedTools,
             @Value("${agenthub.adapters.claude-code.disallowed-tools:Edit,MultiEdit,Write,NotebookEdit,Bash}") String disallowedTools,
             @Value("${agenthub.adapters.claude-code.work-dir:.agenthub/claude-code-runs}") String workDir,
-            @Value("${agenthub.adapters.claude-code.fixture-enabled:false}") boolean fixtureEnabled) {
+            @Value("${agenthub.adapters.claude-code.fixture-enabled:false}") boolean fixtureEnabled,
+            @Value("${agenthub.adapters.claude-code.fixture-stream-chunk-delay-millis:0}") int fixtureStreamChunkDelayMillis) {
         this.timeProvider = timeProvider;
         this.objectMapper = objectMapper;
         this.artifactContractValidator = artifactContractValidator;
@@ -84,6 +87,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
         this.disallowedTools = normalize(disallowedTools, "Edit,MultiEdit,Write,NotebookEdit,Bash");
         this.workDir = Path.of(normalize(workDir, ".agenthub/claude-code-runs"));
         this.fixtureEnabled = fixtureEnabled;
+        this.fixtureStreamChunkDelayMillis = Math.max(0, fixtureStreamChunkDelayMillis);
     }
 
     @Override
@@ -140,6 +144,21 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                     capabilityDetails("missing", availability.failureReason()));
         }
 
+        Map<String, Object> details = capabilityDetails("available", null);
+        String probeFailure = cliProbeFailure(details);
+        if (probeFailure != null) {
+            return new AgentAdapterDescriptor(
+                    AgentAdapterType.CLAUDE_CODE,
+                    AgentAdapterHealthStatus.MISCONFIGURED,
+                    true,
+                    false,
+                    "Claude Code CLI command exists but capability probing failed.",
+                    withFailureType(classifyFailure(probeFailure, ""), probeFailure),
+                    supportedModes(),
+                    safetyPolicies(),
+                    details);
+        }
+
         return new AgentAdapterDescriptor(
                 AgentAdapterType.CLAUDE_CODE,
                 AgentAdapterHealthStatus.AVAILABLE,
@@ -151,7 +170,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 null,
                 supportedModes(),
                 safetyPolicies(),
-                capabilityDetails("available", null));
+                details);
     }
 
     @Override
@@ -265,12 +284,19 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
             process = startProcess(buildCommand(true), requestDir);
             writePrompt(process, buildArtifactPrompt(request));
             CompletableFuture<String> stderrFuture = readStream(process.getErrorStream());
-            String content = consumeStreamJson(process, request);
-            boolean completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            Process runningProcess = process;
+            CompletableFuture<String> contentFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return consumeStreamJson(runningProcess, request);
+                } catch (IOException | AdapterResponseException exception) {
+                    throw new RuntimeException(exception);
+                }
+            });
+            String content = getStreamingContent(contentFuture, process);
+            boolean completed = process.waitFor(5, TimeUnit.SECONDS);
             if (!completed) {
                 process.destroyForcibly();
-                throw new AdapterResponseException("Claude Code stream-json execution timed out after "
-                        + timeoutSeconds + " seconds.");
+                throw new AdapterResponseException("Claude Code stream-json process did not exit after final output.");
             }
             String stderr = getFuture(stderrFuture);
             if (process.exitValue() != 0) {
@@ -295,6 +321,46 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
             throw new AdapterResponseException("Claude Code stream-json I/O failed: "
                     + sanitizeDiagnosticText(exception.getMessage()));
         }
+    }
+
+    private String getStreamingContent(CompletableFuture<String> contentFuture, Process process)
+            throws AdapterResponseException, InterruptedException {
+        try {
+            return contentFuture.get(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (TimeoutException exception) {
+            contentFuture.cancel(true);
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            throw new AdapterResponseException("Claude Code stream-json execution timed out while reading stdout after "
+                    + timeoutSeconds + " seconds.");
+        } catch (InterruptedException exception) {
+            contentFuture.cancel(true);
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            Thread.currentThread().interrupt();
+            throw exception;
+        } catch (ExecutionException exception) {
+            Throwable cause = unwrapFutureCause(exception);
+            if (cause instanceof AdapterResponseException adapterException) {
+                throw adapterException;
+            }
+            if (cause instanceof IOException ioException) {
+                throw new AdapterResponseException("Claude Code stream-json I/O failed: "
+                        + sanitizeDiagnosticText(ioException.getMessage()));
+            }
+            throw new AdapterResponseException("Claude Code stream-json failed while reading stdout: "
+                    + sanitizeDiagnosticText(cause.getMessage()));
+        }
+    }
+
+    private Throwable unwrapFutureCause(ExecutionException exception) {
+        Throwable cause = exception.getCause();
+        if (cause instanceof RuntimeException runtimeException && runtimeException.getCause() != null) {
+            return runtimeException.getCause();
+        }
+        return cause == null ? exception : cause;
     }
 
     private String consumeStreamJson(Process process, AgentRequest request)
@@ -431,16 +497,39 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                         : "UNKNOWN"),
                 Map.entry("versionProbeStatus", versionProbe.success() ? "PASSED" : "FAILED"),
                 Map.entry("versionProbeFailure", versionProbe.failureReason() == null ? "" : versionProbe.failureReason()),
+                Map.entry("helpProbeStatus", helpProbe.success() ? "PASSED" : "FAILED"),
+                Map.entry("helpProbeFailure", helpProbe.failureReason() == null ? "" : helpProbe.failureReason()),
                 Map.entry("supportsPrint", helpOutput.contains("--print") || helpOutput.contains("-p")),
                 Map.entry("supportsJsonOutput", helpOutput.contains("json")),
                 Map.entry("supportsStreamJson", helpOutput.contains("stream-json")),
+                Map.entry("supportsOutputSchema", false),
+                Map.entry("schemaMode", "prompt-contract-only"),
                 Map.entry("supportsToolPolicy", helpOutput.contains("allowedtools") || helpOutput.contains("allowed-tools")),
                 Map.entry("authenticationProbe", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
+                Map.entry("authProbeStatus", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
                 Map.entry("streamingEnabled", streamingEnabled),
                 Map.entry("artifactOnly", artifactOnly),
                 Map.entry("workspaceWriteAllowed", false),
                 Map.entry("timeoutSeconds", timeoutSeconds),
                 Map.entry("maxTurns", maxTurns));
+    }
+
+    private String cliProbeFailure(Map<String, Object> details) {
+        String versionStatus = String.valueOf(details.getOrDefault("versionProbeStatus", ""));
+        String helpStatus = String.valueOf(details.getOrDefault("helpProbeStatus", ""));
+        if ("PASSED".equals(versionStatus) && "PASSED".equals(helpStatus)) {
+            return null;
+        }
+        String versionFailure = String.valueOf(details.getOrDefault("versionProbeFailure", ""));
+        String helpFailure = String.valueOf(details.getOrDefault("helpProbeFailure", ""));
+        return "versionProbeStatus="
+                + versionStatus
+                + "; versionProbeFailure="
+                + versionFailure
+                + "; helpProbeStatus="
+                + helpStatus
+                + "; helpProbeFailure="
+                + helpFailure;
     }
 
     private String withCommandDiagnostics(String diagnostic, String commandMode, String status) {
@@ -477,7 +566,10 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 || normalized.contains("not valid json")) {
             return "CONTRACT_INVALID";
         }
-        if (normalized.contains("permission denied") || normalized.contains("access is denied")) {
+        if (normalized.contains("permission denied")
+                || normalized.contains("access is denied")
+                || normalized.contains("createprocess error=5")
+                || normalized.contains("拒绝访问")) {
             return "PERMISSION_DENIED";
         }
         if (normalized.contains("not available") || normalized.contains("cannot run program")) {
@@ -831,14 +923,36 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
     }
 
     private String normalizeAndValidateArtifactContract(String content) throws AdapterResponseException {
+        String normalizedContent = stripOuterJsonFence(content);
         AdapterArtifactContractValidator.ValidationResult validationResult =
-                artifactContractValidator.validate(content);
+                artifactContractValidator.validate(normalizedContent);
         if (!validationResult.valid()) {
             throw new AdapterResponseException(
                     "PARSE_FAILED: Claude Code output failed AgentHub artifact JSON schema validation: "
                             + validationResult.errorMessage());
         }
         return validationResult.normalizedJson();
+    }
+
+    private String stripOuterJsonFence(String content) {
+        if (content == null) {
+            return null;
+        }
+        String trimmed = content.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (!lower.startsWith("```json") && !lower.startsWith("```")) {
+            return content;
+        }
+        int firstLineBreak = trimmed.indexOf('\n');
+        int lastFence = trimmed.lastIndexOf("```");
+        if (firstLineBreak < 0 || lastFence <= firstLineBreak) {
+            return content;
+        }
+        String inner = trimmed.substring(firstLineBreak + 1, lastFence).trim();
+        if (inner.startsWith("{") && inner.endsWith("}")) {
+            return inner;
+        }
+        return content;
     }
 
     private void publishFixtureStream(AgentRequest request, String content) {
@@ -850,6 +964,18 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
             }
             String chunk = content.substring(offset, Math.min(content.length(), offset + chunkSize));
             publishStreamChunk(request, chunkIndex++, chunk, Math.min(content.length(), offset + chunk.length()));
+            sleepBetweenFixtureChunks();
+        }
+    }
+
+    private void sleepBetweenFixtureChunks() {
+        if (fixtureStreamChunkDelayMillis <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(fixtureStreamChunkDelayMillis);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
         }
     }
 

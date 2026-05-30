@@ -6109,3 +6109,276 @@
 
 - 若继续推进真实输出质量，可把 outcome taxonomy 进一步接入真实 Adapter smoke 报告汇总。
 - 若继续推进 UI 质量门禁，可把本轮 Browser E2E 边缘状态加入 `scripts/verify-local.mjs` 的常规报告摘要。
+
+## Phase 143：Claude / Codex CLI 诊断与消息级主路径验证收敛
+
+### 目标
+
+- 让 Claude Code / Codex CLI headless Adapter 更接近生产级可诊断接入：descriptor、smoke、spec 对齐同一套能力发现和失败分类。
+- 将 Browser E2E 主路径从 Workspace toolbar fallback 收敛到消息级协作确认卡，贴合 IM-first 产品路径。
+
+### 主要变更
+
+- Claude Code `/api/adapters` capability details 增加 help probe、auth probe、`supportsOutputSchema=false` 和 `schemaMode=prompt-contract-only`。
+- Codex `/api/adapters` capability details 增加 help probe、auth probe、`supportsOutputLastMessage`、`supportsOutputSchema`、JSON event 和 sandbox 能力描述。
+- `claude-code-smoke-test.mjs` 在 `AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true` 时强制检查 help probe、print/json/tool-policy 能力，streaming smoke 额外要求 `stream-json`。
+- `codex-smoke-test.mjs` 在 `AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI=true` 时强制检查 help probe、`exec`、`--output-schema`、`--output-last-message`、read-only sandbox，streaming smoke 额外要求 JSON event。
+- `e2e-browser.mjs` 默认要求消息级协作确认卡触发 TaskRun；只有显式设置 `AGENTHUB_E2E_REQUIRE_MESSAGE_TRIGGER=false` 才允许 Workspace toolbar fallback。
+- `real-agent-output-stability-spec.md` 新增 operational failure taxonomy，区分 `NOT_INSTALLED / NOT_AUTHENTICATED / PERMISSION_DENIED / TIMEOUT / CANCELLED / CONTRACT_INVALID` 和 Artifact outcome。
+- `.env.example` 与 `scripts/README.md` 补充真实 Adapter / Browser E2E 相关 opt-in 验证 flags。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `node --check scripts/claude-code-smoke-test.mjs`
+- `node --check scripts/codex-smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮增强的是 capability discovery 与 smoke gate，不要求默认环境必须安装、登录 Claude Code 或 Codex。
+- Claude Code v1 仍是 prompt-contract-only，不提供强 output schema 参数能力。
+- Codex / Claude Code 仍是 Artifact-only headless 接入，不做桌面 GUI 自动化或 workspace-write。
+
+### 遗留问题
+
+- Direct execute 的失败结果尚未单独写入长期 Adapter quality metrics；当前长期聚合仍主要来自 TaskStep / Artifact 链路。
+- Streaming cancel 的独立 fixture smoke 仍可后续补充，用于验证 late chunks / late result 不落最终 Artifact。
+
+### 下一步建议
+
+- 若继续收敛生产级真实 Adapter，可补 direct execute failure metrics 和 Claude/Codex streaming cancel fixture smoke。
+- 若继续收敛产品主路径，可把 message-level trigger 的截图/DOM 证据加入 Browser E2E 失败诊断摘要。
+
+## Phase 144：Direct Execute 指标与 Streaming Cancel Fixture 验证
+
+### 目标
+
+- 按顺序复查真实 Claude Code / Codex CLI smoke 的当前机器状态。
+- 让 `POST /api/adapters/{type}/execute` 的结果也进入 Adapter Quality Dashboard 后端聚合指标。
+- 增加 streaming cancel fixture smoke，验证流式预览中取消后不会落最终真实产物。
+
+### 主要变更
+
+- `AgentAdapterApplicationService` 在 direct execute 后记录 Adapter quality observation，覆盖 accepted contract、fallback、parse / contract failure 等 outcome。
+- direct execute metrics 跳过 `MOCK` 自身，避免 mock 文本污染真实 Adapter 质量统计。
+- Claude Code / Codex descriptor 现在会把 version/help capability probe 失败提前标记为 `MISCONFIGURED`，避免 CLI 文件存在但不可执行时仍显示 `AVAILABLE`。
+- CLI 失败分类补充 `CreateProcess error=5` / `拒绝访问` 到 `PERMISSION_DENIED`，用于 WindowsApps wrapper 等本机权限问题。
+- Claude Code / Codex fixture streaming 增加可配置 chunk delay，便于在 `ADAPTER_STREAM_CHUNK` 后稳定触发 cancel。
+- `sse-smoke-test.mjs` 新增 `AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_CANCEL=true`，会创建 fixture Agent、等待首个 stream chunk、发送 `CANCEL_RUN`，并验证 TaskRun / Audit / Artifact 结果。
+- `.env.example` 和 `scripts/README.md` 增加 fixture stream delay 与 streaming cancel smoke 说明。
+- `docs/plans/next.md` 记录 direct execute metrics 和 streaming cancel fixture smoke 状态，并保留当前真实 CLI 环境诊断结果。
+
+### 验证方式
+
+- `node --check scripts/sse-smoke-test.mjs`
+- `node --check scripts/claude-code-smoke-test.mjs`
+- `node --check scripts/codex-smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- 启动 CODEX fixture streaming backend 后运行 `AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_CANCEL=true node scripts/sse-smoke-test.mjs`
+  - 通过：收到首个 `CODEX` stream chunk。
+  - 通过：`CANCEL_RUN` 被接受，最终 TaskRun 为 `CANCELLED`。
+  - 通过：未持久化 `CODEX / REAL_ADAPTER` late Artifact。
+- 启动 CODEX fixture backend 后调用 `POST /api/adapters/CODEX/execute`，并通过 `GET /api/adapters/quality-metrics` 验证 direct execute accepted outcome 被记录。
+- 使用当前 WindowsApps Codex wrapper 启动 backend，验证 `/api/adapters` 已在 descriptor 阶段返回 `CODEX / MISCONFIGURED / PERMISSION_DENIED`。
+
+### 静态 / Mock / Placeholder 部分
+
+- 本轮 streaming cancel 使用 fixture adapter 验证取消语义，不代表真实外部 CLI 长任务一定能被操作系统级硬中断。
+- Claude Code / Codex 真实 CLI smoke 当前按环境事实输出失败分类：Claude 在本次后端 PowerShell 环境中不可解析为 PATH 命令；Codex 由 Windows app wrapper 返回 `PERMISSION_DENIED`。
+- Fixture smoke 仍不能当作真实 provider / 真实 CLI 成功。
+
+### 遗留问题
+
+- 需要在用户交互终端可用的同一 PATH / 命令上下文下重新提供 Claude Code 命令，才能完成真实 Claude Code CLI smoke。
+- 需要提供可由 backend `ProcessBuilder` 直接执行的 Codex CLI 路径或修复 Windows app wrapper 权限，才能完成真实 Codex CLI smoke。
+
+### 下一步建议
+
+- 先修复本机 Claude / Codex CLI 的后端进程可执行路径，再重跑 `*_SMOKE_REQUIRE_REAL_CLI=true`。
+- 若继续增强 cancel 语义，可补真实 CLI slow-output 场景，确认 late process result discard 与 fixture 行为一致。
+
+## Phase 145：真实 Claude Code / Codex Headless Smoke 复验
+
+### 目标
+
+- 使用本机真实 CLI 和非沙箱 backend 进程复验 Claude Code / Codex 的 headless Artifact-only 接入。
+- 调整 smoke 语义：demo-task 可以因为 Reviewer / quality gate 进入 `BLOCKED`，但真实 Adapter smoke 必须仍证明 direct execute、TaskStep、Artifact 和质量元数据可解释。
+
+### 主要变更
+
+- `claude-code-smoke-test.mjs` 和 `codex-smoke-test.mjs` 不再把 `BLOCKED` 直接等同于 Adapter 接入失败；脚本继续强制要求真实 Adapter step、`REAL_ADAPTER` Artifact 和 `qualityStatus=ACCEPTED`。
+- 保留真实 CLI descriptor 严格检查：require real CLI 时必须通过 version/help probe，并验证 headless / artifact-only / safe policy capability。
+
+### 验证方式
+
+- 非沙箱执行 `claude --version`：通过，返回 `2.1.143 (Claude Code)`。
+- 非沙箱执行 `codex --version`：通过，返回 `codex-cli 0.134.0`。
+- Claude Code real CLI non-stream smoke：
+  - backend 使用 `AGENTHUB_CLAUDE_CODE_COMMAND=C:\Users\shens\AppData\Roaming\npm\claude.cmd`。
+  - 通过：descriptor available、direct execute 返回 Artifact JSON、demo-task 产生 `CLAUDE_CODE / REAL_ADAPTER` Artifact。
+  - 观察：TaskRun 因 Reviewer / quality gate 进入 `BLOCKED`，但真实 Artifact 接入链路通过。
+- Codex real CLI non-stream smoke：
+  - 通过：descriptor available、direct execute 返回 Artifact JSON、demo-task 产生 `CODEX / REAL_ADAPTER` Artifact。
+  - 观察：一次 TaskRun 因 Reviewer / quality gate 进入 `BLOCKED`，但真实 Artifact 接入链路通过。
+- Codex real CLI streaming smoke：
+  - 通过：观察到 `ADAPTER_STREAM_CHUNK`，最终产生 `CODEX / REAL_ADAPTER / REAL_FIRST` Artifact，TaskRun `COMPLETED`。
+- `node --check scripts/claude-code-smoke-test.mjs`
+- `node --check scripts/codex-smoke-test.mjs`
+- `node --check scripts/sse-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 部分
+
+- Claude Code streaming smoke 本轮未完成通过；上一次 stream-json 尝试超过本地 smoke timeout，需要单独做 timeout / stream parser 稳定性验证。
+- 本轮真实 CLI 验证要求非沙箱执行；沙箱内的 WindowsApps / npm shim 行为会导致误判。
+
+### 遗留问题
+
+- 需要把 Claude Code `.cmd` 路径配置经验同步到本机启动说明，避免后端解析到无扩展 npm shim。
+- Claude Code streaming 仍需独立验证，不应在文档中标记为本机真实通过。
+
+### 下一步建议
+
+- 优先修 Claude Code streaming timeout：缩短 prompt、限制 max turns、增加 smoke timeout 或在 stream-json parser 中更早识别最终 result。
+- 继续保持默认 smoke 不依赖真实 CLI；真实 CLI smoke 仍作为 opt-in 质量门禁。
+
+## Phase 146：Claude Code Stream-JSON Timeout 与真实 Streaming Smoke 收敛
+
+### 目标
+
+- 继续收敛 Claude Code real streaming smoke，解决上轮 `stream-json` 路径超过本地 smoke timeout 的问题。
+- 保持 Claude Code v1 的 Artifact-only、安全执行、真实输出 contract 和 fallback 边界不变。
+
+### 主要变更
+
+- `ClaudeCodeAgentAdapter` 的 `stream-json` stdout 消费改为 timeout-bound `CompletableFuture`，避免先阻塞读取 stdout、后执行 `waitFor(timeout)` 导致 timeout 保护失效。
+- Claude Code stream 读取超时会销毁 CLI 进程并返回明确 timeout 诊断，而不是让 smoke 无界等待。
+- Claude Code adapter 增加最小兼容：仅剥离最外层 ````json ... ``` 包裹，再交给统一 Artifact contract validator；普通文本、CLI log、artifact content 内 Markdown fence 仍会被拒绝。
+- 真实 streaming 验证将 `maxTurns` 调整为真实任务更稳定的轮次数，避免 Reviewer step 因轮次过低触发 `error_max_turns`。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `node --check scripts/claude-code-smoke-test.mjs`
+- 非沙箱启动隔离 backend 后运行真实 Claude Code streaming smoke：
+  - 通过：`CLAUDE_CODE` descriptor available。
+  - 通过：direct execute 返回 Artifact JSON。
+  - 通过：demo-task 观察到 `ADAPTER_STREAM_CHUNK`。
+  - 通过：产生 `CLAUDE_CODE / REAL_ADAPTER` Artifact。
+  - 观察：TaskRun 可因 Reviewer / quality gate 进入 `BLOCKED`，但真实 Adapter streaming 接入链路通过。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 smoke 仍不依赖真实 Claude Code CLI。
+- 真实 Claude Code streaming smoke 仍是 opt-in，需要本机安装、登录并配置可由 backend 进程直接执行的 CLI 命令。
+- 这仍是 Artifact-only headless 接入，不允许 Claude Code 直接修改 AgentHub workspace。
+
+### 遗留问题
+
+- Claude Code stream chunk 仍只作为实时预览，不持久化 token 级输出。
+- 更复杂的 Claude Code 多轮 session、workspace-write、真实 patch apply by Claude Code 继续后置。
+
+### 下一步建议
+
+- 后续如继续增强真实 CLI 质量，可补真实 streaming cancel 场景，验证 Stop / Cancel 后 late chunks 和 late result 均不落最终 Artifact。
+- 继续保持 Claude Code、Codex、OpenAI-compatible 的输出质量指标在 Adapter Quality Dashboard 中统一展示。
+
+## Phase 147：真实 Claude / Codex Streaming Cancel Smoke 闭环
+
+### 目标
+
+- 将 streaming cancel 从 fixture 验证推进到真实 CLI 验证，覆盖 Claude Code 与 Codex 的 realtime、cancel、Artifact 落库边界。
+- 保持默认 smoke 不依赖真实 CLI；真实 cancel 仍作为 opt-in 质量门禁。
+
+### 主要变更
+
+- `sse-smoke-test.mjs` 增加 `AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CANCEL=true`，会通过 `/api/adapters` 强制确认目标 Adapter 不是 fixture、状态为 `AVAILABLE`、streaming 已开启，并具备对应 stream 能力。
+- `sse-smoke-test.mjs` 增加 `AGENTHUB_SSE_SMOKE_STREAMING_CANCEL_TIMEOUT_MS`，用于真实 CLI 首个 stream chunk 和取消状态等待，避免真实 CLI 场景被 fixture 级 10 秒 timeout 误杀。
+- streaming cancel 触发后会 abort 客户端 demo-task 请求，并等待 TaskRun 进入 `CANCELLED`；如果取消发生在 TaskStep 结果落库前，允许 steps 为空，但仍强制验证无 late `REAL_ADAPTER` Artifact。
+- `.env.example` 和 `scripts/README.md` 增加真实 streaming cancel smoke 的 opt-in 环境变量和 PowerShell 使用说明。
+
+### 验证方式
+
+- `node --check scripts/sse-smoke-test.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- 非沙箱启动 Codex streaming backend 后运行：
+  - `AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_CANCEL=true`
+  - `AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CANCEL=true`
+  - `AGENTHUB_SSE_SMOKE_STREAMING_CANCEL_ADAPTER=CODEX`
+  - 通过：收到 `CODEX` 的 `ADAPTER_STREAM_CHUNK`。
+  - 通过：`CANCEL_RUN` accepted。
+  - 通过：TaskRun `CANCELLED`，且未持久化 `CODEX / REAL_ADAPTER` late Artifact。
+- 非沙箱启动 Claude Code streaming backend 后运行：
+  - `AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_CANCEL=true`
+  - `AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CANCEL=true`
+  - `AGENTHUB_SSE_SMOKE_STREAMING_CANCEL_ADAPTER=CLAUDE_CODE`
+  - 通过：收到 `CLAUDE_CODE` 的 `ADAPTER_STREAM_CHUNK`。
+  - 通过：`CANCEL_RUN` accepted。
+  - 通过：TaskRun `CANCELLED`，且未持久化 `CLAUDE_CODE / REAL_ADAPTER` late Artifact。
+
+### 静态 / Mock / Placeholder 部分
+
+- 默认 SSE smoke 仍不要求真实 CLI，也不会默认启用真实 streaming cancel。
+- 真实 streaming cancel smoke 需要本机安装、登录并配置可由 backend 进程直接执行的 Claude Code / Codex CLI。
+- 该验证确认 late result discard 和 no late Artifact persistence；不代表非流式 HTTP / CLI 调用可被操作系统级硬中断。
+
+### 遗留问题
+
+- Token 级 streaming 仍不持久化；当前只持久化最终消息、TaskRun、Audit、Realtime state 和 Artifact 结果。
+- 多节点事件总线仍未做；当前 realtime 仍是单进程 SSE / control plane。
+
+### 下一步建议
+
+- 继续观察真实 CLI cancel 后的 Adapter quality metrics 和 ActionAuditLog 是否足够解释用户侧失败/取消体验。
+- 若进入生产化下一阶段，可补一条 Browser E2E 可见性验证：取消后 MessageStream 显示 partial / discarded 状态。
+
+## Phase 148：Streaming Stop Smoke 与 Adapter Quality Matrix
+
+### 目标
+
+- 将 streaming control 验证从 `CANCEL_RUN` 扩展到 `STOP_RUN`，覆盖 fixture 与真实 Claude Code / Codex CLI。
+- 为真实 Adapter 输出质量增加一个任务类型矩阵脚本，便于持续观察 `PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` 模式。
+
+### 主要变更
+
+- `sse-smoke-test.mjs` 新增 `AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_STOP=true`。
+- `sse-smoke-test.mjs` 将 streaming cancel 逻辑抽象为 streaming control smoke，统一验证首个 `ADAPTER_STREAM_CHUNK`、控制命令 accepted、最终状态、ActionAuditLog 和 no late `REAL_ADAPTER` persistence。
+- 新增 `AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CONTROL=true`，用于 cancel / stop 两类真实 CLI streaming control 验证；旧 `AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CANCEL=true` 继续兼容。
+- 新增 `scripts/adapter-quality-matrix-smoke.mjs`，默认按 `OPENAI_COMPATIBLE / CLAUDE_CODE / CODEX` 和 `frontend / api / review / markdown` 任务类型调用 direct execute，并输出 outcome 汇总。
+- `.env.example`、`scripts/README.md`、`scripts/AGENTS.md` 和 `docs/plans/next.md` 已同步新增环境变量、脚本和验证边界。
+
+### 验证方式
+
+- `node --check scripts/sse-smoke-test.mjs`
+- `node --check scripts/adapter-quality-matrix-smoke.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- fixture backend 验证：
+  - 通过：`AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_CANCEL=true`
+  - 通过：`AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_STOP=true`
+  - 结果：Codex fixture 首个 chunk 后 cancel / stop 均不持久化 late `REAL_ADAPTER` Artifact。
+- Adapter quality matrix fixture 验证：
+  - 通过：`OPENAI_COMPATIBLE / CLAUDE_CODE / CODEX` 在 `frontend / api` 任务上均返回 `ACCEPTED`。
+- 真实 Codex CLI streaming stop 验证：
+  - 初次使用 WindowsApps 内部 exe 路径失败，分类为 `PERMISSION_DENIED`。
+  - 改用 `AGENTHUB_CODEX_COMMAND=codex` 后通过：收到 `CODEX` chunk，`STOP_RUN` accepted，TaskRun `STOPPED`，无 late `CODEX / REAL_ADAPTER` Artifact。
+- 真实 Claude Code CLI streaming stop 验证：
+  - 初次使用 extensionless npm shim 失败，分类为 `NOT_INSTALLED` / Win32 shim 不可执行。
+  - 改用 `C:\Users\shens\AppData\Roaming\npm\claude.cmd` 后通过：收到 `CLAUDE_CODE` chunk，`STOP_RUN` accepted，TaskRun `STOPPED`，无 late `CLAUDE_CODE / REAL_ADAPTER` Artifact。
+
+### 静态 / Mock / Placeholder 部分
+
+- Adapter quality matrix 默认是监控脚本，不强制真实 provider；`REQUIRE_REAL=true` 时才禁止 fixture。
+- Streaming stop / cancel 仍是 opt-in；默认 SSE smoke 不依赖真实 CLI。
+- Streaming chunk 仍只作为实时预览，不持久化 token 级历史。
+- 当前验证确认 late result 不落最终 Artifact；不代表所有非流式外部进程都能被操作系统级硬中断。
+
+### 遗留问题
+
+- Browser E2E 未在本轮执行，因为没有修改 Workspace / MessageStream / ArtifactPanel 等前端渲染代码。
+- Adapter quality matrix 目前验证 direct execute contract，不替代 full demo-task / REAL_FIRST Artifact smoke。
+
+### 下一步建议
+
+- 若继续生产化 Adapter 质量，可把 quality matrix 的汇总接入长期指标或本地报告。
+- 若继续增强 realtime 产品体验，可补 UI 可见性验证：Stop 后 MessageStream 显示 partial / discarded 状态。

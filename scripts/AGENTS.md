@@ -3,6 +3,7 @@
 - API smoke: `node scripts/smoke-test.mjs`
 - SSE smoke: `node scripts/sse-smoke-test.mjs`
 - Real Adapter smoke: `node scripts/real-adapter-smoke-test.mjs`
+- Adapter quality matrix: `node scripts/adapter-quality-matrix-smoke.mjs`
 - JDBC smoke: `node scripts/jdbc-smoke-test.mjs`
 - MySQL profile init: `node scripts/mysql-init-profile.mjs`
 - Browser E2E: `node scripts/e2e-browser.mjs`
@@ -18,6 +19,7 @@
 - `smoke-test.mjs`: default API main path; no real LLM, MySQL, or real deployment dependency.
 - `sse-smoke-test.mjs`: SSE, run state, control fallback, and cancel checks.
 - `real-adapter-smoke-test.mjs`: opt-in real OpenAI-compatible provider validation.
+- `adapter-quality-matrix-smoke.mjs`: opt-in direct adapter execute quality monitoring across task types.
 - `jdbc-smoke-test.mjs`: JDBC profile and restart verify entry.
 - `mysql-init-profile.mjs`: opt-in MySQL database/schema initializer for JDBC profile verification.
 - `e2e-browser.mjs`: browser UI verification; requires frontend and backend to be running.

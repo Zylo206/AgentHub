@@ -4,8 +4,10 @@ import com.agenthub.common.IdGenerator;
 import com.agenthub.infrastructure.adapter.AgentAdapterDescriptor;
 import com.agenthub.infrastructure.adapter.AgentAdapterRegistry.AdapterRouteStats;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
+import com.agenthub.infrastructure.adapter.AgentExecutionStatus;
 import com.agenthub.infrastructure.adapter.AgentRequest;
 import com.agenthub.infrastructure.adapter.AgentResponse;
+import com.agenthub.infrastructure.adapter.AdapterArtifactContractValidator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,16 +19,19 @@ public class AgentAdapterApplicationService {
 
     private final AgentExecutorService agentExecutorService;
     private final AdapterQualityMetricsService adapterQualityMetricsService;
+    private final AdapterArtifactContractValidator artifactContractValidator;
     private final IdGenerator idGenerator;
     private final AgentAdapterType defaultAdapterType;
 
     public AgentAdapterApplicationService(
             AgentExecutorService agentExecutorService,
             AdapterQualityMetricsService adapterQualityMetricsService,
+            AdapterArtifactContractValidator artifactContractValidator,
             IdGenerator idGenerator,
             @Value("${agenthub.adapters.default-type:MOCK}") String defaultAdapterType) {
         this.agentExecutorService = agentExecutorService;
         this.adapterQualityMetricsService = adapterQualityMetricsService;
+        this.artifactContractValidator = artifactContractValidator;
         this.idGenerator = idGenerator;
         this.defaultAdapterType = parseAdapterType(defaultAdapterType);
     }
@@ -82,7 +87,67 @@ public class AgentAdapterApplicationService {
                 command.artifactSummaries(),
                 command.metadata() == null ? Map.of() : command.metadata());
 
-        return agentExecutorService.execute(preferredType, request);
+        AgentResponse response = agentExecutorService.execute(preferredType, request);
+        recordDirectExecuteQuality(preferredType, response);
+        return response;
+    }
+
+    private void recordDirectExecuteQuality(AgentAdapterType preferredType, AgentResponse response) {
+        if (preferredType == AgentAdapterType.MOCK) {
+            return;
+        }
+        boolean completed = response != null && response.status() == AgentExecutionStatus.COMPLETED;
+        boolean fallbackUsed = response != null
+                && (response.fallbackUsed() || response.actualAdapterType() != preferredType);
+        boolean preferredCompleted = completed && !fallbackUsed;
+
+        String parseStatus = "NOT_ATTEMPTED";
+        String qualityStatus = preferredCompleted ? "ACCEPTED" : "FALLBACK";
+        String qualityReason = response == null ? "Direct execute returned no response." : response.errorMessage();
+        boolean realOutputAccepted = false;
+
+        if (preferredCompleted) {
+            AdapterArtifactContractValidator.ValidationResult validation =
+                    artifactContractValidator.validate(response.content());
+            if (validation.valid()) {
+                parseStatus = "VALID_JSON_ARTIFACTS";
+                realOutputAccepted = true;
+                qualityReason = "Direct execute returned a valid AgentHub Artifact JSON contract.";
+            } else {
+                parseStatus = "PARSE_FAILED";
+                qualityStatus = "REJECTED";
+                qualityReason = validation.errorMessage();
+                realOutputAccepted = false;
+            }
+        } else if (isContractFailure(response)) {
+            parseStatus = "PARSE_FAILED";
+            qualityStatus = "REJECTED";
+        }
+
+        adapterQualityMetricsService.record(new AdapterQualityMetricsService.QualityObservation(
+                preferredType,
+                preferredCompleted,
+                fallbackUsed,
+                realOutputAccepted,
+                parseStatus,
+                "NOT_ATTEMPTED",
+                qualityStatus,
+                qualityReason));
+    }
+
+    private boolean isContractFailure(AgentResponse response) {
+        String diagnostic = response == null
+                ? ""
+                : ((response.errorMessage() == null ? "" : response.errorMessage())
+                + "\n"
+                + (response.content() == null ? "" : response.content()));
+        String normalized = diagnostic.toLowerCase(Locale.ROOT);
+        return normalized.contains("failuretype=contract_invalid")
+                || normalized.contains("parse_failed")
+                || normalized.contains("artifact json schema")
+                || normalized.contains("artifact contract")
+                || normalized.contains("invalid json")
+                || normalized.contains("not valid json");
     }
 
     private AgentAdapterType parseAdapterType(String value) {

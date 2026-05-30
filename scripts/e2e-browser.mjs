@@ -13,6 +13,7 @@ const SLOW_MO = Number(process.env.AGENTHUB_E2E_SLOW_MO || 0);
 const BROWSER_CHANNEL = process.env.AGENTHUB_E2E_BROWSER_CHANNEL || "msedge";
 const E2E_ARTIFACT_DIR = process.env.AGENTHUB_E2E_ARTIFACT_DIR || path.resolve(".agenthub", "e2e-browser");
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
+const REQUIRE_MESSAGE_TRIGGER = process.env.AGENTHUB_E2E_REQUIRE_MESSAGE_TRIGGER !== "false";
 const EXPECT_REJECTION = process.env.AGENTHUB_E2E_EXPECT_REJECTION !== "false";
 const TEST_MARKER = `browser-e2e-main-${Date.now()}`;
 const TEST_ATTACHMENT_FILE_NAME = "browser-e2e-ui-brief.md";
@@ -646,8 +647,15 @@ async function triggerTaskRunFromUi(page, conversationId) {
   const beforeRuns = await request(`/api/conversations/${conversationId}/task-runs`);
   const beforeRunIds = new Set(beforeRuns.map((taskRun) => getIdValue(taskRun.id)));
 
-  let triggerPath = "workspace collaboration primary action";
-  await clickWorkspaceCollaborationCta(page);
+  let triggerPath = "message auto-trigger collaboration card";
+  const clickedMessageTrigger = await clickAutoTriggerIfAvailable(page);
+  if (!clickedMessageTrigger) {
+    if (REQUIRE_MESSAGE_TRIGGER) {
+      throw new Error("message auto-trigger collaboration card is not visible and enabled");
+    }
+    triggerPath = "workspace collaboration primary action";
+    await clickWorkspaceCollaborationCta(page);
+  }
   try {
     await waitForApiState(
       "primary-action TaskRun",

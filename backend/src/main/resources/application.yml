@@ -91,6 +91,7 @@ agenthub:
       artifact-only: ${AGENTHUB_CODEX_ARTIFACT_ONLY:true}
       work-dir: ${AGENTHUB_CODEX_WORK_DIR:${user.home}/.agenthub/agenthub/codex-runs}
       fixture-enabled: ${AGENTHUB_CODEX_FIXTURE_ENABLED:false}
+      fixture-stream-chunk-delay-millis: ${AGENTHUB_CODEX_FIXTURE_STREAM_CHUNK_DELAY_MILLIS:0}
     claude-code:
       enabled: ${AGENTHUB_CLAUDE_CODE_ENABLED:false}
       command: ${AGENTHUB_CLAUDE_CODE_COMMAND:claude}
@@ -104,6 +105,7 @@ agenthub:
       disallowed-tools: ${AGENTHUB_CLAUDE_CODE_DISALLOWED_TOOLS:Edit,MultiEdit,Write,NotebookEdit,Bash}
       work-dir: ${AGENTHUB_CLAUDE_CODE_WORK_DIR:${user.home}/.agenthub/agenthub/claude-code-runs}
       fixture-enabled: ${AGENTHUB_CLAUDE_CODE_FIXTURE_ENABLED:false}
+      fixture-stream-chunk-delay-millis: ${AGENTHUB_CLAUDE_CODE_FIXTURE_STREAM_CHUNK_DELAY_MILLIS:0}
     open-code:
       enabled: ${AGENTHUB_OPEN_CODE_ENABLED:false}
       command: ${AGENTHUB_OPEN_CODE_COMMAND:opencode}

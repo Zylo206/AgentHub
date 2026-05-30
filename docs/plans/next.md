@@ -14,12 +14,15 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: OpenAI-compatible, Claude Code, and Codex opt-in smoke scripts classify `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` outcomes instead of returning generic failures.
    - `Done`: TaskStep fallback/quality reason now records contract-class failures as `PARSE_FAILED` and non-real-output fallback as `FALLBACK`.
    - `Done`: `docs/spec/real-agent-output-stability-spec.md` now captures the stable contract, outcome taxonomy, acceptance criteria, and fallback boundaries for real Agent output.
+   - `Done`: `docs/spec/real-agent-output-stability-spec.md` now separates Artifact outcome taxonomy from CLI / provider operational failures such as `NOT_INSTALLED`, `NOT_AUTHENTICATED`, `PERMISSION_DENIED`, `TIMEOUT`, and `CANCELLED`.
    - `Done`: REAL_FIRST invalid contract or fallback text promotion is explicitly treated as `PARSE_FAILED`, not a generic quality failure.
    - `Done`: TaskStep and Artifact expose a derived `realAdapterOutcome` field so UI and scripts can read a single `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` result.
    - `Done`: TaskStep and Artifact now expose explicit build validation reason fields instead of forcing UI, smoke, and reviewer gates to parse build failure details from quality reason text.
    - `Active`: keep monitoring real provider parse failure, quality failure, build failure, and fallback patterns across more task types.
    - `Done`: Adapter Quality Dashboard now reads backend aggregate rates for real acceptance, total failure, parse failure, quality failure, and build failure instead of only deriving signals from currently loaded TaskSteps.
    - `Done`: Adapter quality metrics now expose a unified `lastOutcome / outcomeSummary` taxonomy for `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`, shared by OpenAI-compatible, Claude Code, and Codex paths.
+   - `Done`: direct adapter execute results now also feed Adapter Quality Metrics, so `/api/adapters/{type}/execute` parse / fallback / accepted outcomes are visible outside TaskStep-created runs.
+   - `Done`: `scripts/adapter-quality-matrix-smoke.mjs` now probes direct adapter execute across multiple task types and summarizes `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK / SKIPPED` by adapter.
    - Real provider validation must be opt-in and must not commit keys.
 
 2. **Maintain REAL_FIRST primary Artifact rules**
@@ -47,7 +50,15 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Windows npm shim resolution prefers `.cmd/.exe/.bat` over extensionless shims, and `stream-json` uses Claude Code's required `--verbose` flag.
    - `Done`: `docs/spec/claude-codex-headless-adapter-spec.md` captures the Claude Code / Codex headless Artifact-only v1 contract, smoke boundaries, and deeper integration prerequisites.
    - `Done`: `/api/adapters` now exposes Claude Code supported modes, safety policies, and non-invasive version/help capability details without triggering model execution.
+   - `Done`: Claude Code capability details now expose help probe status, auth probe status, and explicit `supportsOutputSchema=false / schemaMode=prompt-contract-only`.
    - `Done`: Claude Code direct execute diagnostics now include `failureType`, command mode, timeout, and CLI path; smoke can require real CLI with `AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true`.
+   - `Done`: Claude Code real CLI smoke now requires help probe, print/json/tool-policy support, and stream-json support when streaming smoke is enabled.
+   - `Done`: real Claude Code non-streaming CLI smoke passes when backend uses the direct npm command shim.
+   - `Done`: real Claude Code streaming CLI smoke passes in non-sandbox mode, observes `ADAPTER_STREAM_CHUNK`, and produces `CLAUDE_CODE / REAL_ADAPTER` Artifact output.
+   - `Done`: real Claude Code streaming cancel smoke passes in non-sandbox mode: first `ADAPTER_STREAM_CHUNK` observed, `CANCEL_RUN` accepted, TaskRun becomes `CANCELLED`, and no late `CLAUDE_CODE / REAL_ADAPTER` Artifact is persisted.
+   - `Done`: real Claude Code streaming stop smoke passes in non-sandbox mode when backend uses the `.cmd` shim: first `ADAPTER_STREAM_CHUNK` observed, `STOP_RUN` accepted, TaskRun becomes `STOPPED`, and no late `CLAUDE_CODE / REAL_ADAPTER` Artifact is persisted.
+   - `Done`: Claude Code `stream-json` stdout consumption is timeout-bound, so stream hangs now return a classified timeout instead of blocking the smoke indefinitely.
+   - `Done`: Claude Code adapter tolerates a single outer JSON Markdown fence by stripping only that wrapper before strict Artifact contract validation; artifact content fences and plain text remain rejected.
    - `Done`: Claude Code prompt contract now requires a single raw JSON object, raw CODE source, no Markdown fences, no CLI wrapper/log content, and explicit Artifact type / summary fields.
    - `Done`: Claude Code contract failures are surfaced as `PARSE_FAILED`; quality/build failures remain visible through TaskStep and Artifact metadata.
    - `Done`: Claude Code streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, destroys the CLI process when cancellation is observed during stream-json reading, and discards final output after Stop / Cancel.
@@ -65,7 +76,13 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: real Codex streaming smoke passed on port `18100` with `AGENTHUB_CODEX_STREAMING_ENABLED=true`, observed `ADAPTER_STREAM_CHUNK`, and created `CODEX / REAL_ADAPTER / REAL_FIRST` Artifact.
    - `Done`: `docs/spec/claude-codex-headless-adapter-spec.md` defines Codex v1 as headless / Artifact-only, not Codex Desktop GUI automation.
    - `Done`: `/api/adapters` now exposes Codex supported modes, safety policies, and non-invasive `--version` / `exec --help` capability details.
+   - `Done`: Codex capability details now expose help probe status, auth probe status, output-last-message support, output schema support, JSON event support, and sandbox support.
    - `Done`: Codex direct execute diagnostics now include `failureType`, command mode, timeout, and CLI path; smoke can require real CLI with `AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI=true`.
+   - `Done`: Codex real CLI smoke now requires help probe, `exec`, `--output-schema`, `--output-last-message`, read-only sandbox, and JSON event support when streaming smoke is enabled.
+   - `Done`: real Codex non-streaming CLI smoke passes in non-sandbox mode.
+   - `Done`: real Codex streaming CLI smoke passes in non-sandbox mode and observes `ADAPTER_STREAM_CHUNK` before producing `CODEX / REAL_ADAPTER / REAL_FIRST` artifacts.
+   - `Done`: real Codex streaming cancel smoke passes in non-sandbox mode: first `ADAPTER_STREAM_CHUNK` observed, `CANCEL_RUN` accepted, TaskRun becomes `CANCELLED`, and no late `CODEX / REAL_ADAPTER` Artifact is persisted.
+   - `Done`: real Codex streaming stop smoke passes in non-sandbox mode with `AGENTHUB_CODEX_COMMAND=codex`: first `ADAPTER_STREAM_CHUNK` observed, `STOP_RUN` accepted, TaskRun becomes `STOPPED`, and no late `CODEX / REAL_ADAPTER` Artifact is persisted.
    - `Done`: Codex prompt contract now requires a single raw JSON object, raw CODE source, no Markdown fences, no CLI wrapper/log content, and explicit Artifact type / summary fields.
    - `Done`: Codex contract failures are surfaced as `PARSE_FAILED`; quality/build failures remain visible through TaskStep and Artifact metadata.
    - `Done`: Codex streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, supports fixture stream previews for contract smoke, and discards final output after Stop / Cancel.
@@ -99,6 +116,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: `CANCEL_RUN` ends as `CANCELLED`; `STOP_RUN` ends as `STOPPED`.
    - `Done`: Orchestrator steps check the control token before delay, before adapter execution, and after adapter execution; late adapter results are discarded.
    - `Done`: opt-in SSE smoke with artificial step delay verified active cancel and active stop behavior locally.
+   - `Done`: opt-in SSE streaming cancel fixture smoke verifies `ADAPTER_STREAM_CHUNK -> CANCEL_RUN -> CANCELLED`, accepted audit record, and no late `REAL_ADAPTER` Artifact persistence.
+   - `Done`: opt-in SSE real streaming cancel smoke now rejects fixture mode and verifies both Codex and Claude Code real CLI streaming cancellation.
+   - `Done`: opt-in SSE streaming stop smoke now covers fixture mode and real Codex / Claude Code CLI paths, verifying `ADAPTER_STREAM_CHUNK -> STOP_RUN -> STOPPED` and no late `REAL_ADAPTER` persistence.
    - `Done`: TaskRunPanel explains Stop vs Cancel semantics in-product: Stop skips later steps, Cancel discards late adapter output, and terminal runs reject control commands.
    - `Boundary`: non-streaming Java HTTP calls already in flight are not forcibly interrupted; results are discarded when the control token is observed.
    - Keep ActionAuditLog, RealtimeRunState, and TaskRunPanel in sync.
@@ -133,7 +153,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: empty message, TaskRun, Artifact, and ChatInput hints now direct users toward message-triggered collaboration instead of Demo Task.
    - `Done`: user message rerun action no longer exposes `Demo Task` as the primary product language.
    - `Done`: Workspace now shows an in-product flow guide: send task message -> confirm collaboration -> Orchestrator run -> Artifact / Approval / Preview.
-   - `Done`: Browser E2E now requires the Workspace collaboration primary action for the product path and does not use the manual debug run as its default fallback.
+   - `Done`: Browser E2E now requires the message-level collaboration confirmation card by default and only allows toolbar fallback when `AGENTHUB_E2E_REQUIRE_MESSAGE_TRIGGER=false`.
    - `Done`: Browser E2E passed on an isolated backend/frontend dev server and covers the IM-first path, approval gates, restore, deploy preview, audit timeline, and optional rejection scenario.
    - `Done`: backend CORS origins are configurable through `AGENTHUB_CORS_ALLOWED_ORIGINS`, so local validation ports do not require code edits.
    - `Done`: Workspace P0 visual polish moved the UI toward a Chinese-first technical command center: unified design tokens, command-center shell, stronger protocol cards, streaming status, and quality gate trust surfaces.

@@ -189,6 +189,12 @@ $env:AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI="true"
 node scripts/claude-code-smoke-test.mjs
 ```
 
+On Windows npm installs, the backend may need the `.cmd` shim rather than the extensionless npm shim:
+
+```powershell
+$env:AGENTHUB_CLAUDE_CODE_COMMAND="C:\Users\<you>\AppData\Roaming\npm\claude.cmd"
+```
+
 Streaming is also opt-in:
 
 ```powershell
@@ -226,6 +232,8 @@ $env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
 cd backend
 mvn spring-boot:run
 ```
+
+On Windows Store / App Execution Alias installs, prefer `AGENTHUB_CODEX_COMMAND="codex"`. Do not point Java directly at the internal `WindowsApps\...\codex.exe` path; that path can fail with `PERMISSION_DENIED`.
 
 Then run:
 
@@ -419,6 +427,63 @@ node scripts/sse-smoke-test.mjs
 
 The active stop check sends `STOP_RUN` while the run is executing and expects the final TaskRun to become `STOPPED`. Both active checks assert that at least one step is skipped or has its adapter result discarded.
 
+To verify streaming cancel or stop semantics with deterministic CLI fixture chunks, enable a fixture adapter, add a small chunk delay, and run the opt-in streaming control check:
+
+```powershell
+$env:AGENTHUB_CODEX_ENABLED="true"
+$env:AGENTHUB_CODEX_FIXTURE_ENABLED="true"
+$env:AGENTHUB_CODEX_STREAMING_ENABLED="true"
+$env:AGENTHUB_CODEX_FIXTURE_STREAM_CHUNK_DELAY_MILLIS="150"
+$env:AGENTHUB_ARTIFACT_GENERATION_MODE="REAL_FIRST"
+# start backend in another terminal
+$env:AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_CANCEL="true"
+# Or use stop instead of cancel:
+# $env:AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_STOP="true"
+$env:AGENTHUB_SSE_SMOKE_STREAMING_CANCEL_ADAPTER="CODEX"
+node scripts/sse-smoke-test.mjs
+```
+
+The streaming control check waits for the first `ADAPTER_STREAM_CHUNK`, sends `CANCEL_RUN` or `STOP_RUN`, and verifies the final TaskRun is `CANCELLED` or `STOPPED`, an accepted audit record exists, and no late `REAL_ADAPTER` Artifact from the streaming adapter is persisted. The same path can be run with `AGENTHUB_SSE_SMOKE_STREAMING_CANCEL_ADAPTER="CLAUDE_CODE"` when the Claude Code fixture adapter is enabled.
+
+For real CLI streaming cancel / stop verification, start backend with the target adapter's real CLI streaming mode enabled, then require non-fixture mode:
+
+```powershell
+$env:AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_CANCEL="true"
+# Or:
+# $env:AGENTHUB_SSE_SMOKE_EXPECT_STREAMING_STOP="true"
+$env:AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CONTROL="true"
+# Legacy equivalent for cancel-only runs:
+$env:AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CANCEL="true"
+$env:AGENTHUB_SSE_SMOKE_STREAMING_CANCEL_ADAPTER="CLAUDE_CODE" # or CODEX
+$env:AGENTHUB_SSE_SMOKE_STREAMING_CANCEL_TIMEOUT_MS="180000"
+node scripts/sse-smoke-test.mjs
+```
+
+`AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CONTROL=true` fails if `/api/adapters` reports fixture mode, unavailable adapter status, missing streaming capability, or missing `stream-json` / JSON event support. This check is opt-in because it requires a locally installed and authenticated CLI. The older `AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CANCEL=true` flag is still accepted for compatibility.
+
+## Adapter Quality Matrix Smoke
+
+`adapter-quality-matrix-smoke.mjs` is an opt-in monitoring script for direct adapter output quality across several task types. It calls `POST /api/adapters/{type}/execute` for `OPENAI_COMPATIBLE`, `CLAUDE_CODE`, and `CODEX` by default, classifies each result as `ACCEPTED`, `PARSE_FAILED`, `QUALITY_FAILED`, `BUILD_FAILED`, `FALLBACK`, or `SKIPPED`, then prints a per-adapter summary.
+
+Run it after starting the backend:
+
+```powershell
+node scripts/adapter-quality-matrix-smoke.mjs
+```
+
+Useful filters:
+
+```powershell
+$env:AGENTHUB_ADAPTER_QUALITY_MATRIX_ADAPTERS="CLAUDE_CODE,CODEX"
+$env:AGENTHUB_ADAPTER_QUALITY_MATRIX_TASKS="frontend,api,review,markdown"
+$env:AGENTHUB_ADAPTER_QUALITY_MATRIX_REQUIRE_AVAILABLE="true"
+$env:AGENTHUB_ADAPTER_QUALITY_MATRIX_REQUIRE_REAL="true"
+$env:AGENTHUB_ADAPTER_QUALITY_MATRIX_STRICT="true"
+node scripts/adapter-quality-matrix-smoke.mjs
+```
+
+Keep `STRICT=false` for exploratory monitoring. Use `REQUIRE_REAL=true` only when the selected adapters are configured in real provider / real CLI mode; fixture mode must not be reported as real quality evidence.
+
 ## Realtime Control Plane
 
 AgentHub exposes a minimal WebSocket control endpoint for future run-control flows:
@@ -448,7 +513,13 @@ The current control semantics are execution-aware for Orchestrator steps: `CANCE
 
 ## Browser E2E
 
-`e2e-browser.mjs` is a lightweight Playwright wrapper that drives the IM-first Workspace flow: create a conversation, send a multi-Agent task with a real text attachment, require the Workspace collaboration primary action, then verify the rendered Workspace, message attachment card, Adapter quality dashboard, retrieved context explanation, Orchestrator explain panel, Stop / Cancel run controls, artifact preview, approval affected summary, diff apply, restore approval flow, Action Audit panel, deploy status card, static preview page, and the rejection protocol.
+`e2e-browser.mjs` is a lightweight Playwright wrapper that drives the IM-first Workspace flow: create a conversation, send a multi-Agent task with a real text attachment, require the message-level collaboration confirmation card by default, then verify the rendered Workspace, message attachment card, Adapter quality dashboard, retrieved context explanation, Orchestrator explain panel, Stop / Cancel run controls, artifact preview, approval affected summary, diff apply, restore approval flow, Action Audit panel, deploy status card, static preview page, and the rejection protocol.
+
+The current edge-state coverage includes:
+
+- `REJECTION -> Revision -> accepted re-review`
+- real Adapter fallback classification when a non-MOCK adapter is unavailable
+- Context Search source diversity across pinned message, memory, attachment, recent message, Artifact, or TaskRun summary sources
 
 Treat this script as the required UI regression gate after major changes to Workspace, MessageStream, ArtifactPanel, Approval, Restore, Deploy Preview, or PreviewPage. A change in those areas should not be marked complete until this script has either passed or the reason for not running it is recorded.
 
@@ -457,7 +528,7 @@ Required product path:
 - open `/workspace`
 - create or select a Conversation
 - send a task message with a real local attachment
-- confirm collaboration from the Workspace primary action or message confirmation card
+- confirm collaboration from the message-level collaboration card
 - observe multi-Agent protocol messages
 - inspect TaskRun / Orchestrator explain output
 - inspect Artifact output
@@ -494,6 +565,7 @@ $env:AGENTHUB_FRONTEND_BASE_URL="http://127.0.0.1:5173"
 $env:VITE_API_BASE_URL="http://127.0.0.1:8080" # set before starting frontend dev server
 $env:AGENTHUB_E2E_BROWSER_CHANNEL="msedge"
 $env:AGENTHUB_E2E_HEADLESS="false"
+$env:AGENTHUB_E2E_REQUIRE_MESSAGE_TRIGGER="true" # default: true; set false only for legacy toolbar fallback debugging
 $env:AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL="true"
 $env:AGENTHUB_E2E_EXPECT_REJECTION="false" # optional: disable default API-seeded REJECTION protocol assertion
 node scripts/e2e-browser.mjs
