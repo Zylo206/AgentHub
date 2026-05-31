@@ -41,6 +41,30 @@ const TASKS = [
     requiredSkill: "docs",
     prompt:
       "Write a short implementation note for AgentHub adapter fallback boundaries. Return AgentHub artifact JSON only."
+  },
+  {
+    id: "web_preview",
+    requiredSkill: "preview",
+    prompt:
+      "Create a small HTML preview card for an AgentHub deployment status panel. Return AgentHub artifact JSON only."
+  },
+  {
+    id: "data_model",
+    requiredSkill: "api",
+    prompt:
+      "Design a compact data model for conversation unread state with fields and constraints. Return AgentHub artifact JSON only."
+  },
+  {
+    id: "deploy",
+    requiredSkill: "deploy",
+    prompt:
+      "Draft a deployment handoff note that explains preview URL, static fallback, audit record, and rollback boundary. Return AgentHub artifact JSON only."
+  },
+  {
+    id: "revision",
+    requiredSkill: "code",
+    prompt:
+      "Revise a React TypeScript message action toolbar to make copy, reply, pin, and regenerate actions clearer. Return AgentHub artifact JSON only."
   }
 ].filter((task) => TASK_FILTER.size === 0 || TASK_FILTER.has(task.id));
 

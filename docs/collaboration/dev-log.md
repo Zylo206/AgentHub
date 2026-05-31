@@ -6577,3 +6577,259 @@
 - Browser E2E 使用默认 memory + MOCK fallback 环境，不等同于真实外部 Adapter 验证。
 - 真实 OpenAI-compatible / Claude Code / Codex provider 仍通过各自 opt-in smoke 验证。
 - 聊天内创建 Agent 仍是单轮 draft + 确认创建，不是完整多轮 Agent Builder 状态机。
+
+## Phase 155：Agent Builder 暗色 IM Command Center 视觉统一
+
+### 目标
+
+- 将 `/agents` Agent Builder 页面从亮色表单页改造成与 `/workspace` 一致的暗色 IM 协作控制台风格。
+- 保持所有 Agent 创建、对话式草案、Adapter 测试和 E2E selectors 不变。
+
+### 主要变更
+
+- 对 `agent-builder-page` 追加 scoped CSS 覆盖：
+  - 暗色 grid 背景和窗口化顶部状态条。
+  - Agent Builder hero、流程条、对话式创建卡片、表单、预览联系人卡、Adapter Test 面板统一为 command-center surface。
+  - Tool Capability、Adapter 深接状态、路由能力映射、联系人预览改为高密度暗色卡片。
+  - 修复旧样式覆盖导致的白色 Adapter 状态卡和路由能力映射区域。
+- 没有改动 Agent Builder 业务逻辑、API client、Router 或 AdapterRegistry。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `git diff --check`
+- 默认端口启动 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 使用 Playwright 截图检查 `/agents` 渲染效果。
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮是视觉统一，不改变 Claude Code / Codex / OpenAI-compatible 的真实接入能力。
+- Adapter 不可用、Mock fallback、OpenCode probe-only 等边界仍按现有状态展示。
+
+## Phase 156：Agent Builder 三栏接入工作台重构
+
+### 目标
+
+- 继续优化 `/agents` 页面，让自建 Agent 从“配置表单”更像“IM 协作成员接入工作台”。
+- 对齐 Workspace 的 technical command center 风格，同时保留现有 Agent 创建、对话式草案、Adapter Test 和 E2E 选择器。
+
+### 主要变更
+
+- 在 Agent Builder 页面新增左侧接入矩阵：
+  - 展示 Adapter 可用数量。
+  - 展示 OpenAI-compatible / Claude Code / Codex 深接 v1、OpenCode probe-only、MOCK fallback 边界。
+  - 展示当前 Tool Capability 选择状态。
+- 中间区域收敛为主要创建流程：
+  - 对话式创建 Agent。
+  - 表单式精修 System Prompt、Capability、preferredAdapter。
+- 新增右侧 Agent Inspector：
+  - 联系人预览。
+  - Adapter 诊断。
+  - 路由证据。
+  - 质量边界说明。
+- CSS 使用 scoped Agent Builder 覆盖，不改 Workspace / Orchestrator / Adapter 后端逻辑。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `git diff --check`
+- 默认端口启动 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+- 使用 Playwright 截图检查 `/agents` 三栏工作台渲染效果。
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮仍是前端信息架构和视觉重构，不改变真实 Claude Code / Codex / OpenAI-compatible 接入能力。
+- OpenCode 继续明确为 probe-only，不包装成主流深接平台。
+- MOCK fallback 仍是默认稳定演示安全网。
+
+## Phase 157：Agent Builder IM 协作流视觉增强
+
+### 目标
+
+- 继续按参考图收敛 `/agents` 页面，让它更像“构建 Agent 的 IM 协作流”，而不是独立配置表单。
+- 保持 Agent Builder 的现有 API、表单字段、对话式创建、Adapter Test 和 E2E 主链路不变。
+
+### 主要变更
+
+- 左侧 rail 增加 IM 化元素：
+  - 新建对话按钮、搜索框、会话筛选标签。
+  - 我的 Agent 联系人列表，展示 Orchestrator、Frontend、Reviewer、Claude Code、Codex。
+- 中间主区域增加消息式协作流：
+  - “建议创建自定义 Agent”确认卡。
+  - Orchestrator / Agent Builder / Reviewer 协议消息。
+  - 规划步骤 strip 和评审结果 grid。
+- 右侧 inspector 增加产品化信息层：
+  - 概览 / 能力 / Adapter / 路由 / 测试 tabs。
+  - 接入状态总览。
+  - Adapter 状态列表。
+- CSS 继续 scoped 到 Agent Builder 页面，不影响 Workspace 默认主链路。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `git diff --check`
+
+### 静态 / Mock / Placeholder 边界
+
+- 新增的 IM 化视觉信息是 Agent Builder 的产品引导，不改变后端 Adapter 可用性。
+- Claude Code / Codex / OpenAI-compatible 的真实验证仍以各自 smoke 为准。
+- OpenCode 继续保持 probe-only 边界。
+
+## Phase 158：Agent Builder 参考图级布局收敛
+
+### 目标
+
+- 继续按暗色 IM 协作参考图压缩 `/agents` 信息密度。
+- 让第一屏直接进入“建议创建 Agent -> 协作消息 -> Agent Builder -> 右侧 Inspector”的产品主路径。
+
+### 主要变更
+
+- 隐藏原独立 hero 和流程条，避免页面显得像表单说明页。
+- 左侧 rail、中心消息流、右侧 Inspector 从首屏开始对齐，接近 Workspace 的三栏 IM 布局。
+- 中心区域新增 IM 输入框视觉，用于表达“发送消息 / @Agent / 描述需求”的主交互心智。
+- 对对话式创建面板、表单、Inspector、Adapter Test 继续压缩圆角、间距和高度，提高桌面应用信息密度。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `git diff --check`
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮仍是 UI 信息架构和视觉收敛，不改变 Agent 创建、Adapter 执行、Orchestrator 或真实 CLI 接入能力。
+- 输入框为 Agent Builder 页面上的产品化视觉表达，不替代 Workspace 的真实聊天输入链路。
+
+## Phase 159：Workspace / Artifact Inspector 视觉系统收敛
+
+### 目标
+
+- 继续把 `/workspace` 收敛成“IM 协作流 + 右侧产物 Inspector”的主屏体验。
+- 让 ArtifactPanel 更像统一的产物工作台，而不是分散的卡片堆叠。
+
+### 主要变更
+
+- Workspace 右栏新增产物工作台 header，明确 Inspector、Preview、审批和快照边界。
+- ArtifactPanel 增加 `Source / Quality / Build / Run` 四个指标卡，统一展示来源、质量门禁、构建校验和运行状态。
+- ArtifactPanel 将 Preview 小窗前置到右侧 Inspector 顶部，同时保留 `/preview/:artifactId` 独立预览页。
+- 追加 command-center CSS token、暗色 panel、协议消息、协作确认卡、Adapter/Context/Artifact 面板、PreviewPage 和响应式覆盖。
+
+### 验证方式
+
+- `cd frontend && npm run build`
+- `git diff --check`
+- 如涉及主路径 UI 回归，继续运行 `node scripts/e2e-browser.mjs`。
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮只调整前端视觉系统和 Inspector 信息架构。
+- 不改变 Orchestrator、AdapterRegistry、Artifact contract、审批、部署或 Mock fallback 行为。
+- `/preview/:artifactId` 仍是本地静态预览，不是真实云部署。
+
+## Phase 160：Workspace 参考图级信息密度补强
+
+### 目标
+
+- 继续按暗色 IM 协作参考图收敛 `/workspace` 首屏。
+- 解决“只学风格、没有结构复刻”的问题，让无数据状态也更像产品主屏，而不是说明页。
+
+### 主要变更
+
+- Conversation 空状态改为 IM 会话样例列表：
+  - 多 Agent 协作示例。
+  - 未读、置顶、归档示例。
+  - 明确标注样例不会创建真实会话。
+- MessageStream 空状态改为参考图式协作骨架：
+  - 建议启动多 Agent 协作卡。
+  - 任务目标、参与 Agent、预计产物、上下文来源。
+  - Orchestrator TASK、Frontend RESULT、Reviewer REVIEW 示例卡。
+- CSS 继续压缩 Workspace 信息密度：
+  - 左侧 Agent 联系人卡更接近 IM 联系人行。
+  - 中间协作空状态更接近真实消息流。
+  - 右侧 Artifact 空状态和 Inspector 面板间距更紧凑。
+- 无会话时隐藏原来的大 Hero 说明区，避免首屏像引导页；主路径改由会话样例、协作确认骨架和输入框承载。
+- Artifact 无数据状态升级为右侧 Inspector scaffold：
+  - 示例 LoginPage.tsx。
+  - 来源 / 质量 / 构建 / 运行指标。
+  - 诊断信息列表。
+  - 本地静态部署预览小窗。
+  - 明确示例不写入后端，真实产物仍由 Orchestrator / Adapter 链路生成。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮只调整前端首屏视觉和空状态信息架构。
+- 空状态中的会话、消息和产物为产品化示例，不会写入后端，也不会伪装成真实 TaskRun。
+- 不改变 Orchestrator、Adapter、Artifact、Approval、Deploy 或 Mock fallback 行为。
+
+## Phase 161：IM 消息中心交互视觉收敛
+
+### 目标
+
+- 继续优化 `/workspace` 的 IM 聊天式核心体验。
+- 让 MessageStream 更像“多 Agent 协作消息中心”，而不是工作流卡片和按钮堆叠。
+
+### 主要变更
+
+- 调整消息气泡视觉层级：
+  - 消息正文优先展示。
+  - 类型 ribbon 压缩为轻量状态标签。
+  - Message Action Bar 下沉为低噪声底部工具条。
+- 统一消息操作入口：
+  - 复制、引用、回复、pin、保存记忆、重跑、Agent 回复再生成继续保留。
+  - 操作状态通过 active / disabled / hover / focus 样式表达。
+- 优化消息类型表达：
+  - 文本消息保持 IM 气泡阅读感。
+  - 附件消息展示文件名、类型、大小、预览摘要和下载入口。
+  - Artifact 消息展示 title、type、source、quality、select / preview。
+  - TASK / RESULT / REVIEW / APPROVAL / REJECTION / ERROR 保留协议视觉，但更贴近聊天流。
+- 压缩 ChatInput：
+  - 路由预览、附件输入和发送按钮更紧凑。
+  - 保留单聊、多 @Agent、Orchestrator 自动分派的发送前提示。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `git diff --check`
+- 如涉及主路径回归，继续运行 `node scripts/e2e-browser.mjs`。
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮只修改前端 CSS 和视觉组织，不改变 API、Orchestrator、Adapter、Artifact、Approval、Deploy 或实时链路。
+- 图片和 PPT 仍作为文件附件展示 metadata / download，不做完整在线渲染、OCR 或编辑。
+- 不新增 UI 组件库，不引入 Redux / Zustand / axios。
+
+## Phase 162：真实 Adapter 质量矩阵任务族扩展
+
+### 目标
+
+- 将 `next.md` 中唯一的 Active 项从“待办”收敛为可重复执行的质量监控入口。
+- 覆盖更多真实 Agent 输出类型，减少只验证单一代码生成任务导致的误判。
+
+### 主要变更
+
+- 扩展 `scripts/adapter-quality-matrix-smoke.mjs` 的任务矩阵：
+  - frontend code。
+  - API contract。
+  - review report。
+  - docs / markdown。
+  - web preview。
+  - data model。
+  - deploy handoff。
+  - revision。
+- 更新 `docs/plans/next.md`：
+  - 将原 Active 项标记为已落地的矩阵验证入口。
+  - 明确真实 provider 质量监控仍是持续运营实践，不是一次性完成后永远稳定。
+
+### 验证方式
+
+- `node --check scripts/adapter-quality-matrix-smoke.mjs`
+- `git diff --check`
+
+### 静态 / Mock / Placeholder 边界
+
+- 质量矩阵不强制真实 provider 默认可用。
+- 未配置真实 Adapter 时脚本仍可按现有策略跳过或分类失败。
+- `REAL_ADAPTER` 仍只代表通过当前 contract / quality / build gate，不等同于生产级代码质量保证。

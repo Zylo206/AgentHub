@@ -216,23 +216,87 @@ export function MessageStream({
 
   if (messages.length === 0) {
     return (
-      <div className="panel-empty panel-empty--collaboration">
-        <span className="panel-empty__orb" aria-hidden="true">
-          IM
-        </span>
-        <strong>从任务消息开始</strong>
-        <p>发送需求后，AgentHub 会生成协作确认卡片；确认后 Orchestrator 会启动多 Agent 协作。</p>
-        <div className="panel-empty__steps" aria-label="协作流程">
-          <span>发送任务</span>
-          <span>确认协作</span>
-          <span>Agent 回复</span>
-          <span>产物交付</span>
-        </div>
-        <div className="panel-empty__examples">
-          <span>生成一个 React 登录页，同时输出 README 并做质量检查。</span>
-          <span>@Frontend Builder @Reviewer 优化这个 UI 并检查代码质量。</span>
-          <span>设计 API 契约，并生成可打开的静态预览。</span>
-        </div>
+      <div className="message-empty-reference" aria-label="AgentHub collaboration empty state">
+        <section className="message-empty-suggestion-card">
+          <div className="message-empty-suggestion-card__icon" aria-hidden="true">✦</div>
+          <div className="message-empty-suggestion-card__body">
+            <div className="message-empty-suggestion-card__header">
+              <div>
+                <strong>建议启动多 Agent 协作</strong>
+                <p>发送任务消息后，Orchestrator 会生成确认卡片并自动分派 Agent。</p>
+              </div>
+              <span>待输入</span>
+            </div>
+            <div className="message-empty-suggestion-card__grid">
+              <span>任务目标</span>
+              <strong>生成登录页并完成安全评审，输出组件、API 合约与审计报告</strong>
+              <span>参与 Agent</span>
+              <strong>Frontend Specialist · Backend Specialist · Reviewer</strong>
+              <span>预计产物</span>
+              <strong>React 组件 · API 合约 · 安全审计报告</strong>
+              <span>上下文来源</span>
+              <strong>历史对话 · 关键消息 · 附件 · Artifact</strong>
+            </div>
+            <div className="message-empty-suggestion-card__actions">
+              <button type="button" disabled>等待任务消息</button>
+              <button type="button" disabled>调试入口已折叠</button>
+            </div>
+          </div>
+        </section>
+
+        <section className="message-empty-protocol-stack" aria-label="Collaboration flow examples">
+          <article className="message-empty-protocol-card message-empty-protocol-card--task">
+            <div className="message-empty-protocol-card__header">
+              <span className="message-empty-avatar">O</span>
+              <div>
+                <strong>Orchestrator</strong>
+                <small>TASK · 任务规划 · 示例</small>
+              </div>
+              <time>10:51</time>
+            </div>
+            <p>我会拆解任务并分派合适的 Agent，预计 4 个步骤并行执行。</p>
+            <div className="message-empty-step-strip">
+              <span>1 需求理解</span>
+              <span>2 前端生成</span>
+              <span>3 API 合约</span>
+              <span>4 安全评审</span>
+            </div>
+          </article>
+
+          <article className="message-empty-protocol-card message-empty-protocol-card--result">
+            <div className="message-empty-protocol-card__header">
+              <span className="message-empty-avatar message-empty-avatar--frontend">F</span>
+              <div>
+                <strong>Frontend Specialist</strong>
+                <small>RESULT · 执行结果 · 示例</small>
+              </div>
+              <time>10:53</time>
+            </div>
+            <div className="message-empty-artifact-card">
+              <span>⚛</span>
+              <div>
+                <strong>LoginPage.tsx</strong>
+                <small>React Component · 构建通过 · 可预览</small>
+              </div>
+              <b>Preview</b>
+            </div>
+          </article>
+
+          <article className="message-empty-protocol-card message-empty-protocol-card--review">
+            <div className="message-empty-protocol-card__header">
+              <span className="message-empty-avatar message-empty-avatar--review">R</span>
+              <div>
+                <strong>Reviewer</strong>
+                <small>REVIEW · 评审结果 · 示例</small>
+              </div>
+              <time>10:55</time>
+            </div>
+            <div className="message-empty-review-pass">
+              <strong>评审通过（ACCEPTED）</strong>
+              <span>类型检查、质量门禁和安全检查通过。</span>
+            </div>
+          </article>
+        </section>
       </div>
     );
   }

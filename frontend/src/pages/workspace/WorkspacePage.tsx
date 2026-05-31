@@ -1636,7 +1636,7 @@ export function WorkspacePage() {
         </div>
       </aside>
 
-      <main className="workspace-main">
+      <main className={`workspace-main ${currentConversationId ? "" : "workspace-main--empty"}`}>
         <WorkspaceHeader
           currentConversation={currentConversation}
           currentParticipantAgents={currentParticipantAgents}
@@ -1787,6 +1787,13 @@ export function WorkspacePage() {
       </main>
 
       <aside className="workspace-artifacts" data-testid="workspace-artifacts">
+        <div className="workspace-artifacts__header" aria-label="Artifact inspector header">
+          <div>
+            <strong>产物工作台</strong>
+            <span>Artifact Inspector</span>
+          </div>
+          <small>本地静态 Preview / 审批 / 快照</small>
+        </div>
         <ArtifactPanel
           artifacts={visibleArtifacts}
           allArtifacts={artifacts}

@@ -18,7 +18,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: REAL_FIRST invalid contract or fallback text promotion is explicitly treated as `PARSE_FAILED`, not a generic quality failure.
    - `Done`: TaskStep and Artifact expose a derived `realAdapterOutcome` field so UI and scripts can read a single `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK` result.
    - `Done`: TaskStep and Artifact now expose explicit build validation reason fields instead of forcing UI, smoke, and reviewer gates to parse build failure details from quality reason text.
-   - `Active`: keep monitoring real provider parse failure, quality failure, build failure, and fallback patterns across more task types.
+   - `Done`: `scripts/adapter-quality-matrix-smoke.mjs` now monitors more task families across frontend code, API contract, review, docs, web preview, data model, deploy handoff, and revision prompts.
+   - `Accepted Boundary`: real provider quality monitoring is an ongoing operational practice; the project now has a repeatable matrix smoke entry, but real model output quality will still vary by provider, prompt, and local CLI state.
    - `Done`: Adapter Quality Dashboard now reads backend aggregate rates for real acceptance, total failure, parse failure, quality failure, and build failure instead of only deriving signals from currently loaded TaskSteps.
    - `Done`: Adapter quality metrics now expose a unified `lastOutcome / outcomeSummary` taxonomy for `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK`, shared by OpenAI-compatible, Claude Code, and Codex paths.
    - `Done`: direct adapter execute results now also feed Adapter Quality Metrics, so `/api/adapters/{type}/execute` parse / fallback / accepted outcomes are visible outside TaskStep-created runs.
@@ -187,6 +188,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace message flow now recognizes "create Agent" style user messages and renders an inline Agent creation confirmation card; confirming creates the Agent through the existing API and refreshes the IM contact list.
    - `Done`: Backend now owns natural-language Agent draft generation through `POST /api/agents/draft`: it tries `OPENAI_COMPATIBLE` for structured Agent creation and falls back to deterministic parsing when unavailable.
    - `Done`: Default API smoke now verifies natural-language Agent draft creation, persisted custom Agent creation, tool capability mapping, and draft source classification.
+   - `Done`: Workspace right-side Artifact Inspector now has a clear workbench header, `Source / Quality / Build / Run` trust metrics, an embedded Preview dock, and command-center CSS tokens shared with protocol cards and PreviewPage polish.
+   - `Done`: Workspace first-screen visual density is closer to the reference IM collaboration desktop: empty conversation list, empty MessageStream, compact Agent contacts, Artifact Inspector scaffold, and no-conversation header behavior now use productized scaffold examples instead of guide-style placeholders.
+   - `Done`: MessageStream interaction polish now prioritizes IM reading order: message body first, compact type ribbon, inline attachment / Artifact cards, and a low-noise Message Action Bar for copy, quote, reply, pin, memory, rerun, and regenerate.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**

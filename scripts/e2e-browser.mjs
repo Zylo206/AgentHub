@@ -469,19 +469,24 @@ async function seedRetrievalContextFromMessage(conversationId, message) {
 }
 
 async function verifyMessageActionBar(page) {
-  const messageRow = page.locator("[data-testid='message-row']").filter({ hasText: TEST_MARKER }).first();
-  await messageRow.getByTestId("message-action-bar").waitFor({ state: "visible", timeout: 10000 });
-  await messageRow.getByTestId("message-type-ribbon").waitFor({ state: "visible", timeout: 10000 });
-  await messageRow.scrollIntoViewIfNeeded();
-  await messageRow.getByTestId("message-copy-button").click();
-  await messageRow.getByTestId("message-quote-button").click();
+  const messageRow = () => page.locator("[data-testid='message-row']").filter({ hasText: TEST_MARKER }).first();
+  await messageRow().getByTestId("message-action-bar").waitFor({ state: "visible", timeout: 10000 });
+  await messageRow().getByTestId("message-type-ribbon").waitFor({ state: "visible", timeout: 10000 });
+
+  async function clickMessageAction(testId, label) {
+    const button = await waitForLocatorEnabled(messageRow().getByTestId(testId), label, 10000);
+    await button.click();
+  }
+
+  await clickMessageAction("message-copy-button", "message copy action");
+  await clickMessageAction("message-quote-button", "message quote action");
   await page.locator(".chat-quote-preview").waitFor({ state: "visible", timeout: 10000 });
   await page.getByTestId("chat-quote-clear").click();
-  await messageRow.getByTestId("message-reply-button").click();
+  await clickMessageAction("message-reply-button", "message reply action");
   await page.locator(".chat-quote-preview").waitFor({ state: "visible", timeout: 10000 });
   await page.getByTestId("chat-quote-clear").click();
-  await messageRow.getByTestId("message-pin-button").click();
-  await messageRow.getByTestId("message-memory-button").click();
+  await clickMessageAction("message-pin-button", "message pin action");
+  await clickMessageAction("message-memory-button", "message memory action");
   await waitForVisible(page, "[data-testid='message-attachment-card']", "message attachment type card");
 }
 

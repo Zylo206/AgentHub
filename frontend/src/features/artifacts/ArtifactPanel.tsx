@@ -737,17 +737,32 @@ export function ArtifactPanel({
         {loadingArtifacts ? (
           <div className="panel-empty">正在加载产物...</div>
         ) : artifacts.length === 0 ? (
-          <div className="panel-empty artifact-empty-state">
-            <span className="artifact-empty-state__mark" aria-hidden="true">
-              A
-            </span>
-            <strong>等待产物生成</strong>
-            <p>从任务消息确认 Agent 协作后，代码、文档、评审报告和预览产物会汇入这里。</p>
-            <div className="artifact-empty-state__chips">
-              <span>CODE</span>
-              <span>MARKDOWN</span>
-              <span>REVIEW</span>
-            </div>
+          <div className="artifact-scaffold-list" aria-label="Artifact scaffold examples">
+            <article className="artifact-scaffold-card artifact-scaffold-card--active">
+              <span className="artifact-scaffold-card__icon">⚛</span>
+              <div>
+                <strong>LoginPage.tsx</strong>
+                <small>React 组件 · 示例</small>
+              </div>
+              <em>v1.2.0</em>
+            </article>
+            <article className="artifact-scaffold-card">
+              <span className="artifact-scaffold-card__icon artifact-scaffold-card__icon--api">API</span>
+              <div>
+                <strong>auth.api.yaml</strong>
+                <small>OpenAPI 合约 · 示例</small>
+              </div>
+              <em>合约</em>
+            </article>
+            <article className="artifact-scaffold-card">
+              <span className="artifact-scaffold-card__icon artifact-scaffold-card__icon--review">R</span>
+              <div>
+                <strong>安全审计报告</strong>
+                <small>Review Report · 示例</small>
+              </div>
+              <em>通过</em>
+            </article>
+            <p>示例不会写入后端；确认协作后真实产物会出现在这里。</p>
           </div>
         ) : (
           <div className="artifact-card-list" data-testid="artifact-card-list">
@@ -776,18 +791,51 @@ export function ArtifactPanel({
         {loadingArtifactDetail ? (
           <div className="panel-empty">正在加载产物详情...</div>
         ) : !selectedArtifact ? (
-          <div className="panel-empty artifact-empty-state artifact-empty-state--detail">
-            <span className="artifact-empty-state__mark" aria-hidden="true">
-              ↗
-            </span>
-            <strong>选择产物进入交付工作台</strong>
-            <p>这里会展示来源、质量门禁、构建校验、Diff、Snapshot、审批和 Deploy Preview。</p>
-            <div className="artifact-empty-state__steps">
-              <span>质量</span>
-              <span>Diff</span>
-              <span>审批</span>
-              <span>预览</span>
+          <div className="artifact-scaffold-inspector" aria-label="Artifact inspector scaffold">
+            <div className="artifact-scaffold-inspector__hero">
+              <span className="artifact-scaffold-card__icon">⚛</span>
+              <div>
+                <strong>LoginPage.tsx</strong>
+                <p>React 组件 · 本地静态 Preview 示例</p>
+                <small>ID: art_7f3b5c9a · 10:53 创建</small>
+              </div>
+              <button type="button" disabled>☆</button>
             </div>
+            <div className="artifact-inspector-tabs artifact-inspector-tabs--scaffold" aria-label="Artifact scaffold sections">
+              <span className="artifact-inspector-tabs__item artifact-inspector-tabs__item--active">概览</span>
+              <span className="artifact-inspector-tabs__item">版本 6</span>
+              <span className="artifact-inspector-tabs__item">快照 3</span>
+              <span className="artifact-inspector-tabs__item">部署 2</span>
+            </div>
+            <div className="artifact-scaffold-metrics">
+              <article><span>来源</span><strong>REAL_ADAPTER</strong></article>
+              <article><span>质量</span><strong>ACCEPTED</strong></article>
+              <article><span>构建</span><strong>通过</strong></article>
+              <article><span>运行</span><strong>良好</strong></article>
+            </div>
+            <section className="artifact-scaffold-diagnostics">
+              <header>
+                <strong>诊断信息</strong>
+                <span>全部通过</span>
+              </header>
+              <p>✓ 类型检查（TypeScript）<em>通过</em></p>
+              <p>✓ ESLint 代码规范<em>通过</em></p>
+              <p>✓ 构建（Vite）<em>通过</em></p>
+              <p>✓ 可访问性（A11y）<em>通过</em></p>
+            </section>
+            <section className="artifact-scaffold-preview">
+              <header>
+                <strong>部署预览</strong>
+                <span>本地静态示例</span>
+              </header>
+              <div className="artifact-scaffold-login-preview">
+                <b>欢迎回来 👋</b>
+                <span>登录你的多 Agent 工作台</span>
+                <i>邮箱</i>
+                <i>密码</i>
+                <button type="button" disabled>登录</button>
+              </div>
+            </section>
           </div>
         ) : (
           <div className="artifact-preview">
@@ -857,6 +905,28 @@ export function ArtifactPanel({
                 <span>{selectedArtifact.language || "plain"}</span>
               </div>
             </div>
+            <div className="artifact-inspector-metrics" aria-label="Artifact trust metrics">
+              <article>
+                <span>Source</span>
+                <strong>{displayArtifactSourceKind(selectedArtifact.sourceKind || "STATIC_TEMPLATE")}</strong>
+                <small>{selectedArtifact.sourceAdapterType || selectedArtifact.generationMode || "fallback-ready"}</small>
+              </article>
+              <article>
+                <span>Quality</span>
+                <strong>{selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome || "NOT_EVALUATED"}</strong>
+                <small>score {formatQualityScore(selectedArtifact.qualityScore)}</small>
+              </article>
+              <article>
+                <span>Build</span>
+                <strong>{formatBuildValidationValue(selectedArtifact)}</strong>
+                <small>{selectedArtifact.buildValidationReason || "no blocking reason"}</small>
+              </article>
+              <article>
+                <span>Run</span>
+                <strong>{displayStatus(selectedArtifact.status)}</strong>
+                <small>{selectedArtifact.realAdapterOutcome || selectedArtifact.generationMode || "static boundary"}</small>
+              </article>
+            </div>
             <ArtifactDeliveryWorkbench
               artifact={selectedArtifact}
               allArtifacts={allArtifacts}
@@ -877,6 +947,18 @@ export function ArtifactPanel({
               qualityScoreLabel={formatQualityScore(selectedArtifact.qualityScore)}
               sizeLabel={formatArtifactSize(selectedArtifact.content)}
             />
+            <section className="artifact-preview-dock" data-testid="artifact-preview-dock">
+              <div className="artifact-preview-dock__header">
+                <div>
+                  <span>Preview</span>
+                  <strong>{selectedArtifact.type === "WEB_PREVIEW" ? "内嵌网页预览" : "内容快照"}</strong>
+                </div>
+                <a href={`/preview/${getIdValue(selectedArtifact.id)}`} target="_blank" rel="noreferrer">
+                  打开独立预览
+                </a>
+              </div>
+              <div className="artifact-preview-dock__body">{renderArtifactContent(selectedArtifact)}</div>
+            </section>
             <div className="artifact-preview__actions">
               <button
                 type="button"
@@ -1010,7 +1092,6 @@ export function ArtifactPanel({
                 void handleForceApplyDiffArtifact(artifact);
               }}
             />
-            {renderArtifactContent(selectedArtifact)}
           </div>
         )}
       </div>

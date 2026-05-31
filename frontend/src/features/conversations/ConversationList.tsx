@@ -118,8 +118,39 @@ export function ConversationList({
       </div>
 
       {visibleConversations.length === 0 ? (
-        <div className="panel-empty panel-empty--compact">
-          {query || filter !== "ALL" ? "没有匹配的会话。" : "暂无会话。创建一个 Demo 会话后开始。"}
+        <div className="conversation-empty-im" aria-label="Conversation empty examples">
+          <div className="conversation-empty-im__eyebrow">
+            {query || filter !== "ALL" ? "未找到匹配会话" : "会话样例"}
+          </div>
+          <article className="conversation-empty-im__row conversation-empty-im__row--active">
+            <div>
+              <strong>多 Agent 协作：登录页生成与安全评审</strong>
+              <span>前端组件 + API 合约 + 代码评审</span>
+            </div>
+            <small>示例</small>
+          </article>
+          <article className="conversation-empty-im__row">
+            <div>
+              <strong>用户认证接口安全审查</strong>
+              <span>安全审计 + API 规范检查</span>
+            </div>
+            <small>未读 2</small>
+          </article>
+          <article className="conversation-empty-im__row">
+            <div>
+              <strong>营销落地页开发</strong>
+              <span>页面设计 + 静态部署预览</span>
+            </div>
+            <small>置顶</small>
+          </article>
+          <article className="conversation-empty-im__row conversation-empty-im__row--muted">
+            <div>
+              <strong>[归档] 历史会话示例</strong>
+              <span>归档会话，可随时恢复</span>
+            </div>
+            <small>5/26</small>
+          </article>
+          <p>以上为产品化空状态示例，不会创建真实会话。</p>
         </div>
       ) : null}
 

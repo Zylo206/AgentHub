@@ -22,6 +22,10 @@ export function WorkspaceHeader({
   realtimeStatus,
   activeRealtimeRunSummary
 }: WorkspaceHeaderProps) {
+  if (!currentConversation) {
+    return null;
+  }
+
   return (
     <div className="workspace-main__header">
       <div className="workspace-main__hero">

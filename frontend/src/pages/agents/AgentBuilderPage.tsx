@@ -279,6 +279,14 @@ export function AgentBuilderPage() {
   const resolvedCapabilityNames = useMemo(() => {
     return mergeTags(...selectedCapabilityOptions.map((option) => option.resolvedCapabilities));
   }, [selectedCapabilityOptions]);
+  const deepAdapterCount = useMemo(() => {
+    return adapterOptions.filter((adapter) => MAINSTREAM_DEEP_ADAPTERS.has(adapter.adapterType)).length;
+  }, [adapterOptions]);
+  const availableAdapterCount = useMemo(() => {
+    return adapterOptions.filter((adapter) => adapter.status === "AVAILABLE").length;
+  }, [adapterOptions]);
+  const previewAgentName = name.trim() || "新的 Specialist Agent";
+  const previewInitial = previewAgentName.charAt(0).toUpperCase();
 
   function toggleToolCapability(key: ToolCapabilityKey) {
     setSelectedToolCapabilities((current) =>
@@ -422,6 +430,86 @@ export function AgentBuilderPage() {
           </div>
         </div>
 
+        <aside className="agent-builder-left-rail" aria-label="Agent integration rail">
+          <button type="button" className="agent-builder-rail-new-button">+ 新建对话</button>
+          <div className="agent-builder-rail-search">搜索会话 / Agent</div>
+          <div className="agent-builder-rail-tabs">
+            <span className="is-active">全部</span>
+            <span>未读</span>
+            <span>置顶</span>
+            <span>归档</span>
+          </div>
+          <div className="agent-builder-rail-card agent-builder-rail-card--primary">
+            <div className="agent-builder-rail-card__header">
+              <span>Agent 接入矩阵</span>
+              <strong>{availableAdapterCount}/{adapterOptions.length}</strong>
+            </div>
+            <p>
+              统一 AdapterRegistry 管理 OpenAI-compatible、Claude Code、Codex 与 MOCK fallback。
+              深接平台必须通过 Artifact contract、质量门禁和 fallback 诊断。
+            </p>
+          </div>
+
+          <div className="agent-builder-rail-section">
+            <span className="agent-builder-rail-title">主流平台</span>
+            {adapterOptions.map((adapter) => {
+              const profile = getAdapterDepthProfile(adapter.adapterType);
+              return (
+                <div className="agent-builder-adapter-row" key={`rail-${adapter.adapterType}`}>
+                  <span className="agent-builder-adapter-row__mark">{adapter.adapterType.slice(0, 2)}</span>
+                  <div>
+                    <strong>{adapter.adapterType}</strong>
+                    <small>{displayStatus(adapter.status)}</small>
+                  </div>
+                  <em className={`agent-builder-depth-badge ${profile.className}`}>{profile.label}</em>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="agent-builder-rail-section">
+            <span className="agent-builder-rail-title">工具能力</span>
+            <div className="agent-builder-capability-cloud">
+              {TOOL_CAPABILITY_OPTIONS.map((option) => (
+                <span
+                  className={selectedToolCapabilities.includes(option.key) ? "is-selected" : ""}
+                  key={`rail-capability-${option.key}`}
+                >
+                  {option.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="agent-builder-rail-card">
+            <div className="agent-builder-rail-card__header">
+              <span>路由预览</span>
+              <strong>@Agent</strong>
+            </div>
+            <p>保存后会进入左侧联系人列表，并参与 mentionedAgentIds、Tool Capability 与 preferredAdapter 路由。</p>
+          </div>
+
+          <div className="agent-builder-rail-section agent-builder-contact-list">
+            <span className="agent-builder-rail-title">我的 Agent</span>
+            {[
+              ["O", "Orchestrator", "任务规划", "在线"],
+              ["F", "Frontend Specialist", "React / UI", "在线"],
+              ["R", "Reviewer", "质量门禁", "空闲"],
+              ["CC", "Claude Code", "代码生成", "可用"],
+              ["CX", "Codex", "补全 / 重构", "可用"]
+            ].map(([initial, agentName, capability, status]) => (
+              <div className="agent-builder-contact-row" key={agentName}>
+                <span>{initial}</span>
+                <div>
+                  <strong>{agentName}</strong>
+                  <small>{capability}</small>
+                </div>
+                <em>{status}</em>
+              </div>
+            ))}
+          </div>
+        </aside>
+
         <div className="agent-builder-flow" aria-label="Agent creation flow">
           <span>1. 基本信息</span>
           <span>2. System Prompt</span>
@@ -429,6 +517,89 @@ export function AgentBuilderPage() {
           <span>4. Preferred Adapter</span>
           <span>5. 在 Workspace @Agent</span>
         </div>
+
+        <section className="agent-builder-suggestion-card" aria-label="Agent creation suggestion">
+          <div className="agent-builder-suggestion-card__icon">✦</div>
+          <div className="agent-builder-suggestion-card__body">
+            <div className="agent-builder-suggestion-card__header">
+              <div>
+                <strong>建议创建自定义 Agent</strong>
+                <p>基于你的描述，为你生成 Agent 草案，请确认或继续编辑。</p>
+              </div>
+              <span>10:50</span>
+            </div>
+            <div className="agent-builder-suggestion-grid">
+              <div>
+                <span>任务摘要</span>
+                <strong>创建安全评审协作成员</strong>
+              </div>
+              <div>
+                <span>角色定位</span>
+                <strong>{previewAgentName}</strong>
+              </div>
+              <div>
+                <span>工具能力</span>
+                <strong>{effectiveToolTags.join(" / ") || "code / review / api"}</strong>
+              </div>
+              <div>
+                <span>首选 Adapter</span>
+                <strong>{preferredAdapterType}</strong>
+              </div>
+            </div>
+            <div className="agent-builder-suggestion-actions">
+              <button type="button" className="secondary-button">编辑草案</button>
+              <button type="button" className="primary-button">确认创建</button>
+            </div>
+          </div>
+        </section>
+
+        <section className="agent-builder-message-stack" aria-label="Agent builder collaboration messages">
+          <article className="agent-builder-protocol-message agent-builder-protocol-message--task">
+            <div className="agent-builder-protocol-avatar">O</div>
+            <div className="agent-builder-protocol-body">
+              <div className="agent-builder-protocol-head">
+                <strong>Orchestrator</strong>
+                <span>TASK · 任务规划</span>
+                <time>10:51</time>
+              </div>
+              <p>我将根据你的需求创建一个安全评审专用 Agent，并为你规划职责与能力。</p>
+              <div className="agent-builder-step-strip">
+                <span>1 需求理解</span>
+                <span>2 能力规划</span>
+                <span>3 System Prompt 生成</span>
+                <span>4 工具映射</span>
+                <span>5 路由预览</span>
+              </div>
+            </div>
+          </article>
+          <article className="agent-builder-protocol-message agent-builder-protocol-message--result">
+            <div className="agent-builder-protocol-avatar">AB</div>
+            <div className="agent-builder-protocol-body">
+              <div className="agent-builder-protocol-head">
+                <strong>Agent Builder</strong>
+                <span>RESULT · 生成草案</span>
+                <time>10:51</time>
+              </div>
+              <p>已为你生成 Agent 草案，请确认或继续优化。</p>
+            </div>
+          </article>
+          <article className="agent-builder-protocol-message agent-builder-protocol-message--review">
+            <div className="agent-builder-protocol-avatar">R</div>
+            <div className="agent-builder-protocol-body">
+              <div className="agent-builder-protocol-head">
+                <strong>Reviewer</strong>
+                <span>REVIEW · 评审结果</span>
+                <time>10:52</time>
+              </div>
+              <div className="agent-builder-review-grid">
+                <span>System Prompt 通过</span>
+                <span>Tool Capability 通过</span>
+                <span>Adapter 选择通过</span>
+                <span>路由预览通过</span>
+              </div>
+            </div>
+          </article>
+        </section>
 
         <section className="conversational-agent-panel" aria-label="Conversational Agent creation">
           <div className="conversational-agent-panel__header">
@@ -686,6 +857,120 @@ export function AgentBuilderPage() {
             </div>
           </aside>
         </div>
+
+        <section className="agent-builder-composer" aria-label="Agent builder composer">
+          <textarea
+            aria-label="Agent builder message draft"
+            readOnly
+            value="发送消息，@Agent 或描述你的需求..."
+          />
+          <div className="agent-builder-composer__bar">
+            <div>
+              <span>📎</span>
+              <span>@</span>
+              <span>☺</span>
+              <span>⌗</span>
+              <span>&lt;/&gt;</span>
+            </div>
+            <button type="button" aria-label="Send Agent builder preview message">➤</button>
+          </div>
+        </section>
+
+        <aside className="agent-builder-inspector" aria-label="Agent inspector">
+          <div className="agent-builder-inspector__header">
+            <div>
+              <span>Agent 接入工作台</span>
+              <strong>{previewAgentName}</strong>
+            </div>
+            <em>{deepAdapterCount} deep</em>
+          </div>
+
+          <div className="agent-builder-inspector-tabs" aria-label="Agent inspector tabs">
+            <span className="is-active">概览</span>
+            <span>能力</span>
+            <span>Adapter</span>
+            <span>路由</span>
+            <span>测试</span>
+          </div>
+
+          <div className="agent-builder-inspector-overview">
+            <div>
+              <span>来源</span>
+              <strong>REAL_ADAPTER</strong>
+            </div>
+            <div>
+              <span>质量</span>
+              <strong>ACCEPTED</strong>
+            </div>
+            <div>
+              <span>健康度</span>
+              <strong>良好</strong>
+            </div>
+            <div>
+              <span>可用性</span>
+              <strong>稳定</strong>
+            </div>
+          </div>
+
+          <div className="agent-builder-preview agent-builder-preview--inspector">
+            <p className="eyebrow">联系人预览</p>
+            <div className="agent-builder-preview__avatar">{previewInitial}</div>
+            <h2>{previewAgentName}</h2>
+            <p>{systemPrompt.trim() || "填写 System Prompt 后，这里会展示 Agent 的职责、行为边界和协作方式。"}</p>
+            <div className="tag-row">
+              {parseTags(capabilityTags).map((tag) => (
+                <span className="agent-tag" key={`inspector-cap-${tag}`}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <div className="tag-row">
+              {effectiveToolTags.map((tag) => (
+                <span className="agent-tag agent-tag--tool" key={`inspector-tool-${tag}`}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="agent-builder-inspector-card agent-builder-inspector-card--adapter-list">
+            <span>接入 Adapter 状态</span>
+            {adapterOptions.map((adapter) => (
+              <div className="agent-builder-inspector-adapter" key={`inspector-${adapter.adapterType}`}>
+                <strong>{adapter.adapterType}</strong>
+                <em>{displayStatus(adapter.status)}</em>
+                <small>{getAdapterDepthProfile(adapter.adapterType).label}</small>
+              </div>
+            ))}
+          </div>
+
+          <div className="agent-builder-inspector-card">
+            <span>Adapter 诊断</span>
+            <div className="agent-builder-inspector-metric">
+              <strong>{selectedAdapterDescriptor?.adapterType || preferredAdapterType}</strong>
+              <em>{displayStatus(selectedAdapterDescriptor?.status || "UNKNOWN")}</em>
+            </div>
+            <p>{selectedAdapterDepthProfile.description}</p>
+          </div>
+
+          <div className="agent-builder-inspector-card">
+            <span>路由证据</span>
+            <ul>
+              <li>Tool Capability: {effectiveToolTags.join(" / ") || "未设置"}</li>
+              <li>Resolved: {resolvedCapabilityNames.join(" / ") || "通用 Agent"}</li>
+              <li>Preferred Adapter: {preferredAdapterType}</li>
+            </ul>
+          </div>
+
+          <div className="agent-builder-inspector-card">
+            <span>质量边界</span>
+            <ul>
+              <li>REAL_ADAPTER 必须通过 contract / quality gate。</li>
+              <li>CLI 不可用时保留 MOCK fallback。</li>
+              <li>OpenCode 当前保持 probe-only，不包装成深接平台。</li>
+            </ul>
+          </div>
+        </aside>
 
         {errorMessage ? <div className="builder-feedback builder-feedback--error">{errorMessage}</div> : null}
         {successMessage ? <div className="builder-feedback builder-feedback--success">{successMessage}</div> : null}
