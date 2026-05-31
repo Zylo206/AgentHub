@@ -314,12 +314,30 @@ async function createCustomAgentFromUi(page) {
   const agentName = `E2E Reviewer ${TEST_MARKER}`;
   await page.goto(`${FRONTEND_BASE}/agents`, { waitUntil: "domcontentloaded" });
   await waitForVisible(page, ".agent-builder-page", "Agent Builder page");
+  await page.getByTestId("conversational-agent-prompt").fill(
+    `Create a quality review Agent for ${TEST_MARKER}. It should review code, security, and quality gates.`
+  );
+  await page.getByTestId("conversational-agent-generate").click();
+  await waitForVisible(page, "[data-testid='conversational-agent-draft']", "Agent Builder conversational draft");
+  await page.getByTestId("conversational-agent-refinement").fill(
+    "Add deploy capability and use MOCK adapter for deterministic browser E2E."
+  );
+  await page.getByTestId("conversational-agent-refine").click();
+  await page.getByTestId("conversational-agent-draft").filter({ hasText: "CLIENT_REFINEMENT" }).waitFor({
+    state: "visible",
+    timeout: 10000
+  });
+  await page.getByTestId("conversational-agent-apply").click();
   await page.getByTestId("agent-builder-name-input").fill(agentName);
   await page.getByTestId("agent-builder-system-prompt").fill(
     "You are a custom Agent created by Browser E2E. Focus on review, quality gates, and actionable feedback."
   );
   await page.getByTestId("agent-builder-capability-tags").fill("review, quality, browser-e2e");
-  await page.getByTestId("tool-capability-review").click();
+  const reviewCapability = page.getByTestId("tool-capability-review");
+  const reviewChecked = await reviewCapability.locator("input").isChecked();
+  if (!reviewChecked) {
+    await reviewCapability.click();
+  }
   await page.getByTestId("agent-builder-preferred-adapter").selectOption("MOCK");
   await page.getByTestId("agent-builder-submit").click();
 

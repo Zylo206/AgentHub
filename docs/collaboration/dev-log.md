@@ -6933,3 +6933,179 @@
 - 本轮不允许外部 CLI 直接写 AgentHub workspace。
 - 外部 CLI session bridge v1 是 AgentHub-managed context injection，不承诺兼容 CLI 私有 session 文件格式。
 - 真实 CLI 仍需本机安装、登录和 opt-in smoke 验证；默认 demo 继续保留 MOCK/static fallback。
+
+## Phase 166：真实本机 CLI Session Bridge 验证
+
+### 目标
+
+- 验证 Claude Code / Codex 的 AgentHub-managed external CLI session bridge 不只停留在 descriptor 展示，而能进入真实本机 CLI smoke 验收路径。
+- 保持 Artifact-only、安全隔离、REAL_FIRST 和 fallback 边界不变。
+
+### 主要变更
+
+- `scripts/claude-code-smoke-test.mjs` 增加 session bridge descriptor 断言：
+  - `supportedModes` 必须包含 `agenthub-session-bridge`。
+  - `safetyPolicies` 必须包含 `agenthub-managed-session-context`。
+  - `capabilityDetails.externalCliSessionSupport=true`。
+  - `externalCliSessionMode=AGENTHUB_CONTEXT_BRIDGE`。
+- `scripts/codex-smoke-test.mjs` 增加同样的 session bridge descriptor 断言。
+- 使用本机真实 CLI 路径启动隔离 backend 验证：
+  - `AGENTHUB_CLAUDE_CODE_COMMAND=C:\Users\shens\AppData\Roaming\npm\claude.cmd`。
+  - `AGENTHUB_CODEX_COMMAND=C:\Users\shens\AppData\Roaming\npm\codex.cmd`。
+  - `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`。
+  - fixture 显式关闭，real CLI smoke 显式要求真实 CLI。
+
+### 验证方式
+
+- `node --check scripts/claude-code-smoke-test.mjs`
+- `node --check scripts/codex-smoke-test.mjs`
+- 隔离端口启动 backend 后运行：
+  - `AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true node scripts/claude-code-smoke-test.mjs`
+  - `AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI=true node scripts/codex-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮验证的是 AgentHub-managed session context bridge，不是 Claude / Codex 原生私有 session 文件托管。
+- 本轮不开放 workspace-write，不做桌面 GUI 自动化，不持久化 token。
+- smoke 验证仍是 opt-in；默认 smoke 不依赖真实 Claude Code / Codex CLI。
+
+## Phase 167：对话式 Agent Builder 轻量多轮 refinement
+
+### 目标
+
+- 将自建 Agent 从单轮自然语言 draft 推进到轻量多轮创建体验。
+- 让用户生成草案后，可以继续用自然语言补充能力、切换 Adapter、追加 System Prompt 要求，再填入表单或确认创建。
+
+### 主要变更
+
+- `conversationalAgentDraft.ts` 新增 `refineAgentCreationDraft(...)`：
+  - 合并新增 capability tags。
+  - 合并新增 tool capabilities。
+  - 支持按追问调整 `preferredAdapterType` 到 `MOCK`、`OPENAI_COMPATIBLE`、`CLAUDE_CODE` 或 `CODEX`。
+  - 将追问写入 System Prompt 的补充要求，保留可解释 reasoning。
+- `/agents` Agent Builder 增加“继续追问修改草案”输入区和“更新草案”操作。
+- Browser E2E 的 Agent Builder 创建路径改为先生成自然语言草案，再执行一次 refinement，再填入表单创建可路由 Agent。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `cd frontend && npm.cmd run build`
+- 后续 UI 主链路继续通过 `node scripts/e2e-browser.mjs` 验证。
+
+### 静态 / Mock / Placeholder 边界
+
+- 这是客户端 deterministic refinement，不是完整 LLM 多轮 Agent Builder 状态机。
+- Workspace 聊天内创建 Agent 仍是单轮 draft + 确认创建；更完整的多轮编辑入口在 `/agents`。
+- 不改变 AdapterRegistry、Orchestrator、REAL_FIRST 或 fallback 主链路。
+
+## Phase 168：本机真实 Claude / Codex CLI smoke 复验
+
+### 目标
+
+- 直接使用本机 `claude.cmd` 和 `codex.cmd` 验证 Claude Code / Codex headless Artifact-only 接入。
+- 修正 real CLI smoke 中把登录页任务误判为未认证的诊断问题。
+- 保持 fixture 关闭、REAL_FIRST、Artifact contract、quality gate 和 fallback 边界。
+
+### 主要变更
+
+- `scripts/claude-code-smoke-test.mjs` 和 `scripts/codex-smoke-test.mjs` 去除 `login` 关键词的认证失败误判，避免“login page”任务被归类为 `NOT_AUTHENTICATED`。
+- 两个 real CLI smoke 的 TaskStep 诊断现在同时输出 `artifactQualityReason` 和 `adapterErrorMessage`，方便区分质量失败、构建失败和 CLI 运行失败。
+- 使用隔离端口 backend 验证本机真实 CLI：
+  - Claude Code direct execute 返回合法 AgentHub Artifact JSON。
+  - Claude Code demo-task 产生 `CLAUDE_CODE / REAL_ADAPTER / REAL_FIRST` 且质量通过。
+  - Codex direct execute 返回合法 AgentHub Artifact JSON。
+  - Codex demo-task 产生 `CODEX / REAL_ADAPTER / REAL_FIRST` 且质量通过；Reviewer gate 可将 TaskRun 标为 `BLOCKED`，但真实产物链路仍通过。
+
+### 验证方式
+
+- `node --check scripts/claude-code-smoke-test.mjs`
+- `node --check scripts/codex-smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+- `cd backend && mvn -q -DskipTests package`
+- 隔离端口启动 backend 后运行：
+  - `AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true node scripts/claude-code-smoke-test.mjs`
+  - `AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI=true node scripts/codex-smoke-test.mjs`
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮验证非流式真实 CLI smoke；streaming cancel 的真实 CLI 专项验证仍可后续单独跑。
+- Claude / Codex 仍是 AgentHub-managed context bridge，不是 workspace-write 或桌面 GUI 自动化。
+- 默认 smoke 仍不依赖真实 Claude Code / Codex CLI。
+
+## Phase 169：Reviewer Gate 与 TaskGraph DAG 可视化增强
+
+### 目标
+
+- 将 Reviewer gate 从通用质量字段推进到更明确的 build / lint / test / typecheck 证据门禁。
+- 让 Orchestrator Explain 不只显示决策文字，还能展示 TaskGraph DAG、batch 依赖和 retry/revise 策略。
+
+### 主要变更
+
+- `ReviewDecisionEvaluator` 新增显式验证证据识别：
+  - `LINT_FAILED`、`ESLINT_FAILED`、`lint failed`。
+  - `TEST_FAILED`、`VITEST_FAILED`、`JEST_FAILED`、`npm test failed`。
+  - `TYPECHECK_FAILED`、`TSC_FAILED`、`typecheck failed`。
+- Reviewer retry instruction 从 `rerunQualityChecks` 扩展为：
+  - `rerunBuildValidation`
+  - `rerunLint`
+  - `rerunTests`
+  - `rerunReviewer`
+- Review Decision markdown 明确：阻塞证据未清理前不得 approve。
+- `TaskRunPanel` 新增 `TaskGraphDAGPanel`：
+  - 展示 batch key、execution mode、status、duration、failure policy、dependsOn 和 step chips。
+  - 被 quality gate 阻塞的 step 会在 DAG 中标记。
+- `TaskRunPanel` 新增 `ReviewerGateRetryPanel`：
+  - 展示 Reviewer gate 的失败原因、fallback decision 和修复顺序。
+  - 对 `BLOCKED` run 或 step quality/build/parse failure 提供 retry/revise 路径。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- `git diff --check`
+- 隔离 backend 运行 `node scripts/smoke-test.mjs`：API 主链路执行到 Deploy/Preview；由于本轮没有保持前端 dev server 可用，Preview URL 访问检查失败，失败原因是 frontend 未启动，不是后端 Orchestrator 回归。
+
+### 静态 / Mock / Placeholder 边界
+
+- Reviewer gate 仍是规则化质量门禁，不是完整 ESLint/Vitest/tsc 执行平台。
+- DAG 可视化基于已有 TaskGraph / ExecutionBatch DTO，不是可编辑 Workflow Canvas。
+- Retry strategy 只提供修复路径和复验要求，不自动生成修复补丁。
+
+## Phase 170：Taste-skill 前端视觉系统收敛
+
+### 目标
+
+- 将 4 张参考设计图中的布局比例、视觉 token 和组件规范落到现有前端，不改变 Workspace / Orchestrator / Artifact / Approval 主链路。
+- 避免继续在旧 CSS 中零散追加风格，改为追加一个清晰的 final polish 覆盖层，便于后续继续收敛或回退。
+
+### 主要变更
+
+- `workspace.css` 新增 `Taste-skill final polish` 覆盖层：
+  - 统一 `--ah-bg-app`、`--ah-bg-shell`、`--ah-surface-*`、`--ah-border-*`、`--ah-accent-blue`、`--ah-accepted-green`、`--ah-rejection-red`、`--ah-warning-yellow` 等顶层视觉 token。
+  - Workspace 三栏收敛为 `292px / minmax(680px, 1fr) / clamp(400px, 29vw, 460px)`，减少面板间距，让中间消息流成为主视觉中心。
+  - MessageStream 收敛为更紧凑的 IM 协作流：协议消息卡、Message Action Bar、Artifact / Attachment card、Streaming strip、REJECTION 状态统一暗色 command-center 语言。
+  - 右侧 Artifact Inspector 使用统一 `Source / Quality / Build / Run` 指标卡视觉，并与 Artifact Cockpit、Diff、Snapshot、Deploy 面板对齐。
+  - Agent Builder 和 PreviewPage 共享同一套深色 shell、metric card、tab、border、radius 和响应式规则。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- 临时启动 Spring Boot jar 后运行 `node scripts/e2e-browser.mjs`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖：
+  - Agent Builder 创建自定义 Agent。
+  - IM-first 消息触发协作。
+  - Message Action Bar。
+  - 附件、Context Search、多 Agent 路由、Adapter fallback。
+  - Approval、Apply Diff、Restore、Deploy Preview。
+  - Preview 页面。
+  - 可选 REJECTION -> Revision -> recovery 路径。
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮只做视觉系统和布局收敛，不新增业务能力。
+- 不改变 AdapterRegistry、REAL_FIRST、Approval、Artifact mutation 或 Orchestrator 主链路。
+- Browser E2E 是 UI 回归门禁，不替代 API smoke、SSE smoke、JDBC/MySQL smoke 或真实 Adapter smoke。

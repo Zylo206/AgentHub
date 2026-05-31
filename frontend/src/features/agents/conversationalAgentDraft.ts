@@ -86,3 +86,69 @@ export function inferAgentCreationDraft(content: string): AgentCreationDraft | n
     reasoning
   };
 }
+
+function mergeUnique<T extends string>(current: T[], next: T[]): T[] {
+  return Array.from(new Set([...current, ...next].filter(Boolean)));
+}
+
+function inferPreferredAdapter(instruction: string, currentAdapter: string): string {
+  const normalized = instruction.toLowerCase();
+  if (includesAny(normalized, ["mock", "fallback", "稳定演示", "测试"])) {
+    return "MOCK";
+  }
+  if (includesAny(normalized, ["claude", "anthropic"])) {
+    return "CLAUDE_CODE";
+  }
+  if (includesAny(normalized, ["codex", "openai cli"])) {
+    return "CODEX";
+  }
+  if (includesAny(normalized, ["openai", "deepseek", "gpt"])) {
+    return "OPENAI_COMPATIBLE";
+  }
+  return currentAdapter;
+}
+
+export function refineAgentCreationDraft(
+  currentDraft: AgentCreationDraft,
+  instruction: string
+): AgentCreationDraft {
+  const trimmedInstruction = instruction.trim();
+  if (!trimmedInstruction) {
+    return currentDraft;
+  }
+
+  const inferredPatch = inferAgentCreationDraft(`create agent ${trimmedInstruction}`);
+  const nextToolTags = mergeUnique<ToolCapabilityKey>(
+    currentDraft.toolTags,
+    inferredPatch?.toolTags ?? []
+  );
+  const nextCapabilityTags = mergeUnique(
+    currentDraft.capabilityTags,
+    inferredPatch?.capabilityTags ?? []
+  );
+  const nextPreferredAdapter = inferPreferredAdapter(trimmedInstruction, currentDraft.preferredAdapterType);
+  const nextSystemPrompt = [
+    currentDraft.systemPrompt.trim(),
+    `补充要求：${trimmedInstruction}`
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return {
+    ...currentDraft,
+    systemPrompt: nextSystemPrompt,
+    capabilityTags: nextCapabilityTags,
+    toolTags: nextToolTags,
+    preferredAdapterType: nextPreferredAdapter,
+    reasoning: [
+      ...currentDraft.reasoning,
+      `根据追问更新草案：${trimmedInstruction}`,
+      nextPreferredAdapter !== currentDraft.preferredAdapterType
+        ? `首选 Adapter 从 ${currentDraft.preferredAdapterType} 调整为 ${nextPreferredAdapter}。`
+        : "保留当前首选 Adapter。"
+    ],
+    draftSource: currentDraft.draftSource
+      ? `${currentDraft.draftSource}+CLIENT_REFINEMENT`
+      : "CLIENT_REFINEMENT"
+  };
+}

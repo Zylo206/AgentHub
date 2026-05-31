@@ -43,7 +43,7 @@ function classifyDiagnostic(value) {
   if (normalized.includes("failuretype=not_installed") || normalized.includes("not available on path") || normalized.includes("cannot run program")) {
     return OUTCOME.NOT_INSTALLED;
   }
-  if (normalized.includes("failuretype=not_authenticated") || normalized.includes("not authenticated") || normalized.includes("unauthorized") || normalized.includes("login")) {
+  if (normalized.includes("failuretype=not_authenticated") || normalized.includes("not authenticated") || normalized.includes("unauthorized")) {
     return OUTCOME.NOT_AUTHENTICATED;
   }
   if (normalized.includes("failuretype=permission_denied") || normalized.includes("permission denied") || normalized.includes("access is denied")) {
@@ -91,14 +91,23 @@ function assertDescriptorCapabilities(descriptor) {
   if (!modes.includes("headless") || !modes.includes("artifact-only") || !modes.includes("exec")) {
     throw new Error(`CODEX descriptor missing headless/artifact-only/exec modes: ${modes.join(", ")}`);
   }
+  if (!modes.includes("agenthub-session-bridge")) {
+    throw new Error(`CODEX descriptor missing agenthub-session-bridge mode: ${modes.join(", ")}`);
+  }
   if (!policies.some((policy) => String(policy).includes("workspace-write-disabled"))) {
     throw new Error(`CODEX descriptor missing workspace-write-disabled policy: ${policies.join(" | ")}`);
   }
   if (!policies.some((policy) => String(policy).includes("sandbox=read-only"))) {
     throw new Error(`CODEX descriptor missing read-only sandbox policy: ${policies.join(" | ")}`);
   }
+  if (!policies.some((policy) => String(policy).includes("agenthub-managed-session-context"))) {
+    throw new Error(`CODEX descriptor missing AgentHub session context policy: ${policies.join(" | ")}`);
+  }
   if (details.adapterMode !== "HEADLESS_ARTIFACT_ONLY") {
     throw new Error(`CODEX adapterMode expected HEADLESS_ARTIFACT_ONLY, got ${details.adapterMode || "missing"}`);
+  }
+  if (details.externalCliSessionSupport !== true || details.externalCliSessionMode !== "AGENTHUB_CONTEXT_BRIDGE") {
+    throw new Error(`CODEX descriptor missing external CLI session bridge details: ${JSON.stringify(details)}`);
   }
   if (details.workspaceWriteAllowed !== false) {
     throw new Error("CODEX descriptor must report workspaceWriteAllowed=false");
@@ -319,7 +328,8 @@ function describeTaskStep(step) {
     `parse=${step.artifactParseStatus || "-"}`,
     `build=${step.artifactBuildValidationStatus || "-"}`,
     `quality=${step.artifactQualityStatus || "-"}`,
-    step.adapterErrorMessage || step.artifactQualityReason || ""
+    `qualityReason=${step.artifactQualityReason || "-"}`,
+    `adapterError=${step.adapterErrorMessage || "-"}`
   ].join(":");
 }
 

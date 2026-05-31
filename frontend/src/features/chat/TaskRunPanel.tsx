@@ -286,6 +286,128 @@ function AdapterRoutingExplainPanel({ taskRun }: { taskRun: TaskRun }) {
   );
 }
 
+function TaskGraphDAGPanel({
+  taskRun,
+  agentNameMap
+}: {
+  taskRun: TaskRun;
+  agentNameMap: Map<string | null, string>;
+}) {
+  const batches = taskRun.taskGraph?.executionBatches ?? [];
+  if (batches.length === 0) {
+    return null;
+  }
+
+  const stepsByOrder = new Map(taskRun.steps.map((step) => [step.stepOrder, step]));
+
+  return (
+    <section className="task-graph-dag-panel" data-testid="task-graph-dag-panel" aria-label="TaskGraph DAG">
+      <div className="task-graph-dag-panel__header">
+        <div>
+          <strong>TaskGraph DAG</strong>
+          <p>{taskRun.taskGraph?.summary || "Batch, dependency, runtime and fallback topology."}</p>
+        </div>
+        <span>{batches.length} batches</span>
+      </div>
+      <div className="task-graph-dag-panel__lane">
+        {batches.map((batch, batchIndex) => (
+          <article className="task-graph-batch-card" key={batch.batchKey}>
+            <div className="task-graph-batch-card__top">
+              <span>{String(batchIndex + 1).padStart(2, "0")}</span>
+              <strong>{batch.batchKey}</strong>
+              <em>{displayStatus(batch.batchStatus || "PENDING")}</em>
+            </div>
+            <div className="task-graph-batch-card__meta">
+              <span>{batch.executionMode}</span>
+              <span>{batch.failurePolicy || "STEP_FALLBACK_TO_MOCK"}</span>
+              {typeof batch.durationMs === "number" ? <span>{batch.durationMs}ms</span> : null}
+            </div>
+            <div className="task-graph-batch-card__deps">
+              depends on: {batch.dependsOnBatchKeys.length > 0 ? batch.dependsOnBatchKeys.join(", ") : "none"}
+            </div>
+            <div className="task-graph-step-list">
+              {batch.stepOrders.map((stepOrder) => {
+                const step = stepsByOrder.get(stepOrder);
+                if (!step) {
+                  return (
+                    <span className="task-graph-step-chip task-graph-step-chip--missing" key={stepOrder}>
+                      Step {stepOrder} missing
+                    </span>
+                  );
+                }
+                const qualityGateAction = getStepQualityGateAction(step);
+                return (
+                  <span
+                    className={`task-graph-step-chip ${qualityGateAction ? "task-graph-step-chip--blocked" : ""}`}
+                    key={stepOrder}
+                    title={step.routingReason || step.taskDescription}
+                  >
+                    Step {step.stepOrder} - {getStepAgentName(step, agentNameMap)} - {displayStatus(step.status)}
+                  </span>
+                );
+              })}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ReviewerGateRetryPanel({ taskRun }: { taskRun: TaskRun }) {
+  const blockedSteps = taskRun.steps
+    .map((step) => ({ step, action: getStepQualityGateAction(step) }))
+    .filter((item): item is { step: TaskStep; action: { title: string; reason: string; nextStep: string } } =>
+      Boolean(item.action)
+    );
+  const isBlockedRun = taskRun.status === "BLOCKED";
+
+  if (!isBlockedRun && blockedSteps.length === 0) {
+    return null;
+  }
+
+  const decisionLog = taskRun.orchestratorDecisionLog;
+
+  return (
+    <section className="reviewer-gate-retry-panel" data-testid="reviewer-gate-retry-panel" aria-label="Reviewer gate retry strategy">
+      <div className="reviewer-gate-retry-panel__header">
+        <div>
+          <strong>Reviewer Gate / Retry Strategy</strong>
+          <p>Failure reason - revise artifact - rerun build/lint/test - rerun Reviewer.</p>
+        </div>
+        <span>{displayStatus(taskRun.status)}</span>
+      </div>
+      {decisionLog?.fallbackDecision ? (
+        <div className="reviewer-gate-retry-panel__decision">
+          {decisionLog.fallbackDecision}
+        </div>
+      ) : null}
+      <div className="reviewer-gate-retry-panel__steps">
+        {["Inspect blockers", "Revise artifacts", "Rerun build/lint/test", "Rerun Reviewer"].map((label, index) => (
+          <span key={label}>
+            {index + 1}. {label}
+          </span>
+        ))}
+      </div>
+      {blockedSteps.length > 0 ? (
+        <div className="reviewer-gate-retry-panel__blockers">
+          {blockedSteps.map(({ step, action }) => (
+            <article key={formatId(step.id)}>
+              <strong>Step {step.stepOrder}: {action.title}</strong>
+              <p>{action.reason}</p>
+              <small>{action.nextStep}</small>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="reviewer-gate-retry-panel__empty">
+          TaskRun is blocked by Reviewer. Check Review Report and Action Audit for detailed blockers.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function extractSummaryField(summary: string, label: string): string | null {
   const start = summary.indexOf(label);
   if (start < 0) {
@@ -405,6 +527,9 @@ function OrchestratorExplainPanel({
           </article>
         ))}
       </div>
+
+      <TaskGraphDAGPanel taskRun={taskRun} agentNameMap={agentNameMap} />
+      <ReviewerGateRetryPanel taskRun={taskRun} />
 
       <div className="orchestrator-stage-grid">
         <article className="orchestrator-stage-card">

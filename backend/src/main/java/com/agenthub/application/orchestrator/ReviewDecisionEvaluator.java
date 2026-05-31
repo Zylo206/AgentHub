@@ -96,7 +96,7 @@ public class ReviewDecisionEvaluator {
                 safeAffectedArtifactIds,
                 "action=REVISE_AND_RETRY; autoFix=false; owner=owning-worker; affectedArtifacts="
                         + safeAffectedArtifactIds.stream().map(ArtifactId::value).toList()
-                        + "; steps=[inspectBlockers,reviseAffectedArtifacts,rerunQualityChecks,rerunReviewer]; "
+                        + "; steps=[inspectBlockers,reviseAffectedArtifacts,rerunBuildValidation,rerunLint,rerunTests,rerunReviewer]; "
                         + "note=Orchestrator records guidance only and does not fabricate an automatic fix.",
                 source);
     }
@@ -143,6 +143,15 @@ public class ReviewDecisionEvaluator {
         if (containsToken(adapterEvidence, "INVALID_CODE")) {
             blockers.add("Reviewer step reported invalid code.");
         }
+        addExternalValidationBlockers(
+                blockers,
+                "Reviewer step",
+                String.join(" ",
+                        value(step.getOutputContent()),
+                        value(step.getAdapterResponseSummary()),
+                        value(step.getAdapterErrorMessage()),
+                        value(step.getArtifactBuildValidationReason()),
+                        value(step.getArtifactQualityReason())));
     }
 
     private void addArtifactQualityBlockers(List<String> blockers, Artifact artifact) {
@@ -167,6 +176,47 @@ public class ReviewDecisionEvaluator {
         }
         if (artifact.getType() == ArtifactType.CODE && looksLikeInvalidCode(artifact.getContent())) {
             blockers.add("Artifact contains invalid code markers: " + label);
+        }
+        addExternalValidationBlockers(
+                blockers,
+                "Artifact " + label,
+                String.join(" ",
+                        value(artifact.getContent()),
+                        value(artifact.getBuildValidationReason()),
+                        value(artifact.getQualityReason())));
+    }
+
+    private void addExternalValidationBlockers(List<String> blockers, String scope, String evidence) {
+        if (containsAny(
+                evidence,
+                "LINT_FAILED",
+                "ESLINT_FAILED",
+                "eslint failed",
+                "lint failed",
+                "lint error",
+                "code style failed")) {
+            blockers.add(scope + " lint validation failed.");
+        }
+        if (containsAny(
+                evidence,
+                "TEST_FAILED",
+                "VITEST_FAILED",
+                "JEST_FAILED",
+                "npm test failed",
+                "test failed",
+                "tests failed",
+                "unit test failed")) {
+            blockers.add(scope + " test validation failed.");
+        }
+        if (containsAny(
+                evidence,
+                "TYPECHECK_FAILED",
+                "TSC_FAILED",
+                "tsc failed",
+                "typecheck failed",
+                "type check failed",
+                "typescript compilation failed")) {
+            blockers.add(scope + " typecheck validation failed.");
         }
     }
 

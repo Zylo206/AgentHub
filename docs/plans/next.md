@@ -66,6 +66,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Claude Code streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, destroys the CLI process when cancellation is observed during stream-json reading, and discards final output after Stop / Cancel.
    - `Done`: Claude Code now receives AgentHub-managed multi-turn session context through the standard prompt contract: recent messages, recent Artifacts, Review Report results, and previous TaskRun summaries are injected without relying on external CLI native sessions.
    - `Done`: Claude Code now exposes an AgentHub external CLI session bridge: `externalCliSessionKey=agenthub:{conversationId}:{agentId}`, `agenthub-session-bridge` supported mode, and descriptor capability details for conversation+agent continuity.
+   - `Done`: Claude Code real CLI smoke now asserts the external CLI session bridge descriptor and passed against the local `claude.cmd` path with fixture disabled.
+   - `Done`: Claude Code real CLI smoke was rerun on an isolated backend with the local `claude.cmd`; direct execute and REAL_FIRST demo-task both produced accepted `CLAUDE_CODE / REAL_ADAPTER` artifacts.
    - `Boundary`: fixture mode is not real Claude Code provider output; real CLI mode still requires local `claude` install and authentication.
    - `Boundary`: v1 is Artifact-only and does not allow Claude Code to modify the AgentHub workspace.
 
@@ -92,6 +94,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Codex streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, supports fixture stream previews for contract smoke, and discards final output after Stop / Cancel.
    - `Done`: Codex now receives AgentHub-managed multi-turn session context through the standard prompt contract: recent messages, recent Artifacts, Review Report results, and previous TaskRun summaries are injected without relying on external CLI native sessions.
    - `Done`: Codex now exposes an AgentHub external CLI session bridge: `externalCliSessionKey=agenthub:{conversationId}:{agentId}`, `agenthub-session-bridge` supported mode, and descriptor capability details for conversation+agent continuity.
+   - `Done`: Codex real CLI smoke now asserts the external CLI session bridge descriptor and passed against the local `codex.cmd` path with fixture disabled.
+   - `Done`: Codex real CLI smoke was rerun on an isolated backend with the local `codex.cmd`; direct execute returned valid artifact JSON and demo-task produced an accepted `CODEX / REAL_ADAPTER` artifact even when Reviewer blocked the run.
    - `Boundary`: this is not Codex Desktop GUI automation; the intended integration is headless / Artifact-only execution with fallback.
    - `Boundary`: default smoke must not require Codex, and Codex output must not bypass Artifact contract validation or quality gates.
 
@@ -148,6 +152,10 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Adapter Quality Dashboard now has metric cards for observed scope, average success rate, fallback rate, real output acceptance, failure taxonomy, and highest-risk adapter.
    - `Done`: Adapter Quality Dashboard now has a Quality Command strip and per-adapter success meter so it reads as an operational quality cockpit, not only a table.
    - `Done`: Orchestrator Explain now has a decision rail for Planner, Router, Executor, Aggregator, Fallback, and Approval / Audit.
+   - `Done`: Reviewer gate now treats explicit lint/test/typecheck evidence such as `LINT_FAILED`, `TEST_FAILED`, `TYPECHECK_FAILED`, `ESLINT_FAILED`, `VITEST_FAILED`, and `TSC_FAILED` as blocking review evidence.
+   - `Done`: Reviewer retry guidance now explicitly requires revise artifacts, rerun build validation, rerun lint, rerun tests, and rerun Reviewer before approval.
+   - `Done`: TaskRunPanel now shows a dedicated TaskGraph DAG panel with execution batches, dependencies, runtime, failure policy, step status, and blocked-step markers.
+   - `Done`: TaskRunPanel now shows a Reviewer Gate / Retry Strategy panel for blocked runs and quality-gate failures.
    - Keep future spec changes aligned with the focused plans and `docs/collaboration/dev-log.md`.
    - Do not describe Mock / fixture / static / half-real behavior as full production capability.
 
@@ -188,6 +196,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Agent Builder now includes a visible creation flow for basic info, System Prompt, Tool Capability, preferred Adapter, and Workspace mention usage.
    - `Done`: Browser E2E now covers creating a custom Agent in Agent Builder, mentioning it in Workspace, seeing routing preview, and verifying it enters the TaskRun.
    - `Done`: Agent Builder now has a lightweight conversational creation lane: natural language description -> rule-based Agent draft -> apply to form or confirm create.
+   - `Done`: Agent Builder now supports a lightweight refinement loop: natural-language draft -> follow-up instruction -> updated capability / adapter / prompt draft -> apply or create.
    - `Done`: Agent contacts and Agent Builder now mark `OPENAI_COMPATIBLE`, `CLAUDE_CODE`, and `CODEX` as deep-integration v1 surfaces, while `OPEN_CODE` remains explicitly labeled as probe-only.
    - `Done`: Workspace message flow now recognizes "create Agent" style user messages and renders an inline Agent creation confirmation card; confirming creates the Agent through the existing API and refreshes the IM contact list.
    - `Done`: Backend now owns natural-language Agent draft generation through `POST /api/agents/draft`: it tries `OPENAI_COMPATIBLE` for structured Agent creation and falls back to deterministic parsing when unavailable.
@@ -197,6 +206,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: MessageStream interaction polish now prioritizes IM reading order: message body first, compact type ribbon, inline attachment / Artifact cards, and a low-noise Message Action Bar for copy, quote, reply, pin, memory, rerun, and regenerate.
    - `Done`: Workspace now surfaces a production session summary for single-Agent priority, group collaboration, Orchestrator auto-route, participants, context continuity, latest TaskRun, and Adapter status.
    - `Done`: Conversation list now shows visible result count, server-search state, archive filter state, and activity-sort status in the IM sidebar.
+   - `Done`: Taste-skill reference-image pass has been translated into a final Workspace visual polish layer: stable command-center tokens, tighter 292px / minmax(680px, 1fr) / 400-460px shell, compact protocol cards, unified Message Action Bar, streaming strip, Artifact Inspector metrics, Agent Builder shell, and Preview Studio token alignment.
+   - `Done`: `cd frontend && npm.cmd run build` and `node scripts/e2e-browser.mjs` passed after the visual polish, covering Agent Builder, IM-first collaboration, message actions, attachment, context search, fallback, approval, restore, deploy preview, optional rejection recovery, and preview page.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**

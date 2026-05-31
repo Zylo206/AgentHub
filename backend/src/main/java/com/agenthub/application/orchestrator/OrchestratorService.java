@@ -2095,7 +2095,8 @@ public class OrchestratorService {
                 - action: REVISE_AND_RETRY
                 - autoFix: false
                 - owner: owning-worker
-                - rerun: quality checks, reviewer
+                - rerun: build validation, lint, tests, reviewer
+                - rule: do not approve until blocking validation evidence is cleared
                 """.formatted(
                 reviewDecision.decision(),
                 reviewDecision.source(),

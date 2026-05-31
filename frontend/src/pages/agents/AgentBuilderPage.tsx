@@ -7,7 +7,7 @@ import {
   type Agent,
   type ToolCapabilityKey
 } from "../../features/agents/agentTypes";
-import type { AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
+import { refineAgentCreationDraft, type AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 
 const ADAPTER_OPTIONS = ["MOCK", "CODEX", "CLAUDE_CODE", "OPEN_CODE", "OPENAI_COMPATIBLE"] as const;
@@ -222,6 +222,7 @@ export function AgentBuilderPage() {
   const [adapterTestError, setAdapterTestError] = useState<string | null>(null);
   const [adapterTestResult, setAdapterTestResult] = useState<AdapterExecutionResponse | null>(null);
   const [naturalAgentPrompt, setNaturalAgentPrompt] = useState("");
+  const [draftRefinementPrompt, setDraftRefinementPrompt] = useState("");
   const [conversationalDraft, setConversationalDraft] = useState<AgentCreationDraft | null>(null);
   const [creatingDraftAgent, setCreatingDraftAgent] = useState(false);
   const [generatingAgentDraft, setGeneratingAgentDraft] = useState(false);
@@ -321,6 +322,17 @@ export function AgentBuilderPage() {
     setSuccessMessage("已把对话式草案填入下方表单；你可以继续微调后创建。");
   }
 
+  function handleRefineConversationalDraft() {
+    if (!conversationalDraft || !draftRefinementPrompt.trim()) {
+      return;
+    }
+
+    const refinedDraft = refineAgentCreationDraft(conversationalDraft, draftRefinementPrompt);
+    setConversationalDraft(refinedDraft);
+    setDraftRefinementPrompt("");
+    setSuccessMessage("已根据追问更新 Agent 草案；你可以继续追问、填入表单或确认创建。");
+  }
+
   async function handleCreateConversationalDraftAgent() {
     if (!conversationalDraft) {
       return;
@@ -343,6 +355,7 @@ export function AgentBuilderPage() {
       setSuccessMessage("已根据对话式草案创建 Agent。回到 Workspace 后可直接 @ 它参与协作。");
       setConversationalDraft(null);
       setNaturalAgentPrompt("");
+      setDraftRefinementPrompt("");
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -633,7 +646,12 @@ export function AgentBuilderPage() {
             </button>
             {conversationalDraft ? (
               <>
-                <button type="button" className="secondary-button" onClick={handleApplyConversationalDraft}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  data-testid="conversational-agent-apply"
+                  onClick={handleApplyConversationalDraft}
+                >
                   填入下方表单
                 </button>
                 <button
@@ -681,6 +699,26 @@ export function AgentBuilderPage() {
                 {conversationalDraft.reasoning.map((reason) => (
                   <span key={reason}>{reason}</span>
                 ))}
+              </div>
+              <div className="conversational-agent-refine">
+                <label className="agent-builder-field">
+                  <span>继续追问修改草案</span>
+                  <textarea
+                    data-testid="conversational-agent-refinement"
+                    value={draftRefinementPrompt}
+                    onChange={(event) => setDraftRefinementPrompt(event.target.value)}
+                    placeholder="例如：再加 deploy 能力，改用 Codex，并补充安全评审职责。"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  data-testid="conversational-agent-refine"
+                  disabled={!draftRefinementPrompt.trim()}
+                  onClick={handleRefineConversationalDraft}
+                >
+                  更新草案
+                </button>
               </div>
             </div>
           ) : null}
