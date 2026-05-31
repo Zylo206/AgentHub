@@ -13,6 +13,7 @@ public class CodexArtifactPromptBuilder {
         builder.append("The first non-whitespace character must be { and the last non-whitespace character must be }.\n");
         builder.append("Do not include Markdown fences, CLI logs, wrapper metadata, stdout/stderr, usage stats, or explanations outside JSON.\n\n");
         builder.append("Agent name: ").append(nullToBlank(request.agentName())).append('\n');
+        appendExternalCliSessionBridge(builder, request);
         if (!nullToBlank(request.systemPrompt()).isBlank()) {
             builder.append("Agent system prompt:\n").append(request.systemPrompt()).append("\n\n");
         }
@@ -60,6 +61,27 @@ public class CodexArtifactPromptBuilder {
                 - Empty content, provider error text, plain text responses, invalid JSON, missing fields, Markdown fences, CLI logs, or wrapper metadata will be rejected.
                 """);
         return builder.toString();
+    }
+
+    private void appendExternalCliSessionBridge(StringBuilder builder, AgentRequest request) {
+        Object sessionKey = request.metadata().get("externalCliSessionKey");
+        if (sessionKey == null || String.valueOf(sessionKey).isBlank()) {
+            return;
+        }
+        builder.append("External CLI session bridge:\n");
+        builder.append("- sessionKey: ").append(sessionKey).append('\n');
+        builder.append("- scope: ")
+                .append(request.metadata().getOrDefault("externalCliSessionScope", "CONVERSATION_AGENT"))
+                .append('\n');
+        builder.append("- mode: ")
+                .append(request.metadata().getOrDefault("externalCliSessionMode", "AGENTHUB_CONTEXT_BRIDGE"))
+                .append('\n');
+        builder.append("- boundary: ")
+                .append(request.metadata().getOrDefault(
+                        "externalCliSessionBoundary",
+                        "Artifact-only continuity; do not write workspace files."))
+                .append("\n");
+        builder.append("Use this session key to treat the provided recent messages, artifacts, review results, and previous TaskRuns as the continuing conversation state. Do not rely on local workspace mutation or desktop GUI state.\n\n");
     }
 
     public String buildJsonSchema() {

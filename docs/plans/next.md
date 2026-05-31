@@ -65,6 +65,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Claude Code contract failures are surfaced as `PARSE_FAILED`; quality/build failures remain visible through TaskStep and Artifact metadata.
    - `Done`: Claude Code streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, destroys the CLI process when cancellation is observed during stream-json reading, and discards final output after Stop / Cancel.
    - `Done`: Claude Code now receives AgentHub-managed multi-turn session context through the standard prompt contract: recent messages, recent Artifacts, Review Report results, and previous TaskRun summaries are injected without relying on external CLI native sessions.
+   - `Done`: Claude Code now exposes an AgentHub external CLI session bridge: `externalCliSessionKey=agenthub:{conversationId}:{agentId}`, `agenthub-session-bridge` supported mode, and descriptor capability details for conversation+agent continuity.
    - `Boundary`: fixture mode is not real Claude Code provider output; real CLI mode still requires local `claude` install and authentication.
    - `Boundary`: v1 is Artifact-only and does not allow Claude Code to modify the AgentHub workspace.
 
@@ -90,6 +91,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Codex contract failures are surfaced as `PARSE_FAILED`; quality/build failures remain visible through TaskStep and Artifact metadata.
    - `Done`: Codex streaming remains preview-only, publishes `ADAPTER_STREAM_CHUNK`, supports fixture stream previews for contract smoke, and discards final output after Stop / Cancel.
    - `Done`: Codex now receives AgentHub-managed multi-turn session context through the standard prompt contract: recent messages, recent Artifacts, Review Report results, and previous TaskRun summaries are injected without relying on external CLI native sessions.
+   - `Done`: Codex now exposes an AgentHub external CLI session bridge: `externalCliSessionKey=agenthub:{conversationId}:{agentId}`, `agenthub-session-bridge` supported mode, and descriptor capability details for conversation+agent continuity.
    - `Boundary`: this is not Codex Desktop GUI automation; the intended integration is headless / Artifact-only execution with fallback.
    - `Boundary`: default smoke must not require Codex, and Codex output must not bypass Artifact contract validation or quality gates.
 
@@ -177,9 +179,11 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: API smoke now validates conversation pin/search/archive/unarchive and unread/read marker behavior.
    - `Done`: MessageStream now has a unified Message Action Bar for copy, quote, reply, pin, memory, rerun, and Agent reply regeneration.
    - `Done`: Message cards now expose type ribbons and richer attachment / Artifact cards, including image and PPT weak-capability boundaries.
+   - `Done`: Uploaded image attachments now render a clickable thumbnail in MessageStream when a backend download URL is available; PPT/PPTX attachments render a presentation preview shell with explicit download-only boundary copy.
    - `Done`: `docs/spec/message-interaction-spec.md` captures stable message type, action, thread, and weak media boundaries.
    - `Done`: ChatInput now shows a send-time routing preview for single Agent, multi-Agent mention, and Orchestrator auto-route paths.
    - `Done`: Workspace Agent contacts show readable capability, preferred Adapter, adapter health, success rate, and fallback rate.
+   - `Done`: Agent contacts now show CLI Session Bridge for Claude Code / Codex style adapters that can receive AgentHub-managed conversation+agent continuity metadata.
    - `Done`: TaskRun / Orchestrator Explain now extracts routing evidence chips from `routingReason` instead of only exposing raw router text.
    - `Done`: Agent Builder now includes a visible creation flow for basic info, System Prompt, Tool Capability, preferred Adapter, and Workspace mention usage.
    - `Done`: Browser E2E now covers creating a custom Agent in Agent Builder, mentioning it in Workspace, seeing routing preview, and verifying it enters the TaskRun.
@@ -191,6 +195,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace right-side Artifact Inspector now has a clear workbench header, `Source / Quality / Build / Run` trust metrics, an embedded Preview dock, and command-center CSS tokens shared with protocol cards and PreviewPage polish.
    - `Done`: Workspace first-screen visual density is closer to the reference IM collaboration desktop: empty conversation list, empty MessageStream, compact Agent contacts, Artifact Inspector scaffold, and no-conversation header behavior now use productized scaffold examples instead of guide-style placeholders.
    - `Done`: MessageStream interaction polish now prioritizes IM reading order: message body first, compact type ribbon, inline attachment / Artifact cards, and a low-noise Message Action Bar for copy, quote, reply, pin, memory, rerun, and regenerate.
+   - `Done`: Workspace now surfaces a production session summary for single-Agent priority, group collaboration, Orchestrator auto-route, participants, context continuity, latest TaskRun, and Adapter status.
+   - `Done`: Conversation list now shows visible result count, server-search state, archive filter state, and activity-sort status in the IM sidebar.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**

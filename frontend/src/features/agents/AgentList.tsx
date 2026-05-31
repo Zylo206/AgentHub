@@ -81,6 +81,18 @@ function getAdapterIntegrationProfile(adapterType?: string | null): { label: str
   };
 }
 
+function getExternalSessionProfile(descriptor: AdapterDescriptor | null): { enabled: boolean; label: string } {
+  if (!descriptor?.capabilityDetails?.externalCliSessionSupport) {
+    return { enabled: false, label: "AgentHub session" };
+  }
+
+  const mode = String(descriptor.capabilityDetails.externalCliSessionMode || "AGENTHUB_CONTEXT_BRIDGE");
+  return {
+    enabled: true,
+    label: mode === "AGENTHUB_CONTEXT_BRIDGE" ? "CLI Session Bridge" : mode
+  };
+}
+
 export function AgentList({
   agents,
   adapterDescriptors,
@@ -145,6 +157,7 @@ export function AgentList({
         const adapterDescriptor = findAdapterDescriptor(adapterDescriptors, agent.preferredAdapterType);
         const availabilityClass = normalizeStatusClass(adapterDescriptor?.status || agent.status);
         const integrationProfile = getAdapterIntegrationProfile(agent.preferredAdapterType || adapterDescriptor?.adapterType);
+        const sessionProfile = getExternalSessionProfile(adapterDescriptor);
 
         return (
           <button
@@ -179,6 +192,12 @@ export function AgentList({
               <strong>{integrationProfile.label}</strong>
               <span>{integrationProfile.description}</span>
             </div>
+            {sessionProfile.enabled ? (
+              <div className="agent-session-bridge-pill" title="复用 AgentHub 会话历史、产物、Review 和 TaskRun 摘要作为外部 CLI 的连续上下文。">
+                <strong>{sessionProfile.label}</strong>
+                <span>conversation + agent</span>
+              </div>
+            ) : null}
             {adapterDescriptor ? (
               <div className="agent-adapter-health">
                 <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(adapterDescriptor.status)}`}>

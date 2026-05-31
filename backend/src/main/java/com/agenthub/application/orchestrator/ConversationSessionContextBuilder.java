@@ -47,9 +47,11 @@ public class ConversationSessionContextBuilder {
         if (agentId != null && !agentId.isBlank()) {
             contextItems.add("AgentHub-managed multi-turn session: current agentId="
                     + agentId
-                    + "; reuse conversation history, artifacts, review results, and previous run summaries without external CLI native session.");
+                    + "; externalCliSessionKey="
+                    + buildExternalCliSessionKey(conversationId, agentId)
+                    + "; reuse conversation history, artifacts, review results, and previous run summaries as the durable session context.");
         } else {
-            contextItems.add("AgentHub-managed multi-turn session: reuse conversation history, artifacts, review results, and previous run summaries without external CLI native session.");
+            contextItems.add("AgentHub-managed multi-turn session: reuse conversation history, artifacts, review results, and previous run summaries as the durable session context.");
         }
 
         List<Message> recentMessages = messageRepository.findRecentByConversationId(
@@ -168,6 +170,12 @@ public class ConversationSessionContextBuilder {
 
     private static String nullToBlank(String value) {
         return value == null ? "" : value;
+    }
+
+    private static String buildExternalCliSessionKey(ConversationId conversationId, String agentId) {
+        String conversationValue = conversationId == null ? "conversation" : conversationId.value();
+        String agentValue = agentId == null || agentId.isBlank() ? "agent" : agentId;
+        return "agenthub:" + conversationValue + ":" + agentValue;
     }
 
     public record SessionContext(

@@ -360,6 +360,7 @@ public class CodexAgentAdapter implements AgentAdapter {
             modes.add("sse-preview");
         }
         modes.add("real-first-compatible");
+        modes.add("agenthub-session-bridge");
         return List.copyOf(modes);
     }
 
@@ -369,7 +370,7 @@ public class CodexAgentAdapter implements AgentAdapter {
                 "processbuilder-no-shell",
                 "isolated-run-directory=" + workDir,
                 "sandbox=read-only",
-                "ephemeral-session",
+                "agenthub-managed-session-context",
                 "skip-git-repo-check-inside-run-dir",
                 "final-output-requires-artifact-contract",
                 "streaming-chunks-are-preview-only");
@@ -403,6 +404,10 @@ public class CodexAgentAdapter implements AgentAdapter {
                 Map.entry("supportsOutputSchema", helpOutput.contains("--output-schema")),
                 Map.entry("supportsOutputLastMessage", helpOutput.contains("--output-last-message")),
                 Map.entry("supportsSandbox", helpOutput.contains("--sandbox")),
+                Map.entry("externalCliSessionSupport", true),
+                Map.entry("externalCliSessionMode", "AGENTHUB_CONTEXT_BRIDGE"),
+                Map.entry("externalCliSessionScope", "conversation+agent"),
+                Map.entry("nativeSessionPersistence", "AgentHub context injection; no workspace-write state"),
                 Map.entry("authenticationProbe", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
                 Map.entry("authProbeStatus", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
                 Map.entry("streamingEnabled", streamingEnabled),

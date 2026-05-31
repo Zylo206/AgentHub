@@ -89,13 +89,7 @@ public class AgentStepExecutor {
                         command.taskDescription(),
                         command.contextItems(),
                         command.artifactSummaries(),
-                        Map.of(
-                                "stepOrder", command.stepOrder(),
-                                "requiredSkill", command.requiredSkill(),
-                                "parallelGroupKey", command.parallelGroupKey(),
-                                "dependsOnStepOrders", command.dependsOnStepOrders(),
-                                "artifactGenerationMode", artifactGenerationMode,
-                                "demoMode", true)));
+                        buildAdapterMetadata(command)));
         if (isCancellationRequested(command)) {
             return cancelledStep(command, stepId, controlReason(command, "Step result discarded after adapter execution."));
         }
@@ -176,6 +170,24 @@ public class AgentStepExecutor {
                     "CANCEL_RUN",
                     "Step thread was interrupted before adapter execution.");
         }
+    }
+
+    private Map<String, Object> buildAdapterMetadata(StepExecutionCommand command) {
+        String externalCliSessionKey = "agenthub:"
+                + nullSafe(command.conversationId(), "conversation")
+                + ":"
+                + nullSafe(command.agentId(), "agent");
+        return Map.ofEntries(
+                Map.entry("stepOrder", command.stepOrder()),
+                Map.entry("requiredSkill", command.requiredSkill()),
+                Map.entry("parallelGroupKey", command.parallelGroupKey()),
+                Map.entry("dependsOnStepOrders", command.dependsOnStepOrders()),
+                Map.entry("artifactGenerationMode", artifactGenerationMode),
+                Map.entry("demoMode", true),
+                Map.entry("externalCliSessionKey", externalCliSessionKey),
+                Map.entry("externalCliSessionScope", "CONVERSATION_AGENT"),
+                Map.entry("externalCliSessionMode", "AGENTHUB_CONTEXT_BRIDGE"),
+                Map.entry("externalCliSessionBoundary", "Artifact-only session continuity; no workspace-write or CLI desktop automation."));
     }
 
     private boolean isCancellationRequested(StepExecutionCommand command) {

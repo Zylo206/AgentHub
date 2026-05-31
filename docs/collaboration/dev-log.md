@@ -6833,3 +6833,103 @@
 - 质量矩阵不强制真实 provider 默认可用。
 - 未配置真实 Adapter 时脚本仍可按现有策略跳过或分类失败。
 - `REAL_ADAPTER` 仍只代表通过当前 contract / quality / build gate，不等同于生产级代码质量保证。
+
+## Phase 163：Workspace 单聊 / 群聊生产状态摘要
+
+### 目标
+
+- 将 Web IM 工作台、对话列表、单聊 Agent 和群聊协作从“功能可用”推进到“用户可理解、可验证”的生产端表达。
+- 不改变 Orchestrator、Adapter、Message、Conversation API，只增强主路径信息架构。
+
+### 主要变更
+
+- 新增 `WorkspaceSessionSummary`：
+  - 显示当前协作模式：单聊优先、群聊协作、Orchestrator 自动分派或等待选择会话。
+  - 展示参与 Agent 头像组、当前路由目标、上下文连续状态、最近 TaskRun 和 Adapter 状态。
+  - 将 pinned context、Memory、消息数量和 Artifact 数量作为上下文连续指标展示。
+- ConversationList 增加生产状态摘要：
+  - 当前可见会话数量。
+  - 服务端搜索状态。
+  - 最近活跃排序 / 归档视图状态。
+- CSS 补充 command-center 风格样式：
+  - Session summary 使用紧凑指标卡，避免增加表单感。
+  - Conversation list 状态条融入左侧 IM rail。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮不引入分页、服务端复杂会话管理或完整长期 Agent session。
+- 单聊优先仍基于 `selectedAgent / targetAgentId` 路由语义；群聊仍基于 participants、多 @Agent 和 Orchestrator TaskGraph。
+- 不改变默认 memory / mock / static fallback 安全边界。
+
+## Phase 164：长期单聊 Session 表达与图片 / PPT 附件预览
+
+### 目标
+
+- 将已存在的 AgentHub-managed session context 明确纳入产品体验：单聊不是一次性请求，而是复用最近消息、产物、Review 和 TaskRun 摘要的连续协作。
+- 将图片 / PPT 从普通附件卡片推进到可识别的弱富媒体展示，补齐课题中图片、文件附件和富媒体消息的可见边界。
+
+### 主要变更
+
+- 保留现有 `ConversationSessionContextBuilder` 后端能力，不新增重复 session 模型。
+- MessageStream 附件卡片增强：
+  - 真实上传图片在存在后端下载 URL 时展示可点击缩略图。
+  - PPT / PPTX 展示演示文稿预览壳、metadata、摘要和下载入口。
+  - 明确标注 PPT 在线渲染、图片编辑和 OCR 后置，不伪装成完整富媒体编辑能力。
+- 补充 Workspace CSS，使图片和 PPT 附件卡片与当前暗色 IM command-center 风格一致。
+- 更新 `docs/plans/next.md`，记录图片缩略预览和 PPT 弱能力边界已落地。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `git diff --check`
+- 如后续修改 MessageStream 主路径，继续跑 `node scripts/e2e-browser.mjs`。
+
+### 静态 / Mock / Placeholder 边界
+
+- 长期单聊 Session v1 由 AgentHub 管理上下文摘要，不依赖 Claude / Codex 原生 session。
+- 图片附件仅做缩略预览和下载，不做图片编辑、OCR 或视觉理解。
+- PPT 附件仅做文件级预览壳和下载，不做在线幻灯片渲染。
+- 本轮不改变 Orchestrator、Adapter、Artifact、Approval、Deploy 或 realtime 主链路。
+
+## Phase 165：Claude / Codex 外部 CLI Session Bridge
+
+### 目标
+
+- 结合外部 CLI session 方向，进一步完善多 Agent 接入、自建 Agent 路由和 Agent 联系人展示。
+- 在不开放 workspace-write、不托管桌面 GUI 的前提下，让 Claude Code / Codex 能按 Conversation + Agent 维度复用 AgentHub 管理的长期上下文。
+
+### 主要变更
+
+- AgentStepExecutor 为 Adapter 请求写入稳定 session metadata：
+  - `externalCliSessionKey=agenthub:{conversationId}:{agentId}`。
+  - `externalCliSessionScope=CONVERSATION_AGENT`。
+  - `externalCliSessionMode=AGENTHUB_CONTEXT_BRIDGE`。
+- ConversationSessionContextBuilder 不再描述为“无外部 CLI session”，改为明确 AgentHub 使用最近消息、Artifact、Review 和 TaskRun 摘要作为 durable session context。
+- Claude Code / Codex prompt contract 增加 External CLI session bridge 区块：
+  - 指示 CLI 使用 session key 理解连续上下文。
+  - 强调仍是 Artifact-only，不依赖 workspace mutation 或桌面 GUI 状态。
+- Claude Code / Codex descriptor 增强：
+  - `supportedModes` 增加 `agenthub-session-bridge`。
+  - `safetyPolicies` 增加 `agenthub-managed-session-context`。
+  - `capabilityDetails` 暴露 `externalCliSessionSupport`、mode、scope、persistence 边界。
+- Agent 联系人卡增加 `CLI Session Bridge` 标识，使自建 Agent 的 preferredAdapter 能力和长期上下文边界更可见。
+- 更新 `docs/spec/claude-codex-headless-adapter-spec.md` 和 `docs/plans/next.md`。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- `git diff --check`
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮不是 Claude Desktop / Codex Desktop GUI 自动化。
+- 本轮不允许外部 CLI 直接写 AgentHub workspace。
+- 外部 CLI session bridge v1 是 AgentHub-managed context injection，不承诺兼容 CLI 私有 session 文件格式。
+- 真实 CLI 仍需本机安装、登录和 opt-in smoke 验证；默认 demo 继续保留 MOCK/static fallback。

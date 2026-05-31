@@ -263,6 +263,12 @@ function isDownloadableAttachment(attachmentId?: string | null): boolean {
   return Boolean(attachmentId && !attachmentId.startsWith("demo-") && !attachmentId.startsWith("local-"));
 }
 
+function getAttachmentDownloadHref(attachment: LightweightAttachment): string | null {
+  return isDownloadableAttachment(attachment.attachmentId)
+    ? getAttachmentDownloadUrl(attachment.attachmentId as string)
+    : null;
+}
+
 function getMessageKind(message: Message, attachments: Message["attachments"], artifacts: Artifact[]): {
   label: string;
   detail: string;
@@ -673,6 +679,7 @@ export function MessageBubble({
           <div className="message-attachment-list" data-testid="message-attachment-list">
             {attachments.map((attachment, index) => {
               const attachmentKind = getAttachmentKind(attachment);
+              const attachmentDownloadHref = getAttachmentDownloadHref(attachment);
               return (
                 <article
                   className={`message-attachment-card message-attachment-card--${attachmentKind.tone}`}
@@ -693,11 +700,31 @@ export function MessageBubble({
                     ) : null}
                     <span>{attachmentKind.boundary}</span>
                   </div>
+                  {attachmentKind.tone === "image" && attachmentDownloadHref ? (
+                    <a
+                      className="message-attachment-image-preview"
+                      data-testid="message-attachment-image-preview"
+                      href={attachmentDownloadHref}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <img src={attachmentDownloadHref} alt={`图片附件预览：${attachment.fileName}`} loading="lazy" />
+                    </a>
+                  ) : null}
+                  {attachmentKind.tone === "ppt" ? (
+                    <div className="message-attachment-ppt-preview" data-testid="message-attachment-ppt-preview">
+                      <span>PPT</span>
+                      <div>
+                        <strong>演示文稿附件</strong>
+                        <small>当前提供 metadata、文本摘要和下载；在线幻灯片渲染后置。</small>
+                      </div>
+                    </div>
+                  ) : null}
                   {attachment.contentPreview || attachment.previewText ? <p>{attachment.contentPreview || attachment.previewText}</p> : null}
-                  {isDownloadableAttachment(attachment.attachmentId) ? (
+                  {attachmentDownloadHref ? (
                     <a
                       className="message-attachment-card__download"
-                      href={getAttachmentDownloadUrl(attachment.attachmentId as string)}
+                      href={attachmentDownloadHref}
                       target="_blank"
                       rel="noreferrer"
                     >

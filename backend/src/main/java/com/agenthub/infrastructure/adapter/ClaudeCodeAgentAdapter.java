@@ -463,6 +463,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
             modes.add("sse-preview");
         }
         modes.add("real-first-compatible");
+        modes.add("agenthub-session-bridge");
         return List.copyOf(modes);
     }
 
@@ -473,6 +474,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 "isolated-run-directory=" + workDir,
                 "allowedTools=" + allowedTools,
                 "disallowedTools=" + disallowedTools,
+                "agenthub-managed-session-context",
                 "final-output-requires-artifact-contract",
                 "streaming-chunks-are-preview-only");
     }
@@ -504,6 +506,10 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 Map.entry("supportsStreamJson", helpOutput.contains("stream-json")),
                 Map.entry("supportsOutputSchema", false),
                 Map.entry("schemaMode", "prompt-contract-only"),
+                Map.entry("externalCliSessionSupport", true),
+                Map.entry("externalCliSessionMode", "AGENTHUB_CONTEXT_BRIDGE"),
+                Map.entry("externalCliSessionScope", "conversation+agent"),
+                Map.entry("nativeSessionPersistence", "AgentHub context injection; no workspace-write state"),
                 Map.entry("supportsToolPolicy", helpOutput.contains("allowedtools") || helpOutput.contains("allowed-tools")),
                 Map.entry("authenticationProbe", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
                 Map.entry("authProbeStatus", "NOT_PROBED_EXECUTE_SMOKE_REQUIRED"),
@@ -873,6 +879,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
         builder.append("The first non-whitespace character must be { and the last non-whitespace character must be }.\n");
         builder.append("Do not include Markdown fences, Claude Code wrapper metadata, CLI logs, stdout/stderr, usage stats, or explanations outside JSON.\n\n");
         builder.append("Agent name: ").append(nullToBlank(request.agentName())).append('\n');
+        appendExternalCliSessionBridge(builder, request);
         if (!nullToBlank(request.systemPrompt()).isBlank()) {
             builder.append("Agent system prompt:\n").append(request.systemPrompt()).append("\n\n");
         }
@@ -920,6 +927,27 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
                 - Empty content, provider error text, plain text responses, invalid JSON, missing fields, markdown fences, CLI logs, or wrapper metadata will be rejected.
                 """);
         return builder.toString();
+    }
+
+    private void appendExternalCliSessionBridge(StringBuilder builder, AgentRequest request) {
+        Object sessionKey = request.metadata().get("externalCliSessionKey");
+        if (sessionKey == null || String.valueOf(sessionKey).isBlank()) {
+            return;
+        }
+        builder.append("External CLI session bridge:\n");
+        builder.append("- sessionKey: ").append(sessionKey).append('\n');
+        builder.append("- scope: ")
+                .append(request.metadata().getOrDefault("externalCliSessionScope", "CONVERSATION_AGENT"))
+                .append('\n');
+        builder.append("- mode: ")
+                .append(request.metadata().getOrDefault("externalCliSessionMode", "AGENTHUB_CONTEXT_BRIDGE"))
+                .append('\n');
+        builder.append("- boundary: ")
+                .append(request.metadata().getOrDefault(
+                        "externalCliSessionBoundary",
+                        "Artifact-only continuity; do not write workspace files."))
+                .append("\n");
+        builder.append("Use this session key to treat the provided recent messages, artifacts, review results, and previous TaskRuns as the continuing conversation state. Do not rely on local workspace mutation or desktop GUI state.\n\n");
     }
 
     private String normalizeAndValidateArtifactContract(String content) throws AdapterResponseException {

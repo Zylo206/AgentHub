@@ -14,13 +14,15 @@
 - `REAL_FIRST` 下的 Artifact contract、quality evaluator、build validation、fallback reason。
 - Adapter smoke、streaming smoke、quality metrics、TaskStep / Artifact source metadata。
 - `/api/adapters` 暴露的 capability discovery、supported modes、安全策略说明。
+- AgentHub-managed external CLI session bridge：使用稳定 session key 将 Conversation / Agent 上下文传给 Claude Code / Codex。
 
 ## 非目标
 
 - 不接 Claude Desktop 或 Codex Desktop GUI 自动化。
 - 不允许 Claude Code / Codex 直接写 AgentHub 工作区。
 - 不做完整 IDE / terminal session 托管。
-- 不做多轮交互式外部 Agent 会话复刻。
+- 不做完整多轮交互式外部 Agent 终端托管。
+- 不依赖外部 CLI 原生 workspace-write 或桌面 GUI session。
 - 不把 fixture smoke 当作真实 CLI 验证。
 - 不默认要求本机安装或登录 Claude Code / Codex。
 - 不让 streaming chunk 绕过最终 Artifact contract。
@@ -35,6 +37,7 @@
 - 两个 Adapter 的最终输出都必须通过 AgentHub Artifact JSON contract。
 - 两个 Adapter 默认关闭，不影响默认 memory + MOCK/static fallback demo。
 - `/api/adapters` 现在会返回 supported modes、safety policies 和 capability details，便于 UI 和 smoke 解释当前能力。
+- AgentStepExecutor 会为 Claude Code / Codex 请求写入 `externalCliSessionKey`，并通过 prompt contract 注入最近消息、Artifact、Review 和 TaskRun 摘要。
 
 ## 核心原则
 
@@ -45,6 +48,25 @@
 - Safe tools by default：默认禁用写文件、执行危险命令或 workspace mutation。
 - Contract-first：最终输出必须是 AgentHub Artifact JSON。
 - Fallback-first：不可用、失败、超时、contract invalid 都进入现有 fallback。
+- Session bridge：连续性由 AgentHub 管理，外部 CLI 通过 `conversation + agent` 稳定 session key 理解上下文。
+
+## External CLI Session Bridge
+
+v1 不托管外部 CLI 原生交互终端，但会把 AgentHub 的长期上下文桥接给 Claude Code / Codex：
+
+- `externalCliSessionKey = agenthub:{conversationId}:{agentId}`。
+- `externalCliSessionScope = CONVERSATION_AGENT`。
+- `externalCliSessionMode = AGENTHUB_CONTEXT_BRIDGE`。
+- Prompt 中明确要求外部 CLI 使用最近消息、Artifact、Review 和 previous TaskRun 作为连续会话状态。
+- `/api/adapters` 的 `supportedModes` 包含 `agenthub-session-bridge`。
+- `/api/adapters` 的 `capabilityDetails` 包含 `externalCliSessionSupport=true`、session mode、scope 和 persistence 边界。
+
+边界：
+
+- 不读取或复用 Claude/Codex 桌面端 GUI 状态。
+- 不允许外部 CLI 写 AgentHub workspace。
+- 不承诺 CLI 私有 session 文件格式兼容。
+- 如果 CLI 原生 session 能力后续稳定暴露，必须仍通过 Artifact contract、Approval、Audit 和 Snapshot 边界。
 
 ## Adapter Contract
 

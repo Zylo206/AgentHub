@@ -115,6 +115,11 @@ export function ConversationList({
           <span>置顶优先</span>
           <span>未读追踪</span>
         </div>
+        <div className="conversation-list-status" data-testid="conversation-list-status">
+          <span>{visibleConversations.length} 条可见</span>
+          <span>{query ? "服务端搜索中" : "最近活跃排序"}</span>
+          <span>{filter === "ARCHIVED" ? "归档视图" : "默认隐藏归档"}</span>
+        </div>
       </div>
 
       {visibleConversations.length === 0 ? (

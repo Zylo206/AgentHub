@@ -82,6 +82,7 @@ import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import "../../styles/workspace.css";
 
 const TASK_STEP_STREAM_CHUNK_EVENT_TYPES = ["TASK_STEP_STREAM_CHUNK", "ADAPTER_STREAM_CHUNK"] as const;
@@ -1673,6 +1674,18 @@ export function WorkspacePage() {
           onStartCollaboration={handleConfirmOrchestratorTrigger}
           onToggleDebugActions={() => setShowDebugActions((current) => !current)}
           onRunManualDebug={handleRunDemoTask}
+        />
+
+        <WorkspaceSessionSummary
+          currentConversation={currentConversation}
+          selectedAgent={selectedAgent}
+          selectedAgentAdapterDescriptor={selectedAgentAdapterDescriptor}
+          participants={currentParticipantAgents}
+          messages={messages}
+          latestTaskRun={selectedTaskRun}
+          pinnedContextCount={pinnedContexts.length}
+          memoryCount={memories.length}
+          artifactCount={artifacts.length}
         />
 
         <div className="selected-agent-banner">
