@@ -7,6 +7,11 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
+# Desktop
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
 # Build caches
 *.tsbuildinfo
 **/*.tsbuildinfo

@@ -8,6 +8,7 @@ interface ArtifactDeployPanelProps {
   deployingArtifact: boolean;
   onCreateDeployment: () => void;
   onCopyPreviewUrl: (previewUrl: string) => void;
+  onDownloadBundle: () => void;
 }
 
 export function ArtifactDeployPanel({
@@ -15,7 +16,8 @@ export function ArtifactDeployPanel({
   deployments,
   deployingArtifact,
   onCreateDeployment,
-  onCopyPreviewUrl
+  onCopyPreviewUrl,
+  onDownloadBundle
 }: ArtifactDeployPanelProps) {
   return (
     <div className="deploy-status-box" data-testid="deploy-status-box">
@@ -30,6 +32,13 @@ export function ArtifactDeployPanel({
         onClick={onCreateDeployment}
       >
         {deployingArtifact ? "部署中..." : "部署选中产物"}
+      </button>
+      <button
+        type="button"
+        className="secondary-button artifact-revision-box__button"
+        onClick={onDownloadBundle}
+      >
+        下载源码包
       </button>
       {deployments.length === 0 ? (
         <div className="deploy-status-empty">
@@ -80,6 +89,13 @@ export function ArtifactDeployPanel({
                   }}
                 >
                   复制 URL
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button deploy-status-card__button"
+                  onClick={onDownloadBundle}
+                >
+                  下载源码包
                 </button>
               </div>
               <p>{deployment.message}</p>

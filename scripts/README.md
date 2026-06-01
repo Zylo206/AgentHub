@@ -36,6 +36,8 @@ This directory contains local bootstrap scripts, demo helpers, and repository au
 - apply-diff conflict detection and force apply
 - demo deployment
 - preview URL reachability
+- chat deployment-intent message coverage
+- artifact bundle zip download coverage
 - artifact snapshot restore
 - action audit log records
 - deployment query
@@ -534,7 +536,7 @@ Required product path:
 - inspect Artifact output
 - approve Apply Diff
 - approve Restore Snapshot
-- approve Deploy Preview
+- approve Deploy Preview from a chat deployment-intent confirmation card
 - open `/preview/:artifactId`
 
 The script uses stable `data-testid` selectors for the main product path and writes failure diagnostics under `.agenthub/e2e-browser/` when the browser flow fails:

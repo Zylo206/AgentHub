@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useRef } from "react";
 import type { Agent } from "../agents/agentTypes";
+import type { ArtifactSelectionReference } from "../artifacts/artifactTypes";
 import type { LightweightAttachment, Message } from "./chatTypes";
 import { parseLeadingAgentMention } from "./agentMention";
 import { formatId, getIdValue } from "../../utils/id";
@@ -12,11 +13,13 @@ interface ChatInputProps {
   selectedAgent?: Agent | null;
   quotedMessage?: Message | null;
   quoteMode?: "quote" | "reply";
+  artifactSelectionReference?: ArtifactSelectionReference | null;
   attachments: LightweightAttachment[];
   onChange: (value: string) => void;
   onAttachmentsChange: (attachments: LightweightAttachment[]) => void;
   onUploadFiles?: (files: File[]) => Promise<LightweightAttachment[]>;
   onClearQuote?: () => void;
+  onClearArtifactSelection?: () => void;
   onSend: () => void;
 }
 
@@ -44,11 +47,13 @@ export function ChatInput({
   selectedAgent,
   quotedMessage,
   quoteMode = "quote",
+  artifactSelectionReference,
   attachments,
   onChange,
   onAttachmentsChange,
   onUploadFiles,
   onClearQuote,
+  onClearArtifactSelection,
   onSend
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -85,7 +90,7 @@ export function ChatInput({
       return {
         mode: "SINGLE_AGENT",
         title: `To: @${targetAgents[0].name}`,
-        detail: "该 Agent 会作为 targetAgentId / selectedAgent 优先参与首个路由决策。",
+        detail: "该 Agent 会作为 targetAgentId / selectedAgent 优先参与路由决策。",
         agents: targetAgents,
         adapters,
         capabilities
@@ -209,6 +214,25 @@ export function ChatInput({
           </div>
           <button type="button" className="ghost-button" data-testid="chat-quote-clear" onClick={onClearQuote}>
             取消引用
+          </button>
+        </div>
+      ) : null}
+
+      {artifactSelectionReference ? (
+        <div className="chat-artifact-selection-preview" data-testid="chat-artifact-selection-preview">
+          <div>
+            <strong>Artifact 局部修改引用</strong>
+            <p>
+              {artifactSelectionReference.artifactTitle} v{artifactSelectionReference.artifactVersion}
+              {" · "}
+              第 {artifactSelectionReference.startLine}-{artifactSelectionReference.endLine} 行
+              {" · "}
+              {artifactSelectionReference.language || artifactSelectionReference.artifactType}
+            </p>
+            <code>{artifactSelectionReference.selectedText.slice(0, 240)}</code>
+          </div>
+          <button type="button" className="ghost-button" data-testid="chat-artifact-selection-clear" onClick={onClearArtifactSelection}>
+            取消选区
           </button>
         </div>
       ) : null}

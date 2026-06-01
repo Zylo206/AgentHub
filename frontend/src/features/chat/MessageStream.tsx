@@ -5,7 +5,7 @@ import type { Artifact } from "../artifacts/artifactTypes";
 import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { PinnedContext } from "../context/contextTypes";
 import { MessageBubble } from "./MessageBubble";
-import type { Message, OrchestratorTriggerSuggestion, StreamingPreviewState } from "./chatTypes";
+import type { DeployIntentDraft, Message, OrchestratorTriggerSuggestion, StreamingPreviewState } from "./chatTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole } from "../../utils/displayLabels";
 
@@ -23,6 +23,8 @@ interface MessageStreamProps {
   autoTriggerRunningMessageId?: string | null;
   agentCreationDraftsByMessageId?: Record<string, AgentCreationDraft | null>;
   agentCreationRunningMessageId?: string | null;
+  deployIntentsByMessageId?: Record<string, DeployIntentDraft | null>;
+  deployingMessageId?: string | null;
   onSelectArtifact: (artifactId: string) => void;
   onToggleMessagePin: (messageId: string, pinnedContextId?: string | null) => void;
   onSaveMessageAsMemory: (message: Message) => void;
@@ -36,6 +38,10 @@ interface MessageStreamProps {
   onRefreshOrchestratorSuggestion: (message: Message) => void;
   onConfirmAgentCreation: (messageId: string) => void;
   onCancelAgentCreation: (messageId: string) => void;
+  onStartDeployIntent: (message: Message, artifactId?: string | null) => void;
+  onApproveDeployIntent: (messageId: string) => void;
+  onCancelDeployIntent: (messageId: string) => void;
+  onDownloadArtifactBundle: (artifactIds?: string[]) => void;
   streamingPreviewsByStepId?: Record<string, StreamingPreviewState>;
 }
 
@@ -149,6 +155,8 @@ export function MessageStream({
   autoTriggerRunningMessageId,
   agentCreationDraftsByMessageId = {},
   agentCreationRunningMessageId,
+  deployIntentsByMessageId = {},
+  deployingMessageId,
   onSelectArtifact,
   onToggleMessagePin,
   onSaveMessageAsMemory,
@@ -162,6 +170,10 @@ export function MessageStream({
   onRefreshOrchestratorSuggestion,
   onConfirmAgentCreation,
   onCancelAgentCreation,
+  onStartDeployIntent,
+  onApproveDeployIntent,
+  onCancelDeployIntent,
+  onDownloadArtifactBundle,
   streamingPreviewsByStepId = {}
 }: MessageStreamProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(() => new Set());
@@ -342,6 +354,11 @@ export function MessageStream({
               autoTriggerRunning={autoTriggerRunningMessageId === messageId}
               agentCreationDraft={agentCreationDraftsByMessageId[messageId] ?? null}
               agentCreationRunning={agentCreationRunningMessageId === messageId}
+              deployIntent={deployIntentsByMessageId[messageId] ?? null}
+              deployIntentArtifact={deployIntentsByMessageId[messageId]?.artifactId
+                ? artifactsById.get(deployIntentsByMessageId[messageId]?.artifactId ?? "") ?? null
+                : artifacts[artifacts.length - 1] ?? null}
+              deployIntentRunning={deployingMessageId === messageId}
               replyMessages={replyMessages}
               threadExpanded={expandedThreadIds.has(messageId)}
               highlighted={highlightedMessageId === messageId}
@@ -358,6 +375,10 @@ export function MessageStream({
               onRefreshOrchestratorSuggestion={onRefreshOrchestratorSuggestion}
               onConfirmAgentCreation={onConfirmAgentCreation}
               onCancelAgentCreation={onCancelAgentCreation}
+              onStartDeployIntent={onStartDeployIntent}
+              onApproveDeployIntent={onApproveDeployIntent}
+              onCancelDeployIntent={onCancelDeployIntent}
+              onDownloadArtifactBundle={onDownloadArtifactBundle}
               onToggleThread={() => toggleThread(messageId)}
               onJumpToMessage={jumpToMessage}
             />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SyntheticEvent } from "react";
 import { ArtifactCard } from "./ArtifactCard";
 import {
   ArtifactDeliveryWorkbench,
@@ -9,7 +9,7 @@ import { ArtifactDeployPanel } from "./ArtifactDeployPanel";
 import { ArtifactSnapshotTimeline } from "./ArtifactSnapshotTimeline";
 import { DiffSummaryPanel } from "./DiffSummaryPanel";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
-import type { Artifact } from "./artifactTypes";
+import type { Artifact, ArtifactSelectionReference } from "./artifactTypes";
 import type { ArtifactSnapshot } from "./artifactSnapshotTypes";
 import type { DeploymentRecord } from "../deployments/deploymentTypes";
 import { buildDiffSummary, getVersionHistoryEntries } from "./artifactLineage";
@@ -36,9 +36,11 @@ interface ArtifactPanelProps {
   onShowAllArtifacts: () => void;
   onCreateRevision: (artifactId: string, revisionInstruction: string) => Promise<void>;
   onCreateDeployment: (artifactId: string, approvalId: string) => Promise<void>;
+  onDownloadArtifactBundle: (artifactIds?: string[]) => void;
   onRestoreSnapshot: (snapshotId: string, approvalId: string) => Promise<Artifact | null>;
   onApplyDiff: (artifactId: string, approvalId: string) => Promise<Artifact | null>;
   onForceApplyDiff: (artifactId: string, approvalId: string) => Promise<Artifact | null>;
+  onSendSelectionToChat?: (selection: ArtifactSelectionReference) => void;
   onCreateApprovalRequest: (request: {
     actionType: string;
     targetType: string;
@@ -67,6 +69,98 @@ interface ApprovalRequest {
 }
 
 const PRODUCT_REVISION_INSTRUCTION = "把主按钮改成蓝色，并增加 loading 状态。";
+
+interface ContentSelectionRange {
+  startLine: number;
+  endLine: number;
+  text: string;
+}
+
+interface DraftDiffPreview {
+  added: number;
+  removed: number;
+  changed: number;
+  firstChangedLine: number | null;
+  hasChanges: boolean;
+}
+
+function getLineNumberAtOffset(content: string, offset: number): number {
+  return content.slice(0, Math.max(offset, 0)).split("\n").length;
+}
+
+function getTextareaSelectionRange(textarea: HTMLTextAreaElement): ContentSelectionRange | null {
+  const selectionStart = textarea.selectionStart;
+  const selectionEnd = textarea.selectionEnd;
+
+  if (selectionEnd <= selectionStart) {
+    return null;
+  }
+
+  return {
+    startLine: getLineNumberAtOffset(textarea.value, selectionStart),
+    endLine: getLineNumberAtOffset(textarea.value, selectionEnd),
+    text: textarea.value.slice(selectionStart, selectionEnd)
+  };
+}
+
+function buildDraftDiffPreview(originalContent: string, draftContent: string): DraftDiffPreview {
+  if (originalContent === draftContent) {
+    return {
+      added: 0,
+      removed: 0,
+      changed: 0,
+      firstChangedLine: null,
+      hasChanges: false
+    };
+  }
+
+  const originalLines = originalContent.split("\n");
+  const draftLines = draftContent.split("\n");
+  const maxLength = Math.max(originalLines.length, draftLines.length);
+  let changed = 0;
+  let firstChangedLine: number | null = null;
+
+  for (let index = 0; index < maxLength; index += 1) {
+    if (originalLines[index] !== draftLines[index]) {
+      changed += 1;
+      firstChangedLine = firstChangedLine ?? index + 1;
+    }
+  }
+
+  return {
+    added: Math.max(draftLines.length - originalLines.length, 0),
+    removed: Math.max(originalLines.length - draftLines.length, 0),
+    changed,
+    firstChangedLine,
+    hasChanges: true
+  };
+}
+
+function buildDraftRevisionInstruction(
+  artifact: Artifact,
+  draftContent: string,
+  draftNote: string,
+  selectedRange: ContentSelectionRange | null
+): string {
+  const scope = selectedRange
+    ? `只修改第 ${selectedRange.startLine}-${selectedRange.endLine} 行选中的代码片段。`
+    : "根据完整编辑草稿生成新的 Artifact Revision。";
+  const selectionContext = selectedRange
+    ? `\n\n选中片段：\n${selectedRange.text}`
+    : "";
+  const userNote = draftNote.trim()
+    ? `\n\n局部修改说明：\n${draftNote.trim()}`
+    : "";
+
+  return [
+    `为 Artifact "${artifact.title}" v${artifact.version} 生成 draft revision。`,
+    scope,
+    "不要直接覆盖当前 Artifact；先生成可审查的 Revision，随后通过 Diff Preview 和 Approval Gate 应用。",
+    userNote,
+    selectionContext,
+    `\n\n编辑后的草稿内容：\n${draftContent}`
+  ].join("\n");
+}
 
 function getArtifactFileExtension(artifact: Artifact): string {
   const language = (artifact.language || "").toLowerCase();
@@ -412,9 +506,11 @@ export function ArtifactPanel({
   onShowAllArtifacts,
   onCreateRevision,
   onCreateDeployment,
+  onDownloadArtifactBundle,
   onRestoreSnapshot,
   onApplyDiff,
   onForceApplyDiff,
+  onSendSelectionToChat,
   onCreateApprovalRequest,
   onApproveApprovalRequest,
   onCancelApprovalRequest
@@ -425,6 +521,10 @@ export function ArtifactPanel({
   const [diffConflictArtifactId, setDiffConflictArtifactId] = useState<string | null>(null);
   const [diffConflictMessage, setDiffConflictMessage] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
+  const [editingArtifactId, setEditingArtifactId] = useState<string | null>(null);
+  const [draftContent, setDraftContent] = useState("");
+  const [draftNote, setDraftNote] = useState("");
+  const [draftSelection, setDraftSelection] = useState<ContentSelectionRange | null>(null);
   const versionEntries = getVersionHistoryEntries(allArtifacts, selectedArtifact);
   const selectedVersionEntry =
     versionEntries.find((entry) => entry.artifactId === selectedArtifactId) ?? null;
@@ -438,6 +538,12 @@ export function ArtifactPanel({
   const selectedArtifactDiagnostics = selectedArtifact
     ? buildArtifactDiagnostics(selectedArtifact, selectedArtifactFallbackReason)
     : [];
+  const isEditingSelectedArtifact = Boolean(
+    selectedArtifact && editingArtifactId === getIdValue(selectedArtifact.id)
+  );
+  const draftDiffPreview = selectedArtifact
+    ? buildDraftDiffPreview(selectedArtifact.content || "", draftContent)
+    : null;
   function buildBaseArtifactAffectedItems(artifact: Artifact): string[] {
     return [
       `Artifact: ${artifact.title} v${artifact.version}`,
@@ -487,6 +593,10 @@ export function ArtifactPanel({
     );
     setArtifactOperationMessage(null);
     setPendingApproval(null);
+    setEditingArtifactId(null);
+    setDraftContent(selectedArtifact?.content || "");
+    setDraftNote("");
+    setDraftSelection(null);
   }, [selectedArtifact]);
 
   async function handleCreateRevision() {
@@ -495,6 +605,67 @@ export function ArtifactPanel({
     }
 
     await onCreateRevision(selectedArtifactId, revisionInstruction.trim());
+  }
+
+  function handleStartContentEdit(artifact: Artifact) {
+    setEditingArtifactId(getIdValue(artifact.id));
+    setDraftContent(artifact.content || "");
+    setDraftNote("");
+    setDraftSelection(null);
+  }
+
+  function handleDraftSelectionChange(event: SyntheticEvent<HTMLTextAreaElement>) {
+    setDraftSelection(getTextareaSelectionRange(event.currentTarget));
+  }
+
+  async function handleCreateDraftRevision() {
+    if (!selectedArtifact || !selectedArtifactId) {
+      return;
+    }
+
+    const hasDraftChange = (selectedArtifact.content || "") !== draftContent;
+    if (!hasDraftChange && !draftNote.trim()) {
+      setArtifactOperationMessage("请先编辑内容、选中片段，或填写局部修改说明。");
+      return;
+    }
+
+    const instruction = buildDraftRevisionInstruction(
+      selectedArtifact,
+      draftContent,
+      draftNote,
+      draftSelection
+    );
+    setRevisionInstruction(instruction);
+    await onCreateRevision(selectedArtifactId, instruction);
+    setArtifactOperationMessage("已生成 Draft Revision。请在 Diff Preview 中确认变更，并通过 Approval Gate 应用。");
+  }
+
+  function handleSendSelectionToChat() {
+    if (!selectedArtifact || !selectedArtifactId || !onSendSelectionToChat) {
+      return;
+    }
+    const fallbackSelection: ContentSelectionRange = {
+      startLine: 1,
+      endLine: Math.max(draftContent.split("\n").length, 1),
+      text: draftContent || selectedArtifact.content || ""
+    };
+    const selection = draftSelection ?? fallbackSelection;
+
+    onSendSelectionToChat({
+      artifactId: selectedArtifactId,
+      artifactTitle: selectedArtifact.title,
+      artifactVersion: selectedArtifact.version,
+      artifactType: selectedArtifact.type,
+      language: selectedArtifact.language || "plain",
+      startLine: selection.startLine,
+      endLine: selection.endLine,
+      selectedText: selection.text
+    });
+    setArtifactOperationMessage(
+      draftSelection
+        ? "已把选中代码片段同步到聊天输入框，请描述修改需求后发送。"
+        : "未捕获到选区，已把当前编辑草稿作为局部修改上下文同步到聊天输入框。"
+    );
   }
 
   async function handleCreateDeployment() {
@@ -1033,6 +1204,116 @@ export function ArtifactPanel({
                 </div>
               </div>
             ) : null}
+            <section className="artifact-content-editor" data-testid="artifact-content-editor-panel">
+              <div className="artifact-content-editor__header">
+                <div>
+                  <strong>内容编辑 / 局部修改</strong>
+                  <p>编辑不会直接覆盖当前 Artifact。系统会先生成 Draft Revision，再通过 Diff Preview 和 Approval Gate 应用。</p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  data-testid="artifact-content-edit-toggle"
+                  onClick={() => {
+                    if (isEditingSelectedArtifact) {
+                      setEditingArtifactId(null);
+                      setDraftContent(selectedArtifact.content || "");
+                      setDraftNote("");
+                      setDraftSelection(null);
+                    } else {
+                      handleStartContentEdit(selectedArtifact);
+                    }
+                  }}
+                >
+                  {isEditingSelectedArtifact ? "退出编辑" : "编辑内容"}
+                </button>
+              </div>
+
+              {isEditingSelectedArtifact ? (
+                <>
+                  <div className="artifact-content-editor__tools">
+                    <span className="artifact-content-editor__chip">
+                      {draftSelection
+                        ? `已选中第 ${draftSelection.startLine}-${draftSelection.endLine} 行`
+                        : "可直接拖选 textarea 中的片段"}
+                    </span>
+                    <span className="artifact-content-editor__chip">
+                      {draftDiffPreview?.hasChanges
+                        ? `Draft diff: +${draftDiffPreview.added} / -${draftDiffPreview.removed} / changed ${draftDiffPreview.changed}`
+                        : "尚未修改内容"}
+                    </span>
+                    {draftDiffPreview?.firstChangedLine ? (
+                      <span className="artifact-content-editor__chip">
+                        首个变化行：{draftDiffPreview.firstChangedLine}
+                      </span>
+                    ) : null}
+                  </div>
+                  <textarea
+                    className="artifact-content-editor__textarea"
+                    data-testid="artifact-content-editor-textarea"
+                    value={draftContent}
+                    disabled={revisingArtifact}
+                    spellCheck={false}
+                    onChange={(event) => setDraftContent(event.target.value)}
+                    onSelect={handleDraftSelectionChange}
+                    onKeyUp={handleDraftSelectionChange}
+                    onMouseUp={handleDraftSelectionChange}
+                  />
+                  <div className="artifact-content-editor__local-instruction">
+                    <label htmlFor="artifact-local-revision-note">局部修改说明</label>
+                    <textarea
+                      id="artifact-local-revision-note"
+                      data-testid="artifact-local-revision-note"
+                      value={draftNote}
+                      disabled={revisingArtifact}
+                      placeholder="例如：只把选中片段改成带错误态的表单校验，并保持现有 API 不变。"
+                      onChange={(event) => setDraftNote(event.target.value)}
+                    />
+                  </div>
+                  <div className="artifact-content-editor__diff-preview" data-testid="artifact-draft-diff-preview">
+                    <div>
+                      <span>Draft Diff Preview</span>
+                      <strong>
+                        {draftDiffPreview?.hasChanges
+                          ? "已检测到本地草稿变更"
+                          : "等待编辑或选区说明"}
+                      </strong>
+                    </div>
+                    <p>
+                      生成 Draft Revision 后，请在下方 Diff Summary 审查真实行级 diff；Apply / Force Apply 仍必须经过后端 Approval Gate。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button artifact-content-editor__button"
+                    data-testid="artifact-create-draft-revision"
+                    disabled={
+                      revisingArtifact ||
+                      (!draftNote.trim() && (selectedArtifact.content || "") === draftContent)
+                    }
+                    onClick={() => {
+                      void handleCreateDraftRevision();
+                    }}
+                  >
+                    {revisingArtifact ? "生成中..." : "生成 Draft Revision"}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button artifact-content-editor__chat-button"
+                    data-testid="artifact-send-selection-to-chat"
+                    disabled={!onSendSelectionToChat || !draftContent.trim()}
+                    onClick={handleSendSelectionToChat}
+                  >
+                    带选区到聊天框修改
+                  </button>
+                </>
+              ) : (
+                <div className="artifact-content-editor__idle">
+                  <span>支持完整内容编辑，也支持选中片段 / 行号范围后带着说明发起局部 Revision。</span>
+                  <span>当前 Artifact：{formatArtifactSize(selectedArtifact.content)}</span>
+                </div>
+              )}
+            </section>
             <div className="artifact-revision-box">
               <div className="artifact-revision-box__header">
                 <strong>产物二次修改</strong>
@@ -1059,6 +1340,7 @@ export function ArtifactPanel({
               artifact={selectedArtifact}
               deployments={deployments}
               deployingArtifact={deployingArtifact}
+              onDownloadBundle={() => onDownloadArtifactBundle(selectedArtifactId ? [selectedArtifactId] : [])}
               onCreateDeployment={() => {
                 void handleCreateDeployment();
               }}

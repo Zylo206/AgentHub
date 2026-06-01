@@ -7109,3 +7109,296 @@
 - 本轮只做视觉系统和布局收敛，不新增业务能力。
 - 不改变 AdapterRegistry、REAL_FIRST、Approval、Artifact mutation 或 Orchestrator 主链路。
 - Browser E2E 是 UI 回归门禁，不替代 API smoke、SSE smoke、JDBC/MySQL smoke 或真实 Adapter smoke。
+
+## Phase 171：Artifact 内容编辑与局部 Revision 体验
+
+### 目标
+
+- 将 ArtifactPanel 从“只能填写 Revision 指令”推进到“可编辑内容草稿、选中片段、生成 Draft Revision、再通过 Diff / Approval Gate 应用”的局部修改体验。
+- 不引入 Monaco / CodeMirror，不改变后端 Artifact mutation 主链路。
+
+### 主要变更
+
+- ArtifactPanel 新增内容编辑模式：
+  - textarea 展示当前 Artifact content。
+  - 本地修改不会直接覆盖当前 Artifact。
+  - 支持选中 textarea 中的代码片段并记录行号范围。
+  - 支持填写局部修改说明。
+- 新增 Draft Diff Preview：
+  - 展示本地草稿是否变化、增删行估算、首个变化行。
+  - 明确生成 Draft Revision 后仍需通过 Diff Summary 和 Approval Gate 应用。
+- 生成 Draft Revision 时，会把 Artifact 标题、版本、选区行号、选中片段、局部说明和编辑后草稿内容打包成 revision instruction，并复用现有 `onCreateRevision` 链路。
+- Browser E2E 的 Artifact revision 流改为优先使用内容编辑器生成 Draft Revision，再走 Apply Diff 审批。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮仍不是完整在线 IDE；没有引入 Monaco / CodeMirror。
+- 本地 textarea 编辑只生成 Revision，不直接覆盖 Artifact。
+- Apply / Force Apply 仍依赖现有后端 ApprovalRequest、Diff Summary、Snapshot 和 Audit 链路。
+
+## Phase 172：Artifact 选区同步到聊天框的局部修改闭环
+
+### 目标
+
+- 完成“选中代码片段 -> 聊天框自动带引用 -> 发送修改请求 -> 生成 Revision”的真实 IM-first 局部修改体验。
+- 让局部修改不再只停留在 ArtifactPanel 内部说明，而是进入聊天消息流并保留用户请求记录。
+
+### 主要变更
+
+- 新增 `ArtifactSelectionReference`，统一描述 Artifact ID、标题、版本、类型、语言、行号范围和选中片段。
+- ArtifactPanel 内容编辑模式新增“带选区到聊天框修改”：
+  - 捕获 textarea 选区和行号范围。
+  - 如果浏览器没有稳定触发选区事件，则退化为当前草稿全文行范围，避免按钮卡死。
+  - 将选区引用同步到 WorkspacePage。
+- ChatInput 新增 Artifact 局部修改引用卡：
+  - 展示 Artifact 标题、版本、行号范围、语言和片段摘要。
+  - 支持取消选区引用。
+- WorkspacePage 在发送带 Artifact 选区引用的聊天消息时：
+  - 先写入用户消息。
+  - 再基于用户修改请求、选中片段、行号范围和来源 messageId 生成 Draft Revision。
+  - 自动选中新的 revision Artifact，后续仍通过 Diff Summary 和 Approval Gate 应用。
+- Browser E2E 已切换到该主路径：选区同步到 ChatInput -> 发送修改请求 -> Revision -> Apply Diff 审批。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/e2e-browser.mjs`
+- 隔离端口启动 backend / frontend 后运行 `node scripts/e2e-browser.mjs`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，并覆盖：
+  - Artifact 内容编辑器。
+  - Draft Diff Preview。
+  - Artifact 选区引用同步到 ChatInput。
+  - 聊天消息触发 Draft Revision。
+  - Apply Diff Approval Gate。
+  - Deploy / Restore / Preview 主链路。
+
+### 静态 / Mock / Placeholder 边界
+
+- 本轮仍不是 Monaco / CodeMirror 在线 IDE。
+- 选区引用由 AgentHub 管理，不依赖外部 CLI 原生编辑 session。
+- Revision 生成后仍必须通过现有 Diff / Approval / Snapshot / Audit 链路应用。
+
+## Phase 173：聊天触发部署与 Artifact Bundle 下载
+
+### 目标
+
+- 将部署发布从 ArtifactPanel 手动入口推进到 IM 主路径：发送部署消息 -> 确认 -> 审批 -> 生成本地静态 Preview URL。
+- 补齐“源码打包下载”的 MVP：下载 AgentHub Artifact 内容 zip，不读取真实工作区源码目录。
+
+### 主要变更
+
+- Backend 新增 Artifact Bundle zip 服务和接口：
+  - `GET /api/conversations/{conversationId}/artifact-bundle/download?artifactIds=&includeRelated=`
+  - 返回 `application/zip` 和 `X-AgentHub-Artifact-Count`。
+  - `includeRelated=true` 时包含同 TaskRun 和 revision lineage 的相关 Artifact。
+- Workspace 新增部署意图识别：
+  - 识别“部署 / 发布 / 生成预览 / preview url / open preview”。
+  - MessageStream 渲染 Deploy 确认卡。
+  - 确认后创建 `DEMO_DEPLOY / ARTIFACT` ApprovalRequest。
+  - 审批后调用现有 `demo-deploy` API，继续生成 DeploymentRecord、DEPLOY_STATUS、Snapshot、Audit 和 Preview URL。
+- Artifact Deploy Panel 和 Deploy 确认卡增加“下载源码包”入口。
+- Smoke / E2E 脚本同步：
+  - API smoke 验证部署意图消息持久化和 Artifact Bundle zip 下载。
+  - Browser E2E 的 deploy 路径改为从聊天部署确认卡触发。
+- 新增 `docs/spec/deployment-publish-spec.md` 并同步 spec index、next plan、scripts README。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/smoke-test.mjs`
+- `node --check scripts/e2e-browser.mjs`
+
+### 静态 / Mock / Placeholder 边界
+
+- Deploy 仍是本地静态 Preview，不是真实 Vercel / Netlify / Docker / Kubernetes 部署。
+- Artifact Bundle 是 Artifact 内容包，不是完整项目源码包，不包含依赖目录、构建产物或容器配置。
+- Deploy 仍必须走后端 ApprovalRequest；本轮没有绕过审批。
+
+## Phase 174：Web 主端响应式收敛与 ChatInput 中文修复
+
+### 目标
+
+- 将 Web 端继续固定为 AgentHub 的主力端，确保 `/workspace` 在 1536px、1366px 和平板宽度下仍可完成 IM-first 主链路。
+- 修复 ChatInput 主路径上可见中文乱码，降低演示时的可信度风险。
+
+### 主要变更
+
+- ChatInput 路由预览、引用、Artifact 选区引用、附件、输入框和发送提示文案改为正常中文。
+- Workspace CSS 追加 Web 主端响应式硬化层：
+  - 桌面保持三栏：会话 / 消息流 / Artifact Inspector。
+  - 1366px 下压缩侧栏与 Inspector，ArtifactPanel 自动改为单列详情。
+  - 平板宽度下改为两列加 Inspector 跨列，窄屏下退化为单列。
+  - 对消息流、Artifact 编辑器、Preview 代码块补充 `min-width: 0` 和断行保护，避免横向溢出。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Playwright 响应式只读检查：1536px、1366px、1024px
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖 Agent Builder、聊天内创建 Agent、消息触发协作、Artifact Revision、Apply Diff、Deploy、Restore、Preview 和 REJECTION recovery。
+- 响应式检查通过：
+  - 1536px：横向溢出 0px。
+  - 1366px：横向溢出 0px。
+  - 1024px：横向溢出 0px。
+
+### 边界
+
+- 本轮不做独立桌面端或移动端。
+- 平板 / 窄屏是 Web 响应式支持，不是完整移动 App。
+
+## Phase 175：可选 Tauri 桌面壳能力骨架
+
+### 目标
+
+- 直接推进桌面端规划中的三类核心能力：本地文件访问、系统通知、Agent 进程管理。
+- 保持 Web 端仍是主力端，桌面端作为可选 Tauri 壳，不影响默认 smoke / E2E。
+
+### 主要变更
+
+- 新增 `desktop/` Tauri v2 scaffold：
+  - `package.json`
+  - `src-tauri/Cargo.toml`
+  - `src-tauri/tauri.conf.json`
+  - `src-tauri/capabilities/default.json`
+  - Rust commands for desktop environment, directory listing, text preview, CLI probing, notification, backend process start/stop, and managed process listing.
+- 新增前端 desktop bridge：
+  - `frontend/src/features/desktop/desktopBridge.ts`
+  - `frontend/src/features/desktop/DesktopCapabilityPanel.tsx`
+  - 普通浏览器下安全降级，Tauri 环境下通过 invoke 调用本地能力。
+- Workspace 增加桌面能力面板：
+  - 本地目录 / 文件预览。
+  - Claude Code / Codex CLI 探测。
+  - 系统通知测试。
+  - 本地 backend Java 进程启动 / 停止。
+- 新增 `docs/spec/desktop-support-spec.md`，并同步 spec index 与 next plan。
+- `.gitignore` 增加 Tauri / desktop 构建产物忽略规则。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+
+### 验证结果
+
+- 前端构建通过，普通 Web 运行不依赖 Tauri。
+- Rust / Cargo / MSVC Build Tools / WebView2 环境已补齐并通过 Tauri 环境诊断的关键项。
+- `cargo check` 通过。
+- `npm run dev` 已启动 Tauri 桌面壳并生成 `agenthub-desktop.exe` 运行进程；验证后已停止相关进程。
+- `npm run build` 已完成 frontend build 和 Rust release 编译，生成 `desktop/src-tauri/target/release/agenthub-desktop.exe`；MSI bundle 阶段因 WiX 下载被网络/权限拦截失败。
+- `npm run build -- --no-bundle` 通过，可稳定生成桌面端 release exe。
+
+### 边界
+
+- 本轮是可选桌面壳骨架，不是完整桌面生产发行包。
+- 未默认启用 workspace-write，不允许外部 Agent 直接修改 AgentHub 仓库。
+- 进程管理只管理由 Tauri shell 启动的进程，不接管系统中已有服务。
+- Tauri 原生构建需要本机安装依赖后单独验证，不能等同于 Web build。
+
+## Phase 176：Desktop Console UI 产品化
+
+### 目标
+
+- 将桌面端从“技术按钮面板”升级为可演示的本地能力中心。
+- 覆盖本地文件访问、系统通知、Agent CLI 状态和 backend 进程管理四个桌面端核心能力。
+
+### 主要变更
+
+- 重写 `DesktopCapabilityPanel` 为 `Desktop Console` 结构：
+  - 顶部环境状态和关键指标。
+  - 四个能力页签：本地文件、通知中心、Agent 进程、Backend 管理。
+  - Web 模式下清晰提示 Tauri 能力不可用，不影响 Web 主路径。
+- 本地文件访问 UI 产品化：
+  - 目录读取、文件列表、文本预览。
+  - 文件类型、大小、截断状态显示。
+  - “标记为上下文候选”的本地候选列表。
+  - 图片 / PPT / 未知二进制文件显示 metadata / preview shell，不再按文本强行读取。
+- 系统通知 UI 产品化：
+  - 通知规则说明。
+  - 测试通知。
+  - 最近通知日志。
+- Agent / Backend 管理 UI 产品化：
+  - Claude Code / Codex / OpenCode CLI 探测卡片。
+  - 本地 backend jar 启动表单。
+  - Tauri 托管进程列表和停止操作。
+- Workspace CSS 增加 Desktop Console 视觉系统，保持暗色 IM 协作控制台风格。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `cd desktop/src-tauri && cargo check`
+
+### 验证结果
+
+- 前端构建通过。
+- Tauri Rust 侧 `cargo check` 通过。
+
+### 边界
+
+- 本轮只优化桌面端 UI，不新增 Tauri 原生权限范围。
+- “上下文候选”当前是桌面面板内的本地状态，后续可接入 Attachment / Context Retrieval。
+- Tauri 原生构建仍需 Rust / Cargo 环境后单独验证。
+
+## Phase 177：Desktop Console 系统通知与 Agent 进程闭环
+
+### 目标
+
+- 将桌面端系统通知从手动测试按钮推进到真实业务事件触发。
+- 将 Agent 进程管理从“command 可用”推进到 runtime cards 和 backend 日志摘要。
+
+### 主要变更
+
+- Workspace SSE / Realtime 事件接入 Tauri 系统通知：
+  - TaskRun completed / blocked / failed。
+  - Approval pending。
+  - Deployment created。
+  - Adapter fallback / quality failure。
+- Desktop Console 通知中心新增 realtime 通知历史，保留 Web 安全降级。
+- `desktopBridge.ts` 新增 `notifyDesktopRealtimeEvent`：
+  - 普通 Web 模式直接 no-op。
+  - Tauri 模式发送系统通知并派发 `agenthub:desktop-notification` 事件。
+- Tauri CLI probe 增强：
+  - executable path。
+  - version。
+  - help probe。
+  - auth probe status。
+  - stream support。
+  - schema support。
+  - sandbox policy。
+  - tool policy。
+- Backend 管理增强：
+  - 启动 backend 时采集 stdout / stderr。
+  - 记录临时 log path。
+  - Desktop Console 显示 pid、startedAt、running、log path、最近输出摘要。
+- `.cmd` / `.bat` 命令通过 Windows `cmd /C` 执行，避免 Tauri/Rust 直接执行 npm shim 失败。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `cd desktop/src-tauri && cargo check`
+- `cd desktop && npm run build -- --no-bundle`
+
+### 验证结果
+
+- 前端构建通过。
+- Tauri Rust 侧 `cargo check` 通过。
+- Tauri `--no-bundle` release build 通过，生成 `agenthub-desktop.exe`。
+
+### 边界
+
+- 系统通知是桌面增强，不是任务状态的唯一来源；REST / SSE 仍是权威状态。
+- auth probe 仍是非侵入式状态，不执行真实模型任务。
+- backend 进程管理只管理由 Tauri shell 启动的进程。
+- MSI installer bundling 仍受 WiX 下载可用性影响。

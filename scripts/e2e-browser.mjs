@@ -788,12 +788,35 @@ async function createRevisionAndApplyDiff(page, conversationId) {
   const beforeArtifacts = await request(`/api/conversations/${conversationId}/artifacts`);
   const beforeIds = new Set(beforeArtifacts.map((artifact) => getIdValue(artifact.id)));
 
-  await page.locator(".artifact-revision-box__input").fill(REVISION_INSTRUCTION);
-  const revisionButton = await waitForLocatorEnabled(
-    page.locator(".artifact-revision-box .artifact-revision-box__button").first(),
-    "artifact revision button"
+  const editToggle = await waitForLocatorEnabled(
+    page.getByTestId("artifact-content-edit-toggle"),
+    "artifact content edit toggle"
   );
-  await revisionButton.click();
+  await editToggle.click();
+  const editor = page.getByTestId("artifact-content-editor-textarea");
+  await editor.waitFor({ state: "visible", timeout: 10000 });
+  const originalContent = await editor.inputValue();
+  const localEditLine = `// ${TEST_MARKER}: local draft revision from selected artifact content editor`;
+  const editedContent = `${originalContent}\n${localEditLine}`;
+  await editor.fill(editedContent);
+  await editor.evaluate((element, marker) => {
+    const textarea = element;
+    const start = textarea.value.indexOf(marker);
+    const end = start + marker.length;
+    textarea.focus();
+    textarea.setSelectionRange(start, end);
+    textarea.dispatchEvent(new Event("select", { bubbles: true }));
+  }, localEditLine);
+  await page.getByTestId("artifact-local-revision-note").fill(REVISION_INSTRUCTION);
+  await waitForVisible(page, "[data-testid='artifact-draft-diff-preview']", "artifact draft diff preview");
+  const sendSelectionButton = await waitForLocatorEnabled(
+    page.getByTestId("artifact-send-selection-to-chat"),
+    "artifact selection to chat button"
+  );
+  await sendSelectionButton.click();
+  await waitForVisible(page, "[data-testid='chat-artifact-selection-preview']", "artifact selection chat preview");
+  await page.getByTestId("chat-input-textarea").fill(`${REVISION_INSTRUCTION} Keep this as a scoped chat-driven local revision.`);
+  await page.getByTestId("chat-send-button").click();
 
   const artifactsAfterRevision = await waitForArtifacts(conversationId, beforeIds, "artifact revision output");
   const revisionArtifact = artifactsAfterRevision.find((artifact) =>
@@ -824,12 +847,19 @@ async function createRevisionAndApplyDiff(page, conversationId) {
 }
 
 async function deploySelectedArtifact(page) {
-  const deployButton = await waitForLocatorEnabled(
-    page.locator(".deploy-status-box .artifact-revision-box__button").first(),
-    "Deploy Selected Artifact button"
+  await page.getByTestId("chat-input-textarea").fill("请部署当前产物并生成预览 URL。");
+  await page.getByTestId("chat-send-button").click();
+  await waitForVisible(page, "[data-testid='message-deploy-intent']", "message deploy confirmation card");
+  const startDeployButton = await waitForLocatorEnabled(
+    page.getByTestId("message-start-deploy").last(),
+    "message deploy confirmation button"
   );
-  await deployButton.click();
-  await approveCurrentGate(page, "deploy");
+  await startDeployButton.click();
+  const approveDeployButton = await waitForLocatorEnabled(
+    page.getByTestId("message-approve-deploy").last(),
+    "message deploy approval button"
+  );
+  await approveDeployButton.click();
   await waitForVisible(page, "[data-testid='deploy-status-card']", "deploy status card");
 
   const previewHref = await page.locator(".deploy-preview-link").last().getAttribute("href");

@@ -1,7 +1,7 @@
 import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { Artifact } from "../artifacts/artifactTypes";
 import type { AgentCreationDraft } from "../agents/conversationalAgentDraft";
-import type { LightweightAttachment, Message, OrchestratorTriggerSuggestion } from "./chatTypes";
+import type { DeployIntentDraft, LightweightAttachment, Message, OrchestratorTriggerSuggestion } from "./chatTypes";
 import { getAttachmentDownloadUrl } from "../../api/agenthubApi";
 import { formatId, getIdValue } from "../../utils/id";
 
@@ -21,6 +21,9 @@ interface MessageBubbleProps {
   autoTriggerRunning?: boolean;
   agentCreationDraft?: AgentCreationDraft | null;
   agentCreationRunning?: boolean;
+  deployIntent?: DeployIntentDraft | null;
+  deployIntentArtifact?: Artifact | null;
+  deployIntentRunning?: boolean;
   replyMessages?: Message[];
   threadExpanded?: boolean;
   highlighted?: boolean;
@@ -37,6 +40,10 @@ interface MessageBubbleProps {
   onRefreshOrchestratorSuggestion: (message: Message) => void;
   onConfirmAgentCreation: (messageId: string) => void;
   onCancelAgentCreation: (messageId: string) => void;
+  onStartDeployIntent: (message: Message, artifactId?: string | null) => void;
+  onApproveDeployIntent: (messageId: string) => void;
+  onCancelDeployIntent: (messageId: string) => void;
+  onDownloadArtifactBundle: (artifactIds?: string[]) => void;
   onToggleThread: () => void;
   onJumpToMessage: (messageId: string) => void;
 }
@@ -333,6 +340,18 @@ function getQualityLabel(artifact: Artifact): string {
   return artifact.realAdapterOutcome || artifact.qualityStatus || artifact.status || "UNKNOWN";
 }
 
+function getDeployIntentStatusLabel(status: DeployIntentDraft["status"]): string {
+  const labels: Record<DeployIntentDraft["status"], string> = {
+    PENDING: "等待确认",
+    APPROVAL_REQUIRED: "等待审批",
+    DEPLOYING: "正在生成预览",
+    COMPLETED: "已生成预览",
+    CANCELLED: "已取消",
+    FAILED: "失败"
+  };
+  return labels[status] || status;
+}
+
 export function MessageBubble({
   message,
   senderLabel,
@@ -349,6 +368,9 @@ export function MessageBubble({
   autoTriggerRunning,
   agentCreationDraft,
   agentCreationRunning,
+  deployIntent,
+  deployIntentArtifact,
+  deployIntentRunning,
   replyMessages = [],
   threadExpanded = false,
   highlighted = false,
@@ -365,6 +387,10 @@ export function MessageBubble({
   onRefreshOrchestratorSuggestion,
   onConfirmAgentCreation,
   onCancelAgentCreation,
+  onStartDeployIntent,
+  onApproveDeployIntent,
+  onCancelDeployIntent,
+  onDownloadArtifactBundle,
   onToggleThread,
   onJumpToMessage
 }: MessageBubbleProps) {
@@ -648,6 +674,83 @@ export function MessageBubble({
                 className="message-action-button"
                 disabled={agentCreationRunning}
                 onClick={() => onCancelAgentCreation(getIdValue(message.id))}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {deployIntent ? (
+          <div className={`message-deploy-intent message-deploy-intent--${deployIntent.status.toLowerCase()}`} data-testid="message-deploy-intent">
+            <div className="message-deploy-intent__header">
+              <div>
+                <strong>建议生成本地静态预览</strong>
+                <p>已识别部署 / 发布意图。确认后会走 Approval Gate，并调用现有静态 Preview 部署链路。</p>
+              </div>
+              <span>{getDeployIntentStatusLabel(deployIntent.status)}</span>
+            </div>
+            <div className="message-deploy-intent__grid">
+              <div>
+                <span>目标产物</span>
+                <strong>{deployIntentArtifact?.title || deployIntent.artifactId || "暂无可部署产物"}</strong>
+              </div>
+              <div>
+                <span>来源 / 质量</span>
+                <strong>
+                  {deployIntentArtifact
+                    ? `${getSourceLabel(deployIntentArtifact.sourceKind)} / ${getQualityLabel(deployIntentArtifact)}`
+                    : "等待 Artifact"}
+                </strong>
+              </div>
+              <div>
+                <span>部署目标</span>
+                <strong>STATIC_PREVIEW</strong>
+              </div>
+              <div>
+                <span>边界</span>
+                <strong>本地静态预览，不是真实云部署</strong>
+              </div>
+            </div>
+            {deployIntent.errorMessage ? <p className="message-deploy-intent__error">{deployIntent.errorMessage}</p> : null}
+            <div className="message-auto-trigger__actions">
+              {deployIntent.status === "PENDING" ? (
+                <button
+                  type="button"
+                  className="message-action-button message-action-button--primary"
+                  data-testid="message-start-deploy"
+                  disabled={deployIntentRunning || !deployIntentArtifact}
+                  onClick={() => onStartDeployIntent(message, deployIntentArtifact ? getIdValue(deployIntentArtifact.id) : deployIntent.artifactId)}
+                >
+                  {deployIntentRunning ? "创建审批中..." : "确认生成预览 URL"}
+                </button>
+              ) : null}
+              {deployIntent.status === "APPROVAL_REQUIRED" ? (
+                <button
+                  type="button"
+                  className="message-action-button message-action-button--primary"
+                  data-testid="message-approve-deploy"
+                  disabled={deployIntentRunning}
+                  onClick={() => onApproveDeployIntent(getIdValue(message.id))}
+                >
+                  {deployIntentRunning ? "部署中..." : "审批并生成预览"}
+                </button>
+              ) : null}
+              {deployIntentArtifact ? (
+                <button
+                  type="button"
+                  className="message-action-button"
+                  data-testid="message-download-bundle"
+                  onClick={() => onDownloadArtifactBundle([getIdValue(deployIntentArtifact.id)])}
+                >
+                  下载源码包
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="message-action-button"
+                disabled={deployIntentRunning || deployIntent.status === "COMPLETED"}
+                onClick={() => onCancelDeployIntent(getIdValue(message.id))}
               >
                 取消
               </button>

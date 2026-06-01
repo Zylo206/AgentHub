@@ -116,6 +116,22 @@ async function request(path, init = {}) {
   return payload.data;
 }
 
+async function requestBinary(path) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`);
+  } catch (error) {
+    throw new Error(`Cannot reach backend at ${API_BASE}. Start backend first. ${error.message}`);
+  }
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`HTTP ${response.status} from ${path}: ${text.slice(0, 160)}`);
+  }
+  const contentType = response.headers.get("content-type") || "";
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return { contentType, bytes, headers: response.headers };
+}
+
 async function uploadSmokeAttachment(conversationId) {
   const content = "Smoke attachment: preserve verification-code login, blue CTA, and review notes.";
   const formData = new FormData();
@@ -1318,6 +1334,30 @@ async function runSmokeTest() {
   }
   const deploymentPreviewUrl = requireValue(deployment.previewUrl, "deployment previewUrl missing");
   pass(`deployment created: ${deploymentId}`);
+
+  const deployIntentMessage = await request(`/api/conversations/${conversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      content: "请部署当前产物并生成预览 URL。"
+    })
+  });
+  requireValue(getIdValue(deployIntentMessage.id), "deploy intent messageId missing");
+  pass("deploy intent message persisted for chat-driven deploy path");
+
+  const artifactBundle = await requestBinary(
+    `/api/conversations/${conversationId}/artifact-bundle/download?artifactIds=${encodeURIComponent(appliedArtifactId)}&includeRelated=true`
+  );
+  if (!artifactBundle.contentType.includes("application/zip")) {
+    throw new Error(`artifact bundle content-type expected application/zip, got ${artifactBundle.contentType}`);
+  }
+  if (artifactBundle.bytes.length < 32) {
+    throw new Error(`artifact bundle expected non-empty zip, got ${artifactBundle.bytes.length} bytes`);
+  }
+  const artifactCount = Number(artifactBundle.headers.get("x-agenthub-artifact-count") || "0");
+  if (!Number.isFinite(artifactCount) || artifactCount < 1) {
+    throw new Error("artifact bundle response missing X-AgentHub-Artifact-Count header");
+  }
+  pass(`artifact bundle downloaded: ${artifactBundle.bytes.length} bytes / ${artifactCount} artifacts`);
 
   const snapshotsAfterDeploy = await request(`/api/conversations/${conversationId}/artifact-snapshots`);
   if (!snapshotsAfterDeploy.some((snapshot) => snapshot.operationType === "DEMO_DEPLOY")) {

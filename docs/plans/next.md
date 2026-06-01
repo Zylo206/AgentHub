@@ -4,7 +4,7 @@ This is the default handoff entry for AgentHub. Every Agent should read this fil
 
 ## Current Stage
 
-AgentHub is in late MVP enhancement. The next stage is to keep moving from half-real / static fallback toward real dynamic capability. Demo video, desktop/mobile, real deployment platforms, and multi-node event bus are not current priorities. Full multi-provider token streaming is not current priority; `OPENAI_COMPATIBLE` streaming HTTP v1 is now implemented as an opt-in execution-experience enhancement.
+AgentHub is in late MVP enhancement. The next stage is to keep moving from half-real / static fallback toward real dynamic capability. Demo video, mobile, real deployment platforms, and multi-node event bus are not current priorities. Desktop support is now an optional Tauri shell track for local file access, system notifications, and Agent process management; it must not replace the Web main client or become a default runtime dependency. Full multi-provider token streaming is not current priority; `OPENAI_COMPATIBLE` streaming HTTP v1 is now implemented as an opt-in execution-experience enhancement.
 
 ## Current Top Priorities
 
@@ -223,12 +223,41 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Diff Summary now includes an apply-time trust check that explains approval, conflict, line impact, and snapshot/restore safety before users apply or force-apply a patch.
    - `Done`: ArtifactPanel now surfaces the same trust model in the main delivery workbench before users reach Apply Diff, Restore, or Deploy controls.
    - `Done`: ArtifactPanel has started component decomposition with `ArtifactDeliveryWorkbench`, `ArtifactDeployPanel`, and `ArtifactSnapshotTimeline`; approval and mutation handlers remain in the parent panel.
+   - `Done`: ArtifactPanel now supports a content edit mode with textarea draft editing, selected line/snippet capture, local modification notes, draft diff preview, and Draft Revision generation that still requires Diff Summary plus Approval Gate before apply.
+   - `Done`: Browser E2E now exercises the Artifact content editor path before creating a revision and applying diff.
+   - `Done`: Artifact code selection can now be sent into ChatInput as an Artifact-local modification reference; sending the chat request writes the user message and creates a Draft Revision from the selected line range / snippet context.
+   - `Done`: Browser E2E now verifies the end-to-end path: select Artifact snippet -> show ChatInput reference -> send modification request -> create Revision -> Apply Diff through Approval Gate.
+   - `Done`: Deploy publishing is now available from the IM path: deployment-intent messages render a Deploy confirmation card, create a backend `DEMO_DEPLOY` ApprovalRequest, and then generate the existing local static Preview URL and `DEPLOY_STATUS` message after approval.
+   - `Done`: Artifact Bundle download now has a backend zip endpoint and UI entry points from the Deploy panel / Deploy intent card, packaging AgentHub Artifact content instead of workspace source files.
+   - `Done`: Web main client has been rechecked as the primary delivery surface: ChatInput main-path Chinese copy is normalized, `/workspace` has responsive hardening for 1536px, 1366px, and tablet widths, and Browser E2E still covers the IM-first collaboration -> Artifact -> Approval -> Preview path.
    - `Boundary`: line diff remains lightweight and conflict handling is explicit user approval, not automated semantic merge.
+   - `Boundary`: deployment remains local static Preview; no Vercel / Netlify / Docker / Kubernetes deployment is performed.
+
+13. **Add optional Tauri desktop support**
+   - `Done`: `docs/spec/desktop-support-spec.md` defines the desktop support contract, including local file access, system notifications, Agent CLI process management, and boundaries.
+   - `Done`: a Tauri v2 scaffold now exists under `desktop/` with Rust commands for environment detection, directory listing, text preview, CLI probe, notification, backend process start/stop, and managed process listing.
+   - `Done`: Workspace includes a Desktop Capability Panel that degrades safely in the browser and exposes local desktop capabilities when running inside Tauri.
+   - `Done`: Desktop Capability Panel has been redesigned into a Desktop Console UI with four productized zones: local files, notification center, Agent CLI processes, and backend management.
+   - `Done`: Desktop Console now has local context candidates, notification log, CLI availability cards, managed process cards, and command-center styling aligned with the Workspace visual system.
+   - `Done`: Rust / Cargo / MSVC Build Tools / WebView2 have been validated for local Tauri development.
+   - `Done`: `cargo check` passes for `desktop/src-tauri`.
+   - `Done`: `npm run dev` launches the Tauri desktop shell; verification confirmed an `agenthub-desktop.exe` process and then cleaned it up.
+   - `Done`: `npm run build` compiles the frontend and Rust release executable; MSI bundling is blocked only by WiX download access.
+   - `Done`: `npm run build -- --no-bundle` passes and generates the desktop release executable without requiring WiX.
+   - `Done`: local file preview now treats image / PPT / unknown binary files as metadata preview shells instead of forcing text reads.
+   - `Done`: Tauri Desktop Console now turns selected realtime events into system notifications: task completed / blocked / failed, approval pending, deploy completed, and adapter fallback / failure.
+   - `Done`: Desktop notification center records realtime notification history in the console while keeping SSE / REST as the authoritative state.
+   - `Done`: Agent CLI runtime cards now show executable path, version, help probe, auth probe status, stream support, schema support, sandbox policy, and tool policy.
+   - `Done`: backend process management now captures recent stdout / stderr lines, exposes a temp log path, and shows PID / startedAt / running status in the Desktop Console.
+   - `Boundary`: desktop support is optional; normal Web build, smoke, and Browser E2E must not require Tauri, native packaging, or desktop permissions.
+   - `Boundary`: desktop process management only controls processes started through the Tauri shell and does not replace OS service management.
+   - `Boundary`: full installer bundling still needs WiX download access or a preinstalled WiX toolset.
 
 ## Not Now
 
 - No Demo video.
-- No desktop or mobile client.
+- No mobile client.
+- No desktop distribution package or default desktop runtime requirement.
 - No real Vercel / Netlify / Docker / Kubernetes deployment.
 - No multi-node event bus.
 - No full multi-provider token streaming or token-level persistence.

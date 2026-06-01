@@ -25,3 +25,14 @@ export interface Artifact {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ArtifactSelectionReference {
+  artifactId: string;
+  artifactTitle: string;
+  artifactVersion: number;
+  artifactType: string;
+  language: string;
+  startLine: number;
+  endLine: number;
+  selectedText: string;
+}

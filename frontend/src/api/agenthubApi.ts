@@ -472,6 +472,19 @@ export function getArtifact(artifactId: string): Promise<Artifact> {
   return request<Artifact>(`/api/artifacts/${artifactId}`);
 }
 
+export function getArtifactBundleDownloadUrl(
+  conversationId: string,
+  artifactIds: string[] = [],
+  includeRelated = true
+): string {
+  const params = new URLSearchParams();
+  if (artifactIds.length > 0) {
+    params.set("artifactIds", artifactIds.join(","));
+  }
+  params.set("includeRelated", includeRelated ? "true" : "false");
+  return `${API_BASE}/api/conversations/${conversationId}/artifact-bundle/download?${params.toString()}`;
+}
+
 export function getArtifactSnapshotsByConversation(conversationId: string): Promise<ArtifactSnapshot[]> {
   return request<ArtifactSnapshot[]>(`/api/conversations/${conversationId}/artifact-snapshots`);
 }

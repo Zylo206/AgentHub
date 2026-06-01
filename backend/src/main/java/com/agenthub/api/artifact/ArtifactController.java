@@ -2,6 +2,7 @@ package com.agenthub.api.artifact;
 
 import com.agenthub.application.approval.ApprovalApplicationService;
 import com.agenthub.application.artifact.ArtifactApplicationService;
+import com.agenthub.application.artifact.ArtifactBundleService;
 import com.agenthub.application.task.TaskApplicationService;
 import com.agenthub.common.ApiResponse;
 import com.agenthub.domain.artifact.Artifact;
@@ -9,9 +10,15 @@ import com.agenthub.domain.artifact.ArtifactSnapshot;
 import com.agenthub.domain.task.TaskRun;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.Arrays;
+import java.util.List;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,14 +27,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class ArtifactController {
 
     private final ArtifactApplicationService artifactApplicationService;
+    private final ArtifactBundleService artifactBundleService;
     private final TaskApplicationService taskApplicationService;
     private final ApprovalApplicationService approvalApplicationService;
 
     public ArtifactController(
             ArtifactApplicationService artifactApplicationService,
+            ArtifactBundleService artifactBundleService,
             TaskApplicationService taskApplicationService,
             ApprovalApplicationService approvalApplicationService) {
         this.artifactApplicationService = artifactApplicationService;
+        this.artifactBundleService = artifactBundleService;
         this.taskApplicationService = taskApplicationService;
         this.approvalApplicationService = approvalApplicationService;
     }
@@ -45,6 +55,29 @@ public class ArtifactController {
     @GetMapping("/api/artifacts/{artifactId}")
     public ApiResponse<?> getArtifact(@PathVariable("artifactId") String artifactId) {
         return ApiResponse.success(artifactApplicationService.getArtifact(artifactId));
+    }
+
+    @GetMapping("/api/conversations/{conversationId}/artifact-bundle/download")
+    public ResponseEntity<byte[]> downloadArtifactBundle(
+            @PathVariable("conversationId") String conversationId,
+            @RequestParam(value = "artifactIds", required = false) String artifactIds,
+            @RequestParam(value = "includeRelated", defaultValue = "true") boolean includeRelated) {
+        List<String> selectedArtifactIds = artifactIds == null || artifactIds.isBlank()
+                ? List.of()
+                : Arrays.stream(artifactIds.split(","))
+                        .map(String::trim)
+                        .filter(value -> !value.isBlank())
+                        .distinct()
+                        .toList();
+        ArtifactBundleService.ArtifactBundle bundle = artifactBundleService.buildConversationBundle(
+                conversationId,
+                selectedArtifactIds,
+                includeRelated);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + bundle.fileName() + "\"")
+                .header("X-AgentHub-Artifact-Count", String.valueOf(bundle.artifactCount()))
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(bundle.content());
     }
 
     @GetMapping("/api/artifacts/{artifactId}/snapshots")

@@ -165,6 +165,14 @@ export interface OrchestratorTriggerSuggestion {
   taskRun?: TaskRun | null;
 }
 
+export interface DeployIntentDraft {
+  messageId: string;
+  status: "PENDING" | "APPROVAL_REQUIRED" | "DEPLOYING" | "COMPLETED" | "CANCELLED" | "FAILED";
+  artifactId?: string | null;
+  approvalId?: string | null;
+  errorMessage?: string | null;
+}
+
 export interface WorkspaceSnapshot {
   messages: Message[];
   taskSpecs: TaskSpec[];
