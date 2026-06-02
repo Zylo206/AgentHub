@@ -87,14 +87,17 @@ import type { MemoryItem } from "../../features/memory/memoryTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
+import { WorkspaceDiagnosticsDrawer } from "./WorkspaceDiagnosticsDrawer";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import "../../styles/workspace.css";
 import "../../styles/workspace/tokens.css";
+import "../../styles/workspace/components.css";
 import "../../styles/workspace/shell.css";
 import "../../styles/workspace/message.css";
 import "../../styles/workspace/inspector.css";
 import "../../styles/workspace/diagnostics.css";
+import "../../styles/workspace/layout-guard.css";
 
 const TASK_STEP_STREAM_CHUNK_EVENT_TYPES = ["TASK_STEP_STREAM_CHUNK", "ADAPTER_STREAM_CHUNK"] as const;
 const STREAMING_PREVIEW_MAX_LENGTH = 1200;
@@ -449,6 +452,54 @@ export function WorkspacePage() {
     () => artifactSnapshots.filter((snapshot) => getIdValue(snapshot.artifactId) === selectedArtifactId),
     [artifactSnapshots, selectedArtifactId]
   );
+  const diagnosticSections = {
+    taskrun: (
+      <TaskRunPanel
+        agents={agents}
+        artifacts={artifacts}
+        taskSpecs={taskSpecs}
+        taskRuns={taskRuns}
+        loading={loadingTaskRuns}
+        selectedTaskRunId={selectedTaskRunId}
+        selectedTaskStepId={selectedTaskStepId}
+        streamingPreviewsByStepId={streamingPreviewsByStepId}
+        onSelectStep={handleSelectTaskStep}
+        onCancelTaskRun={handleCancelTaskRun}
+        onStopTaskRun={handleStopTaskRun}
+      />
+    ),
+    context: (
+      <ContextPanel
+        taskSpec={activeTaskSpec}
+        taskRuns={taskRuns}
+        pinnedContexts={pinnedContexts}
+        memories={memories}
+        contextSnapshots={contextSnapshots}
+        handoffSummaries={handoffSummaries}
+        loading={loadingContext}
+      />
+    ),
+    adapter: (
+      <>
+        <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
+        <AdapterQualityDashboard
+          adapterDescriptors={adapterDescriptors}
+          taskRuns={taskRuns}
+          qualityMetrics={adapterQualityMetrics}
+        />
+      </>
+    ),
+    audit: <ActionAuditTimelinePanel audits={actionAudits} />,
+    local: (
+      <DesktopCapabilityPanel
+        conversationId={currentConversationId}
+        onUseLocalFileAsAttachment={handleUseDesktopLocalFileAsAttachment}
+        onPinAttachmentAsContext={handlePinDesktopAttachmentAsContext}
+        onSaveAttachmentAsMemory={handleSaveDesktopAttachmentAsMemory}
+        onNavigateToDesktopNotificationTarget={handleNavigateToDesktopNotificationTarget}
+      />
+    )
+  };
   const approvalByMessageId = useMemo(() => {
     const byMessageId: Record<string, ApprovalRequest | null> = {};
     approvalRequests.forEach((approvalRequest) => {
@@ -2120,85 +2171,12 @@ export function WorkspacePage() {
             />
           </section>
 
-          <section
-            className={`workspace-diagnostics ${activeDiagnosticPanel ? "workspace-diagnostics--expanded" : "workspace-diagnostics--collapsed"}`}
-            data-testid="workspace-diagnostics"
-            aria-label="Workspace diagnostics drawer"
-          >
-            <div className="workspace-diagnostics__tabs" aria-label="Diagnostic tabs">
-              {DIAGNOSTIC_PANELS.map((panel) => (
-                <button
-                  key={panel.key}
-                  type="button"
-                  className={`workspace-diagnostics__tab ${activeDiagnosticPanel === panel.key ? "workspace-diagnostics__tab--active" : ""}`}
-                  data-testid={`workspace-diagnostics-tab-${panel.key}`}
-                  aria-expanded={activeDiagnosticPanel === panel.key}
-                  onClick={() => setActiveDiagnosticPanel((current) => (current === panel.key ? null : panel.key))}
-                >
-                  <strong>{panel.label}</strong>
-                  <span>{panel.summary}</span>
-                </button>
-              ))}
-            </div>
-            <div className="workspace-diagnostics__sections">
-              <div
-                className={`workspace-diagnostics__section workspace-diagnostics__section--taskrun ${activeDiagnosticPanel === "taskrun" ? "workspace-diagnostics__section--active" : ""}`}
-              >
-                <TaskRunPanel
-                  agents={agents}
-                  artifacts={artifacts}
-                  taskSpecs={taskSpecs}
-                  taskRuns={taskRuns}
-                  loading={loadingTaskRuns}
-                  selectedTaskRunId={selectedTaskRunId}
-                  selectedTaskStepId={selectedTaskStepId}
-                  streamingPreviewsByStepId={streamingPreviewsByStepId}
-                  onSelectStep={handleSelectTaskStep}
-                  onCancelTaskRun={handleCancelTaskRun}
-                  onStopTaskRun={handleStopTaskRun}
-                />
-              </div>
-              <div
-                className={`workspace-diagnostics__section workspace-diagnostics__section--context ${activeDiagnosticPanel === "context" ? "workspace-diagnostics__section--active" : ""}`}
-              >
-                <ContextPanel
-                  taskSpec={activeTaskSpec}
-                  taskRuns={taskRuns}
-                  pinnedContexts={pinnedContexts}
-                  memories={memories}
-                  contextSnapshots={contextSnapshots}
-                  handoffSummaries={handoffSummaries}
-                  loading={loadingContext}
-                />
-              </div>
-              <div
-                className={`workspace-diagnostics__section workspace-diagnostics__section--adapter ${activeDiagnosticPanel === "adapter" ? "workspace-diagnostics__section--active" : ""}`}
-              >
-                <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
-                <AdapterQualityDashboard
-                  adapterDescriptors={adapterDescriptors}
-                  taskRuns={taskRuns}
-                  qualityMetrics={adapterQualityMetrics}
-                />
-              </div>
-              <div
-                className={`workspace-diagnostics__section workspace-diagnostics__section--audit ${activeDiagnosticPanel === "audit" ? "workspace-diagnostics__section--active" : ""}`}
-              >
-                <ActionAuditTimelinePanel audits={actionAudits} />
-              </div>
-              <div
-                className={`workspace-diagnostics__section workspace-diagnostics__section--local ${activeDiagnosticPanel === "local" ? "workspace-diagnostics__section--active" : ""}`}
-              >
-                <DesktopCapabilityPanel
-                  conversationId={currentConversationId}
-                  onUseLocalFileAsAttachment={handleUseDesktopLocalFileAsAttachment}
-                  onPinAttachmentAsContext={handlePinDesktopAttachmentAsContext}
-                  onSaveAttachmentAsMemory={handleSaveDesktopAttachmentAsMemory}
-                  onNavigateToDesktopNotificationTarget={handleNavigateToDesktopNotificationTarget}
-                />
-              </div>
-            </div>
-          </section>
+          <WorkspaceDiagnosticsDrawer
+            panels={DIAGNOSTIC_PANELS}
+            activePanel={activeDiagnosticPanel}
+            sections={diagnosticSections}
+            onTogglePanel={(panel) => setActiveDiagnosticPanel((current) => (current === panel ? null : panel))}
+          />
         </div>
       </main>
 

@@ -6,6 +6,7 @@ import {
   type ArtifactDiagnosticEntry
 } from "./ArtifactDeliveryWorkbench";
 import { ArtifactDeployPanel } from "./ArtifactDeployPanel";
+import { ArtifactInspectorTabs } from "./ArtifactInspectorTabs";
 import { ArtifactSnapshotTimeline } from "./ArtifactSnapshotTimeline";
 import { DiffSummaryPanel } from "./DiffSummaryPanel";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
@@ -1031,32 +1032,15 @@ export function ArtifactPanel({
               <span className="artifact-inspector-tabs__item">部署 {deployments.length}</span>
               <span className="artifact-inspector-tabs__item">关联 {Math.max(versionEntries.length - 1, 0)}</span>
             </div>
-            <div className="artifact-inspector-tabs artifact-inspector-tabs--interactive" aria-label="Artifact inspector sections">
-              {ARTIFACT_INSPECTOR_TABS.map((tab) => {
-                const count =
-                  tab.key === "versions"
-                    ? versionEntries.length
-                    : tab.key === "snapshots"
-                      ? snapshots.length
-                      : tab.key === "deploy"
-                        ? deployments.length
-                        : tab.key === "related"
-                          ? Math.max(versionEntries.length - 1, 0)
-                          : null;
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    className={`artifact-inspector-tabs__item ${activeInspectorTab === tab.key ? "artifact-inspector-tabs__item--active" : ""}`}
-                    data-testid={`artifact-inspector-tab-${tab.key}`}
-                    aria-pressed={activeInspectorTab === tab.key}
-                    onClick={() => setActiveInspectorTab(tab.key)}
-                  >
-                    {tab.label}{count === null ? "" : ` ${count}`}
-                  </button>
-                );
-              })}
-            </div>
+            <ArtifactInspectorTabs
+              tabs={ARTIFACT_INSPECTOR_TABS}
+              activeTab={activeInspectorTab}
+              versionCount={versionEntries.length}
+              snapshotCount={snapshots.length}
+              deploymentCount={deployments.length}
+              relatedCount={Math.max(versionEntries.length - 1, 0)}
+              onChange={setActiveInspectorTab}
+            />
             <div className="artifact-preview__meta">
               <div>
                 <strong>{selectedArtifact.title}</strong>

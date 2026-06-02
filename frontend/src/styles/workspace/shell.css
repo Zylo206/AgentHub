@@ -334,3 +334,180 @@
   padding: 0 7px !important;
   font-size: 10px !important;
 }
+
+/* First-screen convergence: conversation -> message feed -> input, no dashboard pileup. */
+.workspace-page {
+  grid-template-columns: 246px minmax(790px, 1fr) clamp(296px, 21vw, 338px) !important;
+  gap: 7px !important;
+}
+
+.workspace-page--artifact-inspector-collapsed {
+  grid-template-columns: 246px minmax(930px, 1fr) 50px !important;
+}
+
+.workspace-main {
+  padding: 7px !important;
+}
+
+.workspace-main__header {
+  min-height: 46px !important;
+  padding: 8px 11px !important;
+}
+
+.workspace-main__header h2 {
+  font-size: 16px !important;
+}
+
+.workspace-main__header p {
+  max-width: 54ch;
+  font-size: 10px !important;
+}
+
+.workspace-main__toolbar,
+.workspace-main__flow-guide,
+.workspace-session-summary,
+.selected-agent-banner {
+  margin-top: 5px !important;
+  padding: 5px 8px !important;
+}
+
+.workspace-main__toolbar--collaboration .section-header {
+  gap: 8px !important;
+}
+
+.workspace-main__toolbar--collaboration .section-header h3 {
+  font-size: 12px !important;
+}
+
+.workspace-main__toolbar--collaboration .section-header span {
+  max-width: 48ch !important;
+  overflow: hidden !important;
+  font-size: 10px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-main__flow-guide {
+  min-height: 26px !important;
+  gap: 6px !important;
+}
+
+.workspace-session-summary {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 5px !important;
+}
+
+.workspace-session-summary article,
+.workspace-session-summary div {
+  min-height: 34px !important;
+  padding: 6px !important;
+}
+
+.workspace-session-summary span,
+.workspace-session-summary small {
+  font-size: 9px !important;
+}
+
+.workspace-session-summary strong {
+  font-size: 11px !important;
+}
+
+.workspace-main__content {
+  gap: 6px !important;
+  padding-top: 6px !important;
+}
+
+.workspace-sidebar__body {
+  gap: 8px !important;
+  padding: 8px !important;
+}
+
+.workspace-sidebar .conversation-item--im {
+  min-height: 56px !important;
+  padding: 6px 7px !important;
+}
+
+.workspace-sidebar .conversation-avatar {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.workspace-sidebar .conversation-item__identity strong {
+  max-width: 136px !important;
+  font-size: 11.5px !important;
+}
+
+.workspace-sidebar .conversation-item__identity small {
+  max-width: 136px !important;
+  font-size: 9.5px !important;
+}
+
+.workspace-sidebar .conversation-item__meta span:nth-child(n+2) {
+  display: none !important;
+}
+
+.workspace-sidebar .conversation-item__meta span {
+  min-height: 16px !important;
+  padding: 0 5px !important;
+  font-size: 9px !important;
+}
+
+.workspace-sidebar .conversation-item__actions {
+  margin-top: 2px !important;
+  opacity: 0.52 !important;
+}
+
+.workspace-sidebar .conversation-action-button {
+  min-height: 20px !important;
+  padding: 0 6px !important;
+  font-size: 9px !important;
+}
+
+@media (max-width: 1536px) {
+  .workspace-page {
+    grid-template-columns: 236px minmax(720px, 1fr) 304px !important;
+  }
+
+  .workspace-page--artifact-inspector-collapsed {
+    grid-template-columns: 236px minmax(800px, 1fr) 48px !important;
+  }
+
+  .workspace-main__header {
+    min-height: 42px !important;
+  }
+
+  .workspace-session-summary article:nth-child(n+5),
+  .workspace-session-summary div:nth-child(n+5) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1366px) {
+  .workspace-page {
+    grid-template-columns: 218px minmax(790px, 1fr) 320px !important;
+    gap: 6px !important;
+  }
+
+  .workspace-main {
+    padding: 6px !important;
+  }
+
+  .workspace-main__header p,
+  .workspace-main__toolbar--collaboration .section-header span,
+  .workspace-main__flow-guide em:nth-of-type(n+3) {
+    display: none !important;
+  }
+
+  .workspace-session-summary {
+    display: none !important;
+  }
+
+  .workspace-sidebar__header {
+    padding: 8px !important;
+  }
+
+  .workspace-sidebar .conversation-filter-tab {
+    padding: 0 5px !important;
+  }
+}

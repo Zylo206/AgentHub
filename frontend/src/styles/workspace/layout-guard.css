@@ -1,0 +1,38 @@
+/* Final layout guard. Keep this file last in Workspace imports. */
+.workspace-page {
+  display: grid !important;
+  grid-template-columns: 246px minmax(790px, 1fr) clamp(296px, 21vw, 338px) !important;
+  align-items: stretch !important;
+  gap: 7px !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+
+.workspace-page--artifact-inspector-collapsed {
+  grid-template-columns: 246px minmax(930px, 1fr) 50px !important;
+}
+
+.workspace-sidebar,
+.workspace-main,
+.workspace-artifacts {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+@media (max-width: 1536px) {
+  .workspace-page {
+    grid-template-columns: 236px minmax(720px, 1fr) 304px !important;
+  }
+
+  .workspace-page--artifact-inspector-collapsed {
+    grid-template-columns: 236px minmax(800px, 1fr) 48px !important;
+  }
+}
+
+@media (max-width: 1366px) {
+  .workspace-page {
+    grid-template-columns: 218px minmax(790px, 1fr) 320px !important;
+    gap: 6px !important;
+  }
+}

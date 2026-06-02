@@ -1079,3 +1079,215 @@
 .workspace-chat-lane .chat-context-chip {
   padding: 4px 7px !important;
 }
+
+/* First-screen feed pass: more room for the IM stream, less visible configuration chrome. */
+.workspace-chat-lane {
+  flex: 1 1 auto !important;
+  gap: 6px !important;
+}
+
+.workspace-chat-lane .message-stream {
+  flex: 1 1 auto !important;
+  height: clamp(350px, 48vh, 520px) !important;
+  min-height: 340px !important;
+  max-height: none !important;
+  padding: 8px !important;
+}
+
+.message-row {
+  margin-bottom: 5px !important;
+}
+
+.message-bubble {
+  padding: 7px 9px !important;
+}
+
+.message-bubble--user {
+  max-width: min(54%, 540px) !important;
+  border-radius: 17px 17px 5px 17px !important;
+  box-shadow: 0 10px 28px rgba(29, 120, 255, 0.14) !important;
+}
+
+.message-bubble--agent,
+.message-bubble--agent-protocol,
+.message-bubble--system,
+.message-bubble--task-status,
+.message-bubble--task-spec,
+.message-bubble--artifact-card,
+.message-bubble--deploy-status {
+  max-width: min(84%, 760px) !important;
+}
+
+.message-bubble__header {
+  margin-bottom: 4px !important;
+}
+
+.message-bubble__sender span:first-child {
+  font-size: 12px !important;
+}
+
+.message-bubble__body {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.message-protocol-card {
+  min-height: 50px !important;
+  padding: 6px 8px !important;
+}
+
+.message-protocol-card p {
+  max-width: 58ch !important;
+}
+
+.message-action-bar {
+  min-height: 24px !important;
+  margin-top: 3px !important;
+  padding: 2px 4px !important;
+  overflow: visible !important;
+  border-color: transparent !important;
+  opacity: 0.12 !important;
+}
+
+.message-bubble:hover .message-action-bar,
+.message-bubble:focus-within .message-action-bar {
+  margin-top: 5px !important;
+  padding: 3px 4px !important;
+  border-color: rgba(118, 154, 205, 0.08) !important;
+  opacity: 1 !important;
+}
+
+.message-rejection-cta {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  padding: 6px 7px !important;
+}
+
+.message-rejection-cta__actions {
+  gap: 4px !important;
+}
+
+.message-rejection-cta .message-action-button:nth-child(n+3) {
+  display: none !important;
+}
+
+.message-artifact-card {
+  min-height: 42px !important;
+  padding: 6px 7px !important;
+}
+
+.message-artifact-card__header {
+  grid-template-columns: 24px minmax(0, 1fr) auto !important;
+}
+
+.message-artifact-card__icon {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 8px !important;
+}
+
+.message-artifact-card__actions .artifact-link:nth-child(n+4) {
+  display: none !important;
+}
+
+.message-stream-status-bar {
+  min-height: 34px !important;
+  padding: 6px 8px !important;
+}
+
+.message-stream__preview-content {
+  max-height: 2.7em !important;
+  overflow: hidden !important;
+}
+
+.workspace-chat-lane .chat-input {
+  flex: 0 0 auto !important;
+  gap: 6px !important;
+  min-height: 102px !important;
+  max-height: none !important;
+  padding: 8px !important;
+  overflow: visible !important;
+}
+
+.workspace-chat-lane .chat-input__textarea {
+  min-height: 50px !important;
+  max-height: 76px !important;
+  padding: 8px 10px !important;
+  font-size: 13px !important;
+  resize: none !important;
+}
+
+.workspace-chat-lane .chat-input__context-chips {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.workspace-chat-lane .chat-context-chip {
+  max-width: 280px !important;
+  padding: 3px 6px !important;
+}
+
+.workspace-chat-lane .chat-input__actions {
+  min-height: 30px !important;
+}
+
+.workspace-chat-lane .chat-input__toolbar {
+  flex: 1 1 auto !important;
+  max-height: 30px !important;
+  overflow: visible !important;
+}
+
+.workspace-chat-lane .chat-routing-preview,
+.workspace-chat-lane .chat-attachment-composer {
+  min-height: 28px !important;
+  border-color: rgba(118, 154, 205, 0.12) !important;
+}
+
+.workspace-chat-lane .chat-routing-preview summary,
+.workspace-chat-lane .chat-attachment-composer summary {
+  min-height: 28px !important;
+  padding: 4px 7px !important;
+}
+
+.workspace-chat-lane .chat-routing-preview:not([open]) p,
+.workspace-chat-lane .chat-routing-preview:not([open]) .chat-routing-preview__chips,
+.workspace-chat-lane .chat-attachment-composer:not([open]) .chat-attachment-composer__grid {
+  display: none !important;
+}
+
+.workspace-chat-lane .chat-input__actions .primary-button {
+  min-width: 72px !important;
+  min-height: 34px !important;
+  border-radius: 12px !important;
+}
+
+@media (max-width: 1366px) {
+  .workspace-chat-lane .message-stream {
+    height: clamp(330px, 50vh, 430px) !important;
+    min-height: 320px !important;
+  }
+
+  .workspace-chat-lane .chat-input {
+    min-height: 94px !important;
+    max-height: none !important;
+  }
+
+  .workspace-chat-lane .chat-input__textarea {
+    min-height: 44px !important;
+    max-height: 58px !important;
+  }
+
+  .message-bubble--user {
+    max-width: min(62%, 520px) !important;
+  }
+
+  .message-bubble--agent,
+  .message-bubble--agent-protocol,
+  .message-bubble--system,
+  .message-bubble--task-status,
+  .message-bubble--task-spec,
+  .message-bubble--artifact-card,
+  .message-bubble--deploy-status {
+    max-width: min(90%, 720px) !important;
+  }
+}

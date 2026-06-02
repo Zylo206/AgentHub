@@ -123,3 +123,42 @@
     display: none;
   }
 }
+
+/* First-screen diagnostics pass: one-line trust surface unless explicitly opened. */
+.workspace-diagnostics {
+  flex-basis: 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+  border-radius: 12px !important;
+}
+
+.workspace-diagnostics--expanded {
+  flex-basis: clamp(148px, 20vh, 220px) !important;
+  max-height: 220px !important;
+}
+
+.workspace-diagnostics__tabs {
+  min-height: 32px !important;
+  padding: 4px 6px !important;
+}
+
+.workspace-diagnostics__tab {
+  min-height: 22px !important;
+  padding: 0 8px !important;
+}
+
+.workspace-diagnostics__tab span {
+  display: none !important;
+}
+
+@media (max-width: 1366px) {
+  .workspace-diagnostics {
+    flex-basis: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
+  }
+
+  .workspace-diagnostics__tabs {
+    min-height: 30px !important;
+  }
+}

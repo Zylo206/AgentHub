@@ -1,22 +1,3 @@
-.workspace-page {
-  height: calc(100vh - 68px);
-  display: grid;
-  grid-template-columns: 292px minmax(520px, 1fr) minmax(390px, 0.38fr);
-  gap: 16px;
-  padding: 16px;
-  overflow: hidden;
-}
-
-.message-bubble--streaming-discarded {
-  border-left-color: #dc2626;
-  background: #fff1f2;
-}
-
-.message-bubble--streaming-partial {
-  border-left-color: #d97706;
-  background: #fffbeb;
-}
-
 .adapter-routing-panel {
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -285,56 +266,6 @@
   color: var(--ink-soft);
 }
 
-.primary-button,
-.secondary-button,
-.show-all-button {
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  padding: 10px 14px;
-  font-weight: 800;
-  transition:
-    transform 120ms ease,
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease,
-    opacity 120ms ease,
-    box-shadow 120ms ease;
-}
-
-.primary-button {
-  background: linear-gradient(135deg, var(--blue), var(--blue-strong));
-  color: #ffffff;
-  box-shadow: 0 10px 22px rgba(18, 71, 183, 0.20);
-}
-
-.primary-button:hover:not(:disabled),
-.secondary-button:hover:not(:disabled),
-.show-all-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.secondary-button {
-  background: #f2f5f8;
-  color: #253244;
-  border-color: var(--line);
-}
-
-.show-all-button {
-  background: #f8fbff;
-  color: var(--blue-strong);
-  border-color: #c8d9f3;
-  text-align: left;
-}
-
-.primary-button:disabled,
-.secondary-button:disabled,
-.show-all-button:disabled {
-  opacity: 0.56;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
 .conversation-list,
 .agent-list,
 .artifact-card-list,
@@ -344,37 +275,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.conversation-item,
-.agent-item,
-.artifact-card {
-  width: 100%;
-  text-align: left;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: #ffffff;
-  padding: 13px;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
-}
-
-.conversation-item:hover,
-.agent-item:hover,
-.artifact-card:hover {
-  border-color: var(--line-strong);
-  transform: translateY(-1px);
-}
-
-.conversation-item--active,
-.agent-item--selected,
-.artifact-card--selected {
-  border-color: var(--blue);
-  background: var(--blue-soft);
-  box-shadow: inset 3px 0 0 var(--blue), var(--shadow-sm);
 }
 
 .artifact-card--highlighted {

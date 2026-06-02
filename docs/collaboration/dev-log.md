@@ -7943,3 +7943,141 @@
 
 - 本轮只做前端交互闭环和质量门禁，不改变后端部署、审批、Revision、Reviewer 评审语义。
 - Browser E2E 的截图和布局 JSON 是本地 QA 证据，不作为业务数据。
+
+## Phase 190：Workspace 首屏减负与 IM 主路径收敛
+
+### 目标
+
+- 让 Workspace 首屏回到“会话 -> 消息 -> 输入”的 IM 主路径。
+- 压缩顶部协作建议、底部诊断条和左侧会话卡片，避免 1366x768 下出现组件堆叠。
+- 右侧 Artifact Inspector 默认保持 Overview，不让 Diff / Snapshot / Deploy / Audit 抢占首屏。
+- 消息流继续产品化：用户消息更像 IM 气泡，Agent / Artifact / Deploy / REJECTION 作为协作消息和附件卡呈现。
+
+### 主要变更
+
+- `shell.css`：
+  - 调整 Workspace 三栏比例，中栏继续作为主视觉中心。
+  - 压缩 header、协作 toolbar、flow guide、左侧会话卡片。
+  - 1366px 下隐藏中栏 session summary，避免挤压消息流和输入区。
+- `message.css`：
+  - 增大 MessageStream 可用高度。
+  - 压缩消息卡、协议卡、Artifact 附件卡和 streaming strip。
+  - Action Bar 默认低可见但保持可点击，hover / focus 后完整显示。
+  - 修复引用 / 回复 chip 与 ChatInput textarea 的点击覆盖问题。
+- `inspector.css`：
+  - 右栏继续作为轻量 Artifact Inspector。
+  - 保留 Overview / Diff / 版本 / 快照 / 部署核心 tabs；窄屏只收起低优先级详情。
+  - 指标卡、preview dock、操作按钮进一步压缩。
+- `diagnostics.css`：
+  - 诊断抽屉默认压成一行 tabs，只有点击 TaskRun / Context / Adapter / Audit / Local 才展开。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Browser / Playwright 1366x768 布局截图：
+  - `.agenthub/e2e-browser/workspace-layout-1366-latest.png`
+  - `.agenthub/e2e-browser/workspace-layout-metrics-latest.json`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 完整通过。
+- 1366px Workspace 布局门禁通过：
+  - 无横向滚动。
+  - MessageStream / ChatInput 不重叠。
+  - ChatInput / Diagnostics 不重叠。
+  - Artifact Inspector 不越界。
+- E2E 覆盖仍包含会话搜索 / 置顶 / 归档 / 恢复、聊天内 Agent 创建、附件、Message Action Bar、消息触发协作、TaskRun、Context、Adapter fallback、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION recovery。
+
+### 边界
+
+- 本轮只做 Workspace 前端可用性和视觉收敛，不改变后端 Orchestrator、Artifact、Approval、Deploy、Context、Adapter 语义。
+- 右侧 Inspector 仍保留完整功能入口，只是默认隐藏低优先级详情。
+
+## Phase 191：Workspace 组件系统清理与布局保护
+
+### 目标
+
+- 继续把 Workspace 从单体样式和超大组件中拆出来，降低后续 UI 回归风险。
+- 保留模块化样式入口，减少旧 `workspace.css` 对新布局的覆盖。
+- 建立更稳定的组件 token，为 badge / button / card / metric / tab 后续统一做准备。
+
+### 主要变更
+
+- 新增 `WorkspaceDiagnosticsDrawer`：
+  - 从 `WorkspacePage` 拆出底部 TaskRun / Context / Adapter / Audit / Local 诊断抽屉壳层。
+  - `WorkspacePage` 只负责传入 sections 和 active panel 状态。
+- 新增 `ArtifactInspectorTabs`：
+  - 从 `ArtifactPanel` 拆出右侧 Inspector tab 渲染逻辑。
+  - 保持原有 tab key、计数和 `data-testid` 不变，避免破坏 E2E。
+- `workspace.css`：
+  - 删除顶部旧三栏布局规则和浅色 streaming 状态规则，避免与模块化文件冲突。
+- `tokens.css`：
+  - 增加 card / badge / button / tab / status 背景 token。
+- `layout-guard.css`：
+  - 新增最终三栏布局保护文件，并在 Workspace imports 最后加载。
+  - 修复旧 `workspace.css` 响应式规则把 1366px Workspace 打成单列的问题。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Browser / Playwright 1366x768 截图：
+  - `.agenthub/e2e-browser/workspace-layout-1366-latest.png`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 完整通过。
+- 1366px 布局截图确认恢复三栏：
+  - 左栏会话。
+  - 中栏消息流 / 输入框。
+  - 右栏 Artifact Inspector。
+- 布局门禁继续通过：无横向滚动、无 MessageStream / ChatInput / Diagnostics 重叠、右侧 Inspector 不越界。
+
+### 边界
+
+- 本轮没有重写业务组件逻辑，只拆壳层和 tab 渲染。
+- 旧 `workspace.css` 仍未完全清空，后续应逐段迁移到模块化文件，而不是一次性删除。
+
+## Phase 192：Workspace 基础组件样式迁移
+
+### 目标
+
+- 继续逐段迁移旧 `workspace.css`，避免一次性删除造成大面积回归。
+- 先处理高频基础样式：button、badge、card、tab。
+- 让后续新增 UI 优先复用模块化样式，而不是继续写临时 one-off 规则。
+
+### 主要变更
+
+- 新增 `frontend/src/styles/workspace/components.css`：
+  - 统一 `primary-button` / `secondary-button` / `ghost-button` / `message-action-button` / `conversation-action-button` 等按钮基础样式。
+  - 统一 `status-pill` / `adapter-health-pill` / `message-protocol-pill` / `artifact-*badge` / `version-badge` / `revision-badge` 等 badge 基础样式。
+  - 统一 `conversation-item` / `agent-item` / `artifact-card` / `adapter-routing-card` / metric card 等卡片基础样式。
+  - 统一 `conversation-filter-tab` / `artifact-inspector-tabs__item` tab 基础样式。
+- `WorkspacePage` 引入 `components.css`，加载顺序为：
+  - legacy `workspace.css`
+  - `tokens.css`
+  - `components.css`
+  - feature modules
+  - `layout-guard.css`
+- 从旧 `workspace.css` 顶部删除第一段按钮和基础卡片定义，减少浅色后台样式对当前暗色 IM 工作台的干扰。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Browser / Playwright 1366x768 截图：
+  - `.agenthub/e2e-browser/workspace-layout-1366-latest.png`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 完整通过。
+- 1366px 布局门禁通过，三栏保持稳定。
+
+### 边界
+
+- 旧 `workspace.css` 中仍有多段历史重复样式，后续继续按模块逐段迁移。
+- 本轮不改变业务 JSX 和后端语义，只迁移基础视觉 primitives。

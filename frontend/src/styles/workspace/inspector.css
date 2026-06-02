@@ -463,3 +463,98 @@
   background: rgba(8, 20, 34, 0.94) !important;
   color: #cfe0f6 !important;
 }
+
+/* First-screen inspector pass: overview first, details stay behind tabs. */
+.workspace-artifacts {
+  padding: 7px !important;
+}
+
+.workspace-artifacts__header {
+  min-height: 38px !important;
+  margin: -7px -7px 7px !important;
+  padding: 7px 9px !important;
+}
+
+.workspace-artifacts .artifact-panel {
+  gap: 7px !important;
+}
+
+.workspace-artifacts .artifact-inspector-tabs {
+  gap: 4px !important;
+  padding: 3px 0 6px !important;
+}
+
+.workspace-artifacts .artifact-inspector-tabs__item {
+  min-height: 24px !important;
+  padding: 0 7px !important;
+  font-size: 10px !important;
+}
+
+.workspace-artifacts .artifact-preview__meta {
+  margin-top: 6px !important;
+}
+
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__meta {
+  padding: 9px !important;
+}
+
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__meta strong {
+  font-size: 13px !important;
+}
+
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__meta p {
+  font-size: 10px !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics {
+  gap: 5px !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article {
+  min-height: 50px !important;
+  padding: 7px !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article span,
+.workspace-artifacts .artifact-inspector-metrics article small {
+  font-size: 9px !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article strong {
+  font-size: 11px !important;
+}
+
+.workspace-artifacts .artifact-preview-dock {
+  padding: 8px !important;
+}
+
+.workspace-artifacts .artifact-preview-dock__body {
+  max-height: 180px !important;
+}
+
+.workspace-artifacts .artifact-preview__actions {
+  gap: 6px !important;
+}
+
+.workspace-artifacts .artifact-preview__action-button {
+  min-height: 32px !important;
+  font-size: 11px !important;
+}
+
+@media (max-width: 1366px) {
+  .workspace-artifacts {
+    padding: 6px !important;
+  }
+
+  .workspace-artifacts__header {
+    margin: -6px -6px 6px !important;
+  }
+
+  .workspace-artifacts .artifact-preview-dock__body {
+    max-height: 136px !important;
+  }
+
+  .workspace-artifacts .artifact-inspector-tabs__item:nth-child(n+6) {
+    display: none !important;
+  }
+}

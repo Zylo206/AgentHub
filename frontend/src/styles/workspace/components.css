@@ -1,0 +1,182 @@
+/* Shared Workspace primitives. Keep feature-specific layout in shell/message/inspector/diagnostics. */
+.primary-button,
+.secondary-button,
+.ghost-button,
+.show-all-button,
+.message-action-button,
+.message-pin-button,
+.conversation-action-button,
+.artifact-preview__action-button,
+.deploy-status-card__button,
+.diff-summary-apply button,
+.chat-attachment-composer__grid .secondary-button {
+  border: 1px solid var(--workspace-card-border) !important;
+  border-radius: var(--workspace-radius-sm) !important;
+  background: var(--workspace-button-bg) !important;
+  color: var(--workspace-text) !important;
+  font-weight: 800 !important;
+  transition:
+    transform var(--workspace-fast),
+    border-color var(--workspace-fast),
+    background var(--workspace-fast),
+    color var(--workspace-fast),
+    opacity var(--workspace-fast) !important;
+}
+
+.primary-button,
+.message-action-button--primary,
+.message-auto-trigger__actions .message-action-button--primary {
+  border-color: rgba(47, 131, 255, 0.55) !important;
+  background: linear-gradient(180deg, #2d86ff, #0e63ed) !important;
+  color: #ffffff !important;
+  box-shadow: 0 14px 28px rgba(29, 120, 255, 0.24) !important;
+}
+
+.secondary-button,
+.ghost-button,
+.show-all-button {
+  background: rgba(8, 20, 34, 0.78) !important;
+  color: #cfe0f6 !important;
+}
+
+.primary-button:hover:not(:disabled),
+.secondary-button:hover:not(:disabled),
+.ghost-button:hover:not(:disabled),
+.show-all-button:hover:not(:disabled),
+.message-action-button:hover:not(:disabled),
+.message-pin-button:hover:not(:disabled),
+.conversation-action-button:hover:not(:disabled),
+.artifact-preview__action-button:hover:not(:disabled) {
+  border-color: rgba(47, 131, 255, 0.52) !important;
+  transform: translateY(-1px) !important;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.ghost-button:disabled,
+.show-all-button:disabled,
+.message-action-button:disabled,
+.message-pin-button:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.5 !important;
+  transform: none !important;
+}
+
+.status-pill,
+.adapter-health-pill,
+.message-protocol-pill,
+.artifact-source-badge,
+.artifact-quality-badge,
+.artifact-status-badge,
+.artifact-generation-badge,
+.artifact-inspector-badge,
+.artifact-card-badge,
+.artifact-card__tag,
+.artifact-preview__badge,
+.artifact-explain-badge,
+.version-badge,
+.revision-badge,
+.conversation-unread-badge {
+  border: 1px solid rgba(118, 154, 205, 0.24) !important;
+  border-radius: 999px !important;
+  background: var(--workspace-badge-bg) !important;
+  color: #cfe0f6 !important;
+  box-shadow: none !important;
+}
+
+.status-pill--completed,
+.status-pill--accepted,
+.status-pill--active,
+.status-pill--available,
+.adapter-health-pill--available,
+.artifact-quality-badge--accepted,
+.artifact-card__tag--success,
+.artifact-preview__badge--success {
+  border-color: rgba(34, 197, 94, 0.38) !important;
+  background: var(--workspace-status-success-bg) !important;
+  color: #86efac !important;
+}
+
+.status-pill--pending,
+.status-pill--waiting,
+.status-pill--blocked,
+.artifact-card__tag--warning,
+.artifact-preview__badge--warning {
+  border-color: rgba(245, 184, 46, 0.4) !important;
+  background: var(--workspace-status-warning-bg) !important;
+  color: #fde68a !important;
+}
+
+.status-pill--failed,
+.status-pill--rejected,
+.status-pill--disabled,
+.adapter-health-pill--disabled,
+.adapter-health-pill--misconfigured,
+.adapter-health-pill--error,
+.message-protocol-pill--rejection,
+.message-protocol-pill--error,
+.artifact-quality-badge--parse_failed,
+.artifact-quality-badge--quality_failed,
+.artifact-quality-badge--build_failed,
+.artifact-card__tag--danger,
+.artifact-preview__badge--danger {
+  border-color: rgba(239, 68, 68, 0.42) !important;
+  background: var(--workspace-status-danger-bg) !important;
+  color: #fca5a5 !important;
+}
+
+.conversation-item,
+.agent-item,
+.artifact-card,
+.adapter-routing-card,
+.message-artifact-card,
+.artifact-inspector-metrics article,
+.artifact-scaffold-metrics article,
+.desktop-console__metrics article,
+.desktop-capability-panel__metrics article {
+  border: 1px solid var(--workspace-card-border) !important;
+  border-radius: var(--workspace-radius-sm) !important;
+  background: var(--workspace-card-bg) !important;
+  color: var(--workspace-text) !important;
+  box-shadow: none !important;
+}
+
+.conversation-item--active,
+.agent-item--selected,
+.artifact-card--selected,
+.artifact-card--highlighted,
+.adapter-routing-card--selected {
+  border-color: var(--workspace-border-active) !important;
+  background:
+    linear-gradient(180deg, rgba(29, 120, 255, 0.18), rgba(8, 20, 34, 0.9)),
+    var(--workspace-card-bg) !important;
+}
+
+.artifact-card--highlighted {
+  border-color: rgba(34, 197, 94, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(34, 197, 94, 0.14), rgba(8, 20, 34, 0.9)),
+    var(--workspace-card-bg) !important;
+}
+
+.conversation-filter-tabs,
+.artifact-inspector-tabs {
+  border-color: rgba(118, 154, 205, 0.14) !important;
+}
+
+.conversation-filter-tab,
+.artifact-inspector-tabs__item {
+  border: 1px solid rgba(118, 154, 205, 0.18) !important;
+  border-radius: 999px !important;
+  background: rgba(8, 20, 34, 0.72) !important;
+  color: #9bb3d1 !important;
+}
+
+.conversation-filter-tab:hover,
+.conversation-filter-tab--active,
+.artifact-inspector-tabs__item:hover,
+.artifact-inspector-tabs__item--active {
+  border-color: rgba(47, 131, 255, 0.52) !important;
+  background: var(--workspace-tab-active-bg) !important;
+  color: var(--workspace-text) !important;
+}
