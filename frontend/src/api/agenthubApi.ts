@@ -450,6 +450,12 @@ export function pinMessageAsContext(conversationId: string, messageId: string): 
   });
 }
 
+export function pinAttachmentAsContext(conversationId: string, attachmentId: string): Promise<PinnedContext> {
+  return request<PinnedContext>(`/api/conversations/${conversationId}/attachments/${attachmentId}/pin`, {
+    method: "POST"
+  });
+}
+
 export function unpinContext(pinnedContextId: string): Promise<PinnedContext> {
   return request<PinnedContext>(`/api/pinned-contexts/${pinnedContextId}`, {
     method: "DELETE"
@@ -619,6 +625,17 @@ export function saveMessageAsMemory(
   category = "PROJECT_FACT"
 ): Promise<MemoryItem> {
   return request<MemoryItem>(`/api/conversations/${conversationId}/messages/${messageId}/memory`, {
+    method: "POST",
+    body: JSON.stringify({ category })
+  });
+}
+
+export function saveAttachmentAsMemory(
+  conversationId: string,
+  attachmentId: string,
+  category = "PROJECT_FACT"
+): Promise<MemoryItem> {
+  return request<MemoryItem>(`/api/conversations/${conversationId}/attachments/${attachmentId}/memory`, {
     method: "POST",
     body: JSON.stringify({ category })
   });

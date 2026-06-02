@@ -4,17 +4,25 @@ import {
   isDesktopBridgeAvailable,
   listDesktopDirectory,
   listDesktopManagedProcesses,
+  loadDesktopConfig,
+  persistDesktopNotificationSettings,
   probeDesktopAgentCli,
+  readDesktopFileForAttachment,
   readDesktopTextPreview,
+  saveDesktopConfig,
+  checkDesktopPort,
   sendDesktopNotification,
   startDesktopBackend,
   stopDesktopManagedProcess,
   type DesktopCliProbeResult,
+  type DesktopConfig,
   type DesktopEnvironment,
   type DesktopFileEntry,
   type DesktopFilePreview,
-  type DesktopManagedProcess
+  type DesktopManagedProcess,
+  type DesktopPortStatus
 } from "./desktopBridge";
+import type { LightweightAttachment } from "../chat/chatTypes";
 
 const DEFAULT_BACKEND_JAR = "backend/target/agenthub-backend-0.1.0-SNAPSHOT.jar";
 
@@ -25,6 +33,8 @@ interface LocalContextCandidate {
   name: string;
   sizeBytes: number;
   createdAt: string;
+  attachmentId?: string;
+  status: "LOCAL_ONLY" | "UPLOADED_ATTACHMENT";
 }
 
 interface NotificationLogItem {
@@ -49,12 +59,22 @@ interface DesktopRealtimeNotification {
   title: string;
   body: string;
   createdAt: string;
+  targetType?: string;
+  targetId?: string;
 }
 
 declare global {
   interface WindowEventMap {
     "agenthub:desktop-notification": CustomEvent<DesktopRealtimeNotification>;
   }
+}
+
+interface DesktopCapabilityPanelProps {
+  conversationId?: string | null;
+  onUseLocalFileAsAttachment?: (file: File, sourcePath: string) => Promise<LightweightAttachment>;
+  onPinAttachmentAsContext?: (attachmentId: string) => Promise<void>;
+  onSaveAttachmentAsMemory?: (attachmentId: string) => Promise<void>;
+  onNavigateToDesktopNotificationTarget?: (targetType?: string, targetId?: string) => void;
 }
 
 function formatSize(size?: number | null): string {
@@ -72,6 +92,15 @@ function formatSize(size?: number | null): string {
 
 function normalizeDesktopError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function fileFromBase64(name: string, contentType: string, contentBase64: string): File {
+  const binary = window.atob(contentBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new File([bytes], name, { type: contentType || "application/octet-stream" });
 }
 
 function getFileKind(entry: DesktopFileEntry | DesktopFilePreview): string {
@@ -122,15 +151,39 @@ function formatTime(value: string): string {
   return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function DesktopCapabilityPanel() {
+const DEFAULT_DESKTOP_CONFIG: DesktopConfig = {
+  recentDirectories: [],
+  javaCommand: "java",
+  backendJarPath: DEFAULT_BACKEND_JAR,
+  backendWorkingDirectory: ".",
+  claudeCommand: "claude",
+  codexCommand: "codex",
+  opencodeCommand: "opencode",
+  notifyTaskRun: true,
+  notifyApproval: true,
+  notifyDeploy: true,
+  notifyAdapterFallback: true
+};
+
+export function DesktopCapabilityPanel({
+  conversationId,
+  onUseLocalFileAsAttachment,
+  onPinAttachmentAsContext,
+  onSaveAttachmentAsMemory,
+  onNavigateToDesktopNotificationTarget
+}: DesktopCapabilityPanelProps) {
   const desktopAvailable = isDesktopBridgeAvailable();
   const [activeTab, setActiveTab] = useState<DesktopTab>("files");
   const [environment, setEnvironment] = useState<DesktopEnvironment | null>(null);
+  const [desktopConfig, setDesktopConfig] = useState<DesktopConfig>(DEFAULT_DESKTOP_CONFIG);
   const [directoryPath, setDirectoryPath] = useState(".");
   const [filePath, setFilePath] = useState("");
   const [javaCommand, setJavaCommand] = useState("java");
   const [backendJarPath, setBackendJarPath] = useState(DEFAULT_BACKEND_JAR);
   const [backendWorkingDirectory, setBackendWorkingDirectory] = useState(".");
+  const [claudeCommand, setClaudeCommand] = useState("claude");
+  const [codexCommand, setCodexCommand] = useState("codex");
+  const [opencodeCommand, setOpencodeCommand] = useState("opencode");
   const [directoryEntries, setDirectoryEntries] = useState<DesktopFileEntry[]>([]);
   const [filePreview, setFilePreview] = useState<DesktopFilePreview | null>(null);
   const [contextCandidates, setContextCandidates] = useState<LocalContextCandidate[]>([]);
@@ -138,6 +191,7 @@ export function DesktopCapabilityPanel() {
   const [realtimeNotifications, setRealtimeNotifications] = useState<DesktopRealtimeNotification[]>([]);
   const [cliProbes, setCliProbes] = useState<DesktopCliProbeResult[]>([]);
   const [managedProcesses, setManagedProcesses] = useState<DesktopManagedProcess[]>([]);
+  const [portStatus, setPortStatus] = useState<DesktopPortStatus | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -159,9 +213,34 @@ export function DesktopCapabilityPanel() {
     void getDesktopEnvironment()
       .then(setEnvironment)
       .catch((error) => setErrorMessage(normalizeDesktopError(error)));
+    void loadDesktopConfig()
+      .then((config) => {
+        const nextConfig = { ...DEFAULT_DESKTOP_CONFIG, ...config };
+        setDesktopConfig(nextConfig);
+        setDirectoryPath(nextConfig.recentDirectories[0] || ".");
+        setJavaCommand(nextConfig.javaCommand);
+        setBackendJarPath(nextConfig.backendJarPath);
+        setBackendWorkingDirectory(nextConfig.backendWorkingDirectory);
+        setClaudeCommand(nextConfig.claudeCommand);
+        setCodexCommand(nextConfig.codexCommand);
+        setOpencodeCommand(nextConfig.opencodeCommand);
+        persistDesktopNotificationSettings(nextConfig);
+      })
+      .catch((error) => setErrorMessage(normalizeDesktopError(error)));
     void listDesktopManagedProcesses()
       .then(setManagedProcesses)
       .catch(() => undefined);
+  }, [desktopAvailable]);
+
+  useEffect(() => {
+    if (!desktopAvailable) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void listDesktopManagedProcesses().then(setManagedProcesses).catch(() => undefined);
+      void checkDesktopPort("127.0.0.1", 8080).then(setPortStatus).catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
   }, [desktopAvailable]);
 
   useEffect(() => {
@@ -195,10 +274,49 @@ export function DesktopCapabilityPanel() {
     }
   }
 
+  async function persistDesktopConfig(nextConfig: DesktopConfig) {
+    setDesktopConfig(nextConfig);
+    persistDesktopNotificationSettings(nextConfig);
+    if (!desktopAvailable) {
+      return;
+    }
+    await runAction("save-desktop-config", async () => {
+      await saveDesktopConfig(nextConfig);
+    });
+  }
+
+  async function handleToggleNotificationSetting(key: keyof Pick<DesktopConfig, "notifyTaskRun" | "notifyApproval" | "notifyDeploy" | "notifyAdapterFallback">) {
+    await persistDesktopConfig({ ...desktopConfig, [key]: !desktopConfig[key] });
+  }
+
+  async function handlePersistRuntimeConfig() {
+    const nextDirectories = [directoryPath, ...desktopConfig.recentDirectories.filter((item) => item !== directoryPath)].slice(0, 5);
+    await persistDesktopConfig({
+      ...desktopConfig,
+      recentDirectories: nextDirectories,
+      javaCommand,
+      backendJarPath,
+      backendWorkingDirectory,
+      claudeCommand,
+      codexCommand,
+      opencodeCommand
+    });
+  }
+
   async function handleListDirectory() {
     await runAction("list-directory", async () => {
       const entries = await listDesktopDirectory(directoryPath);
       setDirectoryEntries(entries);
+      await saveDesktopConfig({
+        ...desktopConfig,
+        recentDirectories: [directoryPath, ...desktopConfig.recentDirectories.filter((item) => item !== directoryPath)].slice(0, 5),
+        javaCommand,
+        backendJarPath,
+        backendWorkingDirectory,
+        claudeCommand,
+        codexCommand,
+        opencodeCommand
+      });
     });
   }
 
@@ -272,19 +390,69 @@ export function DesktopCapabilityPanel() {
     });
   }
 
-  function handleAddPreviewToContext() {
+  async function handleAddPreviewToContext() {
     if (!filePreview) {
       return;
     }
-    setContextCandidates((current) => [
-      {
+    if (!conversationId || !onUseLocalFileAsAttachment) {
+      const candidate: LocalContextCandidate = {
         path: filePreview.path,
         name: filePreview.fileName,
         sizeBytes: filePreview.sizeBytes,
-        createdAt: new Date().toISOString()
-      },
-      ...current.filter((item) => item.path !== filePreview.path)
-    ].slice(0, 5));
+        createdAt: new Date().toISOString(),
+        status: "LOCAL_ONLY"
+      };
+      setContextCandidates((current) => [
+        candidate,
+        ...current.filter((item) => item.path !== filePreview.path)
+      ].slice(0, 5));
+      return;
+    }
+
+    await runAction("upload-local-context", async () => {
+      const desktopFile = await readDesktopFileForAttachment(filePreview.path);
+      const uploaded = await onUseLocalFileAsAttachment(
+        fileFromBase64(desktopFile.fileName, desktopFile.contentType, desktopFile.contentBase64),
+        desktopFile.path
+      );
+      const candidate: LocalContextCandidate = {
+        path: desktopFile.path,
+        name: desktopFile.fileName,
+        sizeBytes: desktopFile.sizeBytes,
+        createdAt: new Date().toISOString(),
+        attachmentId: uploaded.attachmentId ?? uploaded.id,
+        status: "UPLOADED_ATTACHMENT"
+      };
+      setContextCandidates((current) => [
+        candidate,
+        ...current.filter((item) => item.path !== desktopFile.path)
+      ].slice(0, 5));
+    });
+  }
+
+  async function handlePinAttachmentCandidate(attachmentId?: string) {
+    if (!attachmentId || !onPinAttachmentAsContext) {
+      return;
+    }
+    await runAction("pin-local-attachment", async () => {
+      await onPinAttachmentAsContext(attachmentId);
+    });
+  }
+
+  async function handleSaveAttachmentCandidateAsMemory(attachmentId?: string) {
+    if (!attachmentId || !onSaveAttachmentAsMemory) {
+      return;
+    }
+    await runAction("memory-local-attachment", async () => {
+      await onSaveAttachmentAsMemory(attachmentId);
+    });
+  }
+
+  async function handleCheckBackendPort() {
+    await runAction("check-backend-port", async () => {
+      const status = await checkDesktopPort("127.0.0.1", 8080);
+      setPortStatus(status);
+    });
   }
 
   function renderDesktopBoundary() {
@@ -357,7 +525,7 @@ export function DesktopCapabilityPanel() {
             <div className="desktop-console__card-header">
               <div>
                 <strong>本地文件访问</strong>
-                <p>浏览目录、预览文本文件，并标记为上下文候选。</p>
+                <p>浏览目录、预览文本文件，并可上传为当前消息附件进入上下文检索。</p>
               </div>
               <span>Read-only</span>
             </div>
@@ -407,8 +575,13 @@ export function DesktopCapabilityPanel() {
                   <em>{formatSize(filePreview.sizeBytes)}{filePreview.truncated ? " · 已截断" : ""}</em>
                 </div>
                 <pre className="desktop-console__preview">{filePreview.contentPreview}</pre>
-                <button type="button" className="secondary-button" onClick={handleAddPreviewToContext}>
-                  标记为上下文候选
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={loadingAction === "upload-local-context"}
+                  onClick={handleAddPreviewToContext}
+                >
+                  {conversationId ? "加入当前消息附件" : "标记为上下文候选"}
                 </button>
               </>
             ) : null}
@@ -418,7 +591,7 @@ export function DesktopCapabilityPanel() {
             <div className="desktop-console__card-header">
               <div>
                 <strong>上下文候选</strong>
-                <p>当前仅在桌面面板内标记，后续可接入 Attachment / Context Retrieval。</p>
+                <p>上传成功后会进入当前消息附件；发送消息后可被 Attachment / Context Retrieval 使用。</p>
               </div>
             </div>
             {contextCandidates.length > 0 ? (
@@ -426,7 +599,20 @@ export function DesktopCapabilityPanel() {
                 {contextCandidates.map((item) => (
                   <div key={item.path}>
                     <strong>{item.name}</strong>
-                    <span>{formatSize(item.sizeBytes)} · {formatTime(item.createdAt)}</span>
+                    <span>
+                      {formatSize(item.sizeBytes)} · {formatTime(item.createdAt)} ·{" "}
+                      {item.status === "UPLOADED_ATTACHMENT" ? `已上传 ${item.attachmentId || ""}` : "本地候选"}
+                    </span>
+                    {item.attachmentId ? (
+                      <div className="desktop-console__actions">
+                        <button type="button" className="ghost-button" onClick={() => void handlePinAttachmentCandidate(item.attachmentId)}>
+                          固定到 Context
+                        </button>
+                        <button type="button" className="ghost-button" onClick={() => void handleSaveAttachmentCandidateAsMemory(item.attachmentId)}>
+                          保存为 Memory
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -450,19 +636,35 @@ export function DesktopCapabilityPanel() {
               </button>
             </div>
             <div className="desktop-console__notification-rules">
-              {["任务完成", "审批待确认", "部署完成", "Agent fallback"].map((rule) => (
-                <span key={rule}>{rule}</span>
+              {[
+                ["notifyTaskRun", "任务状态"],
+                ["notifyApproval", "审批待确认"],
+                ["notifyDeploy", "部署完成"],
+                ["notifyAdapterFallback", "Agent fallback"]
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={desktopConfig[key as keyof DesktopConfig] ? "status-pill status-pill--accepted" : "status-pill status-pill--disabled"}
+                  onClick={() => void handleToggleNotificationSetting(key as "notifyTaskRun" | "notifyApproval" | "notifyDeploy" | "notifyAdapterFallback")}
+                >
+                  {label}: {desktopConfig[key as keyof DesktopConfig] ? "开" : "关"}
+                </button>
               ))}
             </div>
             {realtimeNotifications.length > 0 ? (
               <div className="desktop-console__notification-log">
                 {realtimeNotifications.map((item) => (
-                  <div key={item.id}>
-                    <span className="status-pill status-pill--success">{item.type}</span>
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => onNavigateToDesktopNotificationTarget?.(item.targetType, item.targetId)}
+                  >
+                    <span className="status-pill status-pill--accepted">{item.type}</span>
                     <strong>{item.title}</strong>
                     <p>{item.body}</p>
                     <em>{formatTime(item.createdAt)}</em>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : null}
@@ -478,7 +680,7 @@ export function DesktopCapabilityPanel() {
               <div className="desktop-console__notification-log">
                 {notificationLog.map((item) => (
                   <div key={item.id}>
-                    <span className={item.status === "SENT" ? "status-pill status-pill--success" : "status-pill status-pill--warning"}>{item.status}</span>
+                    <span className={item.status === "SENT" ? "status-pill status-pill--accepted" : "status-pill status-pill--pending"}>{item.status}</span>
                     <strong>{item.title}</strong>
                     <p>{item.body}</p>
                     <em>{formatTime(item.createdAt)}</em>
@@ -501,10 +703,15 @@ export function DesktopCapabilityPanel() {
                 <p>探测本机 Claude Code、Codex 和 OpenCode 命令，不执行真实任务。</p>
               </div>
               <div className="desktop-console__actions">
-                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli("claude")}>Claude Code</button>
-                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli("codex")}>Codex</button>
-                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli("opencode")}>OpenCode</button>
+                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli(claudeCommand)}>Claude Code</button>
+                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli(codexCommand)}>Codex</button>
+                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli(opencodeCommand)}>OpenCode</button>
               </div>
+            </div>
+            <div className="desktop-console__row">
+              <input value={claudeCommand} onChange={(event) => setClaudeCommand(event.target.value)} placeholder="Claude command" disabled={!desktopAvailable} />
+              <input value={codexCommand} onChange={(event) => setCodexCommand(event.target.value)} placeholder="Codex command" disabled={!desktopAvailable} />
+              <input value={opencodeCommand} onChange={(event) => setOpencodeCommand(event.target.value)} placeholder="OpenCode command" disabled={!desktopAvailable} />
             </div>
             {cliProbes.length > 0 ? (
               <div className="desktop-console__probe-list">
@@ -522,7 +729,7 @@ export function DesktopCapabilityPanel() {
                         <span>Tools: {probe.toolPolicy}</span>
                       </div>
                     </div>
-                    <span className={probe.available ? "status-pill status-pill--success" : "status-pill status-pill--warning"}>
+                    <span className={probe.available ? "status-pill status-pill--accepted" : "status-pill status-pill--pending"}>
                       {probe.available ? "available" : "unavailable"}
                     </span>
                   </article>
@@ -553,7 +760,19 @@ export function DesktopCapabilityPanel() {
               <button type="button" className="secondary-button" disabled={!desktopAvailable || loadingAction === "start-backend"} onClick={handleStartBackend}>
                 启动 backend
               </button>
+              <button type="button" className="secondary-button" disabled={!desktopAvailable || loadingAction === "save-desktop-config"} onClick={() => void handlePersistRuntimeConfig()}>
+                保存配置
+              </button>
+              <button type="button" className="secondary-button" disabled={!desktopAvailable || loadingAction === "check-backend-port"} onClick={() => void handleCheckBackendPort()}>
+                诊断 8080
+              </button>
             </div>
+            {portStatus ? (
+              <div className={portStatus.open ? "desktop-console__boundary desktop-console__boundary--success" : "desktop-console__boundary"}>
+                <strong>127.0.0.1:{portStatus.port} {portStatus.open ? "可连接" : "不可连接"}</strong>
+                <p>{portStatus.message}</p>
+              </div>
+            ) : null}
           </article>
 
           <article className="desktop-console__card">

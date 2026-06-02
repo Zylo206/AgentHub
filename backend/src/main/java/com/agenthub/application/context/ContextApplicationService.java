@@ -6,6 +6,8 @@ import com.agenthub.domain.context.ContextSnapshotId;
 import com.agenthub.domain.context.HandoffSummary;
 import com.agenthub.domain.context.PinnedContext;
 import com.agenthub.domain.conversation.ConversationId;
+import com.agenthub.domain.attachment.AttachmentRecord;
+import com.agenthub.domain.attachment.AttachmentRepository;
 import com.agenthub.domain.message.Message;
 import com.agenthub.domain.message.MessageId;
 import com.agenthub.domain.message.MessageRepository;
@@ -21,16 +23,19 @@ public class ContextApplicationService {
 
     private final ContextRepository contextRepository;
     private final MessageRepository messageRepository;
+    private final AttachmentRepository attachmentRepository;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
 
     public ContextApplicationService(
             ContextRepository contextRepository,
             MessageRepository messageRepository,
+            AttachmentRepository attachmentRepository,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.contextRepository = contextRepository;
         this.messageRepository = messageRepository;
+        this.attachmentRepository = attachmentRepository;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
@@ -70,6 +75,24 @@ public class ContextApplicationService {
                         timeProvider.now())));
     }
 
+    public PinnedContext pinAttachment(String conversationId, String attachmentId) {
+        ConversationId conversationRef = new ConversationId(conversationId);
+        AttachmentRecord attachment = attachmentRepository.findById(attachmentId)
+                .orElseThrow(() -> new NoSuchElementException("Attachment not found: " + attachmentId));
+        if (!attachment.getConversationId().equals(conversationRef)) {
+            throw new IllegalArgumentException("Attachment does not belong to the provided conversation.");
+        }
+
+        return contextRepository.findPinnedContextBySource(conversationRef, "ATTACHMENT", attachmentId)
+                .orElseGet(() -> contextRepository.savePinnedContext(new PinnedContext(
+                        idGenerator.nextId("pin"),
+                        conversationRef,
+                        buildPinnedAttachmentContent(attachment),
+                        "ATTACHMENT",
+                        attachmentId,
+                        timeProvider.now())));
+    }
+
     public PinnedContext unpinContext(String pinnedContextId) {
         PinnedContext pinnedContext = contextRepository.findPinnedContextById(pinnedContextId)
                 .orElseThrow(() -> new NoSuchElementException("PinnedContext not found: " + pinnedContextId));
@@ -85,5 +108,11 @@ public class ContextApplicationService {
         return "Pinned message from " + message.getSenderType()
                 + " (" + message.getSenderId() + "): "
                 + message.getContent();
+    }
+
+    private String buildPinnedAttachmentContent(AttachmentRecord attachment) {
+        return "Pinned attachment: " + attachment.getFileName()
+                + " (" + attachment.getContentType() + ", " + attachment.getSizeBytes() + " bytes)\n"
+                + (attachment.getContentPreview() == null ? "" : attachment.getContentPreview());
     }
 }

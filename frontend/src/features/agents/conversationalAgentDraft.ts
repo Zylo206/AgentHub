@@ -16,10 +16,14 @@ function includesAny(text: string, keywords: string[]): boolean {
   return keywords.some((keyword) => text.includes(keyword.toLowerCase()));
 }
 
+function includesAgentCreationTarget(text: string): boolean {
+  return /\bagents?\b/.test(text) || includesAny(text, ["智能体", "协作成员", "助手"]);
+}
+
 function isAgentCreationRequest(content: string): boolean {
   const normalized = content.toLowerCase();
   return includesAny(normalized, ["创建", "新建", "生成", "create", "build"]) &&
-    includesAny(normalized, ["agent", "智能体", "协作成员", "助手"]);
+    includesAgentCreationTarget(normalized);
 }
 
 export function inferAgentCreationDraft(content: string): AgentCreationDraft | null {

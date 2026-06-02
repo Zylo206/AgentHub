@@ -7402,3 +7402,132 @@
 - auth probe 仍是非侵入式状态，不执行真实模型任务。
 - backend 进程管理只管理由 Tauri shell 启动的进程。
 - MSI installer bundling 仍受 WiX 下载可用性影响。
+
+## Phase 178：Desktop 本地文件接入 Attachment / Context Retrieval
+
+### 目标
+
+- 将 Desktop Console 的“本地上下文候选”从面板内状态推进到真实 AgentHub Attachment 链路。
+- 保持 Web 模式安全降级，不让 Tauri 能力成为默认演示前置条件。
+
+### 主要变更
+
+- Tauri 新增 `read_file_for_attachment` command：
+  - 读取本地文件内容。
+  - 推断基础 `contentType`。
+  - 生成 `contentPreview`。
+  - 以 base64 payload 交给前端桥接层。
+  - 单文件限制 5MB。
+- `desktopBridge.ts` 新增 `readDesktopFileForAttachment`。
+- `DesktopCapabilityPanel` 支持把当前预览文件上传为当前消息附件：
+  - 无 conversation 时仍可保留本地候选状态。
+  - 有 conversation 时复用 Workspace 的 attachment upload callback。
+  - 上传成功后显示 Attachment ID 和状态。
+- Workspace 复用现有 `uploadConversationAttachment`，将桌面本地文件追加到 ChatInput 附件草稿。
+- 用户发送消息后，该文件成为 Message attachment，可进入后续 Attachment / Context Retrieval 链路。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `cd desktop/src-tauri && cargo check`
+- `cd desktop && npm run build -- --no-bundle`
+
+### 验证结果
+
+- 前端构建通过。
+- Tauri Rust 侧 `cargo check` 通过。
+- Tauri `--no-bundle` release build 通过，生成 `agenthub-desktop.exe`。
+
+### 边界
+
+- 本轮不做 workspace-write。
+- 图片 / PPT 仍是 metadata / preview shell，不做完整渲染或编辑。
+- 文件上传进入当前 ChatInput 草稿，仍需要用户发送消息后才成为聊天历史和 Context Retrieval 输入。
+- MSI installer bundling 仍受 WiX 下载可用性影响。
+
+## Phase 179：Desktop Context / Notification / Runtime 生产化补强
+
+### 目标
+
+- 继续补齐桌面端剩余生产化缺口：
+  - 本地文件一键进入 Context / Memory。
+  - 系统通知支持规则开关和点击定位。
+  - Agent / Backend runtime 增加健康轮询、端口诊断和配置持久化。
+
+### 主要变更
+
+- 后端新增 Attachment 直达上下文接口：
+  - `POST /api/conversations/{conversationId}/attachments/{attachmentId}/pin`
+  - `POST /api/conversations/{conversationId}/attachments/{attachmentId}/memory`
+- `ContextApplicationService` 支持生成 `PinnedContext(sourceType=ATTACHMENT)`。
+- `MemoryApplicationService` 支持生成 `MemoryItem(sourceType=ATTACHMENT)`。
+- 前端 API client 增加 `pinAttachmentAsContext` 和 `saveAttachmentAsMemory`。
+- Desktop Console 上传本地文件为 Attachment 后，可直接执行：
+  - 固定到 Context。
+  - 保存为 Memory。
+- Tauri 新增桌面配置和端口诊断能力：
+  - `load_desktop_config`
+  - `save_desktop_config`
+  - `check_tcp_port`
+- Desktop Console 支持：
+  - 最近目录、CLI command、backend jar path、工作目录持久化。
+  - 通知规则开关持久化。
+  - 托管 backend 进程定时刷新。
+  - `127.0.0.1:8080` 端口诊断。
+  - 通知历史点击定位到 TaskRun。
+
+### 验证方式
+
+- `cd backend && mvn -q -DskipTests package`
+- `cd frontend && npm.cmd run build`
+- `cd desktop/src-tauri && cargo check`
+- `cd desktop && npm run build -- --no-bundle`
+
+### 验证结果
+
+- 后端构建通过。
+- 前端构建通过。
+- Tauri Rust 侧 `cargo check` 通过。
+- Tauri `--no-bundle` release build 通过，生成 `agenthub-desktop.exe`。
+
+### 边界
+
+- 通知点击定位当前优先支持 TaskRun；Approval / Deployment 先保留目标提示，不做复杂跨面板定位。
+- 进程管理仍只管理 Tauri 启动的 backend。
+- 端口诊断只是本地可达性检查，不替代完整 health endpoint。
+- MSI installer bundling 仍受 WiX 下载可用性影响。
+
+## Phase 180：Workspace UI 可见性与重叠修复
+
+### 目标
+
+- 修复 `/workspace` 首屏组件堆叠、横向溢出和局部可读性差的问题。
+- 保持现有 IM 主路径、Artifact Inspector、消息操作、E2E 主链路不破。
+
+### 主要变更
+
+- 重写 `WorkspaceHeader`、`WorkspaceCollaborationToolbar`、`WorkspaceSessionSummary` 的静态中文文案和信息层级。
+- 将顶部区域收敛为：会话标题、运行状态、协作启动入口、轻量会话摘要。
+- 未选择 Agent 时不再展示占位 selected-agent banner，减少首屏噪音。
+- 在 `workspace.css` 末尾增加 UI repair 覆盖层：
+  - 修复 `workspace-main__content` 横向 flex 排布导致的超宽消息流。
+  - 固定 Header / Toolbar / Summary / MessageStream 的文档流关系，避免重叠。
+  - 统一参与者 pill、会话摘要、协作入口的暗色对比。
+  - 优化 1292px / 1366px 宽度下三栏可见性。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- 使用本地 Playwright / Edge 打开 `http://127.0.0.1:5173/workspace` 截图检查。
+- `node scripts/e2e-browser.mjs`
+
+### 验证结果
+
+- 前端构建通过。
+- 浏览器截图确认：无 Header / Toolbar / Summary / MessageStream 重叠；中栏无横向溢出。
+- Browser E2E 全链路通过，覆盖消息触发协作、Agent 创建、附件、Context Search、Adapter fallback、Revision、Apply Diff、Deploy、Restore、Preview、REJECTION 恢复。
+
+### 边界
+
+- 本轮是 Workspace 可见性修复和信息层级收敛，不是完整视觉系统重写。
+- 右侧 Artifact Inspector、Agent Builder、Preview Studio 仍沿用现有组件结构。

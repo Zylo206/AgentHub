@@ -15,6 +15,9 @@ const E2E_ARTIFACT_DIR = process.env.AGENTHUB_E2E_ARTIFACT_DIR || path.resolve("
 const EXPECT_AUTO_TRIGGER_APPROVAL = process.env.AGENTHUB_E2E_EXPECT_AUTO_TRIGGER_APPROVAL === "true";
 const REQUIRE_MESSAGE_TRIGGER = process.env.AGENTHUB_E2E_REQUIRE_MESSAGE_TRIGGER !== "false";
 const EXPECT_REJECTION = process.env.AGENTHUB_E2E_EXPECT_REJECTION !== "false";
+const TASK_RUN_START_TIMEOUT_MS = Number(process.env.AGENTHUB_E2E_TASKRUN_START_TIMEOUT_MS || 8000);
+const TASK_RUN_COMPLETE_TIMEOUT_MS = Number(process.env.AGENTHUB_E2E_TASKRUN_COMPLETE_TIMEOUT_MS || 45000);
+const CHAT_SEND_READY_TIMEOUT_MS = Number(process.env.AGENTHUB_E2E_CHAT_SEND_READY_TIMEOUT_MS || 30000);
 const TEST_MARKER = `browser-e2e-main-${Date.now()}`;
 const TEST_ATTACHMENT_FILE_NAME = "browser-e2e-ui-brief.md";
 const TEST_PROMPT_BODY = [
@@ -715,7 +718,7 @@ async function triggerTaskRunFromUi(page, conversationId) {
       "primary-action TaskRun",
       () => request(`/api/conversations/${conversationId}/task-runs`),
       (taskRuns) => taskRuns.find((taskRun) => !beforeRunIds.has(getIdValue(taskRun.id))),
-      8000,
+      TASK_RUN_START_TIMEOUT_MS,
       500
     );
   } catch (error) {
@@ -739,7 +742,7 @@ async function triggerTaskRunFromUi(page, conversationId) {
       }
       return null;
     },
-    45000,
+    TASK_RUN_COMPLETE_TIMEOUT_MS,
     750
   );
 
@@ -816,6 +819,11 @@ async function createRevisionAndApplyDiff(page, conversationId) {
   await sendSelectionButton.click();
   await waitForVisible(page, "[data-testid='chat-artifact-selection-preview']", "artifact selection chat preview");
   await page.getByTestId("chat-input-textarea").fill(`${REVISION_INSTRUCTION} Keep this as a scoped chat-driven local revision.`);
+  await waitForLocatorEnabled(
+    page.getByTestId("chat-send-button"),
+    "chat send button before local revision",
+    CHAT_SEND_READY_TIMEOUT_MS
+  );
   await page.getByTestId("chat-send-button").click();
 
   const artifactsAfterRevision = await waitForArtifacts(conversationId, beforeIds, "artifact revision output");
@@ -848,6 +856,11 @@ async function createRevisionAndApplyDiff(page, conversationId) {
 
 async function deploySelectedArtifact(page) {
   await page.getByTestId("chat-input-textarea").fill("请部署当前产物并生成预览 URL。");
+  await waitForLocatorEnabled(
+    page.getByTestId("chat-send-button"),
+    "chat send button before deploy intent",
+    CHAT_SEND_READY_TIMEOUT_MS
+  );
   await page.getByTestId("chat-send-button").click();
   await waitForVisible(page, "[data-testid='message-deploy-intent']", "message deploy confirmation card");
   const startDeployButton = await waitForLocatorEnabled(

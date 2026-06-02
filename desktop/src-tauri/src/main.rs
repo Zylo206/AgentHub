@@ -1,8 +1,10 @@
-use serde::Serialize;
+use base64::{engine::general_purpose, Engine as _};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, VecDeque},
     fs,
     io::{BufRead, BufReader, Read},
+    net::{TcpStream, ToSocketAddrs},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
@@ -55,6 +57,17 @@ struct FilePreview {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct AttachmentFilePayload {
+    file_name: String,
+    path: String,
+    size_bytes: u64,
+    content_type: String,
+    content_preview: String,
+    content_base64: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct CliProbeResult {
     command: String,
     available: bool,
@@ -80,10 +93,62 @@ struct ManagedProcessInfo {
     recent_output: Vec<String>,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopConfig {
+    recent_directories: Vec<String>,
+    java_command: String,
+    backend_jar_path: String,
+    backend_working_directory: String,
+    claude_command: String,
+    codex_command: String,
+    opencode_command: String,
+    notify_task_run: bool,
+    notify_approval: bool,
+    notify_deploy: bool,
+    notify_adapter_fallback: bool,
+}
+
+impl Default for DesktopConfig {
+    fn default() -> Self {
+        Self {
+            recent_directories: vec![],
+            java_command: "java".to_string(),
+            backend_jar_path: "backend/target/agenthub-backend-0.1.0-SNAPSHOT.jar".to_string(),
+            backend_working_directory: ".".to_string(),
+            claude_command: "claude".to_string(),
+            codex_command: "codex".to_string(),
+            opencode_command: "opencode".to_string(),
+            notify_task_run: true,
+            notify_approval: true,
+            notify_deploy: true,
+            notify_adapter_fallback: true,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PortStatus {
+    host: String,
+    port: u16,
+    open: bool,
+    message: String,
+}
+
 fn recent_lines(logs: &Arc<Mutex<VecDeque<String>>>) -> Vec<String> {
     logs.lock()
         .map(|value| value.iter().cloned().collect())
         .unwrap_or_default()
+}
+
+fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {error}"))?;
+    fs::create_dir_all(&directory).map_err(|error| format!("Failed to create app data directory: {error}"))?;
+    Ok(directory.join("desktop-config.json"))
 }
 
 fn now_label() -> String {
@@ -91,6 +156,45 @@ fn now_label() -> String {
         Ok(duration) => duration.as_secs().to_string(),
         Err(_) => "unknown".to_string(),
     }
+}
+
+fn infer_content_type(path: &Path) -> String {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_lowercase()
+        .as_str()
+    {
+        "txt" => "text/plain",
+        "md" | "markdown" => "text/markdown",
+        "json" => "application/json",
+        "ts" | "tsx" => "text/typescript",
+        "js" | "jsx" => "text/javascript",
+        "java" => "text/x-java-source",
+        "html" => "text/html",
+        "css" => "text/css",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "pdf" => "application/pdf",
+        "ppt" => "application/vnd.ms-powerpoint",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
+fn build_content_preview(path: &Path, content_type: &str, bytes: &[u8]) -> String {
+    if content_type.starts_with("text/")
+        || matches!(content_type, "application/json" | "text/typescript" | "text/javascript")
+    {
+        return String::from_utf8_lossy(&bytes.iter().copied().take(1200).collect::<Vec<_>>()).to_string();
+    }
+
+    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("file");
+    format!("{file_name} · {content_type} · binary attachment preview shell")
 }
 
 fn sanitize_command(command: &str) -> Result<String, String> {
@@ -238,6 +342,90 @@ fn read_text_preview(path: String, max_bytes: Option<usize>) -> Result<FilePrevi
         content_preview: String::from_utf8_lossy(&buffer).to_string(),
         truncated: metadata.len() > read as u64,
     })
+}
+
+#[tauri::command]
+fn read_file_for_attachment(path: String, max_bytes: Option<u64>) -> Result<AttachmentFilePayload, String> {
+    let path_buf = PathBuf::from(path);
+    if !path_buf.is_file() {
+        return Err("Path is not a file.".to_string());
+    }
+
+    let metadata = fs::metadata(&path_buf).map_err(|error| format!("Failed to inspect file: {error}"))?;
+    let limit = max_bytes.unwrap_or(5 * 1024 * 1024).clamp(1024, 5 * 1024 * 1024);
+    if metadata.len() > limit {
+        return Err(format!("File exceeds desktop attachment limit: {} bytes > {} bytes.", metadata.len(), limit));
+    }
+
+    let bytes = fs::read(&path_buf).map_err(|error| format!("Failed to read file: {error}"))?;
+    let content_type = infer_content_type(&path_buf);
+    Ok(AttachmentFilePayload {
+        file_name: path_buf.file_name().and_then(|name| name.to_str()).unwrap_or("file").to_string(),
+        path: path_buf.to_string_lossy().to_string(),
+        size_bytes: metadata.len(),
+        content_preview: build_content_preview(&path_buf, &content_type, &bytes),
+        content_base64: general_purpose::STANDARD.encode(bytes),
+        content_type,
+    })
+}
+
+#[tauri::command]
+fn load_desktop_config(app: tauri::AppHandle) -> Result<DesktopConfig, String> {
+    let path = config_path(&app)?;
+    if !path.is_file() {
+        return Ok(DesktopConfig::default());
+    }
+    let content = fs::read_to_string(&path).map_err(|error| format!("Failed to read desktop config: {error}"))?;
+    serde_json::from_str(&content).map_err(|error| format!("Failed to parse desktop config: {error}"))
+}
+
+#[tauri::command]
+fn save_desktop_config(app: tauri::AppHandle, config: DesktopConfig) -> Result<DesktopConfig, String> {
+    let path = config_path(&app)?;
+    let content = serde_json::to_string_pretty(&config).map_err(|error| format!("Failed to serialize desktop config: {error}"))?;
+    fs::write(path, content).map_err(|error| format!("Failed to write desktop config: {error}"))?;
+    Ok(config)
+}
+
+#[tauri::command]
+fn check_tcp_port(host: String, port: u16, timeout_millis: Option<u64>) -> PortStatus {
+    let timeout = Duration::from_millis(timeout_millis.unwrap_or(700).clamp(100, 5000));
+    let address = format!("{host}:{port}");
+    let resolved = match address.to_socket_addrs() {
+        Ok(mut addresses) => addresses.next(),
+        Err(error) => {
+            return PortStatus {
+                host,
+                port,
+                open: false,
+                message: format!("Failed to resolve address: {error}"),
+            };
+        }
+    };
+
+    let Some(socket_address) = resolved else {
+        return PortStatus {
+            host,
+            port,
+            open: false,
+            message: "Address did not resolve.".to_string(),
+        };
+    };
+
+    match TcpStream::connect_timeout(&socket_address, timeout) {
+        Ok(_) => PortStatus {
+            host,
+            port,
+            open: true,
+            message: "Port is reachable.".to_string(),
+        },
+        Err(error) => PortStatus {
+            host,
+            port,
+            open: false,
+            message: format!("Port is not reachable: {error}"),
+        },
+    }
 }
 
 #[tauri::command]
@@ -451,6 +639,10 @@ fn main() {
             desktop_environment,
             list_directory,
             read_text_preview,
+            read_file_for_attachment,
+            load_desktop_config,
+            save_desktop_config,
+            check_tcp_port,
             probe_agent_cli,
             send_system_notification,
             start_agenthub_backend,

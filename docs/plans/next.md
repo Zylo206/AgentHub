@@ -249,6 +249,10 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Desktop notification center records realtime notification history in the console while keeping SSE / REST as the authoritative state.
    - `Done`: Agent CLI runtime cards now show executable path, version, help probe, auth probe status, stream support, schema support, sandbox policy, and tool policy.
    - `Done`: backend process management now captures recent stdout / stderr lines, exposes a temp log path, and shows PID / startedAt / running status in the Desktop Console.
+   - `Done`: Desktop local file candidates now connect to the real Attachment path: Tauri reads a selected local file under the 5MB desktop limit, Workspace uploads it through the existing conversation attachment API, and the result is appended to the current ChatInput draft for later Message / Context Retrieval use.
+   - `Done`: Desktop local files can now be promoted directly to Context / Memory after upload through new attachment pin / memory APIs, without waiting for the user to send a chat message first.
+   - `Done`: Desktop notification rules are configurable and persisted through the Tauri desktop config; notification history items can route back to known AgentHub resources such as TaskRun targets.
+   - `Done`: Desktop runtime management now includes periodic managed-process refresh, backend port diagnostics for `127.0.0.1:8080`, and persisted runtime settings for recent directories, CLI commands, backend jar path, and working directory.
    - `Boundary`: desktop support is optional; normal Web build, smoke, and Browser E2E must not require Tauri, native packaging, or desktop permissions.
    - `Boundary`: desktop process management only controls processes started through the Tauri shell and does not replace OS service management.
    - `Boundary`: full installer bundling still needs WiX download access or a preinstalled WiX toolset.

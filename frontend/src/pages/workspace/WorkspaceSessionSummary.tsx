@@ -55,7 +55,7 @@ function getSessionMode(
   if (!currentConversation) {
     return {
       label: "等待选择会话",
-      detail: "创建或选择一个会话后，AgentHub 会展示单聊、群聊和上下文连续状态。",
+      detail: "选择会话后展示单聊、群聊和上下文状态。",
       tone: "idle"
     };
   }
@@ -63,7 +63,7 @@ function getSessionMode(
   if (selectedAgent) {
     return {
       label: "单聊优先",
-      detail: `当前消息会优先路由给 @${selectedAgent.name}，Orchestrator 仍可在需要时补充分工。`,
+      detail: `当前消息优先路由给 @${selectedAgent.name}，Orchestrator 仍可在需要时补充分工。`,
       tone: "single"
     };
   }
@@ -71,14 +71,14 @@ function getSessionMode(
   if (currentConversation.type === "GROUP" || participants.length > 1) {
     return {
       label: "群聊协作",
-      detail: "Orchestrator 会根据 @Agent、参与成员、工具能力和任务上下文进行分派。",
+      detail: "Orchestrator 会根据 @Agent、参与成员、工具能力和上下文分派任务。",
       tone: "group"
     };
   }
 
   return {
     label: "自动分派",
-    detail: "未指定 Agent 时，会按任务意图、tool capability 和 Adapter 健康度选择合适 Agent。",
+    detail: "未指定 Agent 时，根据任务意图、tool capability 和 Adapter 健康度选择合适 Agent。",
     tone: "auto"
   };
 }
@@ -143,7 +143,7 @@ export function WorkspaceSessionSummary({
         </article>
         <article>
           <span>上下文连续</span>
-          <strong>{pinnedContextCount + memoryCount} 条固定/记忆</strong>
+          <strong>{pinnedContextCount + memoryCount} 条固定 / 记忆</strong>
           <small>{messages.length} 条消息 / {artifactCount} 个产物可检索</small>
         </article>
         <article>

@@ -108,3 +108,28 @@ Rust 侧提供命令：
 - 系统通知是桌面增强能力，不作为任务完成的唯一提示渠道。
 - 桌面壳不改变 Orchestrator、Adapter、Artifact、Approval、Realtime 的后端主链路。
 - Installer / MSI bundling 是发布阶段能力；开发期 Tauri shell 能运行不等于完整安装包已可交付。
+
+## Current behavior: 本地文件接入 Attachment
+
+- Desktop Console 的本地文件区可以读取选中文件并上传为当前 Conversation 的 Attachment。
+- 上传走现有 `uploadConversationAttachment` API，不新增桌面专用后端业务入口。
+- 上传成功后，附件会追加到当前 ChatInput 草稿；用户发送消息后，附件成为 Message attachment。
+- Attachment preview 后续可被 Context Search / Context Retrieval 作为 `ATTACHMENT` source 检索和解释。
+- Tauri 侧限制单文件最大 5MB，并返回 `contentType`、`contentPreview`、`contentBase64` 给前端桥接层。
+- 图片 / PPT / 未知二进制文件仍只做 metadata / preview shell，不做完整渲染、OCR 或在线 PPT 浏览。
+
+## Current behavior: 桌面生产化补强
+
+- 已上传的桌面本地文件可以直接执行：
+  - `固定到 Context`：调用 attachment pin API，生成 `PinnedContext(sourceType=ATTACHMENT)`。
+  - `保存为 Memory`：调用 attachment memory API，生成 `MemoryItem(sourceType=ATTACHMENT)`。
+- 通知规则支持开关，并保存到 Tauri desktop config：
+  - TaskRun 状态。
+  - Approval pending。
+  - Deploy completed。
+  - Adapter fallback。
+- Desktop Console 通知历史项可携带 `targetType / targetId`，点击后由 Workspace 定位到已知资源；当前优先支持 TaskRun。
+- Agent / Backend runtime 增加健康检查：
+  - 托管进程列表定时刷新。
+  - backend `127.0.0.1:8080` 端口可达性诊断。
+  - 最近目录、CLI command、backend jar path、working directory 持久化到 Tauri app data。

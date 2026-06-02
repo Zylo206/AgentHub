@@ -35,11 +35,13 @@ import {
   getTaskSpecsByConversation,
   archiveConversation,
   markConversationRead,
+  pinAttachmentAsContext,
   pinConversation,
   pinMessageAsContext,
   regenerateAgentReply,
   runOrchestratorFromMessage,
   restoreArtifactSnapshotWithApproval,
+  saveAttachmentAsMemory,
   saveMessageAsMemory,
   sendMessage,
   stopTaskRun,
@@ -829,6 +831,16 @@ export function WorkspacePage() {
   }, [selectedTaskRunId, loadContextData]);
 
   useEffect(() => {
+    if (!selectedTaskRunId) {
+      return;
+    }
+    const selectedRunStillExists = taskRuns.some((taskRun) => getIdValue(taskRun.id) === selectedTaskRunId);
+    if (selectedRunStillExists) {
+      void loadContextData(selectedTaskRunId);
+    }
+  }, [taskRuns, selectedTaskRunId, loadContextData]);
+
+  useEffect(() => {
     if (artifacts.length === 0) {
       setSelectedArtifactId(null);
       setSelectedArtifact(null);
@@ -1009,6 +1021,42 @@ export function WorkspacePage() {
     setOperationMessage("已引用选中的 Artifact 代码片段。请在聊天框描述修改需求并发送。");
   }
 
+  async function runArtifactSelectionRevisionFromChat(
+    selection: ArtifactSelectionReference,
+    userRequest: string,
+    sourceMessageId: string
+  ) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    setRevisingArtifact(true);
+    try {
+      const revisionInstruction = buildArtifactSelectionRevisionInstruction(
+        selection,
+        userRequest,
+        sourceMessageId
+      );
+      const revisionResult = await createDemoArtifactRevision(
+        selection.artifactId,
+        currentConversationId,
+        revisionInstruction
+      );
+      const revisionTaskRunId = getIdValue(revisionResult.taskRun.id);
+      const revisedArtifactId = getIdValue(revisionResult.revisedArtifact.id);
+      await loadConversationData(currentConversationId);
+      setSelectedTaskRunId(revisionTaskRunId);
+      setSelectedTaskStepId(null);
+      setShowAllArtifacts(true);
+      setSelectedArtifactId(revisedArtifactId);
+      setOperationMessage("已根据聊天中的局部修改请求生成 Draft Revision，请在右侧 Diff Preview 中审批应用。");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setRevisingArtifact(false);
+    }
+  }
+
   async function handleSendMessage() {
     if (!currentConversationId || (!draftMessage.trim() && draftAttachments.length === 0)) {
       return;
@@ -1047,23 +1095,13 @@ export function WorkspacePage() {
         draftAttachments
       );
       const sentMessageId = getIdValue(sentMessage.id);
-      let revisedArtifactIdFromChat: string | null = null;
-      let revisionTaskRunIdFromChat: string | null = null;
       if (selectedArtifactSnippet) {
-        setRevisingArtifact(true);
-        const revisionInstruction = buildArtifactSelectionRevisionInstruction(
+        void runArtifactSelectionRevisionFromChat(
           selectedArtifactSnippet,
           contentToSend,
-          getIdValue(sentMessage.id)
+          sentMessageId
         );
-        const revisionResult = await createDemoArtifactRevision(
-          selectedArtifactSnippet.artifactId,
-          currentConversationId,
-          revisionInstruction
-        );
-        revisionTaskRunIdFromChat = getIdValue(revisionResult.taskRun.id);
-        revisedArtifactIdFromChat = getIdValue(revisionResult.revisedArtifact.id);
-        setOperationMessage("已根据聊天中的局部修改请求生成 Draft Revision，请在右侧 Diff Preview 中审批应用。");
+        setOperationMessage("已发送局部修改请求，系统正在后台生成 Draft Revision。");
       }
       const localAgentCreationDraft = inferAgentCreationDraft(contentToSend);
       if (localAgentCreationDraft) {
@@ -1099,14 +1137,6 @@ export function WorkspacePage() {
         setOperationMessage("已识别部署 / 发布意图，请在消息卡片中确认生成本地静态预览 URL。");
       }
       await loadConversationData(currentConversationId);
-      if (revisionTaskRunIdFromChat) {
-        setSelectedTaskRunId(revisionTaskRunIdFromChat);
-        setSelectedTaskStepId(null);
-        setShowAllArtifacts(true);
-      }
-      if (revisedArtifactIdFromChat) {
-        setSelectedArtifactId(revisedArtifactIdFromChat);
-      }
       await loadConversationIndex();
       setDraftMessage("");
       setDraftAttachments([]);
@@ -1117,7 +1147,6 @@ export function WorkspacePage() {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setSendingMessage(false);
-      setRevisingArtifact(false);
     }
   }
 
@@ -1187,6 +1216,54 @@ export function WorkspacePage() {
       })
     );
     return uploadedAttachments;
+  }
+
+  async function handleUseDesktopLocalFileAsAttachment(file: File, sourcePath: string): Promise<LightweightAttachment> {
+    const [uploadedAttachment] = await handleUploadAttachments([file]);
+    setDraftAttachments((current) => [
+      ...current.filter((item) => (item.attachmentId ?? item.id) !== (uploadedAttachment.attachmentId ?? uploadedAttachment.id)),
+      {
+        ...uploadedAttachment,
+        source: "DESKTOP_LOCAL_FILE",
+        contentPreview: uploadedAttachment.contentPreview || `来自本地文件：${sourcePath}`,
+        previewText: uploadedAttachment.previewText || `来自本地文件：${sourcePath}`
+      }
+    ]);
+    setOperationMessage("本地文件已上传为当前消息附件。发送消息后可进入 Attachment / Context Retrieval。");
+    return uploadedAttachment;
+  }
+
+  async function handlePinDesktopAttachmentAsContext(attachmentId: string): Promise<void> {
+    if (!currentConversationId) {
+      return;
+    }
+    await pinAttachmentAsContext(currentConversationId, attachmentId);
+    const refreshedPinnedContexts = await getPinnedContextsByConversation(currentConversationId);
+    setPinnedContexts(refreshedPinnedContexts);
+    setOperationMessage("本地附件已直接固定到 Context。");
+  }
+
+  async function handleSaveDesktopAttachmentAsMemory(attachmentId: string): Promise<void> {
+    if (!currentConversationId) {
+      return;
+    }
+    await saveAttachmentAsMemory(currentConversationId, attachmentId);
+    const refreshedMemories = await getMemoriesByConversation(currentConversationId);
+    setMemories(refreshedMemories);
+    setOperationMessage("本地附件已直接保存为 Memory。");
+  }
+
+  function handleNavigateToDesktopNotificationTarget(targetType?: string, targetId?: string) {
+    if (!targetType || !targetId) {
+      setOperationMessage("该桌面通知没有可定位的 AgentHub 资源。");
+      return;
+    }
+    if (targetType === "TASK_RUN") {
+      setSelectedTaskRunId(targetId);
+      setOperationMessage(`已定位到 TaskRun：${targetId}`);
+      return;
+    }
+    setOperationMessage(`桌面通知目标：${targetType} / ${targetId}`);
   }
 
   async function handleToggleMessagePin(messageId: string, pinnedContextId?: string | null) {
@@ -1942,36 +2019,29 @@ export function WorkspacePage() {
           artifactCount={artifacts.length}
         />
 
-        <div className="selected-agent-banner">
-          {selectedAgent ? (
-            <>
-              <div>
-                <div className="selected-agent-name">当前 Agent：{selectedAgent.name}</div>
-                <div className="selected-agent-adapter">
-                  首选 Adapter：{selectedAgent.preferredAdapterType || "MOCK"} / 角色：{displayAgentRole(selectedAgent.role)}
-                </div>
-                {selectedAgentAdapterDescriptor ? (
-                  <div className="selected-agent-health">
-                    <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(selectedAgentAdapterDescriptor.status)}`}>
-                      Adapter 状态：{displayStatus(selectedAgentAdapterDescriptor.status)}
-                    </span>
-                    {selectedAgentAdapterDescriptor.status !== "AVAILABLE" ? (
-                      <span className="selected-agent-health__hint">不可用时会回退到 MOCK。</span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              <button type="button" className="secondary-button clear-selected-agent-button" onClick={handleClearSelectedAgent}>
-                清除选择
-              </button>
-            </>
-          ) : (
+        {selectedAgent ? (
+          <div className="selected-agent-banner">
             <div>
-              <div className="selected-agent-name">未选择 Agent</div>
-              <div className="selected-agent-adapter">未选择时，协作会使用内置 Agent 流程。</div>
+              <div className="selected-agent-name">当前 Agent：{selectedAgent.name}</div>
+              <div className="selected-agent-adapter">
+                首选 Adapter：{selectedAgent.preferredAdapterType || "MOCK"} / 角色：{displayAgentRole(selectedAgent.role)}
+              </div>
+              {selectedAgentAdapterDescriptor ? (
+                <div className="selected-agent-health">
+                  <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(selectedAgentAdapterDescriptor.status)}`}>
+                    Adapter 状态：{displayStatus(selectedAgentAdapterDescriptor.status)}
+                  </span>
+                  {selectedAgentAdapterDescriptor.status !== "AVAILABLE" ? (
+                    <span className="selected-agent-health__hint">不可用时会回退到 MOCK。</span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
-          )}
-        </div>
+            <button type="button" className="secondary-button clear-selected-agent-button" onClick={handleClearSelectedAgent}>
+              清除选择
+            </button>
+          </div>
+        ) : null}
 
         <div className="workspace-main__content">
           <MessageStream
@@ -2037,7 +2107,13 @@ export function WorkspacePage() {
             handoffSummaries={handoffSummaries}
             loading={loadingContext}
           />
-          <DesktopCapabilityPanel />
+          <DesktopCapabilityPanel
+            conversationId={currentConversationId}
+            onUseLocalFileAsAttachment={handleUseDesktopLocalFileAsAttachment}
+            onPinAttachmentAsContext={handlePinDesktopAttachmentAsContext}
+            onSaveAttachmentAsMemory={handleSaveDesktopAttachmentAsMemory}
+            onNavigateToDesktopNotificationTarget={handleNavigateToDesktopNotificationTarget}
+          />
           <ActionAuditTimelinePanel audits={actionAudits} />
           <ChatInput
             value={draftMessage}

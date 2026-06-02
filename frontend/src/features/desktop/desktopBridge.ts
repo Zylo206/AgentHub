@@ -20,6 +20,15 @@ export interface DesktopFilePreview {
   truncated: boolean;
 }
 
+export interface DesktopAttachmentFile {
+  fileName: string;
+  path: string;
+  sizeBytes: number;
+  contentType: string;
+  contentPreview: string;
+  contentBase64: string;
+}
+
 export interface DesktopCliProbeResult {
   command: string;
   available: boolean;
@@ -42,6 +51,29 @@ export interface DesktopManagedProcess {
   logPath?: string | null;
   recentOutput: string[];
 }
+
+export interface DesktopConfig {
+  recentDirectories: string[];
+  javaCommand: string;
+  backendJarPath: string;
+  backendWorkingDirectory: string;
+  claudeCommand: string;
+  codexCommand: string;
+  opencodeCommand: string;
+  notifyTaskRun: boolean;
+  notifyApproval: boolean;
+  notifyDeploy: boolean;
+  notifyAdapterFallback: boolean;
+}
+
+export interface DesktopPortStatus {
+  host: string;
+  port: number;
+  open: boolean;
+  message: string;
+}
+
+const DESKTOP_NOTIFICATION_SETTINGS_KEY = "agenthub.desktop.notificationSettings";
 
 type TauriInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -83,12 +115,48 @@ export function readDesktopTextPreview(path: string, maxBytes = 4096): Promise<D
   return invokeDesktop<DesktopFilePreview>("read_text_preview", { path, maxBytes });
 }
 
+export function readDesktopFileForAttachment(path: string, maxBytes = 5 * 1024 * 1024): Promise<DesktopAttachmentFile> {
+  return invokeDesktop<DesktopAttachmentFile>("read_file_for_attachment", { path, maxBytes });
+}
+
+export function loadDesktopConfig(): Promise<DesktopConfig> {
+  return invokeDesktop<DesktopConfig>("load_desktop_config");
+}
+
+export function saveDesktopConfig(config: DesktopConfig): Promise<DesktopConfig> {
+  return invokeDesktop<DesktopConfig>("save_desktop_config", { config });
+}
+
+export function checkDesktopPort(host: string, port: number, timeoutMillis = 700): Promise<DesktopPortStatus> {
+  return invokeDesktop<DesktopPortStatus>("check_tcp_port", { host, port, timeoutMillis });
+}
+
 export function probeDesktopAgentCli(command: string): Promise<DesktopCliProbeResult> {
   return invokeDesktop<DesktopCliProbeResult>("probe_agent_cli", { command });
 }
 
 export function sendDesktopNotification(title: string, body: string): Promise<void> {
   return invokeDesktop<void>("send_system_notification", { title, body });
+}
+
+export function startDesktopBackend(
+  javaCommand: string,
+  jarPath: string,
+  workingDirectory: string
+): Promise<DesktopManagedProcess> {
+  return invokeDesktop<DesktopManagedProcess>("start_agenthub_backend", {
+    javaCommand,
+    jarPath,
+    workingDirectory
+  });
+}
+
+export function stopDesktopManagedProcess(pid: number): Promise<void> {
+  return invokeDesktop<void>("stop_managed_process", { pid });
+}
+
+export function listDesktopManagedProcesses(): Promise<DesktopManagedProcess[]> {
+  return invokeDesktop<DesktopManagedProcess[]>("list_managed_processes");
 }
 
 function tryParseRealtimePayload(raw: string): Record<string, unknown> {
@@ -113,7 +181,39 @@ function stringifyPayloadValue(value: unknown): string | null {
   return null;
 }
 
-function buildRealtimeNotification(eventType: string, rawData: string): { title: string; body: string; type: string } | null {
+function getDesktopNotificationSettings(): Partial<DesktopConfig> {
+  try {
+    return JSON.parse(window.localStorage.getItem(DESKTOP_NOTIFICATION_SETTINGS_KEY) || "{}") as Partial<DesktopConfig>;
+  } catch {
+    return {};
+  }
+}
+
+export function persistDesktopNotificationSettings(config: Partial<DesktopConfig>): void {
+  window.localStorage.setItem(DESKTOP_NOTIFICATION_SETTINGS_KEY, JSON.stringify(config));
+}
+
+function isNotificationTypeEnabled(type: string): boolean {
+  const settings = getDesktopNotificationSettings();
+  if (type.startsWith("TASK_RUN_")) {
+    return settings.notifyTaskRun !== false;
+  }
+  if (type === "APPROVAL_PENDING") {
+    return settings.notifyApproval !== false;
+  }
+  if (type === "DEPLOY_COMPLETED") {
+    return settings.notifyDeploy !== false;
+  }
+  if (type === "ADAPTER_FALLBACK") {
+    return settings.notifyAdapterFallback !== false;
+  }
+  return true;
+}
+
+function buildRealtimeNotification(
+  eventType: string,
+  rawData: string
+): { title: string; body: string; type: string; targetType?: string; targetId?: string } | null {
   const payload = tryParseRealtimePayload(rawData);
   const status =
     stringifyPayloadValue(payload.status) ??
@@ -128,27 +228,59 @@ function buildRealtimeNotification(eventType: string, rawData: string): { title:
     stringifyPayloadValue(payload.adapterType) ??
     stringifyPayloadValue(payload.actualAdapter) ??
     stringifyPayloadValue(payload.sourceAdapterType);
+  const resourceId = stringifyPayloadValue(payload.resourceId);
+  const taskRunId = stringifyPayloadValue(payload.taskRunId) ?? resourceId;
+  const approvalId = stringifyPayloadValue(payload.approvalId) ?? resourceId;
+  const deploymentId = stringifyPayloadValue(payload.deploymentId) ?? resourceId;
 
   if (eventType === "TASK_RUN_UPDATED") {
     if (status === "COMPLETED") {
-      return { type: "TASK_RUN_COMPLETED", title: "AgentHub 任务已完成", body: summary || "多 Agent 协作运行已完成。" };
+      return {
+        type: "TASK_RUN_COMPLETED",
+        title: "AgentHub task completed",
+        body: summary || "Multi-agent collaboration completed.",
+        targetType: "TASK_RUN",
+        targetId: taskRunId ?? undefined
+      };
     }
     if (status === "BLOCKED") {
-      return { type: "TASK_RUN_BLOCKED", title: "AgentHub 任务被 Reviewer 阻塞", body: summary || "Reviewer 发现阻塞问题，需要修复后重新评审。" };
+      return {
+        type: "TASK_RUN_BLOCKED",
+        title: "AgentHub task blocked",
+        body: summary || "Reviewer found blockers. Revise and review again.",
+        targetType: "TASK_RUN",
+        targetId: taskRunId ?? undefined
+      };
     }
     if (status === "FAILED") {
-      return { type: "TASK_RUN_FAILED", title: "AgentHub 任务失败", body: summary || "任务运行失败，请查看 TaskRun 和审计记录。" };
+      return {
+        type: "TASK_RUN_FAILED",
+        title: "AgentHub task failed",
+        body: summary || "Task run failed. Check TaskRun and audit logs.",
+        targetType: "TASK_RUN",
+        targetId: taskRunId ?? undefined
+      };
     }
   }
 
-  if (eventType === "APPROVAL_UPDATED") {
-    if (!status || status === "PENDING") {
-      return { type: "APPROVAL_PENDING", title: "AgentHub 有待审批操作", body: summary || "Apply Diff / Deploy / Restore 等高风险操作等待确认。" };
-    }
+  if (eventType === "APPROVAL_UPDATED" && (!status || status === "PENDING")) {
+    return {
+      type: "APPROVAL_PENDING",
+      title: "AgentHub approval pending",
+      body: summary || "A high-risk operation is waiting for approval.",
+      targetType: "APPROVAL",
+      targetId: approvalId ?? undefined
+    };
   }
 
   if (eventType === "DEPLOYMENT_CREATED") {
-    return { type: "DEPLOY_COMPLETED", title: "AgentHub 预览已生成", body: summary || "本地静态 Preview URL 已生成，可在 Preview Studio 打开。" };
+    return {
+      type: "DEPLOY_COMPLETED",
+      title: "AgentHub preview generated",
+      body: summary || "Local static preview URL is ready.",
+      targetType: "DEPLOYMENT",
+      targetId: deploymentId ?? undefined
+    };
   }
 
   if (eventType === "TASK_STEP_UPDATED" || eventType === "TASK_RUN_UPDATED") {
@@ -156,8 +288,10 @@ function buildRealtimeNotification(eventType: string, rawData: string): { title:
     if (fallbackReason || status === "FALLBACK") {
       return {
         type: "ADAPTER_FALLBACK",
-        title: "AgentHub Adapter 已 fallback",
-        body: `${adapter || "Adapter"} 输出未被采纳：${fallbackReason || "已回退到 Mock / Static fallback。"}`
+        title: "AgentHub adapter fallback",
+        body: `${adapter || "Adapter"} output was not accepted: ${fallbackReason || "fallback to Mock / Static."}`,
+        targetType: "TASK_RUN",
+        targetId: taskRunId ?? undefined
       };
     }
   }
@@ -170,7 +304,7 @@ export async function notifyDesktopRealtimeEvent(eventType: string, rawData: str
     return;
   }
   const notification = buildRealtimeNotification(eventType, rawData);
-  if (!notification) {
+  if (!notification || !isNotificationTypeEnabled(notification.type)) {
     return;
   }
   await sendDesktopNotification(notification.title, notification.body);
@@ -181,28 +315,10 @@ export async function notifyDesktopRealtimeEvent(eventType: string, rawData: str
         type: notification.type,
         title: notification.title,
         body: notification.body,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        targetType: notification.targetType,
+        targetId: notification.targetId
       }
     })
   );
-}
-
-export function startDesktopBackend(
-  javaCommand: string,
-  jarPath: string,
-  workingDirectory: string
-): Promise<DesktopManagedProcess> {
-  return invokeDesktop<DesktopManagedProcess>("start_agenthub_backend", {
-    javaCommand,
-    jarPath,
-    workingDirectory
-  });
-}
-
-export function stopDesktopManagedProcess(pid: number): Promise<void> {
-  return invokeDesktop<void>("stop_managed_process", { pid });
-}
-
-export function listDesktopManagedProcesses(): Promise<DesktopManagedProcess[]> {
-  return invokeDesktop<DesktopManagedProcess[]>("list_managed_processes");
 }

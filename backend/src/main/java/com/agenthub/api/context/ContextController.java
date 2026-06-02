@@ -44,6 +44,15 @@ public class ContextController {
                 "Message pinned as context");
     }
 
+    @PostMapping("/conversations/{conversationId}/attachments/{attachmentId}/pin")
+    public ApiResponse<?> pinAttachment(
+            @PathVariable("conversationId") String conversationId,
+            @PathVariable("attachmentId") String attachmentId) {
+        return ApiResponse.success(
+                contextApplicationService.pinAttachment(conversationId, attachmentId),
+                "Attachment pinned as context");
+    }
+
     @DeleteMapping("/pinned-contexts/{pinnedContextId}")
     public ApiResponse<?> unpinContext(@PathVariable("pinnedContextId") String pinnedContextId) {
         return ApiResponse.success(

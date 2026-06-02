@@ -30,7 +30,7 @@ export function WorkspaceCollaborationToolbar({
       <div className="workspace-main__toolbar workspace-main__toolbar--collaboration">
         <div className="section-header">
           <h3>协作消息流</h3>
-          <span>像群聊一样发送任务，确认后由 Orchestrator 协调多个 Agent 回复。</span>
+          <span>发送任务消息后确认启动，多 Agent 会在同一会话中依次回复。</span>
         </div>
         <div className="workspace-main__collaboration-actions" data-testid="workspace-collaboration-actions">
           <button
@@ -40,7 +40,7 @@ export function WorkspaceCollaborationToolbar({
             disabled={!currentConversationId || !latestUserMessage || !latestTriggerReady || Boolean(autoTriggerRunningMessageId)}
             onClick={() => latestUserMessage && onStartCollaboration(latestUserMessage)}
           >
-            {autoTriggerRunningMessageId ? "启动中..." : latestTriggerReady ? latestTriggerPrimaryLabel : "发送任务消息后确认协作"}
+            {autoTriggerRunningMessageId ? "启动中..." : latestTriggerReady ? latestTriggerPrimaryLabel : "发送任务后确认协作"}
           </button>
           <button
             type="button"
@@ -48,9 +48,9 @@ export function WorkspaceCollaborationToolbar({
             data-testid="debug-actions-toggle"
             onClick={onToggleDebugActions}
             aria-expanded={showDebugActions}
-            title="调试工具是次要入口；产品主路径从消息确认开始。"
+            title="调试入口仅用于 smoke test 或本地排查，产品主路径从聊天消息开始。"
           >
-            {showDebugActions ? "隐藏调试工具" : "调试 / 高级"}
+            {showDebugActions ? "隐藏调试" : "调试 / 高级"}
           </button>
         </div>
       </div>
@@ -59,7 +59,7 @@ export function WorkspaceCollaborationToolbar({
         <div className="workspace-debug-panel" data-testid="debug-actions-panel">
           <div className="workspace-debug-panel__header">
             <strong>手动调试 fallback</strong>
-            <p>仅用于 smoke test 或本地调试。产品主路径是消息确认后启动协作。</p>
+            <p>仅用于 smoke test 或本地调试。默认体验应从“发送任务消息 → 确认协作”开始。</p>
           </div>
           <button
             type="button"
@@ -75,7 +75,7 @@ export function WorkspaceCollaborationToolbar({
 
       <div className="workspace-main__flow-guide" data-testid="workspace-flow-guide" aria-label="Agent collaboration flow">
         <span>主路径</span>
-        <strong>发送任务消息</strong>
+        <strong>发送任务</strong>
         <em>→</em>
         <strong>确认协作</strong>
         <em>→</em>

@@ -51,7 +51,9 @@ public class RealtimeController {
                         .data(event));
             }
         } catch (IOException | IllegalStateException exception) {
-            emitter.completeWithError(exception);
+            // Client disconnect during the initial replay is a normal SSE lifecycle event.
+            // Completing normally avoids routing a text/event-stream response through the JSON API exception handler.
+            emitter.complete();
         }
         return emitter;
     }

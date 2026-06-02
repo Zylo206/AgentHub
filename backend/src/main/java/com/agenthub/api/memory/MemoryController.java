@@ -50,6 +50,22 @@ public class MemoryController {
                 "Message saved as memory");
     }
 
+    @PostMapping("/conversations/{conversationId}/attachments/{attachmentId}/memory")
+    public ApiResponse<?> saveAttachmentAsMemory(
+            @PathVariable("conversationId") String conversationId,
+            @PathVariable("attachmentId") String attachmentId,
+            @RequestBody(required = false) SaveMemoryRequest request) {
+        return ApiResponse.success(
+                memoryApplicationService.saveAttachmentAsMemory(
+                        conversationId,
+                        attachmentId,
+                        request == null ? null : request.category(),
+                        request == null ? null : request.scope(),
+                        request == null ? null : request.importance(),
+                        request == null ? null : request.content()),
+                "Attachment saved as memory");
+    }
+
     @PatchMapping("/memories/{memoryId}")
     public ApiResponse<?> updateMemory(
             @PathVariable("memoryId") String memoryId,

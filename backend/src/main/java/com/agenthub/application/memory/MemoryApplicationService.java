@@ -2,6 +2,8 @@ package com.agenthub.application.memory;
 
 import com.agenthub.common.IdGenerator;
 import com.agenthub.common.TimeProvider;
+import com.agenthub.domain.attachment.AttachmentRecord;
+import com.agenthub.domain.attachment.AttachmentRepository;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.memory.MemoryItem;
 import com.agenthub.domain.memory.MemoryRepository;
@@ -18,16 +20,19 @@ public class MemoryApplicationService {
 
     private final MemoryRepository memoryRepository;
     private final MessageRepository messageRepository;
+    private final AttachmentRepository attachmentRepository;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
 
     public MemoryApplicationService(
             MemoryRepository memoryRepository,
             MessageRepository messageRepository,
+            AttachmentRepository attachmentRepository,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.memoryRepository = memoryRepository;
         this.messageRepository = messageRepository;
+        this.attachmentRepository = attachmentRepository;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
@@ -72,6 +77,38 @@ public class MemoryApplicationService {
                             normalizeScope(scope),
                             normalizeCategory(category),
                             content == null || content.isBlank() ? buildMemoryContent(message) : content.trim(),
+                            normalizeImportance(importance),
+                            now,
+                            now,
+                            now));
+                });
+    }
+
+    public MemoryItem saveAttachmentAsMemory(
+            String conversationId,
+            String attachmentId,
+            String category,
+            String scope,
+            Integer importance,
+            String content) {
+        ConversationId conversationRef = new ConversationId(conversationId);
+        AttachmentRecord attachment = attachmentRepository.findById(attachmentId)
+                .orElseThrow(() -> new NoSuchElementException("Attachment not found: " + attachmentId));
+        if (!attachment.getConversationId().equals(conversationRef)) {
+            throw new IllegalArgumentException("Attachment does not belong to the provided conversation.");
+        }
+
+        return memoryRepository.findBySource(conversationRef, "ATTACHMENT", attachmentId)
+                .orElseGet(() -> {
+                    Instant now = timeProvider.now();
+                    return memoryRepository.save(new MemoryItem(
+                            idGenerator.nextId("mem"),
+                            conversationRef,
+                            "ATTACHMENT",
+                            attachmentId,
+                            normalizeScope(scope),
+                            normalizeCategory(category),
+                            content == null || content.isBlank() ? buildMemoryContent(attachment) : content.trim(),
                             normalizeImportance(importance),
                             now,
                             now,
@@ -128,5 +165,11 @@ public class MemoryApplicationService {
         return "Memory from " + message.getSenderType()
                 + " (" + message.getSenderId() + "): "
                 + message.getContent();
+    }
+
+    private String buildMemoryContent(AttachmentRecord attachment) {
+        return "Memory from attachment " + attachment.getFileName()
+                + " (" + attachment.getContentType() + ", " + attachment.getSizeBytes() + " bytes):\n"
+                + (attachment.getContentPreview() == null ? "" : attachment.getContentPreview());
     }
 }
