@@ -2044,97 +2044,121 @@ export function WorkspacePage() {
         ) : null}
 
         <div className="workspace-main__content">
-          <MessageStream
-            messages={messages}
-            agents={agents}
-            artifacts={artifacts}
-            pinnedContexts={pinnedContexts}
-            memorySourceIds={new Set(memories.filter((memory) => memory.sourceType === "MESSAGE").map((memory) => memory.sourceId))}
-            loading={loadingMessages}
-            rerunningMessageId={rerunningMessageId}
-            regeneratingMessageId={regeneratingMessageId}
-            triggerSuggestionsByMessageId={triggerSuggestionsByMessageId}
-            approvalByMessageId={approvalByMessageId}
-            autoTriggerRunningMessageId={autoTriggerRunningMessageId}
-            agentCreationDraftsByMessageId={agentCreationDraftsByMessageId}
-            agentCreationRunningMessageId={agentCreationRunningMessageId}
-            deployIntentsByMessageId={deployIntentsByMessageId}
-            deployingMessageId={deployingMessageId}
-            streamingPreviewsByStepId={streamingPreviewsByStepId}
-            onSelectArtifact={setSelectedArtifactId}
-            onToggleMessagePin={handleToggleMessagePin}
-            onSaveMessageAsMemory={handleSaveMessageAsMemory}
-            onCopyMessage={handleCopyMessage}
-            onQuoteMessage={handleQuoteMessage}
-            onReplyMessage={handleReplyMessage}
-            onRerunFromMessage={handleRerunFromMessage}
-            onRegenerateAgentReply={handleRegenerateAgentReply}
-            onConfirmOrchestratorTrigger={handleConfirmOrchestratorTrigger}
-            onCancelOrchestratorTrigger={handleCancelApprovalRequest}
-            onRefreshOrchestratorSuggestion={handleRefreshOrchestratorSuggestion}
-            onConfirmAgentCreation={handleConfirmAgentCreation}
-            onCancelAgentCreation={handleCancelAgentCreation}
-            onStartDeployIntent={handleStartDeployIntent}
-            onApproveDeployIntent={handleApproveDeployIntent}
-            onCancelDeployIntent={handleCancelDeployIntent}
-            onDownloadArtifactBundle={handleDownloadArtifactBundle}
-          />
-          <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
-          <AdapterQualityDashboard
-            adapterDescriptors={adapterDescriptors}
-            taskRuns={taskRuns}
-            qualityMetrics={adapterQualityMetrics}
-          />
-          <TaskRunPanel
-            agents={agents}
-            artifacts={artifacts}
-            taskSpecs={taskSpecs}
-            taskRuns={taskRuns}
-            loading={loadingTaskRuns}
-            selectedTaskRunId={selectedTaskRunId}
-            selectedTaskStepId={selectedTaskStepId}
-            streamingPreviewsByStepId={streamingPreviewsByStepId}
-            onSelectStep={handleSelectTaskStep}
-            onCancelTaskRun={handleCancelTaskRun}
-            onStopTaskRun={handleStopTaskRun}
-          />
-          <ContextPanel
-            taskSpec={activeTaskSpec}
-            taskRuns={taskRuns}
-            pinnedContexts={pinnedContexts}
-            memories={memories}
-            contextSnapshots={contextSnapshots}
-            handoffSummaries={handoffSummaries}
-            loading={loadingContext}
-          />
-          <DesktopCapabilityPanel
-            conversationId={currentConversationId}
-            onUseLocalFileAsAttachment={handleUseDesktopLocalFileAsAttachment}
-            onPinAttachmentAsContext={handlePinDesktopAttachmentAsContext}
-            onSaveAttachmentAsMemory={handleSaveDesktopAttachmentAsMemory}
-            onNavigateToDesktopNotificationTarget={handleNavigateToDesktopNotificationTarget}
-          />
-          <ActionAuditTimelinePanel audits={actionAudits} />
-          <ChatInput
-            value={draftMessage}
-            disabled={!currentConversationId}
-            sending={sendingMessage}
-            agents={agents}
-            selectedAgent={selectedAgent}
-            quotedMessage={quotedMessage}
-            quoteMode={quoteMode}
-            artifactSelectionReference={artifactSelectionReference}
-            attachments={draftAttachments}
-            onChange={setDraftMessage}
-            onAttachmentsChange={setDraftAttachments}
-            onUploadFiles={handleUploadAttachments}
-            onClearQuote={() => {
-              setQuotedMessage(null);
-              setQuoteMode("quote");
-            }}
-            onClearArtifactSelection={() => setArtifactSelectionReference(null)}
-            onSend={handleSendMessage}
-          />
+          <section className="workspace-chat-lane" aria-label="IM collaboration lane">
+            <MessageStream
+              messages={messages}
+              agents={agents}
+              artifacts={artifacts}
+              pinnedContexts={pinnedContexts}
+              memorySourceIds={new Set(memories.filter((memory) => memory.sourceType === "MESSAGE").map((memory) => memory.sourceId))}
+              loading={loadingMessages}
+              rerunningMessageId={rerunningMessageId}
+              regeneratingMessageId={regeneratingMessageId}
+              triggerSuggestionsByMessageId={triggerSuggestionsByMessageId}
+              approvalByMessageId={approvalByMessageId}
+              autoTriggerRunningMessageId={autoTriggerRunningMessageId}
+              agentCreationDraftsByMessageId={agentCreationDraftsByMessageId}
+              agentCreationRunningMessageId={agentCreationRunningMessageId}
+              deployIntentsByMessageId={deployIntentsByMessageId}
+              deployingMessageId={deployingMessageId}
+              streamingPreviewsByStepId={streamingPreviewsByStepId}
+              onSelectArtifact={setSelectedArtifactId}
+              onToggleMessagePin={handleToggleMessagePin}
+              onSaveMessageAsMemory={handleSaveMessageAsMemory}
+              onCopyMessage={handleCopyMessage}
+              onQuoteMessage={handleQuoteMessage}
+              onReplyMessage={handleReplyMessage}
+              onRerunFromMessage={handleRerunFromMessage}
+              onRegenerateAgentReply={handleRegenerateAgentReply}
+              onConfirmOrchestratorTrigger={handleConfirmOrchestratorTrigger}
+              onCancelOrchestratorTrigger={handleCancelApprovalRequest}
+              onRefreshOrchestratorSuggestion={handleRefreshOrchestratorSuggestion}
+              onConfirmAgentCreation={handleConfirmAgentCreation}
+              onCancelAgentCreation={handleCancelAgentCreation}
+              onStartDeployIntent={handleStartDeployIntent}
+              onApproveDeployIntent={handleApproveDeployIntent}
+              onCancelDeployIntent={handleCancelDeployIntent}
+              onDownloadArtifactBundle={handleDownloadArtifactBundle}
+            />
+            <ChatInput
+              value={draftMessage}
+              disabled={!currentConversationId}
+              sending={sendingMessage}
+              agents={agents}
+              selectedAgent={selectedAgent}
+              quotedMessage={quotedMessage}
+              quoteMode={quoteMode}
+              artifactSelectionReference={artifactSelectionReference}
+              attachments={draftAttachments}
+              onChange={setDraftMessage}
+              onAttachmentsChange={setDraftAttachments}
+              onUploadFiles={handleUploadAttachments}
+              onClearQuote={() => {
+                setQuotedMessage(null);
+                setQuoteMode("quote");
+              }}
+              onClearArtifactSelection={() => setArtifactSelectionReference(null)}
+              onSend={handleSendMessage}
+            />
+          </section>
+
+          <section className="workspace-diagnostics" data-testid="workspace-diagnostics" aria-label="Workspace diagnostics drawer">
+            <div className="workspace-diagnostics__tabs" aria-label="Diagnostic tabs">
+              <span>TaskRun</span>
+              <span>Context</span>
+              <span>Adapter</span>
+              <span>Audit</span>
+              <span>Local</span>
+            </div>
+            <div className="workspace-diagnostics__sections">
+              <div className="workspace-diagnostics__section workspace-diagnostics__section--taskrun">
+                <TaskRunPanel
+                  agents={agents}
+                  artifacts={artifacts}
+                  taskSpecs={taskSpecs}
+                  taskRuns={taskRuns}
+                  loading={loadingTaskRuns}
+                  selectedTaskRunId={selectedTaskRunId}
+                  selectedTaskStepId={selectedTaskStepId}
+                  streamingPreviewsByStepId={streamingPreviewsByStepId}
+                  onSelectStep={handleSelectTaskStep}
+                  onCancelTaskRun={handleCancelTaskRun}
+                  onStopTaskRun={handleStopTaskRun}
+                />
+              </div>
+              <div className="workspace-diagnostics__section workspace-diagnostics__section--context">
+                <ContextPanel
+                  taskSpec={activeTaskSpec}
+                  taskRuns={taskRuns}
+                  pinnedContexts={pinnedContexts}
+                  memories={memories}
+                  contextSnapshots={contextSnapshots}
+                  handoffSummaries={handoffSummaries}
+                  loading={loadingContext}
+                />
+              </div>
+              <div className="workspace-diagnostics__section workspace-diagnostics__section--adapter">
+                <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
+                <AdapterQualityDashboard
+                  adapterDescriptors={adapterDescriptors}
+                  taskRuns={taskRuns}
+                  qualityMetrics={adapterQualityMetrics}
+                />
+              </div>
+              <div className="workspace-diagnostics__section workspace-diagnostics__section--audit">
+                <ActionAuditTimelinePanel audits={actionAudits} />
+              </div>
+              <div className="workspace-diagnostics__section workspace-diagnostics__section--local">
+                <DesktopCapabilityPanel
+                  conversationId={currentConversationId}
+                  onUseLocalFileAsAttachment={handleUseDesktopLocalFileAsAttachment}
+                  onPinAttachmentAsContext={handlePinDesktopAttachmentAsContext}
+                  onSaveAttachmentAsMemory={handleSaveDesktopAttachmentAsMemory}
+                  onNavigateToDesktopNotificationTarget={handleNavigateToDesktopNotificationTarget}
+                />
+              </div>
+            </div>
+          </section>
         </div>
       </main>
 

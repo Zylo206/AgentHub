@@ -7531,3 +7531,136 @@
 
 - 本轮是 Workspace 可见性修复和信息层级收敛，不是完整视觉系统重写。
 - 右侧 Artifact Inspector、Agent Builder、Preview Studio 仍沿用现有组件结构。
+
+## Phase 181：Workspace IM 主路径收敛与真实 Adapter 验收
+
+### 目标
+
+- 继续修复 `/workspace` 组件堆叠、输入框不可见、信息过杂的问题。
+- 保持现有功能不破，并用 API smoke、Browser E2E、真实 OpenAI-compatible provider、本机 Claude Code / Codex CLI 做验收。
+
+### 主要变更
+
+- `workspace.css` 增加产品化收敛覆盖层：
+  - 三栏比例调整为更稳定的 IM 协作布局。
+  - 顶部 Header / Toolbar / Flow Guide / Session Summary 压缩，减少重复状态信息。
+  - 中栏主路径重排为 MessageStream 优先、ChatInput 紧随其后，Adapter / TaskRun / Context / Desktop / Audit 面板后置为诊断区。
+  - ChatInput 的 routing preview 和附件区改为紧凑 IM 工具条，避免默认展示大表单。
+  - MessageStream、ChatInput、右侧 Artifact Inspector 均约束在首屏内，避免横向溢出和组件互相覆盖。
+- 修复 `AdapterArtifactQualityEvaluator` 的误杀规则：
+  - 原规则只要真实 CODE Artifact 内容包含 `error:` 就判定为错误文本。
+  - 新规则改为仅拦截以错误、鉴权、限流等 provider failure 开头或明显错误消息，避免误拒绝正常 React 表单代码中的 `error:` 字段。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `cd backend && mvn -q -DskipTests compile`
+- `node scripts/smoke-test.mjs`
+- `node scripts/e2e-browser.mjs`
+- DeepSeek OpenAI-compatible `real-adapter-smoke-test.mjs`
+- 本机 Claude Code `claude-code-smoke-test.mjs`
+- 本机 Codex `codex-smoke-test.mjs`
+
+### 验证结果
+
+- 前端构建通过。
+- 后端 compile 通过。
+- API smoke 通过。
+- Browser E2E 通过，覆盖聊天内创建 Agent、会话搜索/置顶/归档/恢复、附件、消息操作、消息触发协作、Context Search、Adapter fallback、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION 恢复。
+- DeepSeek OpenAI-compatible 真实验证通过：
+  - `OPENAI_COMPATIBLE=AVAILABLE`
+  - direct execute 返回合法 Artifact JSON。
+  - `REAL_FIRST` 下主产物为 `REAL_ADAPTER`。
+  - build validation `PASSED`，quality score `100`。
+- Claude Code 本机 CLI 真实验证通过：
+  - descriptor capability 通过。
+  - direct execute 返回 Artifact JSON。
+  - demo task 生成 `CLAUDE_CODE / REAL_ADAPTER` Artifact。
+- Codex 本机 CLI 真实验证通过：
+  - descriptor capability 通过。
+  - direct execute 返回 Artifact JSON。
+  - demo task 生成 `CODEX / REAL_ADAPTER` Artifact。
+
+### 边界
+
+- 本轮没有把 Claude Code / Codex 切到 workspace-write；仍是 headless Artifact-only。
+- 本轮未做全平台 token streaming、token 级持久化或多节点事件总线。
+- `mvn package` 在 8080 常驻后端占用 jar 时无法执行 repackage，本轮后端改动用 `mvn compile` 和临时 `spring-boot:run` 验证。
+- Browser 插件本轮连接本地页超时，渲染检查使用项目 Playwright / Edge 路径完成。
+
+## Phase 182：Workspace IM 协作产品视觉收敛
+
+### 目标
+
+- 继续把 `/workspace` 从“功能面板堆叠”收敛为更清晰的 IM 协作产品。
+- 解决中间消息流视觉权重不足、ChatInput 表单感、右侧 Artifact 状态块可见性差、左侧会话密度偏高的问题。
+
+### 主要变更
+
+- `workspace.css` 增加 IM collaboration product pass：
+  - 三栏比例调整为中间消息流优先，右侧 Inspector 更轻量。
+  - MessageBubble 分层为用户气泡、Agent 协议卡、REJECTION / APPROVAL 状态卡、Artifact / Deploy / Attachment 卡。
+  - Message Action Bar 统一为低噪音 hover 操作区，保留复制、引用、回复、pin、memory、rerun、regenerate 等入口。
+  - ChatInput 改为底部 IM composer：更大的输入区、底部工具栏、routing preview 默认压缩、hover / focus 时展开。
+  - Artifact Inspector 的白色 pill / metric 块改为深色状态 badge，并用绿色 / 黄色 / 红色边框表达质量状态。
+  - 左侧 Conversation / Agent card 进一步压缩，减少后台表单感。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖 Agent Builder、会话搜索 / 置顶 / 归档 / 恢复、消息操作、附件、消息触发协作、TaskRun、Context Search、Adapter fallback、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION 恢复。
+- `git diff --check` 无新增空白错误，仅保留 Windows CRLF 提示。
+
+### 边界
+
+- 本轮只做 UI 视觉与布局收敛，不改变 Orchestrator、Adapter、Approval、Artifact、Realtime 等业务语义。
+- `workspace.css` 仍是追加式覆盖层，后续若继续大规模视觉迭代，应单独做 CSS 分层整理，拆成 token / shell / message / inspector 规则。
+
+## Phase 183：Workspace 三栏职责重排与诊断抽屉
+
+### 目标
+
+- 按新的工作台设计稿重排 `/workspace`，解决中间列组件重叠、ChatInput 覆盖消息流、右侧 Artifact Inspector 详情与列表混杂的问题。
+- 保留现有功能入口，不改 Orchestrator、Adapter、Approval、Artifact、Context、Audit 业务链路。
+
+### 主要变更
+
+- `WorkspacePage` 中栏结构调整为：
+  - `workspace-chat-lane`：只承载 MessageStream 和 ChatInput。
+  - `workspace-diagnostics`：承载 TaskRun、Context、Adapter、Audit、Local desktop capability 等诊断面板。
+- 诊断面板从主消息流同级大块堆叠改为底部诊断抽屉，避免打断 IM 协作主路径。
+- 右侧 Artifact Inspector 改为单列单滚动职责：
+  - Artifact detail 排在 Artifact list 前面，首屏优先展示当前产物状态。
+  - 长 metadata / quality gate 文案做截断或局部滚动，避免撑爆右栏。
+  - Artifact list 下沉为辅助导航。
+- 左侧会话 / Agent 卡片进一步压缩，减少无关 badge 和说明文字。
+
+### 验证方式
+
+- 使用本地浏览器渲染检查 `http://127.0.0.1:5173/workspace`：
+  - MessageStream 与 ChatInput 不重叠。
+  - ChatInput 与 Diagnostics 不重叠。
+  - ChatInput 完整落在 1600x900 首屏内。
+  - Artifact detail 排在 Artifact list 前。
+  - 主体和右栏无横向溢出。
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖 Agent Builder、会话搜索 / 置顶 / 归档 / 恢复、消息操作、附件、消息触发协作、TaskRun、Context Search、Adapter fallback、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION 恢复。
+- `git diff --check` 无新增空白错误，仅保留 Windows CRLF 提示。
+
+### 边界
+
+- 本轮是 Workspace 页面结构和 CSS 布局重排，不是功能新增。
+- 诊断抽屉为了保留 E2E 和答辩解释能力，仍会渲染 TaskRun / Context / Adapter / Audit / Local 面板；只是从主聊天路径下沉到诊断区。
+- 右侧 Artifact Inspector 仍使用现有 `ArtifactPanel` 组件，后续可继续拆分为真正的 tab 子组件。
