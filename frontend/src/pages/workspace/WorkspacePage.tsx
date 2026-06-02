@@ -90,9 +90,22 @@ import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import "../../styles/workspace.css";
+import "../../styles/workspace/tokens.css";
+import "../../styles/workspace/shell.css";
+import "../../styles/workspace/message.css";
+import "../../styles/workspace/inspector.css";
+import "../../styles/workspace/diagnostics.css";
 
 const TASK_STEP_STREAM_CHUNK_EVENT_TYPES = ["TASK_STEP_STREAM_CHUNK", "ADAPTER_STREAM_CHUNK"] as const;
 const STREAMING_PREVIEW_MAX_LENGTH = 1200;
+type DiagnosticPanelKey = "taskrun" | "context" | "adapter" | "audit" | "local";
+const DIAGNOSTIC_PANELS: Array<{ key: DiagnosticPanelKey; label: string; summary: string }> = [
+  { key: "taskrun", label: "TaskRun", summary: "任务运行" },
+  { key: "context", label: "Context", summary: "上下文" },
+  { key: "adapter", label: "Adapter", summary: "适配器" },
+  { key: "audit", label: "Audit", summary: "审计" },
+  { key: "local", label: "Local", summary: "本地能力" }
+];
 const TERMINAL_STEP_STATUSES = new Set([
   "COMPLETED",
   "SUCCEEDED",
@@ -390,6 +403,8 @@ export function WorkspacePage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [runningDemoTask, setRunningDemoTask] = useState(false);
   const [showDebugActions, setShowDebugActions] = useState(false);
+  const [activeDiagnosticPanel, setActiveDiagnosticPanel] = useState<DiagnosticPanelKey | null>(null);
+  const [artifactInspectorCollapsed, setArtifactInspectorCollapsed] = useState(false);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [autoTriggerRunningMessageId, setAutoTriggerRunningMessageId] = useState<string | null>(null);
@@ -1913,7 +1928,10 @@ export function WorkspacePage() {
   }
 
   return (
-    <section className="workspace-page" data-testid="workspace-page">
+    <section
+      className={`workspace-page ${artifactInspectorCollapsed ? "workspace-page--artifact-inspector-collapsed" : ""}`}
+      data-testid="workspace-page"
+    >
       <aside className="workspace-sidebar" data-testid="workspace-sidebar">
         <div className="workspace-sidebar__header">
           <div className="workspace-brand">
@@ -2102,16 +2120,30 @@ export function WorkspacePage() {
             />
           </section>
 
-          <section className="workspace-diagnostics" data-testid="workspace-diagnostics" aria-label="Workspace diagnostics drawer">
+          <section
+            className={`workspace-diagnostics ${activeDiagnosticPanel ? "workspace-diagnostics--expanded" : "workspace-diagnostics--collapsed"}`}
+            data-testid="workspace-diagnostics"
+            aria-label="Workspace diagnostics drawer"
+          >
             <div className="workspace-diagnostics__tabs" aria-label="Diagnostic tabs">
-              <span>TaskRun</span>
-              <span>Context</span>
-              <span>Adapter</span>
-              <span>Audit</span>
-              <span>Local</span>
+              {DIAGNOSTIC_PANELS.map((panel) => (
+                <button
+                  key={panel.key}
+                  type="button"
+                  className={`workspace-diagnostics__tab ${activeDiagnosticPanel === panel.key ? "workspace-diagnostics__tab--active" : ""}`}
+                  data-testid={`workspace-diagnostics-tab-${panel.key}`}
+                  aria-expanded={activeDiagnosticPanel === panel.key}
+                  onClick={() => setActiveDiagnosticPanel((current) => (current === panel.key ? null : panel.key))}
+                >
+                  <strong>{panel.label}</strong>
+                  <span>{panel.summary}</span>
+                </button>
+              ))}
             </div>
             <div className="workspace-diagnostics__sections">
-              <div className="workspace-diagnostics__section workspace-diagnostics__section--taskrun">
+              <div
+                className={`workspace-diagnostics__section workspace-diagnostics__section--taskrun ${activeDiagnosticPanel === "taskrun" ? "workspace-diagnostics__section--active" : ""}`}
+              >
                 <TaskRunPanel
                   agents={agents}
                   artifacts={artifacts}
@@ -2126,7 +2158,9 @@ export function WorkspacePage() {
                   onStopTaskRun={handleStopTaskRun}
                 />
               </div>
-              <div className="workspace-diagnostics__section workspace-diagnostics__section--context">
+              <div
+                className={`workspace-diagnostics__section workspace-diagnostics__section--context ${activeDiagnosticPanel === "context" ? "workspace-diagnostics__section--active" : ""}`}
+              >
                 <ContextPanel
                   taskSpec={activeTaskSpec}
                   taskRuns={taskRuns}
@@ -2137,7 +2171,9 @@ export function WorkspacePage() {
                   loading={loadingContext}
                 />
               </div>
-              <div className="workspace-diagnostics__section workspace-diagnostics__section--adapter">
+              <div
+                className={`workspace-diagnostics__section workspace-diagnostics__section--adapter ${activeDiagnosticPanel === "adapter" ? "workspace-diagnostics__section--active" : ""}`}
+              >
                 <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
                 <AdapterQualityDashboard
                   adapterDescriptors={adapterDescriptors}
@@ -2145,10 +2181,14 @@ export function WorkspacePage() {
                   qualityMetrics={adapterQualityMetrics}
                 />
               </div>
-              <div className="workspace-diagnostics__section workspace-diagnostics__section--audit">
+              <div
+                className={`workspace-diagnostics__section workspace-diagnostics__section--audit ${activeDiagnosticPanel === "audit" ? "workspace-diagnostics__section--active" : ""}`}
+              >
                 <ActionAuditTimelinePanel audits={actionAudits} />
               </div>
-              <div className="workspace-diagnostics__section workspace-diagnostics__section--local">
+              <div
+                className={`workspace-diagnostics__section workspace-diagnostics__section--local ${activeDiagnosticPanel === "local" ? "workspace-diagnostics__section--active" : ""}`}
+              >
                 <DesktopCapabilityPanel
                   conversationId={currentConversationId}
                   onUseLocalFileAsAttachment={handleUseDesktopLocalFileAsAttachment}
@@ -2162,43 +2202,56 @@ export function WorkspacePage() {
         </div>
       </main>
 
-      <aside className="workspace-artifacts" data-testid="workspace-artifacts">
+      <aside
+        className={`workspace-artifacts ${artifactInspectorCollapsed ? "workspace-artifacts--collapsed" : ""}`}
+        data-testid="workspace-artifacts"
+      >
         <div className="workspace-artifacts__header" aria-label="Artifact inspector header">
           <div>
             <strong>产物工作台</strong>
             <span>Artifact Inspector</span>
           </div>
-          <small>本地静态 Preview / 审批 / 快照</small>
+          <button
+            type="button"
+            className="workspace-artifacts__collapse-button"
+            data-testid="artifact-inspector-collapse-toggle"
+            aria-expanded={!artifactInspectorCollapsed}
+            onClick={() => setArtifactInspectorCollapsed((current) => !current)}
+          >
+            {artifactInspectorCollapsed ? "展开" : "收起"}
+          </button>
         </div>
-        <ArtifactPanel
-          artifacts={visibleArtifacts}
-          allArtifacts={artifacts}
-          totalArtifactCount={artifacts.length}
-          selectedArtifact={selectedArtifact}
-          selectedArtifactId={selectedArtifactId}
-          loadingArtifacts={loadingArtifacts}
-          loadingArtifactDetail={loadingArtifactDetail}
-          highlightedArtifactIds={highlightedArtifactIds}
-          filteredByTaskStep={Boolean(selectedTaskStep) && !showAllArtifacts}
-          revisingArtifact={revisingArtifact}
-          deployments={selectedArtifactDeployments}
-          snapshots={selectedArtifactSnapshots}
-          deployingArtifact={deployingArtifact}
-          restoringSnapshot={restoringSnapshot}
-          conversationId={currentConversationId}
-          onSelectArtifact={setSelectedArtifactId}
-          onShowAllArtifacts={handleShowAllArtifacts}
-          onCreateRevision={handleCreateArtifactRevision}
-          onSendSelectionToChat={handleSendArtifactSelectionToChat}
-          onCreateDeployment={handleCreateDeployment}
-          onDownloadArtifactBundle={handleDownloadArtifactBundle}
-          onRestoreSnapshot={handleRestoreArtifactSnapshot}
-          onApplyDiff={handleApplyArtifactDiff}
-          onForceApplyDiff={handleForceApplyArtifactDiff}
-          onCreateApprovalRequest={handleCreateApprovalRequest}
-          onApproveApprovalRequest={handleApproveApprovalRequest}
-          onCancelApprovalRequest={handleCancelApprovalRequest}
-        />
+        <div className="workspace-artifacts__body">
+          <ArtifactPanel
+            artifacts={visibleArtifacts}
+            allArtifacts={artifacts}
+            totalArtifactCount={artifacts.length}
+            selectedArtifact={selectedArtifact}
+            selectedArtifactId={selectedArtifactId}
+            loadingArtifacts={loadingArtifacts}
+            loadingArtifactDetail={loadingArtifactDetail}
+            highlightedArtifactIds={highlightedArtifactIds}
+            filteredByTaskStep={Boolean(selectedTaskStep) && !showAllArtifacts}
+            revisingArtifact={revisingArtifact}
+            deployments={selectedArtifactDeployments}
+            snapshots={selectedArtifactSnapshots}
+            deployingArtifact={deployingArtifact}
+            restoringSnapshot={restoringSnapshot}
+            conversationId={currentConversationId}
+            onSelectArtifact={setSelectedArtifactId}
+            onShowAllArtifacts={handleShowAllArtifacts}
+            onCreateRevision={handleCreateArtifactRevision}
+            onSendSelectionToChat={handleSendArtifactSelectionToChat}
+            onCreateDeployment={handleCreateDeployment}
+            onDownloadArtifactBundle={handleDownloadArtifactBundle}
+            onRestoreSnapshot={handleRestoreArtifactSnapshot}
+            onApplyDiff={handleApplyArtifactDiff}
+            onForceApplyDiff={handleForceApplyArtifactDiff}
+            onCreateApprovalRequest={handleCreateApprovalRequest}
+            onApproveApprovalRequest={handleApproveApprovalRequest}
+            onCancelApprovalRequest={handleCancelApprovalRequest}
+          />
+        </div>
       </aside>
     </section>
   );

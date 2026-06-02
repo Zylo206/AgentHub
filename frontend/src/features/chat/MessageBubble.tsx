@@ -107,7 +107,7 @@ function getProtocolCta(messageType: string): string {
     RESULT: "查看产物",
     REVIEW: "查看评审",
     APPROVAL: "继续交付",
-    REJECTION: "按建议修复",
+    REJECTION: "查看阻塞 / 生成 Revision",
     ERROR: "查看错误"
   };
 
@@ -408,6 +408,7 @@ export function MessageBubble({
   const expectedAgents = getExpectedAgents(message, targetAgentLabel);
   const expectedArtifacts = getExpectedArtifacts(message);
   const contextSources = getContextSources(message);
+  const blockerAnchorId = `message-blockers-${messageId}`;
 
   return (
     <div
@@ -453,6 +454,32 @@ export function MessageBubble({
               <p>{getProtocolDescription(protocolLabel)}</p>
             </div>
             <span className="message-protocol-card__cta">{getProtocolCta(protocolLabel)}</span>
+          </div>
+        ) : null}
+        {protocolLabel === "REJECTION" ? (
+          <div className="message-rejection-cta" data-testid="message-rejection-cta">
+            <div>
+              <strong>修复闭环</strong>
+              <span>先定位阻塞项，再创建修复 Revision，最后重新评审。</span>
+            </div>
+            <div className="message-rejection-cta__actions">
+              <button
+                type="button"
+                className="message-action-button"
+                data-testid="message-rejection-view-blockers"
+                onClick={() => document.getElementById(blockerAnchorId)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              >
+                查看阻塞项
+              </button>
+              <button type="button" className="message-action-button" onClick={() => onQuoteMessage(message)}>
+                生成修复 Revision
+              </button>
+              {message.senderType === "AGENT" ? (
+                <button type="button" className="message-action-button" disabled={regenerating} onClick={() => onRegenerateAgentReply(message)}>
+                  重新评审
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -690,6 +717,14 @@ export function MessageBubble({
               </div>
               <span>{getDeployIntentStatusLabel(deployIntent.status)}</span>
             </div>
+            <div className="message-deploy-intent__flow" data-testid="message-deploy-intent-flow">
+              <span>聊天确认</span>
+              <strong>确认产物</strong>
+              <em>→</em>
+              <strong>Approval Gate</strong>
+              <em>→</em>
+              <strong>生成 Preview URL</strong>
+            </div>
             <div className="message-deploy-intent__grid">
               <div>
                 <span>目标产物</span>
@@ -776,7 +811,18 @@ export function MessageBubble({
           </div>
         ) : null}
 
-        <div className="message-bubble__body">{message.content}</div>
+        <div
+          className="message-bubble__body"
+          id={protocolLabel === "REJECTION" ? blockerAnchorId : undefined}
+        >
+          {message.content}
+        </div>
+        {protocolLabel === "REJECTION" ? (
+          <div className="message-rejection-blockers" data-testid="message-rejection-blockers">
+            <span>阻塞项</span>
+            <p>{message.content}</p>
+          </div>
+        ) : null}
 
         {attachments.length > 0 ? (
           <div className="message-attachment-list" data-testid="message-attachment-list">
@@ -847,8 +893,11 @@ export function MessageBubble({
               return (
                 <article className="message-artifact-card" data-testid="message-artifact-card" key={artifactId}>
                   <div className="message-artifact-card__header">
+                    <span className="message-artifact-card__icon" aria-hidden="true">
+                      {artifact?.type === "API_CONTRACT" ? "API" : artifact?.type === "REVIEW_REPORT" ? "R" : "A"}
+                    </span>
                     <div>
-                      <span>Artifact</span>
+                      <span>Artifact / {artifact?.type || "UNKNOWN"}</span>
                       <strong>{artifact?.title || artifactId}</strong>
                     </div>
                     <em>{artifact?.type || "UNKNOWN"}</em>

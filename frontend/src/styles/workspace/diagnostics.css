@@ -1,0 +1,125 @@
+/* Bottom diagnostics drawer: trust surfaces without interrupting the IM flow. */
+.workspace-diagnostics {
+  flex: 0 0 42px;
+  min-height: 42px;
+  max-height: 42px;
+  overflow: hidden;
+  border: 1px solid rgba(118, 154, 205, 0.16);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(6, 17, 31, 0.92), rgba(3, 11, 22, 0.96));
+  transition: flex-basis var(--workspace-normal), max-height var(--workspace-normal), border-color var(--workspace-fast);
+}
+
+.workspace-diagnostics--expanded {
+  flex-basis: clamp(168px, 23vh, 264px);
+  max-height: 264px;
+  border-color: rgba(47, 131, 255, 0.28);
+}
+
+.workspace-diagnostics__tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(118, 154, 205, 0.13);
+  background: rgba(2, 9, 17, 0.42);
+}
+
+.workspace-diagnostics__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 22px;
+  padding: 0 10px;
+  border: 1px solid rgba(118, 154, 205, 0.16);
+  border-radius: 999px;
+  background: rgba(7, 18, 31, 0.62);
+  color: #cfe0f6;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  transition: border-color var(--workspace-fast), background var(--workspace-fast), color var(--workspace-fast);
+}
+
+.workspace-diagnostics__tab strong {
+  color: inherit;
+  font-size: 11px;
+}
+
+.workspace-diagnostics__tab span {
+  color: rgba(145, 168, 197, 0.9);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.workspace-diagnostics__tab:hover,
+.workspace-diagnostics__tab--active {
+  border-color: rgba(29, 120, 255, 0.46);
+  background: rgba(29, 120, 255, 0.12);
+  color: #e6f2ff;
+}
+
+.workspace-diagnostics__sections {
+  display: block;
+  max-height: calc(100% - 40px);
+  padding: 8px;
+  overflow: auto;
+}
+
+.workspace-diagnostics__section {
+  display: none;
+  min-width: 0;
+  min-height: 104px;
+}
+
+.workspace-diagnostics__section--active {
+  display: block;
+}
+
+.workspace-diagnostics__section > * {
+  height: 100%;
+  max-height: 220px !important;
+  margin: 0 !important;
+  overflow: auto !important;
+}
+
+.workspace-diagnostics__section--adapter {
+  grid-template-rows: minmax(80px, 0.85fr) minmax(120px, 1fr);
+  gap: 8px;
+}
+
+.workspace-diagnostics__section--adapter.workspace-diagnostics__section--active {
+  display: grid;
+}
+
+.workspace-diagnostics--collapsed .workspace-diagnostics__sections {
+  display: none;
+}
+
+.workspace-diagnostics .section-header,
+.workspace-diagnostics h3 {
+  font-size: 12px !important;
+}
+
+.workspace-diagnostics p,
+.workspace-diagnostics span,
+.workspace-diagnostics small,
+.workspace-diagnostics td,
+.workspace-diagnostics th {
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+}
+
+@media (max-width: 1536px) {
+  .workspace-diagnostics--expanded {
+    flex-basis: clamp(140px, 20vh, 220px);
+  }
+}
+
+@media (max-width: 1280px) {
+  .workspace-diagnostics__tab:nth-child(n+5) {
+    display: none;
+  }
+}

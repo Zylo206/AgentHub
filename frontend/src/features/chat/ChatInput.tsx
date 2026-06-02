@@ -39,6 +39,23 @@ function summarizeCapabilities(agents: Agent[]): string[] {
   return Array.from(new Set(agents.flatMap((agent) => agent.toolTags || []).filter(Boolean))).slice(0, 6);
 }
 
+function formatAttachmentSize(size?: number): string {
+  if (typeof size !== "number" || Number.isNaN(size)) {
+    return "size n/a";
+  }
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${Math.round(size / 1024)} KB`;
+  }
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function getAttachmentContentType(attachment: LightweightAttachment): string {
+  return attachment.contentType || attachment.mimeType || "attachment";
+}
+
 export function ChatInput({
   value,
   disabled,
@@ -99,36 +116,13 @@ export function ChatInput({
 
     return {
       mode: "AUTO_ROUTE",
-      title: "Orchestrator 自动分派",
+      title: "To: Orchestrator 自动分派",
       detail: "未指定 Agent 时，将按任务意图、tool capability 和 Adapter 健康度选择内置或自建 Agent。",
       agents: [],
       adapters: ["MOCK fallback 可用"],
       capabilities: []
     };
   }, [agents, selectedAgent, value]);
-
-  function addAttachment(fileName: string, previewText = "") {
-    const trimmedFileName = fileName.trim();
-    const trimmedPreview = previewText.trim();
-    if (!trimmedFileName && !trimmedPreview) {
-      return;
-    }
-
-    onAttachmentsChange([
-      ...attachments,
-      {
-        attachmentId: `demo-${Date.now()}-${attachments.length}`,
-        fileName: trimmedFileName || "typed-context.txt",
-        contentType: "text/plain",
-        mimeType: "text/plain",
-        size: trimmedPreview ? new Blob([trimmedPreview]).size : 0,
-        previewText: trimmedPreview,
-        contentPreview: trimmedPreview,
-        sizeBytes: trimmedPreview ? new Blob([trimmedPreview]).size : undefined,
-        source: trimmedFileName ? "LOCAL_DEMO" : "TEXT_SNIPPET"
-      }
-    ]);
-  }
 
   async function addLocalFiles(files: FileList | null) {
     if (!files || files.length === 0) {
@@ -166,17 +160,6 @@ export function ChatInput({
     onAttachmentsChange([...attachments, ...nextAttachments]);
   }
 
-  function clearManualAttachmentFields(form: HTMLFormElement | null | undefined) {
-    const input = form?.querySelector<HTMLInputElement>(".chat-attachment-composer__input");
-    const textarea = form?.elements.namedItem("attachmentPreview") as HTMLTextAreaElement | null;
-    if (input) {
-      input.value = "";
-    }
-    if (textarea) {
-      textarea.value = "";
-    }
-  }
-
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!disabled && !sending) {
@@ -184,168 +167,134 @@ export function ChatInput({
     }
   }
 
+  function insertMentionHint() {
+    if (disabled || sending) {
+      return;
+    }
+    const mentionName = selectedAgent?.name || agents[0]?.name;
+    const mention = mentionName ? `@${mentionName} ` : "@";
+    onChange(value.trim() ? `${value} ${mention}` : mention);
+  }
+
+  function insertCodeHint() {
+    if (disabled || sending) {
+      return;
+    }
+    const block = "```tsx\n\n```";
+    onChange(value.trim() ? `${value}\n${block}` : block);
+  }
+
   return (
     <form className="chat-input" data-testid="chat-input" onSubmit={handleSubmit}>
-      <div className={`chat-routing-preview chat-routing-preview--${routingPreview.mode.toLowerCase()}`} data-testid="chat-routing-preview">
-        <div>
-          <span>发送前路由预览</span>
-          <strong>{routingPreview.title}</strong>
-          <p>{routingPreview.detail}</p>
-        </div>
-        <div className="chat-routing-preview__chips">
-          {routingPreview.agents.map((agent) => (
-            <em key={getIdValue(agent.id)}>@{agent.name}</em>
-          ))}
-          {routingPreview.adapters.map((adapter) => (
-            <em key={adapter}>{adapter}</em>
-          ))}
-          {routingPreview.capabilities.map((capability) => (
-            <em key={capability}>{capability}</em>
-          ))}
-        </div>
-      </div>
-
-      {quotedMessage ? (
-        <div className="chat-quote-preview">
-          <div>
-            <strong>{quoteMode === "reply" ? "回复消息" : "引用消息"}</strong>
-            <p>{quotedMessage.content}</p>
-            <span>{formatId(quotedMessage.id)}</span>
-          </div>
-          <button type="button" className="ghost-button" data-testid="chat-quote-clear" onClick={onClearQuote}>
-            取消引用
-          </button>
-        </div>
-      ) : null}
-
-      {artifactSelectionReference ? (
-        <div className="chat-artifact-selection-preview" data-testid="chat-artifact-selection-preview">
-          <div>
-            <strong>Artifact 局部修改引用</strong>
-            <p>
-              {artifactSelectionReference.artifactTitle} v{artifactSelectionReference.artifactVersion}
-              {" · "}
-              第 {artifactSelectionReference.startLine}-{artifactSelectionReference.endLine} 行
-              {" · "}
-              {artifactSelectionReference.language || artifactSelectionReference.artifactType}
-            </p>
-            <code>{artifactSelectionReference.selectedText.slice(0, 240)}</code>
-          </div>
-          <button type="button" className="ghost-button" data-testid="chat-artifact-selection-clear" onClick={onClearArtifactSelection}>
-            取消选区
-          </button>
-        </div>
-      ) : null}
-
       <textarea
         className="chat-input__textarea"
         data-testid="chat-input-textarea"
-        rows={4}
-        placeholder="发送消息，@Agent 或描述你的任务需求..."
+        rows={3}
+        placeholder="发送消息，@Agent 或描述你的任务..."
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       />
 
-      <div className="chat-attachment-composer">
-        <div className="chat-attachment-composer__header">
-          <strong>轻量附件</strong>
-          <span>支持真实上传和文本预览；图片 / PPT 当前按文件附件展示，不做富媒体编辑。</span>
-        </div>
-        <div className="chat-attachment-composer__grid">
-          <input
-            ref={fileInputRef}
-            className="chat-attachment-composer__file"
-            data-testid="chat-attachment-file-input"
-            type="file"
-            multiple
-            disabled={disabled || sending}
-            onChange={(event) => {
-              void addLocalFiles(event.currentTarget.files).catch((error) => {
-                console.warn("Attachment upload failed", error);
-              });
-              event.currentTarget.value = "";
-            }}
-          />
+      <div className="chat-input__context-chips" aria-label="Composer context">
+        {quotedMessage ? (
+          <div className="chat-context-chip chat-quote-preview">
+            <strong>{quoteMode === "reply" ? "回复" : "引用"}</strong>
+            <span>{quotedMessage.content}</span>
+            <em>{formatId(quotedMessage.id)}</em>
+            <button type="button" className="ghost-button" data-testid="chat-quote-clear" onClick={onClearQuote}>
+              移除
+            </button>
+          </div>
+        ) : null}
+
+        {artifactSelectionReference ? (
+          <div className="chat-context-chip chat-artifact-selection-preview" data-testid="chat-artifact-selection-preview">
+            <strong>正在局部修改</strong>
+            <span>
+              正在修改 {artifactSelectionReference.artifactTitle} v{artifactSelectionReference.artifactVersion} 的第{" "}
+              {artifactSelectionReference.startLine}-{artifactSelectionReference.endLine} 行
+            </span>
+            <code>{artifactSelectionReference.selectedText.slice(0, 120)}</code>
+            <button type="button" className="ghost-button" data-testid="chat-artifact-selection-clear" onClick={onClearArtifactSelection}>
+              移除
+            </button>
+          </div>
+        ) : null}
+
+        {attachments.map((attachment) => (
+          <div className="chat-context-chip chat-attachment-chip" key={attachment.attachmentId || attachment.id || attachment.fileName}>
+            <strong>{attachment.fileName}</strong>
+            <span>{getAttachmentContentType(attachment)}</span>
+            <em>{formatAttachmentSize(attachment.size ?? attachment.sizeBytes)}</em>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => onAttachmentsChange(attachments.filter((item) => item !== attachment))}
+            >
+              移除
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <input
+        ref={fileInputRef}
+        className="chat-attachment-composer__file"
+        data-testid="chat-attachment-file-input"
+        type="file"
+        multiple
+        disabled={disabled || sending}
+        onChange={(event) => {
+          void addLocalFiles(event.currentTarget.files).catch((error) => {
+            console.warn("Attachment upload failed", error);
+          });
+          event.currentTarget.value = "";
+        }}
+      />
+
+      <div className="chat-input__actions">
+        <div className="chat-input__toolbar" aria-label="Composer tools">
+          <button type="button" className="ghost-button" disabled={disabled || sending} onClick={() => fileInputRef.current?.click()}>
+            附件
+          </button>
+          <button type="button" className="ghost-button" disabled={disabled || sending} onClick={insertMentionHint}>
+            @Agent
+          </button>
+          <button type="button" className="ghost-button" disabled={disabled || sending} onClick={insertCodeHint}>
+            代码
+          </button>
           <button
             type="button"
-            className="secondary-button"
+            className="ghost-button"
             data-testid="chat-attachment-select-button"
             disabled={disabled || sending}
             onClick={() => fileInputRef.current?.click()}
           >
-            选择本地文件
+            选择文件
           </button>
-          <input
-            className="chat-attachment-composer__input"
-            type="text"
-            placeholder="手动输入文件名，例如 brief.md"
-            disabled={disabled || sending}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") {
-                return;
-              }
-
-              event.preventDefault();
-              const input = event.currentTarget;
-              const textarea = input.form?.elements.namedItem("attachmentPreview") as HTMLTextAreaElement | null;
-              addAttachment(input.value, textarea?.value ?? "");
-              clearManualAttachmentFields(input.form);
-            }}
-          />
-          <textarea
-            className="chat-attachment-composer__preview"
-            name="attachmentPreview"
-            rows={2}
-            placeholder="可选：粘贴一小段内容预览"
-            disabled={disabled || sending}
-          />
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={disabled || sending}
-            onClick={(event) => {
-              const form = event.currentTarget.form;
-              const input = form?.querySelector<HTMLInputElement>(".chat-attachment-composer__input");
-              const textarea = form?.elements.namedItem("attachmentPreview") as HTMLTextAreaElement | null;
-              addAttachment(input?.value ?? "", textarea?.value ?? "");
-              clearManualAttachmentFields(form);
-            }}
-          >
-            添加附件
-          </button>
-        </div>
-        {attachments.length > 0 ? (
-          <div className="chat-attachment-list">
-            {attachments.map((attachment) => (
-              <div className="chat-attachment-chip" key={attachment.attachmentId || attachment.id || attachment.fileName}>
-                <div>
-                  <strong>{attachment.fileName}</strong>
-                  {attachment.contentPreview || attachment.previewText ? <span>{attachment.contentPreview || attachment.previewText}</span> : null}
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() =>
-                    onAttachmentsChange(attachments.filter((item) => item !== attachment))
-                  }
-                >
-                  移除
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="chat-input__actions">
-        <div className="chat-input__hint-group">
-          <span className="chat-input__hint">
-            先发送任务消息，AgentHub 会展示协作确认卡片，再启动 Orchestrator。
-          </span>
-          <span className="chat-input__hint">
-            以 @AgentName 开头可指定一个或多个 Agent。
-          </span>
+          <details className={`chat-routing-preview chat-routing-preview--${routingPreview.mode.toLowerCase()}`} data-testid="chat-routing-preview">
+            <summary>
+              <span>路由详情</span>
+              <strong>{routingPreview.title}</strong>
+              {routingPreview.agents.length > 0 ? (
+                <small>{routingPreview.agents.map((agent) => `@${agent.name}`).join(" ")}</small>
+              ) : null}
+              <em>{attachments.length > 0 ? `${attachments.length} 个附件` : "无附件"}</em>
+            </summary>
+            <p>{routingPreview.detail}</p>
+            <div className="chat-routing-preview__chips">
+              {routingPreview.agents.map((agent) => (
+                <em key={getIdValue(agent.id)}>@{agent.name}</em>
+              ))}
+              {routingPreview.adapters.map((adapter) => (
+                <em key={adapter}>{adapter}</em>
+              ))}
+              {routingPreview.capabilities.map((capability) => (
+                <em key={capability}>{capability}</em>
+              ))}
+            </div>
+          </details>
         </div>
         <button
           type="submit"
@@ -353,7 +302,7 @@ export function ChatInput({
           data-testid="chat-send-button"
           disabled={disabled || sending || (!value.trim() && attachments.length === 0)}
         >
-          {sending ? "发送中..." : "发送消息"}
+          {sending ? "发送中..." : "发送"}
         </button>
       </div>
     </form>

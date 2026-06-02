@@ -84,6 +84,18 @@ interface DraftDiffPreview {
   hasChanges: boolean;
 }
 
+type ArtifactInspectorTab = "overview" | "diff" | "versions" | "snapshots" | "deploy" | "audit" | "related";
+
+const ARTIFACT_INSPECTOR_TABS: Array<{ key: ArtifactInspectorTab; label: string }> = [
+  { key: "overview", label: "概览" },
+  { key: "diff", label: "Diff" },
+  { key: "versions", label: "版本" },
+  { key: "snapshots", label: "快照" },
+  { key: "deploy", label: "部署" },
+  { key: "audit", label: "审计" },
+  { key: "related", label: "关联" }
+];
+
 function getLineNumberAtOffset(content: string, offset: number): number {
   return content.slice(0, Math.max(offset, 0)).split("\n").length;
 }
@@ -525,6 +537,7 @@ export function ArtifactPanel({
   const [draftContent, setDraftContent] = useState("");
   const [draftNote, setDraftNote] = useState("");
   const [draftSelection, setDraftSelection] = useState<ContentSelectionRange | null>(null);
+  const [activeInspectorTab, setActiveInspectorTab] = useState<ArtifactInspectorTab>("overview");
   const versionEntries = getVersionHistoryEntries(allArtifacts, selectedArtifact);
   const selectedVersionEntry =
     versionEntries.find((entry) => entry.artifactId === selectedArtifactId) ?? null;
@@ -597,6 +610,7 @@ export function ArtifactPanel({
     setDraftContent(selectedArtifact?.content || "");
     setDraftNote("");
     setDraftSelection(null);
+    setActiveInspectorTab("overview");
   }, [selectedArtifact]);
 
   async function handleCreateRevision() {
@@ -1009,13 +1023,39 @@ export function ArtifactPanel({
             </section>
           </div>
         ) : (
-          <div className="artifact-preview">
-            <div className="artifact-inspector-tabs" aria-label="Artifact inspector sections">
+          <div className={`artifact-preview artifact-preview--tab-${activeInspectorTab}`}>
+            <div className="artifact-inspector-tabs artifact-inspector-tabs--legacy" aria-label="Artifact inspector sections">
               <span className="artifact-inspector-tabs__item artifact-inspector-tabs__item--active">概览</span>
               <span className="artifact-inspector-tabs__item">版本 {versionEntries.length}</span>
               <span className="artifact-inspector-tabs__item">快照 {snapshots.length}</span>
               <span className="artifact-inspector-tabs__item">部署 {deployments.length}</span>
               <span className="artifact-inspector-tabs__item">关联 {Math.max(versionEntries.length - 1, 0)}</span>
+            </div>
+            <div className="artifact-inspector-tabs artifact-inspector-tabs--interactive" aria-label="Artifact inspector sections">
+              {ARTIFACT_INSPECTOR_TABS.map((tab) => {
+                const count =
+                  tab.key === "versions"
+                    ? versionEntries.length
+                    : tab.key === "snapshots"
+                      ? snapshots.length
+                      : tab.key === "deploy"
+                        ? deployments.length
+                        : tab.key === "related"
+                          ? Math.max(versionEntries.length - 1, 0)
+                          : null;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`artifact-inspector-tabs__item ${activeInspectorTab === tab.key ? "artifact-inspector-tabs__item--active" : ""}`}
+                    data-testid={`artifact-inspector-tab-${tab.key}`}
+                    aria-pressed={activeInspectorTab === tab.key}
+                    onClick={() => setActiveInspectorTab(tab.key)}
+                  >
+                    {tab.label}{count === null ? "" : ` ${count}`}
+                  </button>
+                );
+              })}
             </div>
             <div className="artifact-preview__meta">
               <div>
@@ -1374,6 +1414,54 @@ export function ArtifactPanel({
                 void handleForceApplyDiffArtifact(artifact);
               }}
             />
+            <section className="artifact-audit-panel" data-testid="artifact-audit-panel">
+              <div className="artifact-detail-section__header">
+                <strong>Artifact 审计线索</strong>
+                <span>当前产物</span>
+              </div>
+              <div className="artifact-related-grid">
+                <article>
+                  <span>Artifact ID</span>
+                  <strong>{formatId(selectedArtifact.id)}</strong>
+                </article>
+                <article>
+                  <span>Source Step</span>
+                  <strong>{selectedArtifact.sourceTaskStepId || "none"}</strong>
+                </article>
+                <article>
+                  <span>Adapter</span>
+                  <strong>{selectedArtifact.sourceAdapterType || "none"}</strong>
+                </article>
+                <article>
+                  <span>完整审计</span>
+                  <strong>见底部 Audit 诊断抽屉</strong>
+                </article>
+              </div>
+            </section>
+            <section className="artifact-related-panel" data-testid="artifact-related-panel">
+              <div className="artifact-detail-section__header">
+                <strong>关联产物</strong>
+                <span>Lineage / Revision</span>
+              </div>
+              <div className="artifact-related-grid">
+                <article>
+                  <span>当前版本</span>
+                  <strong>v{selectedArtifact.version}</strong>
+                </article>
+                <article>
+                  <span>父产物</span>
+                  <strong>{selectedVersionEntry?.parentArtifact?.title || selectedArtifact.parentArtifactId || "无"}</strong>
+                </article>
+                <article>
+                  <span>Revision 指令</span>
+                  <strong>{selectedArtifact.revisionInstruction ? truncateText(selectedArtifact.revisionInstruction, 72) : "无"}</strong>
+                </article>
+                <article>
+                  <span>相关版本数</span>
+                  <strong>{versionEntries.length}</strong>
+                </article>
+              </div>
+            </section>
           </div>
         )}
       </div>

@@ -1,0 +1,336 @@
+/* Workspace shell: three-column app frame, header density, left rail. */
+.workspace-page {
+  grid-template-columns: 260px minmax(760px, 1fr) clamp(340px, 25vw, 390px) !important;
+  gap: 8px !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 52% 0%, rgba(30, 119, 255, 0.12), transparent 32%),
+    linear-gradient(180deg, #030a14 0%, var(--workspace-bg) 100%) !important;
+}
+
+.workspace-page--artifact-inspector-collapsed {
+  grid-template-columns: 260px minmax(900px, 1fr) 56px !important;
+}
+
+.workspace-sidebar,
+.workspace-main,
+.workspace-artifacts {
+  border-color: var(--workspace-border) !important;
+  background: linear-gradient(180deg, rgba(7, 19, 34, 0.96), rgba(4, 12, 22, 0.98)) !important;
+  box-shadow: var(--workspace-shadow);
+}
+
+.workspace-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 8px !important;
+  overflow: hidden !important;
+}
+
+.workspace-main__header,
+.workspace-main__toolbar,
+.workspace-main__flow-guide,
+.workspace-session-summary,
+.selected-agent-banner,
+.workspace-error,
+.workspace-notice {
+  flex: 0 0 auto !important;
+}
+
+.workspace-main__header {
+  min-height: 58px !important;
+  padding: 10px 14px !important;
+  border-radius: var(--workspace-radius) !important;
+}
+
+.workspace-main__header h2 {
+  max-width: 34ch;
+  overflow: hidden;
+  color: var(--workspace-text) !important;
+  font-size: 18px !important;
+  line-height: 1.15 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-main__header p {
+  max-width: 60ch;
+  overflow: hidden;
+  color: var(--workspace-muted) !important;
+  font-size: 11px !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-main__toolbar,
+.workspace-main__flow-guide,
+.selected-agent-banner {
+  margin-top: 8px !important;
+  padding: 8px 10px !important;
+  border-radius: 13px !important;
+  background: rgba(7, 18, 31, 0.82) !important;
+}
+
+.workspace-main__flow-guide {
+  display: flex !important;
+  gap: 8px !important;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.workspace-main__flow-guide strong,
+.workspace-main__flow-guide span,
+.workspace-main__flow-guide em {
+  font-size: 10px !important;
+}
+
+.workspace-session-summary {
+  margin-top: 8px !important;
+  padding: 8px !important;
+  border-radius: 13px !important;
+}
+
+.selected-agent-banner {
+  align-items: center !important;
+  min-height: 42px !important;
+  margin: 6px 0 0 !important;
+  padding: 7px 10px !important;
+  border-radius: 12px !important;
+}
+
+.selected-agent-banner .selected-agent-adapter,
+.selected-agent-banner .selected-agent-health__hint {
+  display: none !important;
+}
+
+.workspace-main__content {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  gap: 8px !important;
+  padding: 8px 0 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.workspace-sidebar {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.workspace-sidebar__header {
+  padding: 10px !important;
+}
+
+.workspace-sidebar__header .workspace-brand p {
+  display: none !important;
+}
+
+.workspace-sidebar__body {
+  gap: 10px !important;
+  padding: 10px !important;
+  overflow-y: auto !important;
+}
+
+.conversation-card {
+  min-height: 74px !important;
+  padding: 8px 9px !important;
+  gap: 5px !important;
+}
+
+.conversation-card p,
+.conversation-card__description,
+.conversation-card__badges span:nth-child(n+4) {
+  display: none !important;
+}
+
+.conversation-card__title,
+.conversation-card strong {
+  font-size: 12px !important;
+}
+
+.conversation-card__meta,
+.conversation-card__badges {
+  gap: 4px !important;
+}
+
+.conversation-card__badges span {
+  min-height: 20px !important;
+  padding: 0 6px !important;
+  font-size: 10px !important;
+}
+
+.agent-card,
+.agent-list__item {
+  min-height: 56px !important;
+  padding: 7px 8px !important;
+}
+
+.agent-card p,
+.agent-list__item p {
+  display: none !important;
+}
+
+.agent-card__chips,
+.agent-list__chips {
+  gap: 3px !important;
+}
+
+.agent-card__chips span,
+.agent-list__chips span {
+  min-height: 18px !important;
+  padding: 0 5px !important;
+  font-size: 9px !important;
+}
+
+@media (max-width: 1536px) {
+  .workspace-page {
+    grid-template-columns: 248px minmax(690px, 1fr) 330px !important;
+  }
+
+  .workspace-page--artifact-inspector-collapsed {
+    grid-template-columns: 248px minmax(760px, 1fr) 52px !important;
+  }
+}
+
+@media (max-width: 1280px) {
+  .workspace-page {
+    grid-template-columns: 232px minmax(620px, 1fr) 300px !important;
+  }
+
+  .workspace-page--artifact-inspector-collapsed {
+    grid-template-columns: 232px minmax(680px, 1fr) 50px !important;
+  }
+}
+
+/* Sidebar density pass: keep IM recognition, remove dashboard-like badge noise. */
+.workspace-sidebar .im-list-tools {
+  gap: 7px !important;
+}
+
+.workspace-sidebar .im-list-tools__chips {
+  display: none !important;
+}
+
+.workspace-sidebar .conversation-list-status {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 5px !important;
+}
+
+.workspace-sidebar .conversation-list-status span:nth-child(n+3) {
+  display: none !important;
+}
+
+.workspace-sidebar .conversation-filter-tabs {
+  gap: 5px !important;
+}
+
+.workspace-sidebar .conversation-filter-tab {
+  min-height: 28px !important;
+  padding: 0 7px !important;
+}
+
+.workspace-sidebar .conversation-filter-tab strong {
+  min-width: 18px !important;
+  height: 18px !important;
+  font-size: 10px !important;
+}
+
+.workspace-sidebar .conversation-item--im {
+  min-height: 66px !important;
+  padding: 7px 8px !important;
+  gap: 4px !important;
+}
+
+.workspace-sidebar .conversation-item__row {
+  gap: 6px !important;
+}
+
+.workspace-sidebar .conversation-avatar {
+  width: 26px !important;
+  height: 26px !important;
+  font-size: 11px !important;
+}
+
+.workspace-sidebar .conversation-item__identity strong {
+  max-width: 148px !important;
+  overflow: hidden !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-sidebar .conversation-item__identity small {
+  max-width: 148px !important;
+  overflow: hidden !important;
+  color: #8ea6c4 !important;
+  font-size: 10px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-sidebar .conversation-item__type {
+  display: none !important;
+}
+
+.workspace-sidebar .conversation-item__meta {
+  display: flex !important;
+  gap: 5px !important;
+  margin-top: 2px !important;
+}
+
+.workspace-sidebar .conversation-item__meta span:nth-child(n+3) {
+  display: none !important;
+}
+
+.workspace-sidebar .conversation-item__meta span {
+  min-height: 18px !important;
+  padding: 0 6px !important;
+  border: 1px solid rgba(118, 154, 205, 0.14) !important;
+  border-radius: 999px !important;
+  background: rgba(8, 20, 34, 0.7) !important;
+  color: #9bb3d1 !important;
+  font-size: 9.5px !important;
+}
+
+.workspace-sidebar .conversation-item__footer {
+  margin-top: 2px !important;
+}
+
+.workspace-sidebar .conversation-item__time {
+  max-width: 120px !important;
+  overflow: hidden !important;
+  font-size: 10px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-sidebar .conversation-unread-badge {
+  min-width: 20px !important;
+  height: 20px !important;
+  font-size: 10px !important;
+}
+
+.workspace-sidebar .conversation-item__actions {
+  gap: 4px !important;
+  margin-top: 4px !important;
+  opacity: 0.72 !important;
+}
+
+.workspace-sidebar .conversation-item--active .conversation-item__actions,
+.workspace-sidebar .conversation-item:hover .conversation-item__actions,
+.workspace-sidebar .conversation-item:focus-within .conversation-item__actions {
+  opacity: 1 !important;
+}
+
+.workspace-sidebar .conversation-action-button {
+  min-height: 22px !important;
+  padding: 0 7px !important;
+  font-size: 10px !important;
+}

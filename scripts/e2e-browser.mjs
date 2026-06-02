@@ -194,6 +194,103 @@ async function captureFailureDiagnostics(page, consoleErrors, error) {
   console.error(`[DIAG] console summary: ${consolePath}`);
 }
 
+async function saveWorkspaceLayoutGate(page) {
+  const viewport = { width: 1366, height: 768 };
+  await page.setViewportSize(viewport);
+  await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
+  await waitForVisible(page, "[data-testid='workspace-page']", "workspace visual QA page");
+  await page.waitForTimeout(500);
+
+  const metrics = await page.evaluate(() => {
+    function rectFor(selector) {
+      const element = document.querySelector(selector);
+      if (!element) {
+        return null;
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom)
+      };
+    }
+
+    function overlaps(a, b) {
+      if (!a || !b) {
+        return false;
+      }
+      return a.x < b.right && a.right > b.x && a.y < b.bottom && a.bottom > b.y;
+    }
+
+    const pageRect = rectFor("[data-testid='workspace-page']");
+    const sidebar = rectFor("[data-testid='workspace-sidebar']");
+    const chatLane = rectFor(".workspace-chat-lane");
+    const messageStream = rectFor("[data-testid='message-stream']");
+    const chatInput = rectFor("[data-testid='chat-input']");
+    const diagnostics = rectFor("[data-testid='workspace-diagnostics']");
+    const artifactInspector = rectFor("[data-testid='workspace-artifacts']");
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+
+    return {
+      capturedAt: new Date().toISOString(),
+      viewport: { width: viewportWidth, height: viewportHeight },
+      documentWidth,
+      horizontalOverflow: documentWidth > viewportWidth + 2,
+      pageRect,
+      sidebar,
+      chatLane,
+      messageStream,
+      chatInput,
+      diagnostics,
+      artifactInspector,
+      overlaps: {
+        messageStreamChatInput: overlaps(messageStream, chatInput),
+        chatInputDiagnostics: overlaps(chatInput, diagnostics),
+        chatLaneArtifactInspector: overlaps(chatLane, artifactInspector)
+      },
+      overflow: {
+        sidebarRight: sidebar ? sidebar.right > viewportWidth + 1 : false,
+        chatLaneRight: chatLane ? chatLane.right > viewportWidth + 1 : false,
+        artifactInspectorRight: artifactInspector ? artifactInspector.right > viewportWidth + 1 : false
+      }
+    };
+  });
+
+  await mkdir(E2E_ARTIFACT_DIR, { recursive: true });
+  const metricsPath = path.join(E2E_ARTIFACT_DIR, "workspace-layout-metrics-latest.json");
+  const screenshotPath = path.join(E2E_ARTIFACT_DIR, "workspace-layout-1366-latest.png");
+  await writeFile(metricsPath, JSON.stringify(metrics, null, 2), "utf8");
+  await page.screenshot({ path: screenshotPath, fullPage: false });
+
+  const failures = [];
+  if (metrics.horizontalOverflow) {
+    failures.push(`horizontal overflow: documentWidth=${metrics.documentWidth}, viewport=${metrics.viewport.width}`);
+  }
+  if (metrics.overlaps.messageStreamChatInput) {
+    failures.push("message stream overlaps ChatInput");
+  }
+  if (metrics.overlaps.chatInputDiagnostics) {
+    failures.push("ChatInput overlaps diagnostics drawer");
+  }
+  if (metrics.overflow.artifactInspectorRight) {
+    failures.push("Artifact Inspector overflows viewport");
+  }
+  if (metrics.chatLane && metrics.chatLane.width < 520) {
+    failures.push(`chat lane too narrow: ${metrics.chatLane.width}px`);
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`workspace layout gate failed: ${failures.join("; ")}. Metrics: ${metricsPath}`);
+  }
+
+  pass(`workspace 1366px layout gate passed; metrics: ${metricsPath}; screenshot: ${screenshotPath}`);
+}
+
 async function waitForLocatorEnabled(locator, label, timeout = 20000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeout) {
@@ -527,7 +624,22 @@ async function verifyAgentRegenerateAction(page, conversationId) {
   );
 }
 
+async function openDiagnosticTab(page, tabKey) {
+  const tab = page.getByTestId(`workspace-diagnostics-tab-${tabKey}`);
+  await tab.waitFor({ state: "visible", timeout: 10000 });
+  await tab.click();
+  await page
+    .locator(".workspace-diagnostics")
+    .evaluate((element) => element.classList.contains("workspace-diagnostics--expanded"))
+    .then((expanded) => {
+      if (!expanded) {
+        throw new Error(`diagnostic tab ${tabKey} did not expand drawer`);
+      }
+    });
+}
+
 async function verifyContextPanel(page, conversationId) {
+  await openDiagnosticTab(page, "context");
   await waitForVisible(page, "[data-testid='context-panel']", "context panel");
   await waitForApiState(
     "context snapshot",
@@ -541,8 +653,9 @@ async function verifyContextPanel(page, conversationId) {
   const hasRetrievedItem = await retrievedItem.isVisible().catch(() => false);
   if (hasRetrievedItem) {
     pass("retrieved context item visible");
-    await page.getByText(/score/i).first().waitFor({ state: "visible", timeout: 10000 });
-    await page.getByText(/injects into/i).first().waitFor({ state: "visible", timeout: 10000 });
+    const contextPanel = page.getByTestId("context-panel");
+    await contextPanel.getByText(/score/i).first().waitFor({ state: "visible", timeout: 10000 });
+    await contextPanel.getByText(/injects into/i).first().waitFor({ state: "visible", timeout: 10000 });
   } else {
     pass("retrieved context item not emitted for this heuristic run; context snapshot fallback visible");
   }
@@ -779,6 +892,12 @@ async function selectArtifactCardById(page, artifactId, label) {
   await waitForVisible(page, ".artifact-preview", `${label} artifact preview`);
 }
 
+async function openArtifactInspectorTab(page, tabKey) {
+  const tab = page.getByTestId(`artifact-inspector-tab-${tabKey}`).first();
+  await waitForLocatorEnabled(tab, `artifact inspector ${tabKey} tab`);
+  await tab.click();
+}
+
 async function selectCodeArtifact(page, conversationId) {
   const artifacts = await request(`/api/conversations/${conversationId}/artifacts`);
   const codeArtifact = artifacts.find((artifact) => artifact.type === "CODE" || artifact.artifactType === "CODE");
@@ -791,6 +910,7 @@ async function createRevisionAndApplyDiff(page, conversationId) {
   const beforeArtifacts = await request(`/api/conversations/${conversationId}/artifacts`);
   const beforeIds = new Set(beforeArtifacts.map((artifact) => getIdValue(artifact.id)));
 
+  await openArtifactInspectorTab(page, "diff");
   const editToggle = await waitForLocatorEnabled(
     page.getByTestId("artifact-content-edit-toggle"),
     "artifact content edit toggle"
@@ -836,6 +956,7 @@ async function createRevisionAndApplyDiff(page, conversationId) {
   }
 
   await selectArtifactCardById(page, getIdValue(revisionArtifact.id), "revision");
+  await openArtifactInspectorTab(page, "diff");
   await waitForVisible(page, "[data-testid='diff-summary']", "diff summary");
 
   const beforeApplyIds = new Set(artifactsAfterRevision.map((artifact) => getIdValue(artifact.id)));
@@ -873,6 +994,7 @@ async function deploySelectedArtifact(page) {
     "message deploy approval button"
   );
   await approveDeployButton.click();
+  await openArtifactInspectorTab(page, "deploy");
   await waitForVisible(page, "[data-testid='deploy-status-card']", "deploy status card");
 
   const previewHref = await page.locator(".deploy-preview-link").last().getAttribute("href");
@@ -882,6 +1004,7 @@ async function deploySelectedArtifact(page) {
 async function restoreSelectedSnapshot(page, conversationId) {
   const beforeArtifacts = await request(`/api/conversations/${conversationId}/artifacts`);
   const beforeIds = new Set(beforeArtifacts.map((artifact) => getIdValue(artifact.id)));
+  await openArtifactInspectorTab(page, "snapshots");
   const restoreButton = await waitForLocatorEnabled(
     page.locator(".artifact-snapshot-box .deploy-status-card__button").first(),
     "Restore Snapshot button"
@@ -889,6 +1012,7 @@ async function restoreSelectedSnapshot(page, conversationId) {
   await restoreButton.click();
   await approveCurrentGate(page, "restore");
   await waitForArtifacts(conversationId, beforeIds, "restored artifact");
+  await openDiagnosticTab(page, "audit");
   await waitForVisible(page, "[data-testid='action-audit-panel']", "action audit panel");
   await page.getByTestId("action-audit-toggle").click();
   await waitForVisible(page, "[data-testid='action-audit-card']", "action audit card");
@@ -1014,11 +1138,14 @@ async function runBrowserE2e() {
 
     await step("UI triggers collaboration run", () => triggerTaskRunFromUi(page, conversationId));
     await step("custom Agent is routed into TaskRun", () => verifyCustomAgentRouting(conversationId, customAgent));
+    await openDiagnosticTab(page, "taskrun");
     await waitForVisible(page, "[data-testid='task-run-panel']", "TaskRun panel");
     await waitForVisible(page, "[data-testid='orchestrator-route-evidence']", "router evidence chips");
     await waitForVisible(page, ".message-bubble--agent-protocol", "agent protocol message");
     await step("Agent reply can be regenerated from Message Action Bar", () => verifyAgentRegenerateAction(page, conversationId));
+    await openDiagnosticTab(page, "adapter");
     await waitForVisible(page, ".adapter-quality-dashboard", "adapter quality dashboard");
+    await openDiagnosticTab(page, "taskrun");
     await page.getByTestId("stop-run-button").first().waitFor({ state: "visible", timeout: 10000 });
     await page.getByTestId("cancel-run-button").first().waitFor({ state: "visible", timeout: 10000 });
     if (EXPECT_AUTO_TRIGGER_APPROVAL) {
@@ -1044,6 +1171,8 @@ async function runBrowserE2e() {
     if (EXPECT_REJECTION) {
       await step("REJECTION retry/revise recovery path", () => seedOptionalRejectionScenario());
     }
+
+    await step("workspace 1366px visual layout gate", () => saveWorkspaceLayoutGate(page));
 
     if (consoleErrors.length > 0) {
       throw new Error(`browser console/page errors: ${consoleErrors.slice(0, 5).join(" | ")}`);

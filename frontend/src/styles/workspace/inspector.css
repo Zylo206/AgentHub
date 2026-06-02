@@ -1,0 +1,465 @@
+/* Right Artifact Inspector: single-scroll, detail-first, dark status badges. */
+.workspace-artifacts {
+  min-width: 0 !important;
+  height: 100vh !important;
+  padding: 8px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-gutter: stable !important;
+}
+
+.workspace-artifacts__header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  margin: -8px -8px 8px !important;
+  padding: 9px 11px !important;
+  border-bottom-color: rgba(118, 154, 205, 0.14) !important;
+}
+
+.workspace-artifacts__header strong {
+  color: var(--workspace-text) !important;
+  font-size: 14px !important;
+}
+
+.workspace-artifacts__collapse-button {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid rgba(118, 154, 205, 0.22);
+  border-radius: 999px;
+  background: rgba(8, 20, 34, 0.88);
+  color: #cfe0f6;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workspace-artifacts__collapse-button:hover {
+  border-color: rgba(47, 131, 255, 0.5);
+  color: #ffffff;
+}
+
+.workspace-artifacts--collapsed {
+  padding: 6px !important;
+  overflow: hidden !important;
+}
+
+.workspace-artifacts--collapsed .workspace-artifacts__header {
+  flex-direction: column !important;
+  height: calc(100vh - 12px);
+  margin: 0 !important;
+  padding: 9px 5px !important;
+  border: 1px solid rgba(118, 154, 205, 0.18) !important;
+  border-radius: 14px;
+  background: rgba(8, 20, 34, 0.84);
+}
+
+.workspace-artifacts--collapsed .workspace-artifacts__header div {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.workspace-artifacts--collapsed .workspace-artifacts__header span {
+  display: none;
+}
+
+.workspace-artifacts--collapsed .workspace-artifacts__collapse-button {
+  writing-mode: vertical-rl;
+  padding: 9px 0;
+}
+
+.workspace-artifacts--collapsed .workspace-artifacts__body {
+  display: none;
+}
+
+.workspace-artifacts .artifact-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  gap: 10px !important;
+  overflow: visible !important;
+}
+
+.workspace-artifacts .artifact-panel__sidebar,
+.workspace-artifacts .artifact-panel__detail {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.workspace-artifacts .artifact-panel__detail {
+  order: 1 !important;
+  flex: 0 0 auto !important;
+  height: auto !important;
+  padding-bottom: 0 !important;
+}
+
+.workspace-artifacts .artifact-panel__sidebar {
+  order: 2 !important;
+  flex: 0 0 auto !important;
+  padding-bottom: 6px !important;
+  border-bottom: 1px solid rgba(118, 154, 205, 0.12) !important;
+}
+
+.workspace-artifacts .artifact-panel__detail .section-header {
+  display: none !important;
+}
+
+.workspace-artifacts .artifact-card-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 6px !important;
+  max-height: 360px !important;
+  overflow-y: auto !important;
+}
+
+.workspace-artifacts .artifact-inspector-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding: 4px 0 7px;
+  background: rgba(6, 17, 31, 0.96) !important;
+  backdrop-filter: blur(12px);
+}
+
+.workspace-artifacts .artifact-inspector-tabs--legacy {
+  display: none !important;
+}
+
+.workspace-artifacts .artifact-inspector-tabs__item {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(118, 154, 205, 0.16);
+  border-radius: 999px;
+  background: rgba(8, 20, 34, 0.78);
+  color: #93aac8;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.workspace-artifacts .artifact-inspector-tabs__item--active {
+  border-color: rgba(47, 131, 255, 0.55);
+  background: rgba(29, 120, 255, 0.18);
+  color: #e6f0ff;
+}
+
+.workspace-artifacts .artifact-preview,
+.workspace-artifacts .artifact-preview-dock,
+.workspace-artifacts .artifact-content-editor,
+.workspace-artifacts .artifact-revision-box,
+.workspace-artifacts .deploy-status-box,
+.workspace-artifacts .version-history-panel,
+.workspace-artifacts .artifact-snapshot-timeline,
+.workspace-artifacts .diff-summary-panel,
+.workspace-artifacts .artifact-preview-dock__body,
+.workspace-artifacts .artifact-preview__code {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.workspace-artifacts .artifact-preview__meta {
+  display: block !important;
+  max-height: 178px !important;
+  margin-top: 8px !important;
+  overflow: hidden !important;
+  border-color: rgba(118, 154, 205, 0.16) !important;
+  background: rgba(8, 20, 34, 0.76) !important;
+}
+
+.workspace-artifacts .artifact-audit-panel,
+.workspace-artifacts .artifact-related-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid rgba(118, 154, 205, 0.16);
+  border-radius: 14px;
+  background: rgba(8, 20, 34, 0.78);
+}
+
+.workspace-artifacts .artifact-related-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.workspace-artifacts .artifact-related-grid article {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(118, 154, 205, 0.16);
+  border-radius: 12px;
+  background: rgba(5, 14, 25, 0.78);
+}
+
+.workspace-artifacts .artifact-related-grid span,
+.workspace-artifacts .artifact-related-grid small {
+  display: block;
+  color: #8ea6c4;
+  font-size: 10px;
+}
+
+.workspace-artifacts .artifact-related-grid strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #e6f0ff;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-artifacts .artifact-preview--tab-overview .artifact-content-editor,
+.workspace-artifacts .artifact-preview--tab-overview .artifact-revision-box,
+.workspace-artifacts .artifact-preview--tab-overview .diff-summary,
+.workspace-artifacts .artifact-preview--tab-overview .version-history,
+.workspace-artifacts .artifact-preview--tab-overview .artifact-snapshot-box,
+.workspace-artifacts .artifact-preview--tab-overview .deploy-status-box,
+.workspace-artifacts .artifact-preview--tab-overview .artifact-audit-panel,
+.workspace-artifacts .artifact-preview--tab-overview .artifact-related-panel,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-preview__meta,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-inspector-metrics,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-cockpit,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-delivery-workbench,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-preview-dock,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-preview__actions,
+.workspace-artifacts .artifact-preview--tab-diff .version-history,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-snapshot-box,
+.workspace-artifacts .artifact-preview--tab-diff .deploy-status-box,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-audit-panel,
+.workspace-artifacts .artifact-preview--tab-diff .artifact-related-panel,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-preview__meta,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-inspector-metrics,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-cockpit,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-delivery-workbench,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-preview-dock,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-preview__actions,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-content-editor,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-revision-box,
+.workspace-artifacts .artifact-preview--tab-versions .diff-summary,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-snapshot-box,
+.workspace-artifacts .artifact-preview--tab-versions .deploy-status-box,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-audit-panel,
+.workspace-artifacts .artifact-preview--tab-versions .artifact-related-panel,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-preview__meta,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-inspector-metrics,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-cockpit,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-delivery-workbench,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-preview-dock,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-preview__actions,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-content-editor,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-revision-box,
+.workspace-artifacts .artifact-preview--tab-snapshots .diff-summary,
+.workspace-artifacts .artifact-preview--tab-snapshots .version-history,
+.workspace-artifacts .artifact-preview--tab-snapshots .deploy-status-box,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-audit-panel,
+.workspace-artifacts .artifact-preview--tab-snapshots .artifact-related-panel,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-preview__meta,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-inspector-metrics,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-cockpit,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-delivery-workbench,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-preview-dock,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-preview__actions,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-content-editor,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-revision-box,
+.workspace-artifacts .artifact-preview--tab-deploy .diff-summary,
+.workspace-artifacts .artifact-preview--tab-deploy .version-history,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-snapshot-box,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-audit-panel,
+.workspace-artifacts .artifact-preview--tab-deploy .artifact-related-panel,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-preview__meta,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-inspector-metrics,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-cockpit,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-delivery-workbench,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-preview-dock,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-preview__actions,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-content-editor,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-revision-box,
+.workspace-artifacts .artifact-preview--tab-audit .diff-summary,
+.workspace-artifacts .artifact-preview--tab-audit .version-history,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-snapshot-box,
+.workspace-artifacts .artifact-preview--tab-audit .deploy-status-box,
+.workspace-artifacts .artifact-preview--tab-audit .artifact-related-panel,
+.workspace-artifacts .artifact-preview--tab-related .artifact-preview__meta,
+.workspace-artifacts .artifact-preview--tab-related .artifact-inspector-metrics,
+.workspace-artifacts .artifact-preview--tab-related .artifact-cockpit,
+.workspace-artifacts .artifact-preview--tab-related .artifact-delivery-workbench,
+.workspace-artifacts .artifact-preview--tab-related .artifact-preview-dock,
+.workspace-artifacts .artifact-preview--tab-related .artifact-preview__actions,
+.workspace-artifacts .artifact-preview--tab-related .artifact-content-editor,
+.workspace-artifacts .artifact-preview--tab-related .artifact-revision-box,
+.workspace-artifacts .artifact-preview--tab-related .diff-summary,
+.workspace-artifacts .artifact-preview--tab-related .version-history,
+.workspace-artifacts .artifact-preview--tab-related .artifact-snapshot-box,
+.workspace-artifacts .artifact-preview--tab-related .deploy-status-box,
+.workspace-artifacts .artifact-preview--tab-related .artifact-audit-panel {
+  display: none !important;
+}
+
+.workspace-artifacts .artifact-preview__meta p,
+.workspace-artifacts .artifact-preview__line {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-artifacts .artifact-preview__meta-right {
+  display: none !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article,
+.workspace-artifacts .artifact-cockpit,
+.workspace-artifacts .artifact-preview-dock,
+.workspace-artifacts .artifact-content-editor,
+.workspace-artifacts .artifact-revision-box,
+.workspace-artifacts .deploy-status-box,
+.workspace-artifacts .version-history-panel,
+.workspace-artifacts .artifact-snapshot-timeline,
+.workspace-artifacts .diff-summary-panel {
+  margin-top: 8px !important;
+  border-color: rgba(118, 154, 205, 0.16) !important;
+  background: rgba(8, 20, 34, 0.78) !important;
+}
+
+.workspace-artifacts .artifact-preview__line,
+.workspace-artifacts .artifact-card__tag,
+.workspace-artifacts .artifact-explain-badge,
+.workspace-artifacts .artifact-cockpit__status,
+.workspace-artifacts .artifact-preview__badge {
+  border: 1px solid rgba(118, 154, 205, 0.22) !important;
+  background: rgba(8, 20, 34, 0.94) !important;
+  color: #cfe0f6 !important;
+  box-shadow: none !important;
+}
+
+.workspace-artifacts .quality-gate-action,
+.workspace-artifacts .artifact-preview__gate-action {
+  max-height: 132px !important;
+  overflow: auto !important;
+  border: 1px solid rgba(245, 184, 46, 0.28) !important;
+  border-radius: 12px !important;
+  background: rgba(64, 45, 12, 0.78) !important;
+  color: #ffebb0 !important;
+}
+
+.workspace-artifacts .quality-gate-action *,
+.workspace-artifacts .artifact-preview__gate-action * {
+  color: inherit !important;
+}
+
+/* Usability convergence: keep the right rail as an inspector, not a second workspace. */
+.workspace-artifacts .artifact-preview--tab-overview .artifact-delivery-workbench,
+.workspace-artifacts .artifact-preview--tab-overview .artifact-revision-box,
+.workspace-artifacts .artifact-preview--tab-overview .approval-gate,
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__line,
+.workspace-artifacts .artifact-preview--tab-overview .quality-gate-action,
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__gate-action {
+  display: none !important;
+}
+
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__meta {
+  max-height: none !important;
+  padding: 11px !important;
+}
+
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__meta strong {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: #eef6ff !important;
+  font-size: 15px !important;
+  line-height: 1.25 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__meta p {
+  margin: 4px 0 0 !important;
+  color: #8ea6c4 !important;
+  font-size: 11px !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article {
+  min-height: 58px !important;
+  padding: 8px !important;
+  border: 1px solid rgba(118, 154, 205, 0.16) !important;
+  border-radius: 12px !important;
+  background: rgba(5, 14, 25, 0.78) !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article span {
+  display: block !important;
+  color: #8ea6c4 !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article strong {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: #e6f0ff !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article small {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: #7f95b3 !important;
+  font-size: 10px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-artifacts .artifact-preview-dock {
+  padding: 10px !important;
+}
+
+.workspace-artifacts .artifact-preview-dock__header {
+  margin-bottom: 8px !important;
+}
+
+.workspace-artifacts .artifact-preview-dock__body {
+  max-height: 220px !important;
+  overflow: auto !important;
+  border-radius: 12px !important;
+}
+
+.workspace-artifacts .artifact-preview__actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.workspace-artifacts .artifact-preview__action-button {
+  min-width: 0 !important;
+}
+
+.workspace-artifacts .status-pill,
+.workspace-artifacts .adapter-health-pill,
+.workspace-artifacts .artifact-card__tag,
+.workspace-artifacts .artifact-preview__badge,
+.workspace-artifacts .artifact-explain-badge,
+.workspace-artifacts .artifact-cockpit__status {
+  border: 1px solid rgba(118, 154, 205, 0.24) !important;
+  background: rgba(8, 20, 34, 0.94) !important;
+  color: #cfe0f6 !important;
+}

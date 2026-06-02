@@ -1,0 +1,22 @@
+/* Workspace design tokens. Keep this file free of component selectors. */
+:root {
+  --workspace-bg: #04101d;
+  --workspace-shell: #071522;
+  --workspace-surface: rgba(9, 22, 37, 0.92);
+  --workspace-surface-strong: rgba(13, 31, 52, 0.96);
+  --workspace-border: rgba(115, 156, 210, 0.18);
+  --workspace-border-active: rgba(43, 128, 255, 0.58);
+  --workspace-blue: #1d78ff;
+  --workspace-blue-soft: rgba(29, 120, 255, 0.14);
+  --workspace-green: #23c86b;
+  --workspace-red: #ff5454;
+  --workspace-yellow: #f5bd36;
+  --workspace-text: #e8f2ff;
+  --workspace-muted: #91a8c5;
+  --workspace-dim: #627894;
+  --workspace-radius: 14px;
+  --workspace-radius-sm: 10px;
+  --workspace-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+  --workspace-fast: 150ms ease;
+  --workspace-normal: 220ms ease;
+}

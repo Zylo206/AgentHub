@@ -7664,3 +7664,282 @@
 - 本轮是 Workspace 页面结构和 CSS 布局重排，不是功能新增。
 - 诊断抽屉为了保留 E2E 和答辩解释能力，仍会渲染 TaskRun / Context / Adapter / Audit / Local 面板；只是从主聊天路径下沉到诊断区。
 - 右侧 Artifact Inspector 仍使用现有 `ArtifactPanel` 组件，后续可继续拆分为真正的 tab 子组件。
+
+## Phase 184：Workspace CSS 模块化拆分
+
+### 目标
+
+- 将 `/workspace` 的最终视觉覆盖层从单个超大 `workspace.css` 中拆出，降低后续 UI 迭代时的选择器漂移和重复覆盖风险。
+- 保持当前 IM 协作主屏、诊断抽屉、Artifact Inspector 行为不变。
+
+### 主要变更
+
+- 新增 `frontend/src/styles/workspace/` 模块目录：
+  - `tokens.css`：统一 Workspace 设计 token。
+  - `shell.css`：三栏 shell、顶部信息、左侧会话 / Agent 密度。
+  - `message.css`：MessageStream、协议消息卡、Action Bar、ChatInput。
+  - `inspector.css`：右侧 Artifact Inspector、metric、badge、诊断块。
+  - `diagnostics.css`：底部 TaskRun / Context / Adapter / Audit 诊断抽屉。
+- `WorkspacePage` 按 `legacy workspace.css -> tokens -> shell -> message -> inspector -> diagnostics` 顺序导入样式。
+- `workspace.css` 保留为 legacy 基础样式，移除尾部重复的 Workspace v2 覆盖块，最终覆盖规则由模块文件承载。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- 使用 Playwright / Edge 检查 `http://127.0.0.1:5173/workspace`：
+  - MessageStream 与 ChatInput 不重叠。
+  - ChatInput 与 Diagnostics 不重叠。
+  - ChatInput 完整落在 1600x900 首屏内。
+  - 主体和右侧 Inspector 无横向溢出。
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖 Agent Builder、会话管理、消息操作、消息触发协作、Context Search、Adapter fallback、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION 恢复。
+- 渲染指标检查通过：中栏消息流、输入框、诊断抽屉顺序布局；右侧 Inspector 无横向溢出；控制台无错误。
+
+### 边界
+
+- 本轮只拆分 CSS 结构，不改变业务组件、API、Orchestrator、Adapter、Artifact 或 Approval 语义。
+- `workspace.css` 仍包含历史基础规则；后续可单独做 legacy CSS 瘦身，但不应和本轮模块化混在一起。
+
+## Phase 185：Workspace 可用性收敛与折叠诊断抽屉
+
+### 目标
+
+- 减少 `/workspace` 首屏噪音，强化“发送任务消息 -> 确认协作 -> 多 Agent 回复”的聊天主路径。
+- 将复杂诊断信息默认收进可展开抽屉，避免 TaskRun / Context / Adapter / Audit 面板挤占消息流。
+
+### 主要变更
+
+- `WorkspacePage` 增加诊断抽屉 tab 状态：
+  - 默认只显示一行 TaskRun / Context / Adapter / Audit / Local tabs。
+  - 点击 tab 后只展开对应诊断面板。
+  - TaskRun / Context / Adapter / Audit 保持可见入口，Local 在窄屏作为次级入口隐藏。
+- `message.css` 收敛聊天主路径：
+  - MessageStream 改为明确高度的 IM feed，不再和输入框抢布局。
+  - ChatInput 压缩为 IM composer，附件按钮和发送按钮固定在底部工具栏。
+  - routing preview 默认只保留一行，hover / focus 后展开细节。
+  - Message Action Bar 默认低噪音，hover / focus 后突出。
+  - 协议消息增加 lane / protocol 视觉区分，REJECTION / APPROVAL 更清晰。
+- `scripts/e2e-browser.mjs` 适配折叠诊断抽屉，验证 TaskRun / Context / Adapter / Audit 前先打开对应 tab。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- 使用 Playwright / Edge 检查 `http://127.0.0.1:5173/workspace` 1600x900 首屏：
+  - MessageStream 与 ChatInput 不重叠。
+  - ChatInput 与 Diagnostics tabs 不重叠。
+  - ChatInput 完整落在首屏内。
+  - Diagnostics tabs 默认折叠且在首屏内。
+  - 主体和右侧 Inspector 无横向溢出。
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖会话管理、聊天内 Agent 创建、附件、消息触发协作、TaskRun、Context Search、Adapter fallback、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION 恢复。
+- 渲染指标检查通过：消息流、输入框、诊断 tabs 三段无覆盖；输入框和诊断 tabs 均在 1600x900 首屏内；控制台无错误。
+
+### 边界
+
+- 本轮不新增业务功能，只调整 Workspace 主路径可用性和诊断信息展开方式。
+- 诊断面板没有删除，只是默认折叠，仍可用于答辩解释和 E2E 验证。
+- 右侧 Artifact Inspector 仍未做折叠右栏，本轮优先解决中栏主路径和消息流噪音。
+
+## Phase 186：Artifact Inspector 减重与 MessageStream IM 化
+
+### 目标
+
+- 将右侧 Artifact Inspector 从信息堆叠面板收敛为默认 Overview 的产物检查器。
+- 继续强化中栏 MessageStream 的 IM 协作体验，让用户能从聊天流理解 Orchestrator、Specialist、Reviewer 的协作过程。
+
+### 主要变更
+
+- `ArtifactPanel` 增加右栏内部 tabs：
+  - 默认展示 Overview：标题、类型、来源、质量、构建、运行、Preview。
+  - Diff / Versions / Snapshots / Deploy / Audit / Related 收进对应 tab。
+  - 选中新的 Artifact 后自动回到 Overview，避免首屏继续展开历史诊断信息。
+- `WorkspacePage` 增加 Artifact Inspector 折叠状态：
+  - 右栏可折叠为窄 rail，让中间聊天流临时扩展。
+  - 右栏 body 独立为单一滚动上下文，减少组件堆叠。
+- `MessageBubble` 和 `message.css` 继续 IM 化：
+  - 用户消息右侧气泡化。
+  - Agent 消息按 Orchestrator / Specialist / Reviewer 协议卡区分。
+  - Artifact 附件卡压缩为一行摘要 + 预览 / 选择 / 下载操作。
+  - REJECTION 增加“查看阻塞 / 生成 Revision / 重新评审”操作区。
+- `scripts/e2e-browser.mjs` 适配右栏 tabs：
+  - Apply Diff 前打开 Diff tab。
+  - Restore 前打开 Snapshots tab。
+  - Deploy 后打开 Deploy tab 验证部署状态卡和 Preview URL。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖 Agent Builder、会话管理、聊天内 Agent 创建、附件、消息触发协作、TaskRun、Context Search、Adapter fallback、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION 恢复。
+- `git diff --check` 无空白错误，仅有 Windows CRLF 提示。
+
+### 边界
+
+- 本轮不删除 Diff / Snapshot / Deploy / Audit 能力，只把它们从首屏堆叠改为右栏 tab。
+- 右栏折叠是前端展示状态，不改变 Artifact、Approval、Deploy、Audit 后端语义。
+- Browser plugin 在本轮环境未暴露可调用工具，UI 回归使用仓库 Playwright E2E 路径完成。
+
+## Phase 187：ChatInput IM 化与视觉 QA 固化
+
+### 目标
+
+- 将 ChatInput 从表单式输入区收敛为 IM composer，同时保留附件、引用、选区修改、多 Agent 路由。
+- 固化 1600x900、1536x864、1366x768 三个视口的布局指标检查，防止再次出现组件重叠和横向溢出。
+
+### 主要变更
+
+- `ChatInput` 重构为三段式 composer：
+  - 默认主区域只展示消息输入框。
+  - 引用消息、Artifact 选区、附件草稿改为紧凑 context chips。
+  - 底部工具栏保留附件、@Agent、代码、路由详情 disclosure、发送按钮。
+- 路由预览从大块说明卡改为工具栏内的 `路由详情` disclosure：
+  - 默认只展示目标摘要。
+  - 展开后显示 routing reason、目标 Agents、Adapter、capability chips。
+  - 保留 `chat-routing-preview` test id，继续支持 E2E 和路由可解释。
+- 附件上传主路径改为工具栏 `附件` 按钮：
+  - 文件上传能力和附件草稿 chips 保留。
+  - 手动附件录入不再占用默认首屏，减少表单感。
+- `message.css` 增加 Composer v2 覆盖样式：
+  - 控制 textarea、context chips、routing disclosure、toolbar、send button 的密度和对比度。
+  - 修复窄视口下路由详情和附件 disclosure 的垂直重叠。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Browser 插件实际打开 `/workspace`，检查 ChatInput、MessageStream、Diagnostics 的首屏布局。
+- 使用 Playwright Core + Edge 固定验证：
+  - 1600x900
+  - 1536x864
+  - 1366x768
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖会话管理、聊天内 Agent 创建、附件上传、引用/回复、Artifact 选区 Revision、消息触发协作、Apply Diff、Deploy、Restore、Preview、REJECTION 恢复。
+- 三视口布局指标通过：
+  - `documentX=false`
+  - `mainX=false`
+  - `artifactBodyX=false`
+  - `streamComposerOverlap=false`
+  - `composerDiagnosticsOverlap=false`
+  - `routingSendOverlap=false`
+  - `rightOverflow=false`
+- Browser 实测当前窄视口无 console error / warning，ChatInput 与消息流、诊断抽屉不重叠。
+
+### 边界
+
+- 本轮只做 ChatInput 交互和视觉收敛，不改变消息发送、附件上传、Orchestrator 路由或 Artifact revision 后端语义。
+- 右侧 Inspector、Agent Builder、Preview Studio 不在本轮继续改造。
+
+## Phase 188：Workspace 可用性与视觉一致性收敛
+
+### 目标
+
+- 继续把 `/workspace` 从信息堆叠面板收敛为 IM-first 多 Agent 协作工作台。
+- 右侧 Artifact Inspector 默认只保留 Overview，复杂能力进入 tab。
+- MessageStream 更接近聊天流，用户消息、Agent 协议消息、Artifact 附件卡层级更稳定。
+- 左侧会话列表减少 badge 噪音，保留会话识别、未读、置顶 / 群聊核心信息。
+
+### 主要变更
+
+- `inspector.css` 增加 Overview 减重规则：
+  - 默认隐藏 Artifact Delivery Workbench、Revision、Approval Gate、诊断长文本。
+  - 保留 Artifact 标题、类型、四个信任指标和预览区。
+  - Diff、版本、快照、部署、审计、关联仍通过右栏 tab 访问。
+- `message.css` 继续 IM 化：
+  - 用户消息更像右侧聊天气泡。
+  - Orchestrator / Specialist / Reviewer 的协议卡高度、间距、badge 样式统一。
+  - Artifact 消息压缩为附件式摘要卡，保留选择产物和打开 Preview 操作。
+  - 修复旧 absolute toolbar 样式导致引用 chip 的“移除”按钮被路由 summary 覆盖的问题。
+- `shell.css` 压缩左栏：
+  - 隐藏会话列表非必要 chips。
+  - 会话卡片只保留标题、摘要、时间、未读、置顶 / 群聊核心信息。
+  - 会话操作按钮保持可用，但视觉权重降低。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Playwright Core + Edge 固定视口布局检查：
+  - 1600x900
+  - 1536x864
+  - 1366x768
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 通过，覆盖会话搜索 / 置顶 / 归档 / 恢复、聊天内 Agent 创建、附件上传、Message Action Bar、消息触发协作、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION recovery。
+- 三视口布局指标通过：
+  - 无 document 横向滚动。
+  - 无 Workspace main 横向溢出。
+  - 无 Artifact body 横向溢出。
+  - 无 ChatInput / Diagnostics / routing / send 按钮重叠。
+  - 右侧 Inspector 未越界。
+
+### 边界
+
+- 本轮只调整前端展示密度和布局，不改变后端 Orchestrator、Artifact、Approval、Deploy、Context、Adapter 语义。
+- Browser 插件在本轮仍未暴露可调用 JS 执行入口，实际浏览器验证使用仓库 Playwright E2E 和固定视口指标完成。
+
+## Phase 189：Workspace 交互闭环与视觉门禁
+
+### 目标
+
+- 强化 REJECTION 消息的可操作闭环，避免只是红色状态。
+- 让 Artifact 选区修改在 ChatInput 中明确显示 artifact 和行号范围。
+- 让 Deploy intent 更像聊天内确认流，而不是引导用户去右侧手动找按钮。
+- 给 Browser E2E 增加 1366px 布局指标和截图证据，防止后续再次出现组件重叠。
+
+### 主要变更
+
+- `MessageBubble`：
+  - REJECTION 卡新增“查看阻塞项 / 生成修复 Revision / 重新评审”三段 CTA。
+  - REJECTION 消息内联显示阻塞项摘要，并支持跳转定位。
+  - Deploy intent 卡新增“确认产物 -> Approval Gate -> 生成 Preview URL”的流程条。
+- `ChatInput`：
+  - Artifact 选区 chip 从普通“选区”升级为“正在局部修改”提示。
+  - 明确展示正在修改的 artifact、版本和行号范围。
+- `message.css`：
+  - 补充 REJECTION 操作区、阻塞项摘要、选区 chip、Deploy intent flow 的暗色 IM 样式。
+- `scripts/e2e-browser.mjs`：
+  - 新增 1366x768 Workspace 布局门禁。
+  - 保存 `.agenthub/e2e-browser/workspace-layout-metrics-latest.json` 和 `workspace-layout-1366-latest.png`。
+  - 断言无横向溢出、MessageStream / ChatInput 不重叠、ChatInput / Diagnostics 不重叠、Artifact Inspector 不越界。
+
+### 验证方式
+
+- `node --check scripts/e2e-browser.mjs`
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Browser 插件打开 `http://127.0.0.1:5173/workspace` 做页面身份和可见性确认。
+- `git diff --check`
+
+### 验证结果
+
+- E2E 完整通过，覆盖会话管理、聊天内 Agent 创建、多 Agent 消息、附件、Message Action Bar、消息触发协作、TaskRun、Context、Adapter fallback、Artifact revision、Apply Diff、Deploy、Restore、Preview、REJECTION recovery。
+- 1366px 布局门禁通过：
+  - `horizontalOverflow=false`
+  - `messageStreamChatInput=false`
+  - `chatInputDiagnostics=false`
+  - `artifactInspectorRight=false`
+- 前端构建通过。
+- `git diff --check` 无 whitespace error，仅 Windows CRLF 提示。
+
+### 边界
+
+- 本轮只做前端交互闭环和质量门禁，不改变后端部署、审批、Revision、Reviewer 评审语义。
+- Browser E2E 的截图和布局 JSON 是本地 QA 证据，不作为业务数据。
