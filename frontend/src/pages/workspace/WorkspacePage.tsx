@@ -51,7 +51,6 @@ import {
   unpinContext
 } from "../../api/agenthubApi";
 import type { AdapterQualityMetrics } from "../../api/agenthubApi";
-import { AgentList } from "../../features/agents/AgentList";
 import { AdapterQualityDashboard } from "../../features/agents/AdapterQualityDashboard";
 import { AdapterRoutingPanel } from "../../features/agents/AdapterRoutingPanel";
 import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
@@ -76,7 +75,7 @@ import type {
   TaskSpec,
   TaskStep
 } from "../../features/chat/chatTypes";
-import { ConversationList, type ConversationFilter } from "../../features/conversations/ConversationList";
+import type { ConversationFilter } from "../../features/conversations/ConversationList";
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import { ContextPanel } from "../../features/context/ContextPanel";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../../features/context/contextTypes";
@@ -87,8 +86,11 @@ import type { MemoryItem } from "../../features/memory/memoryTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
+import { WorkspaceArtifactInspectorShell } from "./WorkspaceArtifactInspectorShell";
+import { WorkspaceChatLane } from "./WorkspaceChatLane";
 import { WorkspaceDiagnosticsDrawer } from "./WorkspaceDiagnosticsDrawer";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import "../../styles/workspace.css";
 import "../../styles/workspace/tokens.css";
@@ -1983,59 +1985,26 @@ export function WorkspacePage() {
       className={`workspace-page ${artifactInspectorCollapsed ? "workspace-page--artifact-inspector-collapsed" : ""}`}
       data-testid="workspace-page"
     >
-      <aside className="workspace-sidebar" data-testid="workspace-sidebar">
-        <div className="workspace-sidebar__header">
-          <div className="workspace-brand">
-            <h1>AgentHub</h1>
-            <p>面向 Orchestrator、TaskRun 和 Artifact 的 IM 式协作工作台。</p>
-          </div>
-          <button
-            type="button"
-            className="primary-button"
-            data-testid="create-conversation-button"
-            disabled={creatingConversation}
-            onClick={handleCreateDemoConversation}
-          >
-            {creatingConversation ? "创建中..." : "+ 新建对话"}
-          </button>
-        </div>
-
-        <div className="workspace-sidebar__body">
-          <section className="workspace-section">
-            <div className="section-header">
-              <h3>近期会话</h3>
-              <span>{conversations.length}</span>
-            </div>
-            <ConversationList
-              conversations={conversations}
-              currentConversationId={currentConversationId}
-              loading={loadingConversations}
-              query={conversationQuery}
-              filter={conversationFilter}
-              onQueryChange={handleConversationQueryChange}
-              onFilterChange={handleConversationFilterChange}
-              onSelect={handleSelectConversation}
-              onTogglePinned={handleToggleConversationPinned}
-              onArchive={handleArchiveConversation}
-              onRestore={handleRestoreConversation}
-            />
-          </section>
-
-          <section className="workspace-section">
-            <div className="section-header">
-              <h3>我的 Agent</h3>
-              <span>{agents.length}</span>
-            </div>
-            <AgentList
-              agents={agents}
-              adapterDescriptors={adapterDescriptors}
-              loading={loadingAgents}
-              selectedAgentId={selectedAgent ? getIdValue(selectedAgent.id) : null}
-              onSelectAgent={handleSelectAgent}
-            />
-          </section>
-        </div>
-      </aside>
+      <WorkspaceSidebar
+        agents={agents}
+        adapterDescriptors={adapterDescriptors}
+        conversations={conversations}
+        conversationFilter={conversationFilter}
+        conversationQuery={conversationQuery}
+        creatingConversation={creatingConversation}
+        currentConversationId={currentConversationId}
+        loadingAgents={loadingAgents}
+        loadingConversations={loadingConversations}
+        selectedAgent={selectedAgent}
+        onArchiveConversation={handleArchiveConversation}
+        onConversationFilterChange={handleConversationFilterChange}
+        onConversationQueryChange={handleConversationQueryChange}
+        onCreateConversation={handleCreateDemoConversation}
+        onRestoreConversation={handleRestoreConversation}
+        onSelectAgent={handleSelectAgent}
+        onSelectConversation={handleSelectConversation}
+        onToggleConversationPinned={handleToggleConversationPinned}
+      />
 
       <main className={`workspace-main ${currentConversationId ? "" : "workspace-main--empty"}`}>
         <WorkspaceHeader
@@ -2112,8 +2081,8 @@ export function WorkspacePage() {
           </div>
         ) : null}
 
-        <div className="workspace-main__content">
-          <section className="workspace-chat-lane" aria-label="IM collaboration lane">
+        <WorkspaceChatLane
+          messageStream={
             <MessageStream
               messages={messages}
               agents={agents}
@@ -2149,6 +2118,8 @@ export function WorkspacePage() {
               onCancelDeployIntent={handleCancelDeployIntent}
               onDownloadArtifactBundle={handleDownloadArtifactBundle}
             />
+          }
+          composer={
             <ChatInput
               value={draftMessage}
               disabled={!currentConversationId}
@@ -2169,68 +2140,52 @@ export function WorkspacePage() {
               onClearArtifactSelection={() => setArtifactSelectionReference(null)}
               onSend={handleSendMessage}
             />
-          </section>
-
-          <WorkspaceDiagnosticsDrawer
-            panels={DIAGNOSTIC_PANELS}
-            activePanel={activeDiagnosticPanel}
-            sections={diagnosticSections}
-            onTogglePanel={(panel) => setActiveDiagnosticPanel((current) => (current === panel ? null : panel))}
-          />
-        </div>
+          }
+          diagnostics={
+            <WorkspaceDiagnosticsDrawer
+              panels={DIAGNOSTIC_PANELS}
+              activePanel={activeDiagnosticPanel}
+              sections={diagnosticSections}
+              onTogglePanel={(panel) => setActiveDiagnosticPanel((current) => (current === panel ? null : panel))}
+            />
+          }
+        />
       </main>
 
-      <aside
-        className={`workspace-artifacts ${artifactInspectorCollapsed ? "workspace-artifacts--collapsed" : ""}`}
-        data-testid="workspace-artifacts"
+      <WorkspaceArtifactInspectorShell
+        collapsed={artifactInspectorCollapsed}
+        onToggleCollapsed={() => setArtifactInspectorCollapsed((current) => !current)}
       >
-        <div className="workspace-artifacts__header" aria-label="Artifact inspector header">
-          <div>
-            <strong>产物工作台</strong>
-            <span>Artifact Inspector</span>
-          </div>
-          <button
-            type="button"
-            className="workspace-artifacts__collapse-button"
-            data-testid="artifact-inspector-collapse-toggle"
-            aria-expanded={!artifactInspectorCollapsed}
-            onClick={() => setArtifactInspectorCollapsed((current) => !current)}
-          >
-            {artifactInspectorCollapsed ? "展开" : "收起"}
-          </button>
-        </div>
-        <div className="workspace-artifacts__body">
-          <ArtifactPanel
-            artifacts={visibleArtifacts}
-            allArtifacts={artifacts}
-            totalArtifactCount={artifacts.length}
-            selectedArtifact={selectedArtifact}
-            selectedArtifactId={selectedArtifactId}
-            loadingArtifacts={loadingArtifacts}
-            loadingArtifactDetail={loadingArtifactDetail}
-            highlightedArtifactIds={highlightedArtifactIds}
-            filteredByTaskStep={Boolean(selectedTaskStep) && !showAllArtifacts}
-            revisingArtifact={revisingArtifact}
-            deployments={selectedArtifactDeployments}
-            snapshots={selectedArtifactSnapshots}
-            deployingArtifact={deployingArtifact}
-            restoringSnapshot={restoringSnapshot}
-            conversationId={currentConversationId}
-            onSelectArtifact={setSelectedArtifactId}
-            onShowAllArtifacts={handleShowAllArtifacts}
-            onCreateRevision={handleCreateArtifactRevision}
-            onSendSelectionToChat={handleSendArtifactSelectionToChat}
-            onCreateDeployment={handleCreateDeployment}
-            onDownloadArtifactBundle={handleDownloadArtifactBundle}
-            onRestoreSnapshot={handleRestoreArtifactSnapshot}
-            onApplyDiff={handleApplyArtifactDiff}
-            onForceApplyDiff={handleForceApplyArtifactDiff}
-            onCreateApprovalRequest={handleCreateApprovalRequest}
-            onApproveApprovalRequest={handleApproveApprovalRequest}
-            onCancelApprovalRequest={handleCancelApprovalRequest}
-          />
-        </div>
-      </aside>
+        <ArtifactPanel
+          artifacts={visibleArtifacts}
+          allArtifacts={artifacts}
+          totalArtifactCount={artifacts.length}
+          selectedArtifact={selectedArtifact}
+          selectedArtifactId={selectedArtifactId}
+          loadingArtifacts={loadingArtifacts}
+          loadingArtifactDetail={loadingArtifactDetail}
+          highlightedArtifactIds={highlightedArtifactIds}
+          filteredByTaskStep={Boolean(selectedTaskStep) && !showAllArtifacts}
+          revisingArtifact={revisingArtifact}
+          deployments={selectedArtifactDeployments}
+          snapshots={selectedArtifactSnapshots}
+          deployingArtifact={deployingArtifact}
+          restoringSnapshot={restoringSnapshot}
+          conversationId={currentConversationId}
+          onSelectArtifact={setSelectedArtifactId}
+          onShowAllArtifacts={handleShowAllArtifacts}
+          onCreateRevision={handleCreateArtifactRevision}
+          onSendSelectionToChat={handleSendArtifactSelectionToChat}
+          onCreateDeployment={handleCreateDeployment}
+          onDownloadArtifactBundle={handleDownloadArtifactBundle}
+          onRestoreSnapshot={handleRestoreArtifactSnapshot}
+          onApplyDiff={handleApplyArtifactDiff}
+          onForceApplyDiff={handleForceApplyArtifactDiff}
+          onCreateApprovalRequest={handleCreateApprovalRequest}
+          onApproveApprovalRequest={handleApproveApprovalRequest}
+          onCancelApprovalRequest={handleCancelApprovalRequest}
+        />
+      </WorkspaceArtifactInspectorShell>
     </section>
   );
 }

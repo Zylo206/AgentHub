@@ -6,6 +6,7 @@ import {
   type ArtifactDiagnosticEntry
 } from "./ArtifactDeliveryWorkbench";
 import { ArtifactDeployPanel } from "./ArtifactDeployPanel";
+import { ArtifactInspectorMetrics } from "./ArtifactInspectorMetrics";
 import { ArtifactInspectorTabs } from "./ArtifactInspectorTabs";
 import { ArtifactSnapshotTimeline } from "./ArtifactSnapshotTimeline";
 import { DiffSummaryPanel } from "./DiffSummaryPanel";
@@ -1100,28 +1101,30 @@ export function ArtifactPanel({
                 <span>{selectedArtifact.language || "plain"}</span>
               </div>
             </div>
-            <div className="artifact-inspector-metrics" aria-label="Artifact trust metrics">
-              <article>
-                <span>Source</span>
-                <strong>{displayArtifactSourceKind(selectedArtifact.sourceKind || "STATIC_TEMPLATE")}</strong>
-                <small>{selectedArtifact.sourceAdapterType || selectedArtifact.generationMode || "fallback-ready"}</small>
-              </article>
-              <article>
-                <span>Quality</span>
-                <strong>{selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome || "NOT_EVALUATED"}</strong>
-                <small>score {formatQualityScore(selectedArtifact.qualityScore)}</small>
-              </article>
-              <article>
-                <span>Build</span>
-                <strong>{formatBuildValidationValue(selectedArtifact)}</strong>
-                <small>{selectedArtifact.buildValidationReason || "no blocking reason"}</small>
-              </article>
-              <article>
-                <span>Run</span>
-                <strong>{displayStatus(selectedArtifact.status)}</strong>
-                <small>{selectedArtifact.realAdapterOutcome || selectedArtifact.generationMode || "static boundary"}</small>
-              </article>
-            </div>
+            <ArtifactInspectorMetrics
+              metrics={[
+                {
+                  label: "Source",
+                  value: displayArtifactSourceKind(selectedArtifact.sourceKind || "STATIC_TEMPLATE"),
+                  detail: selectedArtifact.sourceAdapterType || selectedArtifact.generationMode || "fallback-ready"
+                },
+                {
+                  label: "Quality",
+                  value: selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome || "NOT_EVALUATED",
+                  detail: `score ${formatQualityScore(selectedArtifact.qualityScore)}`
+                },
+                {
+                  label: "Build",
+                  value: formatBuildValidationValue(selectedArtifact),
+                  detail: selectedArtifact.buildValidationReason || "no blocking reason"
+                },
+                {
+                  label: "Run",
+                  value: displayStatus(selectedArtifact.status),
+                  detail: selectedArtifact.realAdapterOutcome || selectedArtifact.generationMode || "static boundary"
+                }
+              ]}
+            />
             <ArtifactDeliveryWorkbench
               artifact={selectedArtifact}
               allArtifacts={allArtifacts}

@@ -8081,3 +8081,136 @@
 
 - 旧 `workspace.css` 中仍有多段历史重复样式，后续继续按模块逐段迁移。
 - 本轮不改变业务 JSX 和后端语义，只迁移基础视觉 primitives。
+
+## Phase 193：Adapter 诊断样式迁移与 Workspace 展示壳拆分
+
+### 目标
+
+- 继续逐段迁移旧 `workspace.css`，优先处理会污染暗色 IM 工作台的 adapter-routing / adapter-quality 样式。
+- 拆分 Workspace 大组件中的稳定展示壳，降低后续 UI 回归风险。
+- 保持 `/workspace` 主路径、Artifact Inspector、Browser E2E 和 1366px 布局门禁不破。
+
+### 主要变更
+
+- `diagnostics.css`：
+  - 接管 `adapter-routing-panel` / `adapter-quality-dashboard` / `adapter-quality-table` / `adapter-routing-table` 等诊断面板样式。
+  - 将浅色表格、白色 chip、后台卡片感改成暗色诊断抽屉风格。
+- `workspace.css`：
+  - 删除文件头旧 adapter routing / quality 浅色样式块，减少 legacy 覆盖。
+- 新增 `WorkspaceSidebar`：
+  - 从 `WorkspacePage` 拆出左栏会话列表和 Agent 联系人展示。
+  - 保留会话搜索、置顶、归档、恢复、Agent 选择等回调。
+- 新增 `WorkspaceArtifactInspectorShell`：
+  - 从 `WorkspacePage` 拆出右侧 Artifact Inspector shell 和折叠按钮。
+  - `WorkspacePage` 只负责传入 `ArtifactPanel` 和折叠状态。
+- 新增 `ArtifactInspectorMetrics`：
+  - 从 `ArtifactPanel` 拆出 Source / Quality / Build / Run 四个指标卡渲染。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 完整通过。
+- 1366px Workspace 布局门禁通过：无横向滚动、无中栏/右栏重叠。
+
+### 边界
+
+- 本轮没有改变 API、Orchestrator、Approval、Artifact mutation 或 Adapter 业务语义。
+- `ArtifactInspectorMeta` 和 `ArtifactScaffoldEmptyState` 尚未拆出；旧文件中部分 scaffold 文案存在编码显示问题，后续应先处理编码再迁移，避免误删 JSX。
+
+## Phase 194：Artifact Inspector 浅色残留与堆叠修复
+
+### 目标
+
+- 修复右侧 Artifact Inspector 中仍出现的浅色背景块。
+- 降低 Overview 首屏组件堆叠，确保右栏只作为轻量产物检查器。
+
+### 主要变更
+
+- `inspector.css`：
+  - 禁用 legacy `artifact-preview__meta::before` / `quality-gate-action::before` 伪元素，避免旧蓝色侧边条和浅色块穿透右栏。
+  - 将 `artifact-preview`、`artifact-cockpit`、`artifact-delivery-workbench`、badge、diff、snapshot、deploy、approval 等右栏 surface 统一覆盖为暗色。
+  - 取消右栏 tabs 的 sticky 行为，避免 tab 在单滚动容器内压住 meta 内容。
+  - Overview 默认隐藏重复的 `artifact-cockpit` / delivery workbench，只保留标题、四个 trust metrics 和 Preview。
+  - 覆盖 `artifact-preview__actions` 容器旧白底，消除“复制内容 / 下载文件”外层白色 pill。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- 查看 `.agenthub/e2e-browser/workspace-layout-1366-latest.png`
+
+### 验证结果
+
+- 前端构建通过。
+- Browser E2E 完整通过。
+- 1366px 布局门禁通过。
+- 截图确认右侧 Inspector 不再出现明显浅色 action 容器或重复 cockpit 堆叠。
+
+### 边界
+
+- 本轮只做 Workspace 右栏 UI 修复，不改变 Artifact、Approval、Deploy、Preview 的业务链路。
+## Phase 194：Artifact Inspector 右栏浅色残留与堆叠修复
+
+### 目标
+
+- 修复右侧 Artifact Inspector 中旧浅色框、白色 action 容器和 cockpit 重复堆叠问题。
+- 保持右栏作为轻量产物检查器，Overview 只展示标题、指标、Preview 和核心操作。
+
+### 主要变更
+
+- `inspector.css` 增加 right-rail hardening 覆盖层，统一右栏 surface / card / badge / action 的暗色样式。
+- 禁用 legacy `workspace.css` 中影响右栏的 `artifact-preview__meta::before`、quality gate pseudo rail 等伪元素。
+- 取消右栏 tab sticky 覆盖，避免滚动时压住 meta / preview 内容。
+- Overview 隐藏重复 `artifact-cockpit`，避免与上方指标卡重复堆叠。
+- 覆盖 `artifact-preview__actions` 的旧浅色容器和浅色按钮样式。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- 查看 `.agenthub/e2e-browser/workspace-layout-1366-latest.png`
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 通过。
+- 1366px layout gate 通过。
+- 右栏无浅色 action 容器，无 cockpit 重复堆叠。
+
+## Phase 195：Workspace 可用性减负与中栏拆分
+
+### 目标
+
+- 让 Workspace 首屏继续向“会话 -> 消息流 -> IM 输入框”收敛。
+- 减少中栏诊断和输入区对消息流的挤占。
+- 继续把旧 `workspace.css` 高频样式迁移到模块化 CSS，降低浅色残留和 `!important` 回归风险。
+
+### 主要变更
+
+- 新增 `WorkspaceChatLane`，将中栏的 MessageStream、ChatInput、Diagnostics Drawer 作为明确区域承载，降低 `WorkspacePage` 布局膨胀。
+- `message.css` 追加可用性收敛层：
+  - MessageStream 继续作为主视觉中心。
+  - ChatInput 默认更紧凑。
+  - Message Action Bar 默认收起，仅 hover / focus 展开。
+- `diagnostics.css` 压缩默认诊断抽屉高度，展开后仍保留 TaskRun / Context / Adapter / Audit / Local 能力。
+- `components.css` 迁移 conversation / adapter / artifact 高频基础样式，统一暗色输入、badge、表格和状态单元。
+- `inspector.css` 继续减重右侧 Artifact Inspector，同时修复过度隐藏 Artifact 列表导致 CODE Artifact 不可选择的问题。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+- 查看 `.agenthub/e2e-browser/workspace-layout-metrics-latest.json`
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 1366px layout gate 通过：无横向溢出，无 MessageStream / ChatInput / Diagnostics / Artifact Inspector 重叠。
+- E2E 覆盖 Artifact 选择、Revision、Apply Diff、Deploy、Restore、REJECTION recovery 和 Preview。

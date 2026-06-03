@@ -361,6 +361,7 @@
 
 /* Usability convergence: keep the right rail as an inspector, not a second workspace. */
 .workspace-artifacts .artifact-preview--tab-overview .artifact-delivery-workbench,
+.workspace-artifacts .artifact-preview--tab-overview .artifact-cockpit,
 .workspace-artifacts .artifact-preview--tab-overview .artifact-revision-box,
 .workspace-artifacts .artifact-preview--tab-overview .approval-gate,
 .workspace-artifacts .artifact-preview--tab-overview .artifact-preview__line,
@@ -447,6 +448,11 @@
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: 8px !important;
+  margin-top: 8px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .workspace-artifacts .artifact-preview__action-button {
@@ -541,6 +547,153 @@
   font-size: 11px !important;
 }
 
+.workspace-artifacts .artifact-preview__actions .artifact-preview__action-button,
+.workspace-artifacts .artifact-preview__actions .secondary-button {
+  border: 1px solid rgba(118, 154, 205, 0.24) !important;
+  background: rgba(8, 20, 34, 0.9) !important;
+  color: #dbeafe !important;
+  box-shadow: none !important;
+}
+
+.workspace-artifacts .artifact-preview__actions .artifact-preview__action-button:hover:not(:disabled),
+.workspace-artifacts .artifact-preview__actions .secondary-button:hover:not(:disabled) {
+  border-color: rgba(47, 131, 255, 0.5) !important;
+  background: rgba(29, 120, 255, 0.18) !important;
+  color: #ffffff !important;
+}
+
+/* Right-rail hardening: remove legacy light panels and pseudo rails from workspace.css. */
+.workspace-artifacts,
+.workspace-artifacts__body,
+.workspace-artifacts .artifact-panel,
+.workspace-artifacts .artifact-panel__detail,
+.workspace-artifacts .artifact-panel__sidebar,
+.workspace-artifacts .artifact-preview {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(47, 131, 255, 0.1), transparent 26%),
+    rgba(3, 11, 22, 0.9) !important;
+}
+
+.workspace-artifacts .artifact-preview,
+.workspace-artifacts .artifact-preview__meta,
+.workspace-artifacts .artifact-inspector-metrics article,
+.workspace-artifacts .artifact-cockpit,
+.workspace-artifacts .artifact-cockpit__grid article,
+.workspace-artifacts .artifact-cockpit__handoff,
+.workspace-artifacts .artifact-delivery-workbench,
+.workspace-artifacts .artifact-badge-system,
+.workspace-artifacts .artifact-preview-dock,
+.workspace-artifacts .artifact-content-editor,
+.workspace-artifacts .artifact-revision-box,
+.workspace-artifacts .diff-summary,
+.workspace-artifacts .diff-summary-panel,
+.workspace-artifacts .version-history,
+.workspace-artifacts .version-history-panel,
+.workspace-artifacts .artifact-snapshot-box,
+.workspace-artifacts .artifact-snapshot-timeline,
+.workspace-artifacts .deploy-status-box,
+.workspace-artifacts .artifact-audit-panel,
+.workspace-artifacts .artifact-related-panel,
+.workspace-artifacts .approval-gate {
+  position: relative;
+  overflow: hidden !important;
+  border-color: rgba(118, 154, 205, 0.16) !important;
+  background:
+    linear-gradient(180deg, rgba(10, 24, 40, 0.9), rgba(5, 14, 25, 0.92)) !important;
+  color: var(--workspace-text) !important;
+  box-shadow: none !important;
+}
+
+.workspace-artifacts .artifact-preview__meta::before,
+.workspace-artifacts .quality-gate-action::before,
+.workspace-artifacts .artifact-preview__gate-action::before {
+  content: none !important;
+  display: none !important;
+}
+
+.workspace-artifacts .artifact-preview > *,
+.workspace-artifacts .artifact-preview__meta > *,
+.workspace-artifacts .artifact-cockpit > *,
+.workspace-artifacts .artifact-delivery-workbench > * {
+  min-width: 0 !important;
+}
+
+.workspace-artifacts .artifact-inspector-tabs {
+  position: relative !important;
+  top: auto !important;
+  z-index: 1 !important;
+  margin-bottom: 6px !important;
+  border-bottom: 1px solid rgba(118, 154, 205, 0.1) !important;
+}
+
+.workspace-artifacts .artifact-preview__meta {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 5px !important;
+  max-height: 104px !important;
+}
+
+.workspace-artifacts .artifact-preview--tab-overview .artifact-preview__meta {
+  max-height: 94px !important;
+}
+
+.workspace-artifacts .artifact-preview__meta p:nth-of-type(n+3) {
+  display: none !important;
+}
+
+.workspace-artifacts .artifact-badge-system {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 6px !important;
+}
+
+.workspace-artifacts .artifact-explain-badge,
+.workspace-artifacts .artifact-cockpit__status,
+.workspace-artifacts .artifact-preview__badge,
+.workspace-artifacts .artifact-source-badge,
+.workspace-artifacts .artifact-quality-badge,
+.workspace-artifacts .artifact-status-badge,
+.workspace-artifacts .artifact-generation-badge,
+.workspace-artifacts .artifact-inspector-badge {
+  border-color: rgba(118, 154, 205, 0.24) !important;
+  background: rgba(5, 14, 25, 0.94) !important;
+  color: #cfe0f6 !important;
+}
+
+.workspace-artifacts .artifact-cockpit {
+  padding: 9px !important;
+}
+
+.workspace-artifacts .artifact-cockpit__hero {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+}
+
+.workspace-artifacts .artifact-cockpit__hero strong,
+.workspace-artifacts .artifact-cockpit__hero p,
+.workspace-artifacts .artifact-cockpit__handoff p,
+.workspace-artifacts .artifact-cockpit__grid article strong,
+.workspace-artifacts .artifact-cockpit__grid article small,
+.workspace-artifacts .artifact-explain-badge strong,
+.workspace-artifacts .artifact-explain-badge small {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-artifacts .artifact-cockpit__grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+}
+
+.workspace-artifacts .artifact-cockpit__flow,
+.workspace-artifacts .artifact-cockpit__handoff {
+  display: none !important;
+}
+
 @media (max-width: 1366px) {
   .workspace-artifacts {
     padding: 6px !important;
@@ -557,4 +710,82 @@
   .workspace-artifacts .artifact-inspector-tabs__item:nth-child(n+6) {
     display: none !important;
   }
+}
+
+/* Inspector overview pass: keep the right rail as a compact artifact inspector, not a second workspace. */
+.workspace-artifacts {
+  overflow: hidden !important;
+}
+
+.workspace-artifacts__body {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.workspace-artifacts .artifact-panel {
+  gap: 7px !important;
+}
+
+.workspace-artifacts .artifact-panel__sidebar {
+  max-height: 118px !important;
+}
+
+.workspace-artifacts .artifact-card-list {
+  max-height: 128px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.workspace-artifacts .artifact-preview {
+  gap: 8px !important;
+  padding: 8px !important;
+}
+
+.workspace-artifacts .artifact-inspector-tabs {
+  display: flex !important;
+  gap: 5px !important;
+  overflow-x: auto !important;
+  scrollbar-width: none;
+}
+
+.workspace-artifacts .artifact-inspector-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-artifacts .artifact-inspector-tabs__item {
+  flex: 0 0 auto !important;
+  min-height: 24px !important;
+  padding: 0 8px !important;
+  font-size: 10px !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+}
+
+.workspace-artifacts .artifact-inspector-metrics article {
+  min-height: 56px !important;
+  padding: 8px !important;
+}
+
+.workspace-artifacts .artifact-preview-dock {
+  padding: 8px !important;
+}
+
+.workspace-artifacts .artifact-preview-dock__body {
+  max-height: 168px !important;
+}
+
+.workspace-artifacts .artifact-preview__actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+
+.workspace-artifacts .artifact-preview__operation-message {
+  grid-column: 1 / -1;
+  min-height: 22px !important;
+  padding: 3px 7px !important;
+  font-size: 10px !important;
 }

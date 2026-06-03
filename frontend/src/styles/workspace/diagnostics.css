@@ -98,6 +98,257 @@
   display: none;
 }
 
+/* Keep diagnostics as a compact trust rail until the user explicitly opens it. */
+.workspace-diagnostics {
+  flex: 0 0 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+  border-radius: 12px !important;
+}
+
+.workspace-diagnostics--expanded {
+  flex-basis: clamp(150px, 21vh, 236px) !important;
+  max-height: 236px !important;
+}
+
+.workspace-diagnostics__tabs {
+  min-height: 32px !important;
+  padding: 4px 6px !important;
+}
+
+.workspace-diagnostics__tab {
+  min-height: 22px !important;
+  padding: 0 8px !important;
+  font-size: 10px !important;
+}
+
+.workspace-diagnostics__tab span {
+  display: none !important;
+}
+
+/* Adapter routing / quality trust surfaces live in the diagnostics drawer. */
+.adapter-routing-panel,
+.adapter-quality-dashboard {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(118, 154, 205, 0.16) !important;
+  border-radius: 12px !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(47, 131, 255, 0.12), transparent 28%),
+    rgba(6, 17, 31, 0.9) !important;
+  color: var(--workspace-text) !important;
+  box-shadow: none !important;
+}
+
+.adapter-routing-panel__header,
+.adapter-quality-dashboard__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid rgba(118, 154, 205, 0.12);
+}
+
+.adapter-routing-panel__header strong,
+.adapter-quality-dashboard__header strong {
+  color: var(--workspace-text) !important;
+  font-size: 12px !important;
+}
+
+.adapter-routing-panel__header p,
+.adapter-routing-panel p,
+.adapter-quality-dashboard__header p,
+.adapter-quality-dashboard__header span {
+  margin: 3px 0 0 !important;
+  color: #91a8c5 !important;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+}
+
+.adapter-routing-panel__selected {
+  flex: 0 0 auto;
+  border: 1px solid rgba(47, 131, 255, 0.34) !important;
+  border-radius: 999px !important;
+  background: rgba(29, 120, 255, 0.14) !important;
+  color: #93c5fd !important;
+  padding: 4px 8px !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}
+
+.adapter-routing-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  padding: 10px;
+}
+
+.adapter-routing-card {
+  padding: 10px !important;
+}
+
+.adapter-routing-card--selected {
+  border-color: rgba(47, 131, 255, 0.52) !important;
+  background:
+    linear-gradient(180deg, rgba(29, 120, 255, 0.18), rgba(8, 20, 34, 0.88)),
+    var(--workspace-card-bg) !important;
+}
+
+.adapter-routing-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #cfe0f6;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.adapter-routing-card__topline span {
+  color: #91a8c5 !important;
+}
+
+.adapter-routing-card__score {
+  margin-top: 6px;
+  color: #e6f2ff !important;
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.adapter-routing-card__metrics,
+.adapter-quality-command-strip__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.adapter-routing-card__metrics span,
+.adapter-quality-command-strip__metrics span {
+  border: 1px solid rgba(118, 154, 205, 0.18) !important;
+  border-radius: 999px !important;
+  background: rgba(8, 20, 34, 0.78) !important;
+  color: #9bb3d1 !important;
+  padding: 3px 6px !important;
+  font-size: 10px !important;
+  font-weight: 750 !important;
+}
+
+.adapter-quality-command-strip {
+  margin: 8px !important;
+  padding: 10px !important;
+  border: 1px solid rgba(118, 154, 205, 0.16) !important;
+  border-radius: 12px !important;
+  background: rgba(8, 20, 34, 0.72) !important;
+}
+
+.adapter-quality-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 8px 8px;
+}
+
+.adapter-quality-kpi {
+  min-width: 0;
+  padding: 8px !important;
+  border: 1px solid rgba(118, 154, 205, 0.16) !important;
+  border-radius: 10px !important;
+  background: rgba(8, 20, 34, 0.78) !important;
+}
+
+.adapter-quality-kpi strong {
+  display: block;
+  color: #e6f2ff !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+}
+
+.adapter-quality-kpi span,
+.adapter-quality-kpi small {
+  color: #91a8c5 !important;
+  font-size: 10px !important;
+}
+
+.adapter-quality-table,
+.adapter-routing-table {
+  overflow-x: auto;
+  margin: 0 8px 8px;
+  border: 1px solid rgba(118, 154, 205, 0.14) !important;
+  border-radius: 10px !important;
+  background: rgba(3, 11, 22, 0.72) !important;
+}
+
+.adapter-quality-table__row,
+.adapter-routing-table__row {
+  display: grid;
+  min-width: 960px;
+  border-top: 1px solid rgba(118, 154, 205, 0.1) !important;
+}
+
+.adapter-quality-table__row {
+  grid-template-columns: 120px 92px 68px 68px 74px 92px 92px 100px 106px 116px 90px;
+}
+
+.adapter-routing-table__row {
+  grid-template-columns: 120px repeat(6, minmax(72px, 1fr));
+}
+
+.adapter-quality-table__row:first-child,
+.adapter-routing-table__row:first-child {
+  border-top: 0 !important;
+}
+
+.adapter-quality-table__row span,
+.adapter-quality-table__row strong,
+.adapter-routing-table__row span,
+.adapter-routing-table__row strong {
+  min-width: 0;
+  padding: 7px 8px !important;
+  overflow: hidden;
+  color: #9bb3d1 !important;
+  font-size: 10px !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adapter-quality-table__row strong,
+.adapter-routing-table__row strong {
+  color: #e6f2ff !important;
+}
+
+.adapter-quality-table__row--head span,
+.adapter-routing-table__row--head span {
+  background: rgba(8, 20, 34, 0.9) !important;
+  color: #6f89aa !important;
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.adapter-routing-table__row--selected {
+  background: rgba(29, 120, 255, 0.1) !important;
+}
+
+.adapter-quality-table__meter {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  height: 4px;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  background: rgba(118, 154, 205, 0.16);
+}
+
+.adapter-quality-table__meter b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #1976ff, #22c55e);
+}
+
 .workspace-diagnostics .section-header,
 .workspace-diagnostics h3 {
   font-size: 12px !important;

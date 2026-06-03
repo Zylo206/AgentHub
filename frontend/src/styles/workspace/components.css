@@ -180,3 +180,82 @@
   background: var(--workspace-tab-active-bg) !important;
   color: var(--workspace-text) !important;
 }
+
+/* Migration guard for old workspace.css: high-frequency list, adapter, and artifact primitives. */
+.conversation-list,
+.conversation-list-status,
+.conversation-search,
+.conversation-filter-tabs,
+.im-list-tools,
+.im-list-tools__chips,
+.adapter-quality-dashboard,
+.adapter-quality-dashboard__metrics,
+.adapter-quality-dashboard__table,
+.adapter-routing-panel,
+.artifact-card-list,
+.artifact-scaffold-list,
+.artifact-inspector-tabs,
+.artifact-inspector-metrics,
+.artifact-preview__actions {
+  color: var(--workspace-text) !important;
+}
+
+.conversation-search input,
+.conversation-list input,
+.adapter-quality-dashboard input,
+.adapter-routing-panel input {
+  border: 1px solid rgba(118, 154, 205, 0.18) !important;
+  border-radius: 10px !important;
+  background: rgba(3, 11, 22, 0.72) !important;
+  color: var(--workspace-text) !important;
+}
+
+.conversation-search input::placeholder,
+.conversation-list input::placeholder {
+  color: rgba(145, 168, 197, 0.76) !important;
+}
+
+.conversation-list-status span,
+.im-list-tools__chips span,
+.adapter-quality-dashboard__metric,
+.adapter-quality-dashboard__signal,
+.adapter-quality-dashboard__outcome,
+.adapter-quality-dashboard__cell,
+.adapter-routing-card__metric,
+.artifact-preview__meta-right span,
+.artifact-preview__operation-message {
+  border: 1px solid rgba(118, 154, 205, 0.16) !important;
+  border-radius: 999px !important;
+  background: rgba(8, 20, 34, 0.72) !important;
+  color: #cfe0f6 !important;
+}
+
+.adapter-quality-dashboard table,
+.adapter-quality-dashboard th,
+.adapter-quality-dashboard td,
+.adapter-quality-dashboard__table,
+.adapter-quality-dashboard__row {
+  border-color: rgba(118, 154, 205, 0.14) !important;
+  background: transparent !important;
+  color: #cfe0f6 !important;
+}
+
+.adapter-quality-dashboard th,
+.adapter-quality-dashboard__heading {
+  color: #8ea6c4 !important;
+  font-size: 10px !important;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.artifact-card__meta,
+.artifact-card__summary,
+.artifact-preview__line,
+.artifact-preview__meta p {
+  color: #8ea6c4 !important;
+}
+
+.artifact-preview__actions {
+  background: transparent !important;
+  box-shadow: none !important;
+}

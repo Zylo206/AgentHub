@@ -1291,3 +1291,113 @@
     max-width: min(90%, 720px) !important;
   }
 }
+
+/* Usability convergence pass: make the feed the visual center, keep composer compact by default. */
+.workspace-chat-lane {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+.workspace-chat-lane .message-stream {
+  flex: 1 1 auto !important;
+  height: auto !important;
+  min-height: clamp(410px, 56vh, 620px) !important;
+  max-height: none !important;
+  padding: 9px !important;
+}
+
+.workspace-chat-lane .chat-input {
+  flex: 0 0 auto !important;
+  min-height: 88px !important;
+  padding: 8px !important;
+  gap: 5px !important;
+}
+
+.workspace-chat-lane .chat-input__textarea {
+  min-height: 42px !important;
+  max-height: 62px !important;
+  padding: 8px 10px !important;
+  font-size: 13px !important;
+  line-height: 1.42 !important;
+}
+
+.workspace-chat-lane .chat-input__toolbar {
+  max-height: 28px !important;
+  gap: 6px !important;
+}
+
+.workspace-chat-lane .chat-input__actions {
+  min-height: 28px !important;
+}
+
+.workspace-chat-lane .chat-input__actions .primary-button {
+  min-width: 68px !important;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+}
+
+.workspace-chat-lane .chat-routing-preview,
+.workspace-chat-lane .chat-attachment-composer {
+  min-height: 26px !important;
+}
+
+.workspace-chat-lane .chat-routing-preview summary,
+.workspace-chat-lane .chat-attachment-composer summary {
+  min-height: 26px !important;
+  padding: 3px 7px !important;
+}
+
+.workspace-chat-lane .chat-routing-preview:not([open]),
+.workspace-chat-lane .chat-attachment-composer:not([open]) {
+  max-width: 260px !important;
+}
+
+.workspace-chat-lane .chat-context-chip {
+  max-width: 240px !important;
+}
+
+.workspace-chat-lane .chat-context-chip strong,
+.workspace-chat-lane .chat-context-chip span,
+.workspace-chat-lane .chat-context-chip em,
+.workspace-chat-lane .chat-context-chip code {
+  max-width: 170px !important;
+}
+
+.message-row {
+  margin-bottom: 6px !important;
+}
+
+.message-bubble {
+  padding: 8px 10px !important;
+}
+
+.message-action-bar {
+  max-height: 0;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden;
+}
+
+.message-bubble:hover .message-action-bar,
+.message-bubble:focus-within .message-action-bar {
+  max-height: 34px;
+  margin-top: 7px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+@media (max-width: 1366px) {
+  .workspace-chat-lane .message-stream {
+    min-height: clamp(390px, 55vh, 560px) !important;
+  }
+
+  .workspace-chat-lane .chat-input {
+    min-height: 82px !important;
+  }
+
+  .workspace-chat-lane .chat-input__textarea {
+    min-height: 38px !important;
+    max-height: 54px !important;
+  }
+}
