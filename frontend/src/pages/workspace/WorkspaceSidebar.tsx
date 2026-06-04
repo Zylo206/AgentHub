@@ -50,7 +50,7 @@ export function WorkspaceSidebar({
       <div className="workspace-sidebar__header">
         <div className="workspace-brand">
           <h1>AgentHub</h1>
-          <p>面向 Orchestrator、TaskRun 和 Artifact 的 IM 式协作工作台。</p>
+          <p>IM 式多 Agent 协作工作台</p>
         </div>
         <button
           type="button"

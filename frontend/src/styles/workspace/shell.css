@@ -511,3 +511,21 @@
     padding: 0 5px !important;
   }
 }
+
+/* Stable chat-lane layout gate: message feed + composer + one-line diagnostics. */
+.workspace-main__content {
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  align-content: stretch !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.workspace-main__content > .workspace-chat-lane {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.workspace-main__content > .workspace-diagnostics {
+  align-self: end !important;
+}

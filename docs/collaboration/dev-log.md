@@ -8214,3 +8214,330 @@
 - Browser E2E 完整通过。
 - 1366px layout gate 通过：无横向溢出，无 MessageStream / ChatInput / Diagnostics / Artifact Inspector 重叠。
 - E2E 覆盖 Artifact 选择、Revision、Apply Diff、Deploy、Restore、REJECTION recovery 和 Preview。
+
+## Phase 196：MessageStream IM 化与三视口视觉门禁
+
+### 目标
+
+- 继续把中栏消息流从“后台面板堆叠”收敛为 IM 协作流。
+- 让用户消息、Orchestrator、Specialist、Reviewer 有稳定可辨识的消息模板。
+- 固化 1366x768、1536x864、1600x900 三个视口的布局回归检查。
+
+### 主要变更
+
+- `MessageBubble` 增加 Reviewer lane 与 protocol class，支持 Orchestrator / Specialist / Reviewer 的固定视觉模板。
+- `message.css` 增加 IM collaboration polish：
+  - 用户消息右侧气泡化。
+  - Orchestrator 使用规划卡视觉。
+  - Specialist 使用结果卡视觉。
+  - Reviewer / APPROVAL / REJECTION 使用评审与阻塞状态视觉。
+  - Message Action Bar 默认收起，hover / focus 后出现。
+  - Artifact / Deploy 继续以消息附件或状态卡呈现。
+- 修复 hover-only Action Bar 与 E2E 点击模型的冲突，测试会先 hover 再执行消息操作。
+- `workspace.css` 增加最终布局门禁覆盖，强制中栏采用“消息流 + 输入框 + 诊断条”的非重叠布局。
+- `scripts/e2e-browser.mjs` 扩展 Workspace visual layout gate：
+  - 1366x768
+  - 1536x864
+  - 1600x900
+  - 每个视口保存 metrics 与 screenshot。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 三个视口布局门禁均通过：无横向溢出、无 MessageStream / ChatInput / Diagnostics / Artifact Inspector 重叠。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+## Phase 197：扣子式低噪声 Workspace 设计收敛
+
+### 目标
+
+- 借鉴扣子类 Agent 工作台的低门槛表达：能力分组、任务启动清晰、右侧 Inspector 降噪。
+- 保留 AgentHub 暗色 IM 协作控制台风格，不复制外部品牌，不移除既有功能。
+- 继续解决组件堆叠、浅色残留、右侧信息过重和协作建议卡可读性问题。
+
+### 主要变更
+
+- 通过 Creative Production style intake 固化本轮方向：三栏但中栏优先、深色低噪声、发送消息后确认协作、右侧 Inspector 降噪。
+- `workspace.css` 追加 Coze-inspired product pass：
+  - Workspace shell 改为更轻的深色低噪声背景。
+  - Header / Collaboration toolbar / Flow guide 降低视觉权重。
+  - MessageStream 增加 sticky section title 和更柔和的 feed 背景。
+  - 协作建议卡改为更像任务启动卡，任务摘要横跨两列并采用两行截断。
+  - 会话操作不再 display none，改为低透明度，避免破坏搜索 / 置顶 / 归档 / 恢复 E2E。
+  - Artifact Inspector badge、tabs、metrics、preview dock 统一暗色底和状态色边框，避免白色 pill 和浅色框回流。
+- `ArtifactPanel` 移除遗留 duplicated inspector tabs，只保留当前统一 `ArtifactInspectorTabs`。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+- 查看 `.agenthub/e2e-browser/workspace-layout-1366x768.png`
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 1366x768、1536x864、1600x900 三视口 layout gate 均通过。
+- 会话搜索 / 置顶 / 归档 / 恢复、消息触发协作、Artifact Revision、Deploy、Restore、REJECTION recovery 等主链路均未破坏。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+## Phase 198：Workspace 扁平化 UI 重设计
+
+### 目标
+
+- 在满足课题功能要求的前提下，将 Workspace 从高装饰深色控制台调整为更扁平、低噪声、可读性更稳定的 IM 协作界面。
+- 保留三栏结构、消息触发协作、Artifact Inspector、Approval / Deploy / Restore、Context / Adapter / Audit 等既有功能。
+- 避免组件重叠、浅色 pill 回流和过重阴影导致的视觉杂乱。
+
+### 主要变更
+
+- `workspace.css` 新增 flat workspace token：
+  - `--flat-bg`
+  - `--flat-shell`
+  - `--flat-panel`
+  - `--flat-line`
+  - `--flat-blue / green / red / yellow`
+- 统一 Workspace shell、MessageStream、ChatInput、Artifact Inspector 的扁平背景、边框和文字层级。
+- 移除主要区域的大面积渐变、阴影和伪立体效果，改为 flat dark surface + 状态色边框。
+- 统一按钮、badge、conversation item、message card、artifact metric card 的暗色样式。
+- 保留用户消息、Orchestrator、Specialist、Reviewer 的角色区分，但降低卡片装饰强度。
+- 右侧 Artifact Inspector 继续保持 Overview 优先，Diff / Snapshot / Deploy / Audit 仍由 tab 承载。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+- 查看 `.agenthub/e2e-browser/workspace-layout-1366x768.png`
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 1366x768、1536x864、1600x900 三视口 layout gate 均通过。
+- 会话管理、聊天内创建 Agent、消息触发协作、附件、Artifact Revision、Apply Diff、Deploy、Restore、REJECTION recovery、Preview 主链路均未破坏。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+## Phase 199：Coze 风格浅色 Workspace 复刻与布局门禁修复
+
+### 目标
+
+- 按扣子类 IM Agent 产品的浅色、低噪声、扁平化方向重构 Workspace 视觉表达。
+- 保留 AgentHub 三栏功能：左侧会话与 Agent 联系人，中栏 IM 协作消息流，右侧 Artifact Inspector。
+- 修复 1366 / 1536 / 1600 视口下的组件重叠、Artifact Inspector 溢出、旧深色样式回流和可见性问题。
+
+### 主要变更
+
+- 新增 `frontend/src/styles/workspace/coze-light.css` 作为最后导入的浅色主题覆盖层，不删除既有业务样式。
+- 将 Workspace shell、顶部栏、会话列表、MessageStream、ChatInput、Artifact Inspector 切换为浅色 IM 协作界面。
+- 修复 `AppLayout` 与 `WorkspaceHeader` 的中文展示问题，替换遗留乱码文案。
+- 右侧 Artifact Inspector 收敛为固定宽度浅色检查器，并压制旧深色 Artifact list / preview 背景外露。
+- 1366 窄屏下隐藏会话状态摘要并压缩输入区，把首屏高度还给消息流。
+- Message Action Bar、message type ribbon、Artifact badge 统一为浅色 badge / button，不再混用旧暗色块。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- `git diff --check`
+- 查看 `.agenthub/e2e-browser/workspace-layout-1366x768.png`
+- 查看 `.agenthub/e2e-browser/workspace-layout-1536x864.png`
+- 查看 `.agenthub/e2e-browser/workspace-layout-1600x900.png`
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 1366x768、1536x864、1600x900 三视口 layout gate 均通过。
+- 会话搜索 / 置顶 / 归档 / 恢复、聊天内创建 Agent、消息触发协作、附件、消息操作、TaskRun、Context Search、Adapter fallback、Artifact Revision、Apply Diff、Deploy、Restore、Preview、REJECTION recovery 主链路均未破坏。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+## Phase 200：Coze 结构复刻与 IM 首屏减负
+
+### 目标
+
+- 继续按扣子类浅色 IM 产品结构重构 Workspace，而不是仅做颜色替换。
+- 将旧的顶部工作台导航改为左侧窄图标 rail，让中栏聊天画布成为视觉中心。
+- 压缩 TaskRun / Context / Adapter / Audit 诊断入口，避免首屏像后台面板堆叠。
+- 修复输入区、Artifact Inspector 和消息操作中的深色残留、乱码与层叠点击问题。
+
+### 主要变更
+
+- `AppLayout` 在 Workspace 路由下通过浅色主题覆盖为左侧 60px 应用 rail，隐藏旧顶部 mission/status/window 控制信息。
+- `Workspace` 布局改为左侧会话列表、宽中栏 IM 画布、轻量右侧 Artifact Inspector。
+- `workspace-flow-guide` 保留给 E2E 和主路径语义，但视觉压缩为细分隔线，不再占用首屏。
+- `ChatInput` 可见中文文案修复，并统一为 Coze 式浮动 IM composer。
+- Message Action Bar 改为低透明常驻、hover 高亮的静态区域，修复 E2E 点击时被 MessageStream 拦截的问题。
+- 右侧 Artifact Inspector、Artifact list、diagnostics tabs、composer route chips 统一为浅色扁平样式。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Chrome 插件打开 `http://127.0.0.1:5173/workspace` 进行当前视口截图核对。
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 1366x768、1536x864、1600x900 三视口 layout gate 均通过。
+- 会话管理、聊天内创建 Agent、消息触发协作、附件、消息操作、TaskRun、Context Search、Adapter fallback、Artifact Revision、Apply Diff、Deploy、Restore、Preview、REJECTION recovery 主链路均未破坏。
+- Chrome 扩展可连接，已在真实 Chrome 中打开本地 Workspace 并完成截图核对。
+
+## Phase 201：Coze 浅色左栏与 Composer 可用性精修
+
+### 目标
+
+- 修复左侧会话栏搜索、筛选和会话卡片的可见度问题。
+- 修复中下 ChatInput / 引用 chip / 诊断 tabs 的层叠和点击冲突。
+- 继续保持 Coze 类浅色 IM 视觉，不回退到深色 command center。
+
+### 主要变更
+
+- 修复 `WorkspaceSidebar`、`ConversationList`、`ChatInput` 中残留的可见乱码文案。
+- 左侧会话列表改为更轻的浅色搜索框、四段筛选 pills、低噪声状态 chips 和更清晰的未读 badge。
+- 会话卡片压缩为头像、标题、摘要、时间、未读、置顶/归档操作，减少多余 badge 对首屏的占用。
+- ChatInput 明确分成 context chips、textarea、toolbar 三段，避免引用 / 回复 / 附件 chip 被 textarea 覆盖。
+- 诊断入口继续保持一行 tabs，只有展开后展示 TaskRun / Context / Adapter / Audit / Local 详情。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+- Chrome 插件打开 `http://127.0.0.1:5173/workspace`，检查控制台和布局指标。
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 三视口 layout gate 均通过。
+- Chrome 控制台无 error / warn。
+- DOM 布局指标显示左栏搜索、会话卡、消息流、ChatInput、诊断条无重叠。
+
+## Phase 202：Coze 中栏与 Artifact Inspector 可用性收敛
+
+### 目标
+
+- 继续按扣子类浅色 IM 产品结构优化 Workspace 中栏和右侧栏。
+- 修复中栏协作卡 / 消息流 / ChatInput 的重叠与可操作性问题。
+- 将右侧 Artifact Inspector 降噪为轻量产物检查器，避免双列挤压和旧深色样式残留。
+
+### 主要变更
+
+- `workspace-main` 从旧 grid 自动行切换为纵向 flex，修复协作建议卡与消息流重叠。
+- 中栏消息流、协作建议卡、flow guide、ChatInput 统一限制到约 800px 居中宽度，贴近扣子对话画布。
+- `message-row` 与 `message-bubble` 同步居中宽度并增加 scroll margin / scroll padding，避免 sticky header、输入框、诊断抽屉遮挡消息操作。
+- 右侧 `ArtifactPanel` 强制单列布局，修复旧双列导致 detail 区过窄的问题。
+- Artifact Inspector 改为浅色 drawer：tabs、metric card、preview dock、badge 均收敛为低噪声浅色样式。
+- Flow guide 降噪为细分隔提示，ChatInput 高度继续压缩，并为底部诊断 tabs 留出间距，避免 1600x900 首屏出现裁切和拥挤。
+- 右侧 Artifact Inspector 增加拖拽调整宽度能力，中栏通过 CSS grid 变量自动适配剩余空间。
+- 继续清理浅色 Coze UI 下的深色残留：左栏搜索容器、右栏 metric / preview / cockpit / code 区统一为浅色 surface。
+- Browser E2E 改为按钮级消息再生成交互，并在 TaskRun / Context 诊断验证后自动折叠抽屉，符合“诊断临时查看、不遮挡聊天”的产品语义。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/e2e-browser.mjs`
+- `node scripts/e2e-browser.mjs`
+
+### 验证结果
+
+- Frontend build 通过。
+- `node --check scripts/e2e-browser.mjs` 通过。
+- Browser E2E 完整通过，新增覆盖 Workspace 弹窗创建自定义 Agent、联系人刷新、@Agent 多 Agent 消息、TaskRun / TaskStep 路由验证。
+- 旧 `/agents` 页面仍作为高级配置 / Adapter 测试入口保留，不再是自建 Agent 的默认主路径。
+- Chrome 打开 `http://127.0.0.1:5173/workspace` 检查 title、console 和布局指标。
+- Chrome/Playwright Core 检查右侧 Inspector 拖拽宽度与中栏自适应。
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 1366x768、1536x864、1600x900 三视口 layout gate 均通过。
+- Chrome 控制台无 error / warn。
+- Chrome/Playwright Core 检查显示：页面、搜索框、主栏、右栏均为浅色背景；右栏拖拽从 340px 增加到 417px 后，中栏从 928px 自适应到 851px。
+- 会话管理、聊天内创建 Agent、消息触发协作、附件、消息操作、Agent 回复再生成、TaskRun、Context Search、Adapter fallback、Artifact Revision、Apply Diff、Deploy、Restore、Preview、REJECTION recovery 主链路均未破坏。
+
+## Phase 203：Workspace 中栏与产物工作台扁平化收敛
+
+### 目标
+
+- 继续优化 Workspace 中间聊天栏和右侧产物工作台，减少组件堆叠、深色残留和信息噪音。
+- 修复右侧 Artifact Inspector 在窄栏宽度下列表与详情互相覆盖、点击被拦截的问题。
+- 保持现有 IM 主链路、Artifact Revision、Apply Diff、Deploy、Restore 和 Preview 功能不破。
+
+### 主要变更
+
+- `WorkspaceCollaborationToolbar` 清理可见中文乱码，协作入口文案收敛为“发送任务消息 -> 确认启动 -> 多 Agent 回复”的主路径说明。
+- 中栏消息流继续扁平化：消息宽度居中、用户消息更接近 IM 气泡，协作确认卡和 ChatInput 降低表单感。
+- 右侧 Artifact Inspector 强制单列布局：artifact 列表固定在详情上方，详情区从列表下方开始，避免旧双列和旧 `order` 样式导致覆盖。
+- 产物预览和代码块限制在自身滚动容器内，禁止横向溢出和 pointer event 透明遮罩拦截。
+- 右栏按钮、badge、metric card 改为浅色扁平样式，去掉大面积深色背景和白色 pill 的割裂感。
+- 保留右侧拖拽宽度能力，中栏可随右栏宽度动态自适应。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/e2e-browser.mjs`
+- `node scripts/e2e-browser.mjs`
+- 检查 `.agenthub/e2e-browser/workspace-layout-1366x768.png`
+- 检查 `.agenthub/e2e-browser/workspace-layout-1600x900.png`
+
+### 验证结果
+
+- Frontend build 通过。
+- Browser E2E 完整通过。
+- 1366x768、1536x864、1600x900 三视口 layout gate 均通过。
+- E2E 覆盖：会话搜索/置顶/归档/恢复、聊天内创建 Agent、消息触发协作、附件、消息操作、TaskRun、Context Search、多源上下文、Adapter fallback、Artifact Revision、Apply Diff Approval、Deploy Preview、Snapshot Restore、Action Audit、Preview Page、REJECTION recovery。
+- 修复了右侧 artifact 详情覆盖 artifact 卡片、artifact 列表覆盖“编辑内容”按钮的交互问题。
+
+## Phase 204：Coze 式新建 Agent 入口与 Agent Builder 浅色化
+
+### 目标
+
+- 让 Workspace 左侧全局加号具备 Coze 式“新建”浮层，而不是直接跳转或隐藏在复杂页面中。
+- 在 Workspace 内点击“新建 Agent”后展示“接入本地 Agent”轻量弹窗，再进入 Agent Builder。
+- 将 Agent Builder 视觉同步到当前浅色 IM 工作台风格，避免和 Workspace 形成两套产品语言。
+
+### 主要变更
+
+- `AppLayout` 增加全局新建按钮、Coze 式新建菜单、本地 Agent 接入弹窗。
+- 新建菜单包含新建项目、新建编程项目、新建视频项目和新建 Agent，其中新建 Agent 进入本地 Agent 接入流程。
+- 本地 Agent 弹窗展示三步状态、连接命令、复制命令、执行提示和“我已执行”入口。
+- Agent Builder 改为浅色三栏工作台：左侧 Agent / Adapter 导航，中间对话式创建流程，右侧 Agent 接入 Inspector。
+- Browser E2E 的自建 Agent 流程改为先从 Workspace 新建菜单进入，确认新入口可用。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node scripts/e2e-browser.mjs`
+
+## Phase 205：Workspace 内自建 Agent 弹窗主路径
+
+### 目标
+
+- 将 `/agents` 的核心自建 Agent 能力前移到 Workspace 左侧 `+` 弹窗。
+- 新用户不离开工作台即可完成：新建 Agent -> 描述需求 -> 生成草案 -> 选择能力 / Adapter -> 确认创建 -> 联系人列表可见 -> 聊天中 @ 使用。
+- 保留“接入本地 Agent”三步流程，但与“创建自定义 Agent”分成独立入口。
+
+### 主要变更
+
+- 新增 `AgentCreateDialog`，提供“创建自定义 Agent”和“接入本地 Agent”两条轻量路径。
+- `AppLayout` 的全局新建菜单只保留课题核心入口，隐藏项目 / 视频 / 编程项目等非当前主路径。
+- Workspace 监听 `agenthub:agent-created` 事件，创建成功后立即刷新 Agent 联系人并选中新 Agent。
+- Browser E2E 自建 Agent 流程切换为 Workspace 弹窗路径，不再依赖 `/agents` 页面作为主路径。
+- 新弹窗复用现有 `draftAgentFromNaturalLanguage`、`createAgent`、Tool Capability、preferredAdapter 和 MOCK fallback。
+
+### 验证方式
+
+- `cd frontend && npm.cmd run build`
+- `node --check scripts/e2e-browser.mjs`
+- `node scripts/e2e-browser.mjs`

@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent } from "react";
 import {
   createAgent,
   createConversation,
@@ -100,6 +101,7 @@ import "../../styles/workspace/message.css";
 import "../../styles/workspace/inspector.css";
 import "../../styles/workspace/diagnostics.css";
 import "../../styles/workspace/layout-guard.css";
+import "../../styles/workspace/coze-light.css";
 
 const TASK_STEP_STREAM_CHUNK_EVENT_TYPES = ["TASK_STEP_STREAM_CHUNK", "ADAPTER_STREAM_CHUNK"] as const;
 const STREAMING_PREVIEW_MAX_LENGTH = 1200;
@@ -410,6 +412,7 @@ export function WorkspacePage() {
   const [showDebugActions, setShowDebugActions] = useState(false);
   const [activeDiagnosticPanel, setActiveDiagnosticPanel] = useState<DiagnosticPanelKey | null>(null);
   const [artifactInspectorCollapsed, setArtifactInspectorCollapsed] = useState(false);
+  const [artifactInspectorWidth, setArtifactInspectorWidth] = useState(340);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [autoTriggerRunningMessageId, setAutoTriggerRunningMessageId] = useState<string | null>(null);
@@ -724,6 +727,25 @@ export function WorkspacePage() {
   useEffect(() => {
     void loadInitialData();
   }, [loadInitialData]);
+
+  useEffect(() => {
+    function handleAgentCreated(event: Event) {
+      const createdAgent = (event as CustomEvent<{ agent?: Agent }>).detail?.agent ?? null;
+      void getAgents()
+        .then((agentData) => {
+          setAgents(agentData);
+          if (createdAgent) {
+            const createdAgentId = getIdValue(createdAgent.id);
+            setSelectedAgent(agentData.find((agent) => getIdValue(agent.id) === createdAgentId) ?? createdAgent);
+            setOperationMessage(`已创建 ${createdAgent.name}。现在可以在输入框使用 @${createdAgent.name} 参与协作。`);
+          }
+        })
+        .catch((error) => setErrorMessage(getErrorMessage(error)));
+    }
+
+    window.addEventListener("agenthub:agent-created", handleAgentCreated);
+    return () => window.removeEventListener("agenthub:agent-created", handleAgentCreated);
+  }, []);
 
   useEffect(() => {
     if (!currentConversationId) {
@@ -1980,10 +2002,45 @@ export function WorkspacePage() {
     setShowAllArtifacts(true);
   }
 
+  function handleArtifactInspectorResizeStart(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const pointerId = event.pointerId;
+    const handle = event.currentTarget;
+    const minWidth = 300;
+    const maxWidth = 520;
+
+    handle.setPointerCapture(pointerId);
+    document.body.classList.add("workspace-resizing-inspector");
+
+    function handlePointerMove(moveEvent: globalThis.PointerEvent) {
+      const nextWidth = Math.round(window.innerWidth - moveEvent.clientX - 8);
+      setArtifactInspectorWidth(Math.min(maxWidth, Math.max(minWidth, nextWidth)));
+    }
+
+    function handlePointerUp() {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+      document.body.classList.remove("workspace-resizing-inspector");
+      try {
+        handle.releasePointerCapture(pointerId);
+      } catch {
+        // Pointer capture can already be released when the browser cancels a drag.
+      }
+    }
+
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp, { once: true });
+  }
+
+  const workspaceStyle = {
+    "--artifact-inspector-width": artifactInspectorCollapsed ? "48px" : `${artifactInspectorWidth}px`
+  } as CSSProperties;
+
   return (
     <section
       className={`workspace-page ${artifactInspectorCollapsed ? "workspace-page--artifact-inspector-collapsed" : ""}`}
       data-testid="workspace-page"
+      style={workspaceStyle}
     >
       <WorkspaceSidebar
         agents={agents}
@@ -2155,6 +2212,7 @@ export function WorkspacePage() {
       <WorkspaceArtifactInspectorShell
         collapsed={artifactInspectorCollapsed}
         onToggleCollapsed={() => setArtifactInspectorCollapsed((current) => !current)}
+        onResizeStart={handleArtifactInspectorResizeStart}
       >
         <ArtifactPanel
           artifacts={visibleArtifacts}

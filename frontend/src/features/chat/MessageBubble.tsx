@@ -114,12 +114,20 @@ function getProtocolCta(messageType: string): string {
   return ctas[messageType as ProtocolTone] || "查看详情";
 }
 
-function getAgentLane(message: Message): "orchestrator" | "specialist" | "system" {
+function getAgentLane(message: Message): "orchestrator" | "specialist" | "reviewer" | "system" {
   if (message.senderType !== "AGENT") {
     return "system";
   }
 
-  return message.senderId === "agent_orchestrator" ? "orchestrator" : "specialist";
+  if (message.senderId === "agent_orchestrator") {
+    return "orchestrator";
+  }
+
+  if (["REVIEW", "APPROVAL", "REJECTION"].includes(message.messageType)) {
+    return "reviewer";
+  }
+
+  return "specialist";
 }
 
 function getReferenceMessageId(message: Message): string | null {
@@ -400,6 +408,7 @@ export function MessageBubble({
   const artifactIds = message.artifactIds.map((artifactId) => formatId(artifactId)).filter(Boolean);
   const protocolLabel = getProtocolLabel(message.messageType);
   const agentLane = getAgentLane(message);
+  const protocolClass = protocolLabel ? `message-bubble--protocol-${protocolLabel.toLowerCase()}` : "";
   const attachments = message.attachments ?? [];
   const messageKind = getMessageKind(message, attachments, artifacts);
   const autoTriggerStatus = getAutoTriggerStatus(autoTriggerSuggestion, autoTriggerApproval);
@@ -416,7 +425,7 @@ export function MessageBubble({
       data-testid="message-row"
     >
       <div
-        className={`message-bubble message-bubble--${variant} message-bubble--lane-${agentLane}`}
+        className={`message-bubble message-bubble--${variant} message-bubble--lane-${agentLane} ${protocolClass}`}
         data-testid="message-bubble"
       >
         <div className="message-bubble__header">

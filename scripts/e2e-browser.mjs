@@ -194,8 +194,8 @@ async function captureFailureDiagnostics(page, consoleErrors, error) {
   console.error(`[DIAG] console summary: ${consolePath}`);
 }
 
-async function saveWorkspaceLayoutGate(page) {
-  const viewport = { width: 1366, height: 768 };
+async function saveWorkspaceLayoutGate(page, viewport) {
+  const viewportLabel = `${viewport.width}x${viewport.height}`;
   await page.setViewportSize(viewport);
   await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
   await waitForVisible(page, "[data-testid='workspace-page']", "workspace visual QA page");
@@ -235,11 +235,13 @@ async function saveWorkspaceLayoutGate(page) {
     const viewportWidth = document.documentElement.clientWidth;
     const viewportHeight = document.documentElement.clientHeight;
     const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+    const documentHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
 
     return {
       capturedAt: new Date().toISOString(),
       viewport: { width: viewportWidth, height: viewportHeight },
       documentWidth,
+      documentHeight,
       horizontalOverflow: documentWidth > viewportWidth + 2,
       pageRect,
       sidebar,
@@ -262,10 +264,15 @@ async function saveWorkspaceLayoutGate(page) {
   });
 
   await mkdir(E2E_ARTIFACT_DIR, { recursive: true });
-  const metricsPath = path.join(E2E_ARTIFACT_DIR, "workspace-layout-metrics-latest.json");
-  const screenshotPath = path.join(E2E_ARTIFACT_DIR, "workspace-layout-1366-latest.png");
+  const metricsPath = path.join(E2E_ARTIFACT_DIR, `workspace-layout-metrics-${viewportLabel}.json`);
+  const screenshotPath = path.join(E2E_ARTIFACT_DIR, `workspace-layout-${viewportLabel}.png`);
   await writeFile(metricsPath, JSON.stringify(metrics, null, 2), "utf8");
   await page.screenshot({ path: screenshotPath, fullPage: false });
+
+  if (viewport.width === 1366 && viewport.height === 768) {
+    await writeFile(path.join(E2E_ARTIFACT_DIR, "workspace-layout-metrics-latest.json"), JSON.stringify(metrics, null, 2), "utf8");
+    await page.screenshot({ path: path.join(E2E_ARTIFACT_DIR, "workspace-layout-1366-latest.png"), fullPage: false });
+  }
 
   const failures = [];
   if (metrics.horizontalOverflow) {
@@ -283,12 +290,18 @@ async function saveWorkspaceLayoutGate(page) {
   if (metrics.chatLane && metrics.chatLane.width < 520) {
     failures.push(`chat lane too narrow: ${metrics.chatLane.width}px`);
   }
+  if (metrics.messageStream && metrics.messageStream.height < 360) {
+    failures.push(`message stream too short: ${metrics.messageStream.height}px`);
+  }
+  if (metrics.chatInput && metrics.chatInput.height > 150) {
+    failures.push(`ChatInput too tall: ${metrics.chatInput.height}px`);
+  }
 
   if (failures.length > 0) {
     throw new Error(`workspace layout gate failed: ${failures.join("; ")}. Metrics: ${metricsPath}`);
   }
 
-  pass(`workspace 1366px layout gate passed; metrics: ${metricsPath}; screenshot: ${screenshotPath}`);
+  pass(`workspace ${viewportLabel} layout gate passed; metrics: ${metricsPath}; screenshot: ${screenshotPath}`);
 }
 
 async function waitForLocatorEnabled(locator, label, timeout = 20000) {
@@ -411,38 +424,47 @@ async function createWorkspaceConversation(page) {
 }
 
 async function createCustomAgentFromUi(page) {
+  return createCustomAgentFromWorkspaceDialog(page);
+
   const agentName = `E2E Reviewer ${TEST_MARKER}`;
-  await page.goto(`${FRONTEND_BASE}/agents`, { waitUntil: "domcontentloaded" });
-  await waitForVisible(page, ".agent-builder-page", "Agent Builder page");
-  await page.getByTestId("conversational-agent-prompt").fill(
+  await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
+  await waitForVisible(page, "[data-testid='workspace-page']", "Workspace before Agent create menu");
+  await page.getByTestId("app-create-button").click();
+  await waitForVisible(page, "[data-testid='app-create-menu']", "Coze-style create menu");
+  await page.getByTestId("app-create-agent-option").click();
+  await waitForVisible(page, "[data-testid='agent-create-dialog']", "Workspace Agent create dialog");
+  await page.getByRole("button", { name: "我已执行" }).click();
+  return createCustomAgentFromWorkspaceDialog(page);
+}
+
+async function createCustomAgentFromWorkspaceDialog(page) {
+  const agentName = `E2E Reviewer ${TEST_MARKER}`;
+  await page.goto(`${FRONTEND_BASE}/workspace`, { waitUntil: "domcontentloaded" });
+  await waitForVisible(page, "[data-testid='workspace-page']", "Workspace before Agent create dialog");
+  await page.getByTestId("app-create-button").click();
+  await waitForVisible(page, "[data-testid='app-create-menu']", "Coze-style create menu");
+  await page.getByTestId("app-create-agent-option").click();
+  await waitForVisible(page, "[data-testid='agent-create-dialog']", "Workspace Agent create dialog");
+  await page.getByTestId("agent-create-prompt").fill(
     `Create a quality review Agent for ${TEST_MARKER}. It should review code, security, and quality gates.`
   );
-  await page.getByTestId("conversational-agent-generate").click();
-  await waitForVisible(page, "[data-testid='conversational-agent-draft']", "Agent Builder conversational draft");
-  await page.getByTestId("conversational-agent-refinement").fill(
-    "Add deploy capability and use MOCK adapter for deterministic browser E2E."
-  );
-  await page.getByTestId("conversational-agent-refine").click();
-  await page.getByTestId("conversational-agent-draft").filter({ hasText: "CLIENT_REFINEMENT" }).waitFor({
-    state: "visible",
-    timeout: 10000
-  });
-  await page.getByTestId("conversational-agent-apply").click();
-  await page.getByTestId("agent-builder-name-input").fill(agentName);
-  await page.getByTestId("agent-builder-system-prompt").fill(
+  await page.getByTestId("agent-create-generate-draft").click();
+  await waitForVisible(page, "[data-testid='agent-create-draft']", "Workspace Agent draft");
+  await page.getByTestId("agent-create-name").fill(agentName);
+  await page.getByTestId("agent-create-system-prompt").fill(
     "You are a custom Agent created by Browser E2E. Focus on review, quality gates, and actionable feedback."
   );
-  await page.getByTestId("agent-builder-capability-tags").fill("review, quality, browser-e2e");
-  const reviewCapability = page.getByTestId("tool-capability-review");
+  await page.getByTestId("agent-create-capability-tags").fill("review, quality, browser-e2e");
+  const reviewCapability = page.getByTestId("agent-create-tool-review");
   const reviewChecked = await reviewCapability.locator("input").isChecked();
   if (!reviewChecked) {
     await reviewCapability.click();
   }
-  await page.getByTestId("agent-builder-preferred-adapter").selectOption("MOCK");
-  await page.getByTestId("agent-builder-submit").click();
+  await page.getByTestId("agent-create-preferred-adapter").selectOption("MOCK");
+  await page.getByTestId("agent-create-confirm").click();
 
-  return waitForApiState(
-    "UI-created custom Agent",
+  const createdAgent = await waitForApiState(
+    "Workspace modal created custom Agent",
     () => request("/api/agents"),
     (agents) => agents.find((agent) =>
       agent.name === agentName &&
@@ -451,6 +473,11 @@ async function createCustomAgentFromUi(page) {
     ),
     20000
   );
+  await page.getByTestId("workspace-sidebar").filter({ hasText: agentName }).waitFor({
+    state: "visible",
+    timeout: 10000
+  });
+  return createdAgent;
 }
 
 async function verifyConversationManagementUi(page, conversation) {
@@ -592,6 +619,7 @@ async function verifyMessageActionBar(page) {
   await messageRow().getByTestId("message-type-ribbon").waitFor({ state: "visible", timeout: 10000 });
 
   async function clickMessageAction(testId, label) {
+    await messageRow().hover();
     const button = await waitForLocatorEnabled(messageRow().getByTestId(testId), label, 10000);
     await button.click();
   }
@@ -610,11 +638,14 @@ async function verifyMessageActionBar(page) {
 
 async function verifyAgentRegenerateAction(page, conversationId) {
   const beforeMessages = await request(`/api/conversations/${conversationId}/messages`);
+  const agentRow = page.locator("[data-testid='message-row']").filter({ has: page.getByTestId("message-regenerate-button") }).first();
   const regenerateButton = await waitForLocatorEnabled(
-    page.getByTestId("message-regenerate-button").first(),
+    agentRow.getByTestId("message-regenerate-button").first(),
     "Agent reply regenerate button",
     10000
   );
+  await regenerateButton.scrollIntoViewIfNeeded();
+  await regenerateButton.hover();
   await regenerateButton.click();
   await waitForApiState(
     "regenerated Agent reply from browser action",
@@ -634,6 +665,20 @@ async function openDiagnosticTab(page, tabKey) {
     .then((expanded) => {
       if (!expanded) {
         throw new Error(`diagnostic tab ${tabKey} did not expand drawer`);
+      }
+    });
+}
+
+async function collapseDiagnosticTab(page, tabKey) {
+  const tab = page.getByTestId(`workspace-diagnostics-tab-${tabKey}`);
+  await tab.waitFor({ state: "visible", timeout: 10000 });
+  await tab.click();
+  await page
+    .locator(".workspace-diagnostics")
+    .evaluate((element) => !element.classList.contains("workspace-diagnostics--expanded"))
+    .then((collapsed) => {
+      if (!collapsed) {
+        throw new Error(`diagnostic tab ${tabKey} did not collapse drawer`);
       }
     });
 }
@@ -659,6 +704,7 @@ async function verifyContextPanel(page, conversationId) {
   } else {
     pass("retrieved context item not emitted for this heuristic run; context snapshot fallback visible");
   }
+  await collapseDiagnosticTab(page, "context");
 }
 
 function collectRetrievedSourceTypes(snapshots) {
@@ -1103,7 +1149,9 @@ async function runBrowserE2e() {
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
   try {
-    const customAgent = await step("Agent Builder creates a custom routable Agent", () => createCustomAgentFromUi(page));
+    const customAgent = await step("Workspace modal creates a custom routable Agent", () =>
+      createCustomAgentFromWorkspaceDialog(page)
+    );
     let agents = await step("agents loaded for multi-agent mention", () => request("/api/agents"));
 
     await step("workspace route opens", async () => {
@@ -1142,6 +1190,7 @@ async function runBrowserE2e() {
     await waitForVisible(page, "[data-testid='task-run-panel']", "TaskRun panel");
     await waitForVisible(page, "[data-testid='orchestrator-route-evidence']", "router evidence chips");
     await waitForVisible(page, ".message-bubble--agent-protocol", "agent protocol message");
+    await collapseDiagnosticTab(page, "taskrun");
     await step("Agent reply can be regenerated from Message Action Bar", () => verifyAgentRegenerateAction(page, conversationId));
     await openDiagnosticTab(page, "adapter");
     await waitForVisible(page, ".adapter-quality-dashboard", "adapter quality dashboard");
@@ -1172,7 +1221,17 @@ async function runBrowserE2e() {
       await step("REJECTION retry/revise recovery path", () => seedOptionalRejectionScenario());
     }
 
-    await step("workspace 1366px visual layout gate", () => saveWorkspaceLayoutGate(page));
+    const workspaceVisualViewports = [
+      { width: 1366, height: 768 },
+      { width: 1536, height: 864 },
+      { width: 1600, height: 900 }
+    ];
+    for (const viewport of workspaceVisualViewports) {
+      await step(
+        `workspace ${viewport.width}x${viewport.height} visual layout gate`,
+        () => saveWorkspaceLayoutGate(page, viewport)
+      );
+    }
 
     if (consoleErrors.length > 0) {
       throw new Error(`browser console/page errors: ${consoleErrors.slice(0, 5).join(" | ")}`);

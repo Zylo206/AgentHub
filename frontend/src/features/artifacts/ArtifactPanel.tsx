@@ -1026,13 +1026,6 @@ export function ArtifactPanel({
           </div>
         ) : (
           <div className={`artifact-preview artifact-preview--tab-${activeInspectorTab}`}>
-            <div className="artifact-inspector-tabs artifact-inspector-tabs--legacy" aria-label="Artifact inspector sections">
-              <span className="artifact-inspector-tabs__item artifact-inspector-tabs__item--active">概览</span>
-              <span className="artifact-inspector-tabs__item">版本 {versionEntries.length}</span>
-              <span className="artifact-inspector-tabs__item">快照 {snapshots.length}</span>
-              <span className="artifact-inspector-tabs__item">部署 {deployments.length}</span>
-              <span className="artifact-inspector-tabs__item">关联 {Math.max(versionEntries.length - 1, 0)}</span>
-            </div>
             <ArtifactInspectorTabs
               tabs={ARTIFACT_INSPECTOR_TABS}
               activeTab={activeInspectorTab}

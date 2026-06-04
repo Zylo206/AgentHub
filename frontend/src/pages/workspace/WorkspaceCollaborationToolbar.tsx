@@ -25,6 +25,12 @@ export function WorkspaceCollaborationToolbar({
   onToggleDebugActions,
   onRunManualDebug
 }: WorkspaceCollaborationToolbarProps) {
+  const primaryLabel = autoTriggerRunningMessageId
+    ? "启动中..."
+    : latestTriggerReady
+      ? latestTriggerPrimaryLabel
+      : "发送任务后确认协作";
+
   return (
     <>
       <div className="workspace-main__toolbar workspace-main__toolbar--collaboration">
@@ -40,7 +46,7 @@ export function WorkspaceCollaborationToolbar({
             disabled={!currentConversationId || !latestUserMessage || !latestTriggerReady || Boolean(autoTriggerRunningMessageId)}
             onClick={() => latestUserMessage && onStartCollaboration(latestUserMessage)}
           >
-            {autoTriggerRunningMessageId ? "启动中..." : latestTriggerReady ? latestTriggerPrimaryLabel : "发送任务后确认协作"}
+            {primaryLabel}
           </button>
           <button
             type="button"

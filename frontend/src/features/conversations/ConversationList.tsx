@@ -124,9 +124,7 @@ export function ConversationList({
 
       {visibleConversations.length === 0 ? (
         <div className="conversation-empty-im" aria-label="Conversation empty examples">
-          <div className="conversation-empty-im__eyebrow">
-            {query || filter !== "ALL" ? "未找到匹配会话" : "会话样例"}
-          </div>
+          <div className="conversation-empty-im__eyebrow">{query || filter !== "ALL" ? "未找到匹配会话" : "会话示例"}</div>
           <article className="conversation-empty-im__row conversation-empty-im__row--active">
             <div>
               <strong>多 Agent 协作：登录页生成与安全评审</strong>
@@ -182,11 +180,7 @@ export function ConversationList({
             data-testid="conversation-item"
             data-conversation-id={conversationId}
           >
-            <button
-              type="button"
-              className="conversation-item__main"
-              onClick={() => onSelect(conversationId)}
-            >
+            <button type="button" className="conversation-item__main" onClick={() => onSelect(conversationId)}>
               <div className="conversation-item__row">
                 <div className="conversation-item__identity">
                   <span className="conversation-avatar">{conversation.type === "GROUP" ? "群" : "单"}</span>

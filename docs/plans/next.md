@@ -199,6 +199,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Agent Builder now supports a lightweight refinement loop: natural-language draft -> follow-up instruction -> updated capability / adapter / prompt draft -> apply or create.
    - `Done`: Agent contacts and Agent Builder now mark `OPENAI_COMPATIBLE`, `CLAUDE_CODE`, and `CODEX` as deep-integration v1 surfaces, while `OPEN_CODE` remains explicitly labeled as probe-only.
    - `Done`: Workspace message flow now recognizes "create Agent" style user messages and renders an inline Agent creation confirmation card; confirming creates the Agent through the existing API and refreshes the IM contact list.
+   - `Done`: Workspace global `+` menu now opens a focused Agent creation dialog: create custom Agent from natural language, confirm capability / Adapter, refresh contacts, and immediately use the new Agent through `@AgentName`.
    - `Done`: Backend now owns natural-language Agent draft generation through `POST /api/agents/draft`: it tries `OPENAI_COMPATIBLE` for structured Agent creation and falls back to deterministic parsing when unavailable.
    - `Done`: Default API smoke now verifies natural-language Agent draft creation, persisted custom Agent creation, tool capability mapping, and draft source classification.
    - `Done`: Workspace right-side Artifact Inspector now has a clear workbench header, `Source / Quality / Build / Run` trust metrics, an embedded Preview dock, and command-center CSS tokens shared with protocol cards and PreviewPage polish.
