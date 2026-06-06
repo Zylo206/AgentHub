@@ -8817,3 +8817,36 @@
 - 本轮不改后端核心 API。
 - 本轮不移除 Mock / static fallback，只在 UI 中继续明确真实、fallback 和本地静态预览边界。
 - Claude Code / Codex 仍是 headless Artifact-only CLI 接入，不是桌面 GUI 自动化，也不允许绕过 Artifact contract、质量门禁、审批和审计。
+
+## Phase 214-216：Workspace 生产级拆分、Desktop Console 独立化、CSS 收敛
+
+### 目标
+
+- 继续把 Workspace 从“巨型页面组件 + 样式兜底覆盖”收敛到生产级结构。
+- 不改后端 API，不引入 Redux / Zustand / axios，不改变 IM-first 主链路和现有 E2E 契约。
+
+### 修复内容
+
+- Phase 214：从 `WorkspacePage` 抽出数据加载、SSE 实时刷新、Artifact 高风险操作三个 hook：
+  - `useWorkspaceDataLoaders`
+  - `useWorkspaceRealtime`
+  - `useWorkspaceArtifactOperations`
+- Phase 214：聊天内 Artifact 选区修改和 Deploy intent 继续复用现有消息卡 / 审批契约，避免把 fallback 或高风险操作伪装成直接成功。
+- Phase 215：新增独立 `/desktop` Desktop Console 页面，承载 Tauri 本地文件、通知、Agent CLI 探测和 backend managed process UI。
+- Phase 215：Workspace 的 Local 诊断区降噪为轻入口，只说明边界并跳转到 `/desktop`，不再默认挂载完整 Desktop Console。
+- Phase 216：新增 `frontend/src/styles/workspace/production.css` 和 `frontend/src/styles/desktop.css`，把 Workspace 三栏 / 诊断 / Artifact 可见性规则、Desktop 页面 shell 规则从 `production-alignment.css` 中迁出。
+- Phase 216：`production-alignment.css` 缩小为全局生产化 token、Agent Builder / CLI 卡、Preview 余留覆盖层；后续可继续拆到 Agents / Preview 专属样式。
+
+### 验证结果
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过。
+- `node scripts/smoke-test.mjs` 通过。
+- `node scripts/sse-smoke-test.mjs` 通过。
+- Browser 插件 DOM 检查确认 `/desktop` 可打开、`desktop-console-page` 和 `desktop-capability-panel` 可见、1366px 下无横向 overflow。
+
+### 边界
+
+- 本轮没有重写 DesktopCapabilityPanel 内部 Tauri 功能实现；只是把入口和页面所有权拆清楚。
+- Browser 插件截图调用在本轮出现 CDP 截图超时，未作为最终验收依据；命令级构建、E2E、smoke、SSE 均通过。
+- `workspace.css` 和 `layout-guard.css` 仍然存在，后续需要继续按组件所有权迁移，不应继续扩大兜底覆盖层。

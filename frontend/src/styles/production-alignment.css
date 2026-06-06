@@ -178,108 +178,6 @@
   line-height: 1.6;
 }
 
-.workspace-page {
-  grid-template-columns:
-    246px
-    minmax(var(--workspace-middle-min, 680px), 1fr)
-    var(--artifact-inspector-width, 380px) !important;
-  gap: 7px !important;
-  overflow: hidden !important;
-}
-
-.workspace-page--artifact-inspector-collapsed {
-  grid-template-columns: 246px minmax(var(--workspace-middle-min, 680px), 1fr) 48px !important;
-}
-
-.workspace-artifacts {
-  width: var(--artifact-inspector-width, 380px) !important;
-  max-width: var(--artifact-inspector-width, 720px) !important;
-  min-width: 0 !important;
-}
-
-.workspace-artifacts__resize-handle {
-  position: absolute !important;
-  inset: 0 auto 0 0 !important;
-  z-index: 8 !important;
-  width: 12px !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  cursor: col-resize !important;
-  touch-action: none !important;
-}
-
-.workspace-page .workspace-artifacts.workspace-artifacts .workspace-artifacts__resize-handle {
-  inset: 0 auto 0 0 !important;
-  left: 0 !important;
-  width: 12px !important;
-  border-radius: 0 !important;
-}
-
-.workspace-artifacts__resize-handle::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 2px;
-  width: 2px;
-  height: 72px;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.28);
-  transform: translateY(-50%);
-  transition: background 160ms ease, width 160ms ease;
-}
-
-.workspace-artifacts__resize-handle:hover::after,
-.workspace-resizing-inspector .workspace-artifacts__resize-handle::after {
-  width: 3px;
-  background: rgba(37, 99, 235, 0.72);
-}
-
-.workspace-resizing-inspector {
-  cursor: col-resize !important;
-  user-select: none !important;
-}
-
-.workspace-diagnostics--collapsed {
-  max-height: 40px !important;
-  overflow: hidden !important;
-}
-
-.workspace-diagnostics--collapsed .workspace-diagnostics__sections {
-  display: none !important;
-}
-
-.workspace-diagnostics__tab {
-  min-width: 0 !important;
-}
-
-.workspace-diagnostics__tab strong,
-.workspace-diagnostics__tab span {
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-
-.workspace-page .workspace-artifacts .artifact-preview__meta,
-.workspace-page .workspace-artifacts .artifact-preview-dock,
-.workspace-page .workspace-artifacts .artifact-inspector-metrics article {
-  background: #ffffff !important;
-  color: #17202c !important;
-}
-
-.workspace-page .workspace-artifacts .artifact-inspector-metrics article strong,
-.workspace-page .workspace-artifacts .artifact-preview-dock__header strong,
-.workspace-page .workspace-artifacts .artifact-preview__meta strong {
-  color: #111827 !important;
-}
-
-.workspace-page .workspace-artifacts .artifact-inspector-metrics article span,
-.workspace-page .workspace-artifacts .artifact-inspector-metrics article small,
-.workspace-page .workspace-artifacts .artifact-preview-dock__header span,
-.workspace-page .workspace-artifacts .artifact-preview__meta p {
-  color: #667085 !important;
-}
-
 .preview-page {
   min-height: 100dvh !important;
   background:
@@ -323,33 +221,6 @@
   color: #475569 !important;
 }
 
-@media (max-width: 1536px) {
-  .workspace-page {
-    grid-template-columns:
-      236px
-      minmax(var(--workspace-middle-min, 600px), 1fr)
-      var(--artifact-inspector-width, 360px) !important;
-  }
-
-  .workspace-page--artifact-inspector-collapsed {
-    grid-template-columns: 236px minmax(var(--workspace-middle-min, 600px), 1fr) 48px !important;
-  }
-}
-
-@media (max-width: 1368px) {
-  .workspace-page {
-    grid-template-columns:
-      218px
-      minmax(var(--workspace-middle-min, 520px), 1fr)
-      var(--artifact-inspector-width, 320px) !important;
-    gap: 6px !important;
-  }
-
-  .workspace-page--artifact-inspector-collapsed {
-    grid-template-columns: 218px minmax(var(--workspace-middle-min, 520px), 1fr) 48px !important;
-  }
-}
-
 @media (max-width: 1180px) {
   .agent-builder-page .agent-builder-shell {
     grid-template-columns: 240px minmax(0, 1fr) !important;
@@ -362,24 +233,6 @@
 }
 
 @media (max-width: 980px) {
-  .workspace-page {
-    height: auto !important;
-    min-height: 100dvh !important;
-    grid-template-columns: 1fr !important;
-    overflow: auto !important;
-  }
-
-  .workspace-sidebar,
-  .workspace-main,
-  .workspace-artifacts {
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-
-  .workspace-artifacts__resize-handle {
-    display: none !important;
-  }
-
   .preview-page .preview-page__card {
     grid-template-columns: 1fr !important;
   }

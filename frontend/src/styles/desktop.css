@@ -1,0 +1,60 @@
+/* Desktop Console page shell. The inner console remains owned by desktop feature styles. */
+.desktop-console-page {
+  min-height: calc(100dvh - 64px);
+  padding: clamp(1rem, 2vw, 2rem);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(14, 165, 233, 0.12), transparent 28%),
+    linear-gradient(180deg, #f8fafc 0%, #eef4f8 100%);
+  color: var(--prod-ink);
+}
+
+.desktop-console-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 1280px;
+  margin: 0 auto 1rem;
+  padding: 1.25rem;
+  border: 1px solid rgba(30, 41, 59, 0.1);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--prod-shadow-soft);
+}
+
+.desktop-console-page__eyebrow {
+  color: var(--prod-blue);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.desktop-console-page__header h1,
+.desktop-console-page__header p {
+  margin: 0;
+}
+
+.desktop-console-page__header h1 {
+  margin-top: 0.25rem;
+  color: var(--prod-ink);
+  font-size: clamp(1.8rem, 3vw, 3rem);
+  letter-spacing: -0.06em;
+}
+
+.desktop-console-page__header p {
+  max-width: 760px;
+  color: var(--prod-muted);
+  line-height: 1.7;
+}
+
+.desktop-console-page .desktop-console {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+@media (max-width: 780px) {
+  .desktop-console-page__header {
+    display: grid;
+  }
+}

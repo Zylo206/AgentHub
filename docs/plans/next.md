@@ -209,6 +209,10 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Conversation list now shows visible result count, server-search state, archive filter state, and activity-sort status in the IM sidebar.
    - `Done`: Taste-skill reference-image pass has been translated into a final Workspace visual polish layer: stable command-center tokens, tighter 292px / minmax(680px, 1fr) / 400-460px shell, compact protocol cards, unified Message Action Bar, streaming strip, Artifact Inspector metrics, Agent Builder shell, and Preview Studio token alignment.
    - `Done`: `cd frontend && npm.cmd run build` and `node scripts/e2e-browser.mjs` passed after the visual polish, covering Agent Builder, IM-first collaboration, message actions, attachment, context search, fallback, approval, restore, deploy preview, optional rejection recovery, and preview page.
+   - `Done`: WorkspacePage production decomposition now extracts data loading, SSE realtime handling, and Artifact high-risk operations into dedicated hooks while preserving the Browser E2E contract.
+   - `Done`: Desktop Console is now an independent `/desktop` route; Workspace keeps only a lightweight Local diagnostics entry and no longer mounts the full Tauri file / notification / process console by default.
+   - `Done`: Workspace and Desktop production CSS has started moving out of the catch-all `production-alignment.css` into `styles/workspace/production.css` and `styles/desktop.css`.
+   - `Boundary`: `workspace.css`, `coze-light.css`, and `layout-guard.css` still need further component-owned migration; the current split is a productionization step, not a complete design-system rewrite.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**

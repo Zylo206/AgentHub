@@ -1,47 +1,27 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   createAgent,
   createConversation,
   draftAgentFromNaturalLanguage,
   approveApprovalRequest,
-  cancelApprovalRequest,
   cancelTaskRun,
   createApprovalRequest,
-  createDemoArtifactRevision,
-  createDemoDeployment,
-  applyArtifactDiff,
   createDemoTask,
-  getActionAuditsByConversation,
-  getActiveRealtimeState,
-  getAdapterQualityMetrics,
-  getAdapters,
   getAgents,
-  getArtifactBundleDownloadUrl,
   getArtifact,
-  getArtifactSnapshotsByConversation,
-  getArtifactsByConversation,
-  getContextSnapshotsByTaskRun,
   getConversation,
-  getConversations,
-  getDeploymentsByConversation,
-  getHandoffSummariesByTaskRun,
   getMemoriesByConversation,
   getMessages,
   getApprovalRequestsByConversation,
-  getConversationEventsUrl,
   getOrchestratorTriggerSuggestion,
   getPinnedContextsByConversation,
-  getTaskRunsByConversation,
-  getTaskSpecsByConversation,
   archiveConversation,
   markConversationRead,
-  pinAttachmentAsContext,
   pinConversation,
   pinMessageAsContext,
   regenerateAgentReply,
   runOrchestratorFromMessage,
-  restoreArtifactSnapshotWithApproval,
-  saveAttachmentAsMemory,
   saveMessageAsMemory,
   sendMessage,
   stopTaskRun,
@@ -67,7 +47,6 @@ import { MessageStream } from "../../features/chat/MessageStream";
 import { TaskRunPanel } from "../../features/chat/TaskRunPanel";
 import type {
   LightweightAttachment,
-  DeployIntentDraft,
   Message,
   OrchestratorTriggerSuggestion,
   StreamingPreviewState,
@@ -80,8 +59,6 @@ import type { Conversation } from "../../features/conversations/conversationType
 import { ContextPanel } from "../../features/context/ContextPanel";
 import type { ContextSnapshot, HandoffSummary, PinnedContext } from "../../features/context/contextTypes";
 import type { DeploymentRecord } from "../../features/deployments/deploymentTypes";
-import { DesktopCapabilityPanel } from "../../features/desktop/DesktopCapabilityPanel";
-import { notifyDesktopRealtimeEvent } from "../../features/desktop/desktopBridge";
 import type { MemoryItem } from "../../features/memory/memoryTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
@@ -93,6 +70,9 @@ import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import { useArtifactInspectorLayout } from "./useArtifactInspectorLayout";
+import { useWorkspaceArtifactOperations } from "./useWorkspaceArtifactOperations";
+import { useWorkspaceDataLoaders } from "./useWorkspaceDataLoaders";
+import { useWorkspaceRealtime } from "./useWorkspaceRealtime";
 import "../../styles/workspace.css";
 import "../../styles/workspace/tokens.css";
 import "../../styles/workspace/shell.css";
@@ -103,9 +83,8 @@ import "../../styles/workspace/message.css";
 import "../../styles/workspace/inspector.css";
 import "../../styles/workspace/layout-guard.css";
 import "../../styles/production-alignment.css";
+import "../../styles/workspace/production.css";
 
-const TASK_STEP_STREAM_CHUNK_EVENT_TYPES = ["TASK_STEP_STREAM_CHUNK", "ADAPTER_STREAM_CHUNK"] as const;
-const STREAMING_PREVIEW_MAX_LENGTH = 1200;
 type DiagnosticPanelKey = "taskrun" | "context" | "adapter" | "audit" | "local";
 const DIAGNOSTIC_PANELS: Array<{ key: DiagnosticPanelKey; label: string; summary: string }> = [
   { key: "taskrun", label: "TaskRun", summary: "任务运行" },
@@ -114,198 +93,6 @@ const DIAGNOSTIC_PANELS: Array<{ key: DiagnosticPanelKey; label: string; summary
   { key: "audit", label: "Audit", summary: "审计" },
   { key: "local", label: "Local", summary: "本地能力" }
 ];
-const TERMINAL_STEP_STATUSES = new Set([
-  "COMPLETED",
-  "SUCCEEDED",
-  "FAILED",
-  "REJECTED",
-  "CANCELLED",
-  "TIMED_OUT",
-  "SKIPPED",
-  "BLOCKED",
-  "DISABLED",
-  "ABORTED"
-]);
-
-interface ParsedStreamingChunkPayload {
-  taskRunId: string;
-  taskStepId: string;
-  adapterType?: string;
-  chunk: string;
-}
-interface ParsedControlPayload {
-  taskRunId: string;
-  action?: string;
-  status?: string;
-  reason?: string;
-}
-
-function normalizeStreamingPayload(raw: string): ParsedStreamingChunkPayload | null {
-  try {
-    const parsed = JSON.parse(raw) as {
-      taskRunId?: unknown;
-      taskStepId?: unknown;
-      resourceId?: unknown;
-      chunk?: unknown;
-      adapterType?: unknown;
-      payload?: Record<string, unknown>;
-    };
-    const payload = parsed.payload ?? parsed;
-
-    const taskRunId = String((payload.taskRunId as unknown) ?? parsed.taskRunId ?? "");
-    const taskStepId = String((payload.taskStepId as unknown) ?? parsed.taskStepId ?? parsed.resourceId ?? "");
-    const chunkRaw = (payload.chunk as unknown) ?? parsed.chunk;
-    const chunk = typeof chunkRaw === "string" ? chunkRaw : typeof chunkRaw === "number" ? String(chunkRaw) : "";
-    const adapterTypeRaw = payload.adapterType as unknown;
-
-    if (!taskStepId || !chunk) {
-      return null;
-    }
-
-    return {
-      taskRunId,
-      taskStepId,
-      adapterType: typeof adapterTypeRaw === "string" ? adapterTypeRaw : undefined,
-      chunk
-    };
-  } catch {
-    return null;
-  }
-}
-
-function isStreamingStepStatus(status: string): boolean {
-  return !TERMINAL_STEP_STATUSES.has((status || "").toUpperCase());
-}
-
-function appendStreamingChunk(previous: string, nextChunk: string): string {
-  return `${previous || ""}${nextChunk}`.slice(-STREAMING_PREVIEW_MAX_LENGTH);
-}
-
-function appendStreamingPreview(
-  previous: StreamingPreviewState | undefined,
-  payload: ParsedStreamingChunkPayload
-): StreamingPreviewState {
-  return {
-    taskRunId: payload.taskRunId || previous?.taskRunId || "",
-    taskStepId: payload.taskStepId,
-    adapterType: payload.adapterType || previous?.adapterType,
-    content: appendStreamingChunk(previous?.content || "", payload.chunk),
-    chunkCount: (previous?.chunkCount ?? 0) + 1,
-    status: "STREAMING",
-    updatedAt: new Date().toISOString()
-  };
-}
-
-function getStepStreamingTerminalStatus(taskRun: TaskRun, step: TaskStep): "ACTIVE" | "COMPLETE" | "PARTIAL" | "DISCARDED" {
-  const runStatus = (taskRun.status || "").toUpperCase();
-  const stepStatus = (step.status || "").toUpperCase();
-  const adapterStatus = (step.adapterStatus || "").toUpperCase();
-
-  if (["CANCELLED", "STOPPED"].includes(runStatus) || ["CANCELLED", "STOPPED"].includes(adapterStatus)) {
-    return "DISCARDED";
-  }
-
-  if (stepStatus === "SKIPPED") {
-    return "DISCARDED";
-  }
-
-  if (isStreamingStepStatus(step.status)) {
-    return "ACTIVE";
-  }
-
-  if (["FAILED", "REJECTED", "BLOCKED", "TIMED_OUT", "ABORTED"].includes(stepStatus)) {
-    return "PARTIAL";
-  }
-
-  return "COMPLETE";
-}
-
-function reconcileStreamingStateByTaskRuns(
-  taskRuns: TaskRun[],
-  state: Record<string, StreamingPreviewState>
-): Record<string, StreamingPreviewState> {
-  const stepIndex = new Map<string, { taskRun: TaskRun; step: TaskStep }>();
-  taskRuns.forEach((taskRun) => {
-    taskRun.steps.forEach((step) => {
-      stepIndex.set(getIdValue(step.id), { taskRun, step });
-    });
-  });
-
-  const next: Record<string, StreamingPreviewState> = {};
-  Object.entries(state).forEach(([stepId, chunk]) => {
-    if (!chunk.content) {
-      return;
-    }
-
-    const indexedStep = stepIndex.get(stepId);
-    if (!indexedStep) {
-      next[stepId] = chunk;
-      return;
-    }
-
-    const terminalStatus = getStepStreamingTerminalStatus(indexedStep.taskRun, indexedStep.step);
-    if (terminalStatus === "ACTIVE") {
-      next[stepId] = { ...chunk, status: "STREAMING" };
-    } else if (terminalStatus === "DISCARDED") {
-      next[stepId] = {
-        ...chunk,
-        status: "DISCARDED",
-        finishReason: `${indexedStep.taskRun.status}: partial streaming output was discarded and not persisted.`
-      };
-    } else if (terminalStatus === "PARTIAL") {
-      next[stepId] = {
-        ...chunk,
-        status: "PARTIAL",
-        finishReason: `${indexedStep.step.status}: partial streaming output was not promoted to final Artifact.`
-      };
-    }
-  });
-  return next;
-}
-
-function normalizeControlPayload(raw: string): ParsedControlPayload | null {
-  try {
-    const parsed = JSON.parse(raw) as {
-      resourceId?: unknown;
-      payload?: Record<string, unknown>;
-      action?: unknown;
-      status?: unknown;
-      reason?: unknown;
-    };
-    const payload = (parsed.payload ?? parsed) as Record<string, unknown>;
-    const taskRunId = String(payload.taskRunId ?? parsed.resourceId ?? "");
-    if (!taskRunId) {
-      return null;
-    }
-    return {
-      taskRunId,
-      action: typeof payload.action === "string" ? payload.action : undefined,
-      status: typeof payload.status === "string" ? payload.status : undefined,
-      reason: typeof payload.reason === "string" ? payload.reason : undefined
-    };
-  } catch {
-    return null;
-  }
-}
-
-function markStreamingPreviewsForTaskRun(
-  state: Record<string, StreamingPreviewState>,
-  control: ParsedControlPayload
-): Record<string, StreamingPreviewState> {
-  const next = { ...state };
-  Object.entries(next).forEach(([stepId, preview]) => {
-    if (preview.taskRunId === control.taskRunId && preview.content) {
-      next[stepId] = {
-        ...preview,
-        status: "DISCARDED",
-        finishReason:
-          `${control.action || "CONTROL"} accepted: partial output discarded before final persistence.`
-          + (control.reason ? ` Reason: ${control.reason}` : "")
-      };
-    }
-  });
-  return next;
-}
 
 const PRODUCT_DEMO_PROMPT =
   "帮我生成一个 React 登录页面，要求支持邮箱登录和验证码登录，同时生成 README，最后检查代码质量并给出修改建议。";
@@ -314,27 +101,6 @@ const DEPLOY_INTENT_PATTERN = /(部署|发布|生成预览|预览\s*url|preview\
 
 function isDeployIntent(content: string): boolean {
   return DEPLOY_INTENT_PATTERN.test(content || "");
-}
-
-function selectDefaultDeployArtifactId(artifacts: Artifact[], selectedArtifactId: string | null): string | null {
-  const selectedArtifact = selectedArtifactId
-    ? artifacts.find((artifact) => getIdValue(artifact.id) === selectedArtifactId)
-    : null;
-  if (selectedArtifact && selectedArtifact.status !== "REJECTED") {
-    return getIdValue(selectedArtifact.id);
-  }
-
-  const deployableArtifacts = artifacts
-    .filter((artifact) => artifact.status !== "REJECTED")
-    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  const preferredArtifact = deployableArtifacts.find((artifact) =>
-    ["CODE", "WEB_PREVIEW", "MARKDOWN"].includes((artifact.type || "").toUpperCase())
-  );
-  return preferredArtifact
-    ? getIdValue(preferredArtifact.id)
-    : deployableArtifacts[0]
-      ? getIdValue(deployableArtifacts[0].id)
-      : null;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -374,7 +140,6 @@ export function WorkspacePage() {
   const [agentCreationDraftsByMessageId, setAgentCreationDraftsByMessageId] = useState<
     Record<string, AgentCreationDraft | null>
   >({});
-  const [deployIntentsByMessageId, setDeployIntentsByMessageId] = useState<Record<string, DeployIntentDraft | null>>({});
   const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [contextSnapshots, setContextSnapshots] = useState<ContextSnapshot[]>([]);
@@ -391,10 +156,6 @@ export function WorkspacePage() {
   const [draftAttachments, setDraftAttachments] = useState<LightweightAttachment[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
-  const [realtimeStatus, setRealtimeStatus] = useState<"DISCONNECTED" | "CONNECTING" | "CONNECTED" | "ERROR">(
-    "DISCONNECTED"
-  );
-  const [activeRealtimeRunSummary, setActiveRealtimeRunSummary] = useState<string | null>(null);
   const [streamingPreviewsByStepId, setStreamingPreviewsByStepId] = useState<Record<string, StreamingPreviewState>>({});
   const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
   const [quoteMode, setQuoteMode] = useState<"quote" | "reply">("quote");
@@ -418,11 +179,6 @@ export function WorkspacePage() {
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [autoTriggerRunningMessageId, setAutoTriggerRunningMessageId] = useState<string | null>(null);
   const [agentCreationRunningMessageId, setAgentCreationRunningMessageId] = useState<string | null>(null);
-  const [deployingMessageId, setDeployingMessageId] = useState<string | null>(null);
-  const [revisingArtifact, setRevisingArtifact] = useState(false);
-  const [deployingArtifact, setDeployingArtifact] = useState(false);
-  const [restoringSnapshot, setRestoringSnapshot] = useState(false);
-  const realtimeRefreshTimerRef = useRef<number | null>(null);
 
   const currentConversation =
     conversations.find((conversation) => getIdValue(conversation.id) === currentConversationId) ?? null;
@@ -458,54 +214,6 @@ export function WorkspacePage() {
     () => artifactSnapshots.filter((snapshot) => getIdValue(snapshot.artifactId) === selectedArtifactId),
     [artifactSnapshots, selectedArtifactId]
   );
-  const diagnosticSections = {
-    taskrun: (
-      <TaskRunPanel
-        agents={agents}
-        artifacts={artifacts}
-        taskSpecs={taskSpecs}
-        taskRuns={taskRuns}
-        loading={loadingTaskRuns}
-        selectedTaskRunId={selectedTaskRunId}
-        selectedTaskStepId={selectedTaskStepId}
-        streamingPreviewsByStepId={streamingPreviewsByStepId}
-        onSelectStep={handleSelectTaskStep}
-        onCancelTaskRun={handleCancelTaskRun}
-        onStopTaskRun={handleStopTaskRun}
-      />
-    ),
-    context: (
-      <ContextPanel
-        taskSpec={activeTaskSpec}
-        taskRuns={taskRuns}
-        pinnedContexts={pinnedContexts}
-        memories={memories}
-        contextSnapshots={contextSnapshots}
-        handoffSummaries={handoffSummaries}
-        loading={loadingContext}
-      />
-    ),
-    adapter: (
-      <>
-        <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
-        <AdapterQualityDashboard
-          adapterDescriptors={adapterDescriptors}
-          taskRuns={taskRuns}
-          qualityMetrics={adapterQualityMetrics}
-        />
-      </>
-    ),
-    audit: <ActionAuditTimelinePanel audits={actionAudits} />,
-    local: (
-      <DesktopCapabilityPanel
-        conversationId={currentConversationId}
-        onUseLocalFileAsAttachment={handleUseDesktopLocalFileAsAttachment}
-        onPinAttachmentAsContext={handlePinDesktopAttachmentAsContext}
-        onSaveAttachmentAsMemory={handleSaveDesktopAttachmentAsMemory}
-        onNavigateToDesktopNotificationTarget={handleNavigateToDesktopNotificationTarget}
-      />
-    )
-  };
   const approvalByMessageId = useMemo(() => {
     const byMessageId: Record<string, ApprovalRequest | null> = {};
     approvalRequests.forEach((approvalRequest) => {
@@ -563,167 +271,87 @@ export function WorkspacePage() {
     return adapterDescriptors.find((descriptor) => descriptor.adapterType === preferredAdapterType) ?? null;
   }, [adapterDescriptors, selectedAgent]);
 
-  const loadConversationIndex = useCallback(
-    async (query = conversationQuery, filter = conversationFilter) => {
-      setLoadingConversations(true);
-      try {
-        const includeArchived = filter === "ARCHIVED";
-        const conversationData = await getConversations({ query, includeArchived });
-        setConversations(conversationData);
-        setCurrentConversationId((previousId) => {
-          if (previousId && conversationData.some((conversation) => getIdValue(conversation.id) === previousId)) {
-            return previousId;
-          }
-          return getIdValue(conversationData[0]?.id) || null;
-        });
-        return conversationData;
-      } finally {
-        setLoadingConversations(false);
-      }
-    },
-    [conversationQuery, conversationFilter]
-  );
-
-  const loadInitialData = useCallback(async () => {
-    setErrorMessage(null);
-    setLoadingAgents(true);
-    setLoadingConversations(true);
-
-    try {
-      const [agentData, conversationData, adapterData, qualityMetricData] = await Promise.all([
-        getAgents(),
-        getConversations(),
-        getAdapters().catch(() => []),
-        getAdapterQualityMetrics().catch(() => [])
-      ]);
-      const firstConversationId = getIdValue(conversationData[0]?.id) || null;
-
-      setAgents(agentData);
-      setAdapterDescriptors(adapterData);
-      setAdapterQualityMetrics(qualityMetricData);
-      setSelectedAgent((previous) => {
-        if (!previous) {
-          return null;
-        }
-
-        const previousId = getIdValue(previous.id);
-        return agentData.find((agent) => getIdValue(agent.id) === previousId) ?? null;
-      });
-      setConversations(conversationData);
-      setCurrentConversationId((previousId) => previousId ?? firstConversationId);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setLoadingAgents(false);
-      setLoadingConversations(false);
-    }
-  }, []);
-
-  const loadMessageTriggerSuggestions = useCallback(async (conversationId: string, messageData: Message[]) => {
-    const userMessages = messageData
-      .filter((message) => message.senderType === "USER")
-      .slice(-20);
-
-    if (userMessages.length === 0) {
-      setTriggerSuggestionsByMessageId({});
-      return;
-    }
-
-    const entries = await Promise.all(
-      userMessages.map(async (message) => {
-        const messageId = getIdValue(message.id);
-        try {
-          const suggestion = await getOrchestratorTriggerSuggestion(conversationId, messageId);
-          return [messageId, suggestion] as const;
-        } catch {
-          return [messageId, null] as const;
-        }
-      })
-    );
-
-    setTriggerSuggestionsByMessageId(Object.fromEntries(entries));
-  }, []);
-
-  const loadConversationData = useCallback(async (conversationId: string) => {
-    setErrorMessage(null);
-    setLoadingMessages(true);
-    setLoadingTaskRuns(true);
-    setLoadingArtifacts(true);
-
-    try {
-      const [
-        messageData,
-        taskSpecData,
-        taskRunData,
-        artifactData,
-        deploymentData,
-        artifactSnapshotData,
-        actionAuditData,
-        approvalRequestData,
-        pinnedContextData,
-        memoryData,
-        qualityMetricData
-      ] = await Promise.all([
-        getMessages(conversationId),
-        getTaskSpecsByConversation(conversationId),
-        getTaskRunsByConversation(conversationId),
-        getArtifactsByConversation(conversationId),
-        getDeploymentsByConversation(conversationId),
-        getArtifactSnapshotsByConversation(conversationId),
-        getActionAuditsByConversation(conversationId),
-        getApprovalRequestsByConversation(conversationId),
-        getPinnedContextsByConversation(conversationId),
-        getMemoriesByConversation(conversationId),
-        getAdapterQualityMetrics().catch(() => [])
-      ]);
-
-      setMessages(messageData);
-      setTaskSpecs(taskSpecData);
-      setTaskRuns(taskRunData);
-      setArtifacts(artifactData);
-      setDeployments(deploymentData);
-      setArtifactSnapshots(artifactSnapshotData);
-      setActionAudits(actionAuditData);
-      setApprovalRequests(approvalRequestData);
-      setPinnedContexts(pinnedContextData);
-      setMemories(memoryData);
-      setAdapterQualityMetrics(qualityMetricData);
-      setStreamingPreviewsByStepId((previous) => reconcileStreamingStateByTaskRuns(taskRunData, previous));
-      void loadMessageTriggerSuggestions(conversationId, messageData);
-      setShowAllArtifacts(true);
-      setSelectedTaskStepId(null);
-      setSelectedTaskRunId((previousId) => {
-        const previousExists = previousId ? taskRunData.some((taskRun) => getIdValue(taskRun.id) === previousId) : false;
-
-        return previousExists ? previousId : getIdValue(taskRunData[taskRunData.length - 1]?.id) || null;
-      });
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setLoadingMessages(false);
-      setLoadingTaskRuns(false);
-      setLoadingArtifacts(false);
-    }
-  }, [loadMessageTriggerSuggestions]);
-
-  const loadContextData = useCallback(async (taskRunId: string) => {
-    setErrorMessage(null);
-    setLoadingContext(true);
-
-    try {
-      const [snapshotData, handoffData] = await Promise.all([
-        getContextSnapshotsByTaskRun(taskRunId),
-        getHandoffSummariesByTaskRun(taskRunId)
-      ]);
-
-      setContextSnapshots(snapshotData);
-      setHandoffSummaries(handoffData);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setLoadingContext(false);
-    }
-  }, []);
+  const {
+    loadConversationIndex,
+    loadInitialData,
+    loadConversationData,
+    loadContextData
+  } = useWorkspaceDataLoaders({
+    conversationQuery,
+    conversationFilter,
+    setErrorMessage,
+    setLoadingAgents,
+    setLoadingConversations,
+    setLoadingMessages,
+    setLoadingTaskRuns,
+    setLoadingArtifacts,
+    setLoadingContext,
+    setAgents,
+    setAdapterDescriptors,
+    setAdapterQualityMetrics,
+    setSelectedAgent,
+    setConversations,
+    setCurrentConversationId,
+    setMessages,
+    setTaskSpecs,
+    setTaskRuns,
+    setArtifacts,
+    setDeployments,
+    setArtifactSnapshots,
+    setActionAudits,
+    setApprovalRequests,
+    setTriggerSuggestionsByMessageId,
+    setPinnedContexts,
+    setMemories,
+    setStreamingPreviewsByStepId,
+    setShowAllArtifacts,
+    setSelectedTaskStepId,
+    setSelectedTaskRunId,
+    setContextSnapshots,
+    setHandoffSummaries
+  });
+  const { realtimeStatus, activeRealtimeRunSummary } = useWorkspaceRealtime({
+    currentConversationId,
+    loadConversationData,
+    loadConversationIndex,
+    setStreamingPreviewsByStepId
+  });
+  const {
+    deployIntentsByMessageId,
+    deployingMessageId,
+    revisingArtifact,
+    deployingArtifact,
+    restoringSnapshot,
+    handleCreateArtifactRevision,
+    handleApplyArtifactDiff,
+    handleForceApplyArtifactDiff,
+    handleCreateDeployment,
+    handleQueueDeployIntent,
+    handleStartDeployIntent,
+    handleApproveDeployIntent,
+    handleCancelDeployIntent,
+    handleDownloadArtifactBundle,
+    handleRestoreArtifactSnapshot,
+    handleCreateApprovalRequest,
+    handleApproveApprovalRequest,
+    handleCancelApprovalRequest
+  } = useWorkspaceArtifactOperations({
+    currentConversationId,
+    artifacts,
+    selectedArtifactId,
+    loadConversationData,
+    setMessages,
+    setDeployments,
+    setArtifactSnapshots,
+    setActionAudits,
+    setApprovalRequests,
+    setSelectedTaskRunId,
+    setSelectedTaskStepId,
+    setShowAllArtifacts,
+    setSelectedArtifactId,
+    setErrorMessage,
+    setOperationMessage
+  });
 
   useEffect(() => {
     void loadInitialData();
@@ -783,142 +411,6 @@ export function WorkspacePage() {
 
     void loadConversationData(currentConversationId);
   }, [currentConversationId, loadConversationData]);
-
-  useEffect(() => {
-    if (!currentConversationId) {
-      setRealtimeStatus("DISCONNECTED");
-      setActiveRealtimeRunSummary(null);
-      return;
-    }
-
-    let closed = false;
-    setRealtimeStatus("CONNECTING");
-
-    const scheduleRefresh = () => {
-      if (closed) {
-        return;
-      }
-      if (realtimeRefreshTimerRef.current !== null) {
-        window.clearTimeout(realtimeRefreshTimerRef.current);
-      }
-      realtimeRefreshTimerRef.current = window.setTimeout(() => {
-        realtimeRefreshTimerRef.current = null;
-        void loadConversationData(currentConversationId);
-        void loadConversationIndex();
-        void getActiveRealtimeState(currentConversationId)
-          .then((state) => {
-            if (!closed) {
-              setActiveRealtimeRunSummary(state ? `${state.status} / ${state.summary || state.taskRunId}` : null);
-            }
-          })
-          .catch(() => {
-            if (!closed) {
-              setActiveRealtimeRunSummary(null);
-            }
-          });
-      }, 250);
-    };
-
-    const eventSource = new EventSource(getConversationEventsUrl(currentConversationId));
-    eventSource.onopen = () => {
-      if (!closed) {
-        setRealtimeStatus("CONNECTED");
-      }
-    };
-    eventSource.onerror = () => {
-      if (!closed) {
-        setRealtimeStatus("ERROR");
-      }
-    };
-
-    const handleRealtimeEvent = (event: MessageEvent) => {
-      if (event.type === "HEARTBEAT" || event.type === "CONNECTED") {
-        setRealtimeStatus("CONNECTED");
-        return;
-      }
-      if (TASK_STEP_STREAM_CHUNK_EVENT_TYPES.includes(event.type as (typeof TASK_STEP_STREAM_CHUNK_EVENT_TYPES)[number])) {
-        setRealtimeStatus("CONNECTED");
-        try {
-          const streamPayload = normalizeStreamingPayload(event.data);
-          if (streamPayload) {
-            setStreamingPreviewsByStepId((previous) => ({
-              ...previous,
-              [streamPayload.taskStepId]: appendStreamingPreview(previous[streamPayload.taskStepId], streamPayload)
-            }));
-            return;
-          }
-        } catch {
-          console.warn("Invalid AgentHub streaming event:", event.data);
-        }
-        return;
-      }
-      if (
-        [
-          "MESSAGE_CREATED",
-          "TASK_RUN_CREATED",
-          "TASK_RUN_UPDATED",
-          "TASK_STEP_UPDATED",
-          "ARTIFACT_CREATED",
-          "ARTIFACT_UPDATED",
-          "CONTEXT_UPDATED",
-          "HANDOFF_UPDATED",
-          "DEPLOYMENT_CREATED",
-          "APPROVAL_UPDATED",
-          "ACTION_AUDIT_CREATED",
-          "CONTROL_COMMAND_RECEIVED",
-          "CONTROL_COMMAND_REJECTED"
-        ].includes(event.type)
-      ) {
-        setRealtimeStatus("CONNECTED");
-        if (["TASK_RUN_UPDATED", "TASK_STEP_UPDATED", "DEPLOYMENT_CREATED", "APPROVAL_UPDATED"].includes(event.type)) {
-          void notifyDesktopRealtimeEvent(event.type, event.data);
-        }
-        if (event.type === "CONTROL_COMMAND_RECEIVED") {
-          const controlPayload = normalizeControlPayload(event.data);
-          if (controlPayload) {
-            setStreamingPreviewsByStepId((previous) => markStreamingPreviewsForTaskRun(previous, controlPayload));
-          }
-        }
-        scheduleRefresh();
-        return;
-      }
-
-      if (event.type !== "ERROR") {
-        console.warn("Unknown AgentHub realtime event:", event.type, event.data);
-      }
-    };
-
-    [
-      "CONNECTED",
-      "HEARTBEAT",
-      "MESSAGE_CREATED",
-      "TASK_RUN_CREATED",
-      "TASK_RUN_UPDATED",
-      "TASK_STEP_UPDATED",
-      "ADAPTER_STREAM_CHUNK",
-      "TASK_STEP_STREAM_CHUNK",
-      "ARTIFACT_CREATED",
-      "ARTIFACT_UPDATED",
-      "CONTEXT_UPDATED",
-      "HANDOFF_UPDATED",
-      "DEPLOYMENT_CREATED",
-      "APPROVAL_UPDATED",
-      "ACTION_AUDIT_CREATED",
-      "CONTROL_COMMAND_RECEIVED",
-      "CONTROL_COMMAND_REJECTED",
-      "ERROR"
-    ].forEach((eventType) => eventSource.addEventListener(eventType, handleRealtimeEvent));
-
-    return () => {
-      closed = true;
-      eventSource.close();
-      if (realtimeRefreshTimerRef.current !== null) {
-        window.clearTimeout(realtimeRefreshTimerRef.current);
-        realtimeRefreshTimerRef.current = null;
-      }
-      setRealtimeStatus("DISCONNECTED");
-    };
-  }, [currentConversationId, loadConversationData, loadConversationIndex]);
 
   useEffect(() => {
     if (!selectedTaskRunId) {
@@ -1130,30 +622,16 @@ export function WorkspacePage() {
       return;
     }
 
-    setRevisingArtifact(true);
     try {
       const revisionInstruction = buildArtifactSelectionRevisionInstruction(
         selection,
         userRequest,
         sourceMessageId
       );
-      const revisionResult = await createDemoArtifactRevision(
-        selection.artifactId,
-        currentConversationId,
-        revisionInstruction
-      );
-      const revisionTaskRunId = getIdValue(revisionResult.taskRun.id);
-      const revisedArtifactId = getIdValue(revisionResult.revisedArtifact.id);
-      await loadConversationData(currentConversationId);
-      setSelectedTaskRunId(revisionTaskRunId);
-      setSelectedTaskStepId(null);
-      setShowAllArtifacts(true);
-      setSelectedArtifactId(revisedArtifactId);
+      await handleCreateArtifactRevision(selection.artifactId, revisionInstruction);
       setOperationMessage("已根据聊天中的局部修改请求生成 Draft Revision，请在右侧 Diff Preview 中审批应用。");
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
-    } finally {
-      setRevisingArtifact(false);
     }
   }
 
@@ -1226,14 +704,7 @@ export function WorkspacePage() {
         setSelectedAgent(parsedMention.matchedAgent);
       }
       if (isDeployIntent(contentToSend)) {
-        setDeployIntentsByMessageId((current) => ({
-          ...current,
-          [sentMessageId]: {
-            messageId: sentMessageId,
-            status: "PENDING",
-            artifactId: selectDefaultDeployArtifactId(artifacts, selectedArtifactId)
-          }
-        }));
+        handleQueueDeployIntent(sentMessage);
         setOperationMessage("已识别部署 / 发布意图，请在消息卡片中确认生成本地静态预览 URL。");
       }
       await loadConversationData(currentConversationId);
@@ -1316,78 +787,6 @@ export function WorkspacePage() {
       })
     );
     return uploadedAttachments;
-  }
-
-  async function handleUseDesktopLocalFileAsAttachment(file: File, sourcePath: string): Promise<LightweightAttachment> {
-    const [uploadedAttachment] = await handleUploadAttachments([file]);
-    setDraftAttachments((current) => [
-      ...current.filter((item) => (item.attachmentId ?? item.id) !== (uploadedAttachment.attachmentId ?? uploadedAttachment.id)),
-      {
-        ...uploadedAttachment,
-        source: "DESKTOP_LOCAL_FILE",
-        contentPreview: uploadedAttachment.contentPreview || `来自本地文件：${sourcePath}`,
-        previewText: uploadedAttachment.previewText || `来自本地文件：${sourcePath}`
-      }
-    ]);
-    setOperationMessage("本地文件已上传为当前消息附件。发送消息后可进入 Attachment / Context Retrieval。");
-    return uploadedAttachment;
-  }
-
-  async function handlePinDesktopAttachmentAsContext(attachmentId: string): Promise<void> {
-    if (!currentConversationId) {
-      return;
-    }
-    await pinAttachmentAsContext(currentConversationId, attachmentId);
-    const refreshedPinnedContexts = await getPinnedContextsByConversation(currentConversationId);
-    setPinnedContexts(refreshedPinnedContexts);
-    setOperationMessage("本地附件已直接固定到 Context。");
-  }
-
-  async function handleSaveDesktopAttachmentAsMemory(attachmentId: string): Promise<void> {
-    if (!currentConversationId) {
-      return;
-    }
-    await saveAttachmentAsMemory(currentConversationId, attachmentId);
-    const refreshedMemories = await getMemoriesByConversation(currentConversationId);
-    setMemories(refreshedMemories);
-    setOperationMessage("本地附件已直接保存为 Memory。");
-  }
-
-  function handleNavigateToDesktopNotificationTarget(targetType?: string, targetId?: string) {
-    if (!targetType || !targetId) {
-      setOperationMessage("该桌面通知没有可定位的 AgentHub 资源。");
-      return;
-    }
-    if (targetType === "TASK_RUN") {
-      setSelectedTaskRunId(targetId);
-      setActiveDiagnosticPanel("taskrun");
-      setOperationMessage(`已定位到 TaskRun：${targetId}`);
-      return;
-    }
-    if (targetType === "APPROVAL") {
-      const approval = approvalRequests.find((item) => item.approvalId === targetId);
-      setActiveDiagnosticPanel("audit");
-      setOperationMessage(
-        approval
-          ? `已定位到 Approval：${approval.summary}`
-          : `已打开审计面板，等待刷新 Approval：${targetId}`
-      );
-      return;
-    }
-    if (targetType === "DEPLOYMENT") {
-      const deployment = deployments.find((item) => item.deploymentId === targetId);
-      if (deployment) {
-        setSelectedArtifactId(getIdValue(deployment.artifactId));
-        setShowAllArtifacts(true);
-      }
-      setOperationMessage(
-        deployment
-          ? `已定位到部署预览：${deployment.artifactTitle}`
-          : `已收到部署通知，等待刷新 Deployment：${targetId}`
-      );
-      return;
-    }
-    setOperationMessage(`桌面通知目标：${targetType} / ${targetId}`);
   }
 
   async function handleToggleMessagePin(messageId: string, pinnedContextId?: string | null) {
@@ -1647,347 +1046,6 @@ export function WorkspacePage() {
     }
   }
 
-  async function handleCreateArtifactRevision(artifactId: string, revisionInstruction: string) {
-    if (!currentConversationId) {
-      setErrorMessage("请先创建或选择一个会话，再修改产物。");
-      return;
-    }
-
-    setRevisingArtifact(true);
-    setErrorMessage(null);
-
-    try {
-      const revisionResult = await createDemoArtifactRevision(artifactId, currentConversationId, revisionInstruction);
-      const createdTaskRunId = getIdValue(revisionResult.taskRun.id);
-      const revisedArtifactId = getIdValue(revisionResult.revisedArtifact.id);
-
-      await loadConversationData(currentConversationId);
-      setSelectedTaskRunId(createdTaskRunId);
-      setSelectedTaskStepId(null);
-      setShowAllArtifacts(true);
-      setSelectedArtifactId(revisedArtifactId);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setRevisingArtifact(false);
-    }
-  }
-
-  async function handleApplyArtifactDiff(artifactId: string, approvalId: string) {
-    if (!currentConversationId) {
-      setErrorMessage("请先创建或选择一个会话，再应用 Diff。");
-      return null;
-    }
-
-    setErrorMessage(null);
-    setOperationMessage(null);
-
-    try {
-      const applyResult = await applyArtifactDiff(artifactId, false, approvalId);
-      if (applyResult.conflict) {
-        const lineStats = `Diff 仍包含新增 ${applyResult.addedLines} 行、删除 ${applyResult.removedLines} 行。`;
-        setOperationMessage(`${applyResult.conflictReason || "检测到 Diff 应用冲突，请查看最新已应用产物。"} ${lineStats}`);
-        return null;
-      }
-      if (!applyResult.appliedArtifact) {
-        setOperationMessage("Diff 应用未生成新产物。");
-        return null;
-      }
-      const appliedArtifactId = getIdValue(applyResult.appliedArtifact.id);
-
-      await loadConversationData(currentConversationId);
-      setShowAllArtifacts(true);
-      setSelectedArtifactId(appliedArtifactId);
-      setOperationMessage(
-        `Diff 已应用为 ${applyResult.appliedArtifact.title} v${applyResult.appliedArtifact.version}，新增 ${applyResult.addedLines} 行，删除 ${applyResult.removedLines} 行。`
-      );
-      return applyResult.appliedArtifact;
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-      return null;
-    }
-  }
-
-  async function handleForceApplyArtifactDiff(artifactId: string, approvalId: string) {
-    if (!currentConversationId) {
-      setErrorMessage("请先创建或选择一个会话，再强制应用 Diff。");
-      return null;
-    }
-
-    setErrorMessage(null);
-    setOperationMessage(null);
-
-    try {
-      const applyResult = await applyArtifactDiff(artifactId, true, approvalId);
-      if (!applyResult.appliedArtifact) {
-        setOperationMessage("强制应用 Diff 未生成新产物。");
-        return null;
-      }
-
-      const appliedArtifactId = getIdValue(applyResult.appliedArtifact.id);
-      await loadConversationData(currentConversationId);
-      setShowAllArtifacts(true);
-      setSelectedArtifactId(appliedArtifactId);
-      const bypassMessage = applyResult.conflictBypassed
-        ? ` 已绕过冲突保护：${applyResult.conflictReason || "force apply bypassed the latest accepted artifact guard."}`
-        : "";
-      setOperationMessage(
-        `已强制应用 Diff 为 ${applyResult.appliedArtifact.title} v${applyResult.appliedArtifact.version}，新增 ${applyResult.addedLines} 行，删除 ${applyResult.removedLines} 行。${bypassMessage}`
-      );
-      return applyResult.appliedArtifact;
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-      return null;
-    }
-  }
-
-  async function handleCreateDeployment(artifactId: string, approvalId: string) {
-    if (!currentConversationId) {
-      setErrorMessage("请先创建或选择一个会话，再部署产物。");
-      return;
-    }
-
-    setDeployingArtifact(true);
-    setErrorMessage(null);
-
-    try {
-      const deployment = await createDemoDeployment(artifactId, approvalId);
-      const [refreshedMessages, refreshedDeployments, refreshedSnapshots, refreshedAudits] = await Promise.all([
-        getMessages(currentConversationId),
-        getDeploymentsByConversation(currentConversationId),
-        getArtifactSnapshotsByConversation(currentConversationId),
-        getActionAuditsByConversation(currentConversationId)
-      ]);
-      setMessages(refreshedMessages);
-      setDeployments(refreshedDeployments);
-      setArtifactSnapshots(refreshedSnapshots);
-      setActionAudits(refreshedAudits);
-      setSelectedArtifactId(getIdValue(deployment.artifactId) || artifactId);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setDeployingArtifact(false);
-    }
-  }
-
-  async function handleStartDeployIntent(message: Message, artifactId?: string | null) {
-    if (!currentConversationId) {
-      setErrorMessage("Please select a conversation before creating a deploy preview.");
-      return;
-    }
-
-    const messageId = getIdValue(message.id);
-    const resolvedArtifactId = artifactId || selectDefaultDeployArtifactId(artifacts, selectedArtifactId);
-    const artifact = artifacts.find((item) => getIdValue(item.id) === resolvedArtifactId) ?? null;
-    if (!resolvedArtifactId || !artifact) {
-      setDeployIntentsByMessageId((current) => ({
-        ...current,
-        [messageId]: {
-          messageId,
-          status: "FAILED",
-          artifactId: null,
-          errorMessage: "没有找到可部署的 Artifact。请先完成一次 Agent 协作并生成产物。"
-        }
-      }));
-      return;
-    }
-
-    setDeployingMessageId(messageId);
-    setErrorMessage(null);
-    try {
-      const approval = await createApprovalRequest(currentConversationId, {
-        actionType: "DEMO_DEPLOY",
-        targetType: "ARTIFACT",
-        targetId: resolvedArtifactId,
-        riskLevel: "MEDIUM",
-        summary: `确认将 ${artifact.title} v${artifact.version} 生成本地静态 Preview URL。`,
-        affectedItems: [
-          `Artifact: ${artifact.title} v${artifact.version}`,
-          `Type: ${artifact.type} / Status: ${artifact.status}`,
-          `Source: ${artifact.sourceKind || "UNKNOWN"} / Quality: ${artifact.realAdapterOutcome || artifact.qualityStatus || artifact.status}`,
-          "Target: STATIC_PREVIEW",
-          "Boundary: local static preview only; no Vercel / Netlify / Docker deployment."
-        ]
-      });
-      const [refreshedApprovals, refreshedAudits] = await Promise.all([
-        getApprovalRequestsByConversation(currentConversationId),
-        getActionAuditsByConversation(currentConversationId)
-      ]);
-      setApprovalRequests(refreshedApprovals);
-      setActionAudits(refreshedAudits);
-      setDeployIntentsByMessageId((current) => ({
-        ...current,
-        [messageId]: {
-          messageId,
-          status: "APPROVAL_REQUIRED",
-          artifactId: resolvedArtifactId,
-          approvalId: approval.approvalId
-        }
-      }));
-      setOperationMessage("Deploy approval created. Confirm it in the message card to generate the Preview URL.");
-    } catch (error) {
-      const messageText = getErrorMessage(error);
-      setDeployIntentsByMessageId((current) => ({
-        ...current,
-        [messageId]: {
-          messageId,
-          status: "FAILED",
-          artifactId: resolvedArtifactId,
-          errorMessage: messageText
-        }
-      }));
-      setErrorMessage(messageText);
-    } finally {
-      setDeployingMessageId(null);
-    }
-  }
-
-  async function handleApproveDeployIntent(messageId: string) {
-    if (!currentConversationId) {
-      return;
-    }
-
-    const deployIntent = deployIntentsByMessageId[messageId];
-    if (!deployIntent?.artifactId || !deployIntent.approvalId) {
-      return;
-    }
-
-    setDeployingMessageId(messageId);
-    setDeployIntentsByMessageId((current) => ({
-      ...current,
-      [messageId]: { ...deployIntent, status: "DEPLOYING" }
-    }));
-
-    try {
-      await handleApproveApprovalRequest(deployIntent.approvalId);
-      const deployment = await createDemoDeployment(deployIntent.artifactId, deployIntent.approvalId);
-      const [refreshedMessages, refreshedDeployments, refreshedSnapshots, refreshedAudits] = await Promise.all([
-        getMessages(currentConversationId),
-        getDeploymentsByConversation(currentConversationId),
-        getArtifactSnapshotsByConversation(currentConversationId),
-        getActionAuditsByConversation(currentConversationId)
-      ]);
-      setMessages(refreshedMessages);
-      setDeployments(refreshedDeployments);
-      setArtifactSnapshots(refreshedSnapshots);
-      setActionAudits(refreshedAudits);
-      setSelectedArtifactId(getIdValue(deployment.artifactId) || deployIntent.artifactId);
-      setDeployIntentsByMessageId((current) => ({
-        ...current,
-        [messageId]: { ...deployIntent, status: "COMPLETED" }
-      }));
-      setOperationMessage("已生成本地静态 Preview URL，并写入 Deploy Status 消息。");
-    } catch (error) {
-      const messageText = getErrorMessage(error);
-      setDeployIntentsByMessageId((current) => ({
-        ...current,
-        [messageId]: { ...deployIntent, status: "FAILED", errorMessage: messageText }
-      }));
-      setErrorMessage(messageText);
-    } finally {
-      setDeployingMessageId(null);
-    }
-  }
-
-  async function handleCancelDeployIntent(messageId: string) {
-    const deployIntent = deployIntentsByMessageId[messageId];
-    if (deployIntent?.approvalId) {
-      await handleCancelApprovalRequest(deployIntent.approvalId);
-    }
-    setDeployIntentsByMessageId((current) => ({
-      ...current,
-      [messageId]: deployIntent
-        ? { ...deployIntent, status: "CANCELLED" }
-        : { messageId, status: "CANCELLED" }
-    }));
-  }
-
-  function handleDownloadArtifactBundle(artifactIds: string[] = []) {
-    if (!currentConversationId) {
-      setErrorMessage("Please select a conversation before downloading an artifact bundle.");
-      return;
-    }
-
-    const url = getArtifactBundleDownloadUrl(currentConversationId, artifactIds, true);
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-
-  async function handleRestoreArtifactSnapshot(snapshotId: string, approvalId: string): Promise<Artifact | null> {
-    if (!currentConversationId) {
-      setErrorMessage("Please select a conversation before restoring a snapshot.");
-      return null;
-    }
-
-    setRestoringSnapshot(true);
-    setErrorMessage(null);
-
-    try {
-      const restoredArtifact = await restoreArtifactSnapshotWithApproval(snapshotId, approvalId);
-      await loadConversationData(currentConversationId);
-      setShowAllArtifacts(true);
-      setSelectedArtifactId(getIdValue(restoredArtifact.id));
-      setOperationMessage(`Restored snapshot as ${restoredArtifact.title} v${restoredArtifact.version}.`);
-      return restoredArtifact;
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-      return null;
-    } finally {
-      setRestoringSnapshot(false);
-    }
-  }
-
-  async function handleCreateApprovalRequest(request: {
-    actionType: string;
-    targetType: string;
-    targetId: string;
-    riskLevel: string;
-    summary: string;
-    affectedItems: string[];
-  }): Promise<string | null> {
-    if (!currentConversationId) {
-      setErrorMessage("请先创建或选择一个会话，再创建审批请求。");
-      return null;
-    }
-
-    try {
-      const approvalRequest = await createApprovalRequest(currentConversationId, request);
-      const refreshedAudits = await getActionAuditsByConversation(currentConversationId);
-      setActionAudits(refreshedAudits);
-      return approvalRequest.approvalId;
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-      return null;
-    }
-  }
-
-  async function handleApproveApprovalRequest(approvalId: string) {
-    if (!currentConversationId) {
-      return;
-    }
-
-    await approveApprovalRequest(approvalId);
-    const [refreshedAudits, refreshedApprovals] = await Promise.all([
-      getActionAuditsByConversation(currentConversationId),
-      getApprovalRequestsByConversation(currentConversationId)
-    ]);
-    setActionAudits(refreshedAudits);
-    setApprovalRequests(refreshedApprovals);
-  }
-
-  async function handleCancelApprovalRequest(approvalId: string) {
-    if (!currentConversationId) {
-      return;
-    }
-
-    await cancelApprovalRequest(approvalId);
-    const [refreshedAudits, refreshedApprovals] = await Promise.all([
-      getActionAuditsByConversation(currentConversationId),
-      getApprovalRequestsByConversation(currentConversationId)
-    ]);
-    setActionAudits(refreshedAudits);
-    setApprovalRequests(refreshedApprovals);
-  }
-
   async function handleCancelTaskRun(taskRunId: string) {
     if (!currentConversationId) {
       return;
@@ -2035,6 +1093,59 @@ export function WorkspacePage() {
   function handleShowAllArtifacts() {
     setShowAllArtifacts(true);
   }
+
+  const diagnosticSections = {
+    taskrun: (
+      <TaskRunPanel
+        agents={agents}
+        artifacts={artifacts}
+        taskSpecs={taskSpecs}
+        taskRuns={taskRuns}
+        loading={loadingTaskRuns}
+        selectedTaskRunId={selectedTaskRunId}
+        selectedTaskStepId={selectedTaskStepId}
+        streamingPreviewsByStepId={streamingPreviewsByStepId}
+        onSelectStep={handleSelectTaskStep}
+        onCancelTaskRun={handleCancelTaskRun}
+        onStopTaskRun={handleStopTaskRun}
+      />
+    ),
+    context: (
+      <ContextPanel
+        taskSpec={activeTaskSpec}
+        taskRuns={taskRuns}
+        pinnedContexts={pinnedContexts}
+        memories={memories}
+        contextSnapshots={contextSnapshots}
+        handoffSummaries={handoffSummaries}
+        loading={loadingContext}
+      />
+    ),
+    adapter: (
+      <>
+        <AdapterRoutingPanel adapterDescriptors={adapterDescriptors} selectedAgent={selectedAgent} />
+        <AdapterQualityDashboard
+          adapterDescriptors={adapterDescriptors}
+          taskRuns={taskRuns}
+          qualityMetrics={adapterQualityMetrics}
+        />
+      </>
+    ),
+    audit: <ActionAuditTimelinePanel audits={actionAudits} />,
+    local: (
+      <section className="workspace-local-entry" data-testid="workspace-desktop-console-entry">
+        <span className="workspace-local-entry__eyebrow">Desktop Console</span>
+        <h3>本机文件、通知和进程管理已移到独立控制台</h3>
+        <p>
+          Workspace 默认只保留 IM 协作主链路。本地文件预览、系统通知、Claude Code / Codex CLI 探测和 backend managed
+          process 请在 Desktop Console 中操作。
+        </p>
+        <Link className="secondary-button" to="/desktop">
+          打开 Desktop Console
+        </Link>
+      </section>
+    )
+  };
 
   return (
     <section

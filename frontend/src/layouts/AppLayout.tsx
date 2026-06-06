@@ -176,6 +176,12 @@ export function AppLayout() {
           >
             Agent 管理台
           </NavLink>
+          <NavLink
+            to="/desktop"
+            className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}
+          >
+            Desktop Console
+          </NavLink>
         </nav>
 
         <div className="app-header__window-controls" aria-label="窗口控制">
