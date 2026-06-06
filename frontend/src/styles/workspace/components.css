@@ -259,3 +259,384 @@
   background: transparent !important;
   box-shadow: none !important;
 }
+
+/* Light IM workspace: shared list/card primitives that override legacy workspace.css. */
+.workspace-page .conversation-list {
+  gap: 4px !important;
+}
+
+.workspace-page .conversation-item--im {
+  min-height: 58px !important;
+  padding: 7px 8px !important;
+  border-radius: 13px !important;
+}
+
+.workspace-page .conversation-item__identity strong {
+  max-width: 150px !important;
+  font-size: 13px !important;
+}
+
+.workspace-page .conversation-item__preview {
+  display: -webkit-box !important;
+  max-width: 180px !important;
+  overflow: hidden !important;
+  font-size: 11px !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 1 !important;
+}
+
+.workspace-page .conversation-item__type,
+.workspace-page .conversation-item__actions,
+.workspace-page .conversation-item__meta span:nth-child(n+2) {
+  display: none !important;
+}
+
+.workspace-page .conversation-item__unread {
+  min-width: 22px !important;
+  height: 22px !important;
+  padding: 0 6px !important;
+  border-radius: 999px !important;
+  background: var(--ah-blue, #2f73ff) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+}
+
+.workspace-page .agent-item {
+  min-height: 44px !important;
+  padding: 7px 8px !important;
+  border-radius: 12px !important;
+}
+
+.workspace-page .agent-item__tags span:nth-child(n+4) {
+  display: none !important;
+}
+
+.workspace-page .chat-input button,
+.workspace-page .chat-input__tool-button,
+.workspace-page .chat-input__mode-button,
+.workspace-page .chat-input__route-toggle,
+.workspace-page .chat-input__send-button:not(.primary-button) {
+  border: 1px solid rgba(22, 24, 28, 0.1) !important;
+  background: #f5f5f2 !important;
+  color: #4d5662 !important;
+  box-shadow: none !important;
+}
+
+.workspace-page .chat-input .primary-button,
+.workspace-page .chat-input__send-button,
+.workspace-page .chat-input button[type="submit"] {
+  border: 0 !important;
+  background: #2f73ff !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(47, 115, 255, 0.18) !important;
+}
+
+.workspace-page .conversation-filter-tabs button,
+.workspace-page .im-list-chip,
+.workspace-page .agent-status-badge,
+.workspace-page .conversation-item__type,
+.workspace-page .conversation-participant-pill,
+.workspace-page .status-chip,
+.workspace-page .message-type-ribbon {
+  border: 0 !important;
+  background: #f0f0ee !important;
+  color: #676f7a !important;
+}
+
+.workspace-page .artifact-preview__operation-message,
+.workspace-page .adapter-quality-dashboard__metric,
+.workspace-page .adapter-quality-dashboard__signal,
+.workspace-page .adapter-quality-dashboard__outcome,
+.workspace-page .adapter-quality-dashboard__cell,
+.workspace-page .adapter-routing-card__metric {
+  border: 1px solid rgba(22, 24, 28, 0.1) !important;
+  border-radius: 999px !important;
+  background: #f5f5f2 !important;
+  color: #4d5662 !important;
+  box-shadow: none !important;
+}
+
+/* Usability pass: left rail stays an IM list, not an admin dashboard. */
+.workspace-page .workspace-sidebar__header {
+  gap: 8px !important;
+  padding: 14px 12px 10px !important;
+}
+
+.workspace-page .workspace-sidebar__header .primary-button {
+  min-height: 36px !important;
+}
+
+.workspace-page .workspace-section {
+  gap: 7px !important;
+}
+
+.workspace-page .workspace-section .section-header {
+  min-height: 24px !important;
+  margin-bottom: 2px !important;
+}
+
+.workspace-page .im-list-tools {
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+}
+
+.workspace-page .im-search-box {
+  gap: 3px !important;
+}
+
+.workspace-page .im-search-box > span:first-child {
+  font-size: 10px !important;
+  color: #8b929b !important;
+}
+
+.workspace-page .im-search-box input {
+  min-height: 34px !important;
+  padding: 0 10px !important;
+  border-radius: 14px !important;
+  font-size: 13px !important;
+}
+
+.workspace-page .conversation-filter-tabs {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+}
+
+.workspace-page .conversation-filter-tabs button {
+  min-height: 26px !important;
+  padding: 0 5px !important;
+  font-size: 11px !important;
+}
+
+.workspace-page .conversation-filter-tabs button strong {
+  font-size: 10px !important;
+}
+
+.workspace-page .im-list-tools__chips {
+  display: none !important;
+}
+
+.workspace-page .conversation-list-status {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+}
+
+.workspace-page .conversation-list-status span:nth-child(n+3) {
+  display: none !important;
+}
+
+.workspace-page .conversation-item--im {
+  min-height: 50px !important;
+  padding: 6px 7px !important;
+}
+
+.workspace-page .conversation-item__main {
+  gap: 3px !important;
+}
+
+.workspace-page .conversation-item__row {
+  gap: 6px !important;
+}
+
+.workspace-page .conversation-avatar {
+  width: 26px !important;
+  height: 26px !important;
+  font-size: 12px !important;
+}
+
+.workspace-page .conversation-item__identity strong {
+  max-width: 138px !important;
+  font-size: 12px !important;
+}
+
+.workspace-page .conversation-item__identity small {
+  display: block !important;
+  max-width: 146px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 10px !important;
+}
+
+.workspace-page .conversation-item__meta {
+  display: none !important;
+}
+
+.workspace-page .conversation-item__footer {
+  margin-left: 32px !important;
+}
+
+.workspace-page .conversation-item__time {
+  max-width: 110px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 10px !important;
+}
+
+.workspace-page .conversation-item__actions {
+  max-height: 0 !important;
+  margin-top: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  transition:
+    max-height 140ms ease,
+    margin-top 140ms ease,
+    opacity 140ms ease !important;
+}
+
+.workspace-page .conversation-item--im:hover .conversation-item__actions,
+.workspace-page .conversation-item--im:focus-within .conversation-item__actions,
+.workspace-page .conversation-item--active .conversation-item__actions {
+  max-height: 28px !important;
+  margin-top: 4px !important;
+  opacity: 1 !important;
+}
+
+.workspace-page .agent-list .im-list-tools {
+  margin-bottom: 6px !important;
+}
+
+.workspace-page .agent-list .im-search-box {
+  display: none !important;
+}
+
+.workspace-page .agent-item {
+  min-height: 40px !important;
+  padding: 6px 7px !important;
+}
+
+.workspace-page .agent-item__description,
+.workspace-page .agent-im-strip,
+.workspace-page .agent-integration-pill,
+.workspace-page .agent-session-bridge-pill,
+.workspace-page .agent-adapter-health,
+.workspace-page .agent-capability-summary {
+  display: none !important;
+}
+
+.workspace-page .agent-item__row {
+  align-items: center !important;
+}
+
+.workspace-page .agent-avatar,
+.workspace-page .agent-avatar-placeholder {
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 12px !important;
+}
+
+.workspace-page .agent-item__identity-text strong {
+  max-width: 118px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 12px !important;
+}
+
+.workspace-page .agent-item__meta {
+  max-width: 118px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 10px !important;
+}
+
+.workspace-page .agent-item .status-pill {
+  max-width: 38px !important;
+  overflow: hidden !important;
+  padding: 0 5px !important;
+  font-size: 10px !important;
+}
+
+.workspace-page .agent-item .tag-row {
+  display: flex !important;
+  gap: 3px !important;
+  margin-left: 36px !important;
+  overflow: hidden !important;
+}
+
+.workspace-page .agent-item .tag-row:nth-of-type(n+2) {
+  display: none !important;
+}
+
+.workspace-page .agent-tag {
+  max-width: 54px !important;
+  min-height: 18px !important;
+  padding: 0 5px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 10px !important;
+}
+
+@media (max-width: 1368px) {
+  .workspace-page .conversation-item__identity strong {
+    max-width: 118px !important;
+  }
+
+  .workspace-page .conversation-item__identity small {
+    max-width: 124px !important;
+  }
+
+  .workspace-page .conversation-list-status {
+    display: none !important;
+  }
+}
+
+/* E2E-safe compact conversation actions: keep the IM density without overlaying
+   the pin/archive/restore buttons under the main conversation selector. */
+.workspace-page .conversation-item--im {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-auto-rows: auto !important;
+  align-items: start !important;
+}
+
+.workspace-page .conversation-item--im .conversation-item__main {
+  position: relative !important;
+  z-index: 1 !important;
+  display: grid !important;
+  width: 100% !important;
+}
+
+.workspace-page .conversation-item--im .conversation-item__actions {
+  position: relative !important;
+  z-index: 2 !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 4px !important;
+  width: fit-content !important;
+  max-width: calc(100% - 32px) !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  margin: 2px 0 0 32px !important;
+  overflow: visible !important;
+  opacity: 0 !important;
+  transform: translateY(-2px) !important;
+  pointer-events: none !important;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease !important;
+}
+
+.workspace-page .conversation-item--im:hover .conversation-item__actions,
+.workspace-page .conversation-item--im:focus-within .conversation-item__actions,
+.workspace-page .conversation-item--active .conversation-item__actions,
+.workspace-page .conversation-item--archived .conversation-item__actions {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
+
+.workspace-page .conversation-item--im .conversation-action-button {
+  position: relative !important;
+  z-index: 3 !important;
+  min-height: 20px !important;
+  padding: 0 6px !important;
+  border-radius: 999px !important;
+  font-size: 10px !important;
+  white-space: nowrap !important;
+}

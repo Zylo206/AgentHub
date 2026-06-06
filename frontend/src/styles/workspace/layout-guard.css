@@ -20,9 +20,27 @@
   max-width: none !important;
 }
 
+@media (max-width: 1600px) {
+  .workspace-page {
+    --artifact-inspector-width: 332px !important;
+    grid-template-columns: 246px minmax(0, 1fr) 332px !important;
+  }
+
+  .workspace-page .workspace-artifacts {
+    width: 332px !important;
+    max-width: 332px !important;
+  }
+}
+
 @media (max-width: 1536px) {
   .workspace-page {
-    grid-template-columns: 236px minmax(720px, 1fr) 304px !important;
+    --artifact-inspector-width: 278px !important;
+    grid-template-columns: 236px minmax(0, 1fr) 278px !important;
+  }
+
+  .workspace-page .workspace-artifacts {
+    width: 278px !important;
+    max-width: 278px !important;
   }
 
   .workspace-page--artifact-inspector-collapsed {
@@ -30,9 +48,15 @@
   }
 }
 
-@media (max-width: 1366px) {
+@media (max-width: 1368px) {
   .workspace-page {
-    grid-template-columns: 218px minmax(790px, 1fr) 320px !important;
+    --artifact-inspector-width: 278px !important;
+    grid-template-columns: 218px minmax(0, 1fr) 278px !important;
     gap: 6px !important;
+  }
+
+  .workspace-page .workspace-artifacts {
+    width: 278px !important;
+    max-width: 278px !important;
   }
 }

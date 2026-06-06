@@ -176,14 +176,6 @@ export function ChatInput({
     onChange(value.trim() ? `${value} ${mention}` : mention);
   }
 
-  function insertCodeHint() {
-    if (disabled || sending) {
-      return;
-    }
-    const block = "```tsx\n\n```";
-    onChange(value.trim() ? `${value}\n${block}` : block);
-  }
-
   return (
     <form className="chat-input" data-testid="chat-input" onSubmit={handleSubmit}>
       <textarea
@@ -260,18 +252,6 @@ export function ChatInput({
           </button>
           <button type="button" className="ghost-button" disabled={disabled || sending} onClick={insertMentionHint}>
             @Agent
-          </button>
-          <button type="button" className="ghost-button" disabled={disabled || sending} onClick={insertCodeHint}>
-            代码
-          </button>
-          <button
-            type="button"
-            className="ghost-button"
-            data-testid="chat-attachment-select-button"
-            disabled={disabled || sending}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            选择文件
           </button>
           <details className={`chat-routing-preview chat-routing-preview--${routingPreview.mode.toLowerCase()}`} data-testid="chat-routing-preview">
             <summary>
