@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { AgentCreateDialog, type AgentCreateMode } from "../features/agents/AgentCreateDialog";
 import type { Agent } from "../features/agents/agentTypes";
 
@@ -10,6 +10,7 @@ export function AppLayout() {
   const [createdAgentName, setCreatedAgentName] = useState<string | null>(null);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
   const createButtonRef = useRef<HTMLButtonElement | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -42,6 +43,19 @@ export function AppLayout() {
     setAgentDialogMode(mode);
     setAgentDialogOpen(true);
     setCreateMenuOpen(false);
+  }
+
+  function handleCreateConversation() {
+    setCreateMenuOpen(false);
+    navigate("/workspace");
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("agenthub:create-conversation"));
+    }, 0);
+  }
+
+  function handleOpenCliStatus() {
+    setCreateMenuOpen(false);
+    navigate("/agents#local-cli");
   }
 
   function handleAgentCreated(agent: Agent) {
@@ -87,6 +101,22 @@ export function AppLayout() {
           <button
             type="button"
             className="app-create-menu__item app-create-menu__item--active"
+            data-testid="app-create-conversation-option"
+            role="menuitem"
+            onClick={handleCreateConversation}
+          >
+            <span className="app-create-menu__icon" aria-hidden="true">
+              +
+            </span>
+            <span>
+              <strong>新建会话</strong>
+              <small>回到 Workspace，创建一条 IM-first 协作会话。</small>
+            </span>
+            <em aria-hidden="true">↵</em>
+          </button>
+          <button
+            type="button"
+            className="app-create-menu__item"
             data-testid="app-create-agent-option"
             role="menuitem"
             onClick={() => openAgentDialog("custom")}
@@ -105,16 +135,16 @@ export function AppLayout() {
             className="app-create-menu__item"
             data-testid="app-connect-local-agent-option"
             role="menuitem"
-            onClick={() => openAgentDialog("local")}
+            onClick={handleOpenCliStatus}
           >
             <span className="app-create-menu__icon" aria-hidden="true">
               ⌘
             </span>
             <span>
-              <strong>接入本地 Agent</strong>
-              <small>生成连接命令，接入本机 Agent。</small>
+              <strong>检查本地 CLI</strong>
+              <small>查看 Claude Code / Codex 的 path、version、auth 和 sandbox 状态。</small>
             </span>
-            <em aria-hidden="true">+</em>
+            <em aria-hidden="true">→</em>
           </button>
         </div>
 
@@ -144,7 +174,7 @@ export function AppLayout() {
             to="/agents"
             className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}
           >
-            Agent 构建器
+            Agent 管理台
           </NavLink>
         </nav>
 

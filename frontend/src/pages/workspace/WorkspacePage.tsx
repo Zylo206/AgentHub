@@ -1,5 +1,4 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent } from "react";
 import {
   createAgent,
   createConversation,
@@ -93,6 +92,7 @@ import { WorkspaceDiagnosticsDrawer } from "./WorkspaceDiagnosticsDrawer";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
+import { useArtifactInspectorLayout } from "./useArtifactInspectorLayout";
 import "../../styles/workspace.css";
 import "../../styles/workspace/tokens.css";
 import "../../styles/workspace/shell.css";
@@ -102,6 +102,7 @@ import "../../styles/workspace/components.css";
 import "../../styles/workspace/message.css";
 import "../../styles/workspace/inspector.css";
 import "../../styles/workspace/layout-guard.css";
+import "../../styles/production-alignment.css";
 
 const TASK_STEP_STREAM_CHUNK_EVENT_TYPES = ["TASK_STEP_STREAM_CHUNK", "ADAPTER_STREAM_CHUNK"] as const;
 const STREAMING_PREVIEW_MAX_LENGTH = 1200;
@@ -353,28 +354,6 @@ function findTaskStep(taskRuns: TaskRun[], taskRunId: string | null, taskStepId:
   return taskRun?.steps.find((step) => getIdValue(step.id) === taskStepId) ?? null;
 }
 
-function getArtifactInspectorMinWidth(viewportWidth: number): number {
-  return viewportWidth <= 1536 ? 278 : 300;
-}
-
-function getArtifactInspectorMaxWidth(viewportWidth: number): number {
-  if (viewportWidth <= 1536) {
-    return 278;
-  }
-
-  if (viewportWidth <= 1600) {
-    return 332;
-  }
-
-  return 520;
-}
-
-function getArtifactInspectorRenderWidth(width: number, viewportWidth: number): number {
-  const minWidth = getArtifactInspectorMinWidth(viewportWidth);
-  const maxWidth = getArtifactInspectorMaxWidth(viewportWidth);
-  return Math.min(maxWidth, Math.max(minWidth, width));
-}
-
 export function WorkspacePage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [adapterDescriptors, setAdapterDescriptors] = useState<AdapterDescriptor[]>([]);
@@ -434,10 +413,7 @@ export function WorkspacePage() {
   const [showDebugActions, setShowDebugActions] = useState(false);
   const [activeDiagnosticPanel, setActiveDiagnosticPanel] = useState<DiagnosticPanelKey | null>(null);
   const [artifactInspectorCollapsed, setArtifactInspectorCollapsed] = useState(false);
-  const [artifactInspectorWidth, setArtifactInspectorWidth] = useState(340);
-  const [viewportWidth, setViewportWidth] = useState(() =>
-    typeof window === "undefined" ? 1600 : window.innerWidth
-  );
+  const { workspaceStyle, onArtifactInspectorResizeStart } = useArtifactInspectorLayout(artifactInspectorCollapsed);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [autoTriggerRunningMessageId, setAutoTriggerRunningMessageId] = useState<string | null>(null);
@@ -754,16 +730,6 @@ export function WorkspacePage() {
   }, [loadInitialData]);
 
   useEffect(() => {
-    function handleResize() {
-      setViewportWidth(window.innerWidth);
-    }
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useEffect(() => {
     function handleAgentCreated(event: Event) {
       const createdAgent = (event as CustomEvent<{ agent?: Agent }>).detail?.agent ?? null;
       void getAgents()
@@ -780,6 +746,15 @@ export function WorkspacePage() {
 
     window.addEventListener("agenthub:agent-created", handleAgentCreated);
     return () => window.removeEventListener("agenthub:agent-created", handleAgentCreated);
+  }, []);
+
+  useEffect(() => {
+    function handleCreateConversationRequest() {
+      void handleCreateDemoConversation();
+    }
+
+    window.addEventListener("agenthub:create-conversation", handleCreateConversationRequest);
+    return () => window.removeEventListener("agenthub:create-conversation", handleCreateConversationRequest);
   }, []);
 
   useEffect(() => {
@@ -1385,7 +1360,31 @@ export function WorkspacePage() {
     }
     if (targetType === "TASK_RUN") {
       setSelectedTaskRunId(targetId);
+      setActiveDiagnosticPanel("taskrun");
       setOperationMessage(`已定位到 TaskRun：${targetId}`);
+      return;
+    }
+    if (targetType === "APPROVAL") {
+      const approval = approvalRequests.find((item) => item.approvalId === targetId);
+      setActiveDiagnosticPanel("audit");
+      setOperationMessage(
+        approval
+          ? `已定位到 Approval：${approval.summary}`
+          : `已打开审计面板，等待刷新 Approval：${targetId}`
+      );
+      return;
+    }
+    if (targetType === "DEPLOYMENT") {
+      const deployment = deployments.find((item) => item.deploymentId === targetId);
+      if (deployment) {
+        setSelectedArtifactId(getIdValue(deployment.artifactId));
+        setShowAllArtifacts(true);
+      }
+      setOperationMessage(
+        deployment
+          ? `已定位到部署预览：${deployment.artifactTitle}`
+          : `已收到部署通知，等待刷新 Deployment：${targetId}`
+      );
       return;
     }
     setOperationMessage(`桌面通知目标：${targetType} / ${targetId}`);
@@ -2037,41 +2036,6 @@ export function WorkspacePage() {
     setShowAllArtifacts(true);
   }
 
-  function handleArtifactInspectorResizeStart(event: PointerEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    const pointerId = event.pointerId;
-    const handle = event.currentTarget;
-    const minWidth = getArtifactInspectorMinWidth(window.innerWidth);
-    const maxWidth = getArtifactInspectorMaxWidth(window.innerWidth);
-
-    handle.setPointerCapture(pointerId);
-    document.body.classList.add("workspace-resizing-inspector");
-
-    function handlePointerMove(moveEvent: globalThis.PointerEvent) {
-      const nextWidth = Math.round(window.innerWidth - moveEvent.clientX - 8);
-      setArtifactInspectorWidth(Math.min(maxWidth, Math.max(minWidth, nextWidth)));
-    }
-
-    function handlePointerUp() {
-      document.removeEventListener("pointermove", handlePointerMove);
-      document.removeEventListener("pointerup", handlePointerUp);
-      document.body.classList.remove("workspace-resizing-inspector");
-      try {
-        handle.releasePointerCapture(pointerId);
-      } catch {
-        // Pointer capture can already be released when the browser cancels a drag.
-      }
-    }
-
-    document.addEventListener("pointermove", handlePointerMove);
-    document.addEventListener("pointerup", handlePointerUp, { once: true });
-  }
-
-  const artifactInspectorRenderWidth = getArtifactInspectorRenderWidth(artifactInspectorWidth, viewportWidth);
-  const workspaceStyle = {
-    "--artifact-inspector-width": artifactInspectorCollapsed ? "48px" : `${artifactInspectorRenderWidth}px`
-  } as CSSProperties;
-
   return (
     <section
       className={`workspace-page ${artifactInspectorCollapsed ? "workspace-page--artifact-inspector-collapsed" : ""}`}
@@ -2248,7 +2212,7 @@ export function WorkspacePage() {
       <WorkspaceArtifactInspectorShell
         collapsed={artifactInspectorCollapsed}
         onToggleCollapsed={() => setArtifactInspectorCollapsed((current) => !current)}
-        onResizeStart={handleArtifactInspectorResizeStart}
+        onResizeStart={onArtifactInspectorResizeStart}
       >
         <ArtifactPanel
           artifacts={visibleArtifacts}

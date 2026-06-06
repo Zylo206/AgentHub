@@ -8795,3 +8795,25 @@
 - 本机 CLI 只读探测通过：Claude Code `2.1.143`，Codex `codex-cli 0.134.0`。
 - Desktop / Tauri 构建级验证通过：`cargo check` 通过，`tauri build --no-bundle` 通过并生成本地 release exe。
 - 真实 provider / 真实 CLI smoke 未由本轮代理执行；需要用户在本机终端显式运行，或使用 fixture smoke 替代自动验收。
+
+## Phase 213：前端生产级对齐整改
+
+### 目标
+
+- 按问题报告将前端从“验收演示台”继续收敛到生产级产品结构。
+- 优先修复 `/agents` 可用性阻断、Workspace 三栏拖拽、入口心智重复、本地 CLI 接入表达和 Preview / Artifact 可见性问题。
+
+### 修复内容
+
+- 新增本地 CLI 状态卡组件，统一展示 Claude Code / Codex 的 path、version、help/auth、schema、stream、sandbox、session bridge 和 fallback 边界。
+- 顶部 `+ 新建` 菜单收敛为三入口：新建会话、创建自定义 Agent、检查本地 CLI。
+- `/agents` 页面新增真实本地 CLI 状态区，可直接把 Claude Code / Codex 设置为 preferredAdapter。
+- Workspace 右侧 Artifact Inspector 的宽度、viewport、min/max 和 pointer resize 逻辑抽为独立 hook，避免继续堆在巨型页面组件中。
+- 新增 `production-alignment.css` 作为本轮生产化覆盖层，修复 Agent Builder 滚动、三栏拖拽、诊断区降噪、Artifact / Preview 可见性和窄屏行为。
+- ChatInput 保留 Explain 路由详情，但将默认文案从 `targetAgentId / mentionedAgentIds` 等内部字段改为用户可理解的协作语言。
+
+### 边界
+
+- 本轮不改后端核心 API。
+- 本轮不移除 Mock / static fallback，只在 UI 中继续明确真实、fallback 和本地静态预览边界。
+- Claude Code / Codex 仍是 headless Artifact-only CLI 接入，不是桌面 GUI 自动化，也不允许绕过 Artifact contract、质量门禁、审批和审计。

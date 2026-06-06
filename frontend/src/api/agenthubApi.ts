@@ -29,7 +29,20 @@ interface ApiResponse<T> {
   errorCode: string | null;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+function isTauriRuntime(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const tauriWindow = window as unknown as {
+    __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: unknown;
+  };
+  return Boolean(tauriWindow.__TAURI__ || tauriWindow.__TAURI_INTERNALS__);
+}
+
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ??
+  (isTauriRuntime() ? "http://127.0.0.1:8080" : "http://localhost:8080");
 export const API_BASE_URL = API_BASE;
 
 export interface RealtimeEvent {

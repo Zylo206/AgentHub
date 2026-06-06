@@ -15,7 +15,7 @@ public class WebCorsConfig {
 
     @Bean
     public CorsFilter corsFilter(
-            @Value("${agenthub.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
+            @Value("${agenthub.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173,http://tauri.localhost,https://tauri.localhost,tauri://localhost}")
             String allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(parseOrigins(allowedOrigins));

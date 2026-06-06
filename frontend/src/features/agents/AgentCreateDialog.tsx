@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createAgent, draftAgentFromNaturalLanguage, getAdapters } from "../../api/agenthubApi";
 import type { Agent, AdapterDescriptor, ToolCapabilityKey } from "./agentTypes";
+import { getAdapterLabel, LocalCliStatusCards } from "./LocalCliStatusCards";
 
 export type AgentCreateMode = "custom" | "local";
 
@@ -17,8 +18,7 @@ interface ToolCapabilityChoice {
   description: string;
 }
 
-const LOCAL_AGENT_BRIDGE_COMMAND =
-  "npx -y --registry=https://registry.npmmirror.com agenthub-local-agent-bridge";
+const LOCAL_CLI_VERIFY_COMMAND = "claude --version\ncodex --version";
 
 const TOOL_CHOICES: ToolCapabilityChoice[] = [
   { key: "code", label: "代码", description: "生成或修改代码 Artifact" },
@@ -71,21 +71,6 @@ function parseTags(value: string): string[] {
 function normalizeToolTags(toolTags: string[] | undefined): ToolCapabilityKey[] {
   const normalized = (toolTags ?? []).filter((tag): tag is ToolCapabilityKey => TOOL_KEYS.has(tag as ToolCapabilityKey));
   return normalized.length > 0 ? Array.from(new Set(normalized)) : ["code", "review"];
-}
-
-function getAdapterLabel(adapterType: string): string {
-  switch (adapterType) {
-    case "OPENAI_COMPATIBLE":
-      return "OpenAI-compatible";
-    case "CLAUDE_CODE":
-      return "Claude Code";
-    case "CODEX":
-      return "Codex CLI";
-    case "MOCK":
-      return "MOCK fallback";
-    default:
-      return adapterType;
-  }
 }
 
 function getAdapterOptions(adapters: AdapterDescriptor[]): AdapterDescriptor[] {
@@ -212,11 +197,11 @@ export function AgentCreateDialog({
 
   async function handleCopyCommand() {
     try {
-      await navigator.clipboard.writeText(LOCAL_AGENT_BRIDGE_COMMAND);
+      await navigator.clipboard.writeText(LOCAL_CLI_VERIFY_COMMAND);
       setCommandCopied(true);
     } catch {
       setCommandCopied(false);
-      setErrorMessage("复制失败，请手动复制命令。");
+      setErrorMessage("复制失败，请手动复制 CLI 验证命令。");
     }
   }
 
@@ -263,8 +248,8 @@ export function AgentCreateDialog({
               >
                 <span className="agent-create-choice__icon" aria-hidden="true">⌘</span>
                 <span>
-                  <strong>接入本地 Agent</strong>
-                  <small>生成连接命令，接入本机正在运行的 Agent。</small>
+                  <strong>检查本地 CLI</strong>
+                  <small>检查 Claude Code / Codex 本机 CLI 状态，不使用桥接命令伪装成功。</small>
                 </span>
                 <em aria-hidden="true">+</em>
               </button>
@@ -385,44 +370,49 @@ export function AgentCreateDialog({
             <div className="agent-create-dialog__header">
               <button type="button" onClick={() => setMode("choose")}>返回</button>
               <div>
-                <h2 id="agent-create-dialog-title">接入本地 Agent</h2>
-                <p>生成连接命令，在本地终端执行后，AgentHub 会自动识别连接状态。</p>
+                <h2 id="agent-create-dialog-title">接入本地 CLI Agent</h2>
+                <p>这里接入的是本机已安装并已登录的 Claude Code CLI / Codex CLI；AgentHub 负责探测、路由、执行、质量门禁和 fallback，不再伪装成一个 npm bridge。</p>
               </div>
             </div>
 
-            <div className="app-create-modal__steps" aria-label="接入步骤">
-              <span className="is-done">
-                <strong>✓</strong>
-                <em>生成连接命令</em>
-                <small>命令已生成</small>
+            <div className="app-create-modal__steps agent-create-local-steps" aria-label="本地 CLI 接入步骤">
+              <span className="is-active">
+                <strong>1</strong>
+                <em>探测 CLI</em>
+                <small>path / version / auth</small>
               </span>
               <span className="is-active">
                 <strong>2</strong>
-                <em>本地执行</em>
-                <small>等待中</small>
+                <em>选择 Adapter</em>
+                <small>Claude Code 或 Codex</small>
               </span>
               <span>
                 <strong>3</strong>
-                <em>自动识别</em>
-                <small>等待中</small>
+                <em>真实执行</em>
+                <small>失败必须分类并 fallback</small>
               </span>
             </div>
 
+            <LocalCliStatusCards
+              adapters={adapterOptions}
+              selectedAdapterType={preferredAdapter}
+              onSelectAdapter={setPreferredAdapter}
+            />
+
             <div className="app-create-modal__command-head">
-              <span>连接命令</span>
-              <small>命令已生成，token 剩余 59:58 到期</small>
+              <span>手动验证命令</span>
+              <small>用于本机终端确认真实 CLI，不作为 AgentHub 伪成功。</small>
             </div>
-            <pre className="app-create-modal__command">
-              <code>{LOCAL_AGENT_BRIDGE_COMMAND}</code>
+            <pre className="app-create-modal__command agent-create-cli-command">
+              <code>{LOCAL_CLI_VERIFY_COMMAND}</code>
             </pre>
             <button type="button" className="app-create-modal__copy" onClick={handleCopyCommand}>
-              {commandCopied ? "已复制" : "复制命令"}
+              {commandCopied ? "已复制验证命令" : "复制验证命令"}
             </button>
 
-            <div className="app-create-modal__tips">
-              <p>1. 在终端窗口粘贴命令。</p>
-              <p>2. 按 Enter 执行。</p>
-              <p>3. 保持终端开启，系统会自动检测连接。</p>
+            <div className="app-create-modal__tips agent-create-local-boundary">
+              <p>生产级接入建议：优先使用后端 AdapterRegistry 的 Claude Code / Codex 真实 CLI adapter；Desktop Console 只负责本机 path、version、auth、sandbox 探测和进程可视化。</p>
+              <p>若 CLI 未安装、未认证、超时、解析失败、质量不达标或构建失败，必须显示失败分类并回退到 MOCK，不能把 fallback 标成真实成功。</p>
             </div>
           </>
         ) : null}

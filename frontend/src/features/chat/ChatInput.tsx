@@ -96,7 +96,7 @@ export function ChatInput({
       return {
         mode: "MULTI_AGENT",
         title: "To: 多 Agent 协作",
-        detail: "消息开头的多个 @Agent 会写入 mentionedAgentIds，并进入 Orchestrator 路由。",
+        detail: "消息开头的多个 @Agent 会被作为协作成员，Orchestrator 会按能力和可用性拆分任务。",
         agents: targetAgents,
         adapters,
         capabilities
@@ -107,7 +107,7 @@ export function ChatInput({
       return {
         mode: "SINGLE_AGENT",
         title: `To: @${targetAgents[0].name}`,
-        detail: "该 Agent 会作为 targetAgentId / selectedAgent 优先参与路由决策。",
+        detail: "该 Agent 会优先处理本次消息；需要更多成员时，Orchestrator 仍可补充分工。",
         agents: targetAgents,
         adapters,
         capabilities
@@ -117,7 +117,7 @@ export function ChatInput({
     return {
       mode: "AUTO_ROUTE",
       title: "To: Orchestrator 自动分派",
-      detail: "未指定 Agent 时，将按任务意图、tool capability 和 Adapter 健康度选择内置或自建 Agent。",
+      detail: "未指定 Agent 时，将按任务意图、工具能力和可用性选择内置或自建 Agent。",
       agents: [],
       adapters: ["MOCK fallback 可用"],
       capabilities: []
@@ -255,7 +255,7 @@ export function ChatInput({
           </button>
           <details className={`chat-routing-preview chat-routing-preview--${routingPreview.mode.toLowerCase()}`} data-testid="chat-routing-preview">
             <summary>
-              <span>路由详情</span>
+              <span>Explain</span>
               <strong>{routingPreview.title}</strong>
               {routingPreview.agents.length > 0 ? (
                 <small>{routingPreview.agents.map((agent) => `@${agent.name}`).join(" ")}</small>

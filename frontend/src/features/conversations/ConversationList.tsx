@@ -124,36 +124,14 @@ export function ConversationList({
 
       {visibleConversations.length === 0 ? (
         <div className="conversation-empty-im" aria-label="Conversation empty examples">
-          <div className="conversation-empty-im__eyebrow">{query || filter !== "ALL" ? "未找到匹配会话" : "会话示例"}</div>
-          <article className="conversation-empty-im__row conversation-empty-im__row--active">
-            <div>
-              <strong>多 Agent 协作：登录页生成与安全评审</strong>
-              <span>前端组件 + API 合约 + 代码评审</span>
-            </div>
-            <small>示例</small>
-          </article>
-          <article className="conversation-empty-im__row">
-            <div>
-              <strong>用户认证接口安全审查</strong>
-              <span>安全审计 + API 规范检查</span>
-            </div>
-            <small>未读 2</small>
-          </article>
-          <article className="conversation-empty-im__row">
-            <div>
-              <strong>营销落地页开发</strong>
-              <span>页面设计 + 静态部署预览</span>
-            </div>
-            <small>置顶</small>
-          </article>
-          <article className="conversation-empty-im__row conversation-empty-im__row--muted">
-            <div>
-              <strong>[归档] 历史会话示例</strong>
-              <span>归档会话，可随时恢复</span>
-            </div>
-            <small>5/26</small>
-          </article>
-          <p>以上为产品化空状态示例，不会创建真实会话。</p>
+          <div className="conversation-empty-im__eyebrow">{query || filter !== "ALL" ? "未找到匹配会话" : "暂无会话"}</div>
+          <strong>{query || filter !== "ALL" ? "换个关键词或切回全部会话。" : "点击“新建对话”开始一次协作。"}</strong>
+          <p>发送任务后，这里只展示真实会话；未读、置顶、归档状态来自后端数据，不再用假会话占位。</p>
+          <div className="conversation-empty-im__hints">
+            <span>搜索 Agent / 消息</span>
+            <span>置顶关键协作</span>
+            <span>归档后可恢复</span>
+          </div>
         </div>
       ) : null}
 

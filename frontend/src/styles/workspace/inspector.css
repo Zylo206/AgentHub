@@ -1262,3 +1262,105 @@
   background: #eef4ff !important;
   color: #1456d9 !important;
 }
+
+/* Production polish: keep the right rail readable when it is resized narrow or wide. */
+.workspace-page .workspace-artifacts {
+  background: #fbfbfa !important;
+  color: #1f2329 !important;
+  overflow-y: auto !important;
+}
+
+.workspace-page .workspace-artifacts__resize-handle {
+  left: -8px !important;
+  width: 12px !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+}
+
+.workspace-page .workspace-artifacts__resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 80px 4px;
+  border-radius: 999px;
+  background: rgba(47, 112, 255, 0.28);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.workspace-page .workspace-artifacts__resize-handle:hover::after,
+.workspace-resizing-inspector .workspace-artifacts__resize-handle::after {
+  opacity: 1;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview,
+.workspace-page .workspace-artifacts .artifact-preview__meta,
+.workspace-page .workspace-artifacts .artifact-preview-dock,
+.workspace-page .workspace-artifacts .diff-summary-panel,
+.workspace-page .workspace-artifacts .version-history-panel,
+.workspace-page .workspace-artifacts .artifact-card,
+.workspace-page .workspace-artifacts .approval-gate {
+  overflow: visible !important;
+  background: #ffffff !important;
+  color: #1f2329 !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__meta {
+  display: grid !important;
+  max-height: none !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__meta-right,
+.workspace-page .workspace-artifacts .artifact-preview__line,
+.workspace-page .workspace-artifacts .artifact-inspector-metrics,
+.workspace-page .workspace-artifacts .artifact-delivery-workbench,
+.workspace-page .workspace-artifacts .diff-summary-section,
+.workspace-page .workspace-artifacts .version-history-item {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__line,
+.workspace-page .workspace-artifacts .artifact-card__row,
+.workspace-page .workspace-artifacts .artifact-card__meta,
+.workspace-page .workspace-artifacts .artifact-card__tags {
+  flex-wrap: wrap !important;
+  white-space: normal !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-card__header strong,
+.workspace-page .workspace-artifacts .artifact-preview__meta strong,
+.workspace-page .workspace-artifacts .artifact-preview__line strong,
+.workspace-page .workspace-artifacts .diff-summary-section strong,
+.workspace-page .workspace-artifacts .version-history-item strong {
+  color: #1f2329 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-card__description,
+.workspace-page .workspace-artifacts .artifact-card__id,
+.workspace-page .workspace-artifacts .artifact-preview__meta p,
+.workspace-page .workspace-artifacts .artifact-preview__line,
+.workspace-page .workspace-artifacts .diff-summary-section p,
+.workspace-page .workspace-artifacts .diff-summary-section li {
+  color: #475569 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-inspector-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-related-grid,
+.workspace-page .workspace-artifacts .artifact-delivery-workbench {
+  grid-template-columns: 1fr !important;
+}
+
+.workspace-page .workspace-artifacts textarea,
+.workspace-page .workspace-artifacts input,
+.workspace-page .workspace-artifacts select {
+  max-width: 100% !important;
+  color: #1f2329 !important;
+  background: #ffffff !important;
+}

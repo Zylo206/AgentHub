@@ -6,6 +6,7 @@ import type { Artifact } from "../../features/artifacts/artifactTypes";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { formatId, getIdValue } from "../../utils/id";
 import "../../styles/workspace.css";
+import "../../styles/production-alignment.css";
 
 function getPreviewMode(artifact: Artifact): string {
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {

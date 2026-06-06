@@ -512,13 +512,18 @@ fn start_agenthub_backend(
     working_directory: String,
 ) -> Result<ManagedProcessInfo, String> {
     let java = sanitize_command(&java_command)?;
-    let jar = PathBuf::from(jar_path);
-    if !jar.is_file() {
-        return Err("Backend jar path does not exist.".to_string());
-    }
     let cwd = PathBuf::from(working_directory);
     if !cwd.is_dir() {
         return Err("Working directory does not exist.".to_string());
+    }
+    let configured_jar = PathBuf::from(jar_path);
+    let jar = if configured_jar.is_absolute() {
+        configured_jar
+    } else {
+        cwd.join(configured_jar)
+    };
+    if !jar.is_file() {
+        return Err("Backend jar path does not exist.".to_string());
     }
 
     let recent_output = Arc::new(Mutex::new(VecDeque::with_capacity(40)));

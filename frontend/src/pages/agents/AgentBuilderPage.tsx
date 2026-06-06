@@ -8,7 +8,10 @@ import {
   type ToolCapabilityKey
 } from "../../features/agents/agentTypes";
 import { refineAgentCreationDraft, type AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
+import { LocalCliStatusCards } from "../../features/agents/LocalCliStatusCards";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import "../../styles/workspace.css";
+import "../../styles/production-alignment.css";
 
 const ADAPTER_OPTIONS = ["MOCK", "CODEX", "CLAUDE_CODE", "OPEN_CODE", "OPENAI_COMPATIBLE"] as const;
 
@@ -530,6 +533,25 @@ export function AgentBuilderPage() {
           <span>4. Preferred Adapter</span>
           <span>5. 在 Workspace @Agent</span>
         </div>
+
+        <section className="agent-builder-local-cli-panel" id="local-cli" aria-label="Local CLI adapter status">
+          <div className="agent-builder-local-cli-panel__header">
+            <div>
+              <p className="eyebrow">本地 CLI 状态</p>
+              <h2>Claude Code / Codex 真实接入</h2>
+              <p>
+                这里展示的是后端 Adapter descriptor 的本机探测结果：path、version、help/auth、schema、stream、sandbox。
+                不再使用桥接命令伪装成功，真实执行失败必须分类并 fallback。
+              </p>
+            </div>
+            <span className="agent-builder-depth-badge agent-builder-depth-badge--deep">Headless Artifact-only</span>
+          </div>
+          <LocalCliStatusCards
+            adapters={adapterOptions}
+            selectedAdapterType={preferredAdapterType}
+            onSelectAdapter={setPreferredAdapterType}
+          />
+        </section>
 
         <section className="agent-builder-suggestion-card" aria-label="Agent creation suggestion">
           <div className="agent-builder-suggestion-card__icon">✦</div>

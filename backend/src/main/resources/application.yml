@@ -24,7 +24,7 @@ agenthub:
     storage-dir: ${AGENTHUB_ATTACHMENTS_STORAGE_DIR:${user.home}/.agenthub/agenthub/uploads}
     max-file-size-bytes: ${AGENTHUB_ATTACHMENTS_MAX_FILE_SIZE_BYTES:5242880}
   cors:
-    allowed-origins: ${AGENTHUB_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+    allowed-origins: ${AGENTHUB_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://tauri.localhost,https://tauri.localhost,tauri://localhost}
   memory:
     persistence:
       enabled: ${AGENTHUB_MEMORY_PERSISTENCE_ENABLED:true}
