@@ -1,5 +1,6 @@
 package com.agenthub.api.memory;
 
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.application.memory.MemoryApplicationService;
 import com.agenthub.common.ApiResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,13 +18,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class MemoryController {
 
     private final MemoryApplicationService memoryApplicationService;
+    private final ConversationAccessService conversationAccessService;
 
-    public MemoryController(MemoryApplicationService memoryApplicationService) {
+    public MemoryController(
+            MemoryApplicationService memoryApplicationService,
+            ConversationAccessService conversationAccessService) {
         this.memoryApplicationService = memoryApplicationService;
+        this.conversationAccessService = conversationAccessService;
     }
 
     @GetMapping("/conversations/{conversationId}/memories")
     public ApiResponse<?> listMemories(@PathVariable("conversationId") String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return ApiResponse.success(memoryApplicationService.listMemoriesByConversation(conversationId));
     }
 
@@ -31,6 +37,7 @@ public class MemoryController {
     public ApiResponse<?> listRelevantMemories(
             @PathVariable("conversationId") String conversationId,
             @RequestParam(value = "limit", defaultValue = "6") int limit) {
+        conversationAccessService.requireReadable(conversationId);
         return ApiResponse.success(memoryApplicationService.listRelevantMemories(conversationId, limit));
     }
 
@@ -39,6 +46,7 @@ public class MemoryController {
             @PathVariable("conversationId") String conversationId,
             @PathVariable("messageId") String messageId,
             @RequestBody(required = false) SaveMemoryRequest request) {
+        conversationAccessService.requireWritable(conversationId);
         return ApiResponse.success(
                 memoryApplicationService.saveMessageAsMemory(
                         conversationId,
@@ -55,6 +63,7 @@ public class MemoryController {
             @PathVariable("conversationId") String conversationId,
             @PathVariable("attachmentId") String attachmentId,
             @RequestBody(required = false) SaveMemoryRequest request) {
+        conversationAccessService.requireWritable(conversationId);
         return ApiResponse.success(
                 memoryApplicationService.saveAttachmentAsMemory(
                         conversationId,

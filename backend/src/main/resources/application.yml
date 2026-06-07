@@ -9,6 +9,8 @@ mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
 
 agenthub:
+  auth:
+    enabled: ${AGENTHUB_AUTH_ENABLED:true}
   realtime:
     enabled: ${AGENTHUB_REALTIME_ENABLED:true}
     heartbeat-seconds: ${AGENTHUB_REALTIME_HEARTBEAT_SECONDS:25}

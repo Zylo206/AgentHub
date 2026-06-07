@@ -102,7 +102,10 @@ public class ArtifactController {
                 "RESTORE_SNAPSHOT",
                 "ARTIFACT_SNAPSHOT",
                 snapshotId);
-        Artifact restoredArtifact = artifactApplicationService.restoreSnapshot(snapshotId);
+        Artifact restoredArtifact = artifactApplicationService.restoreSnapshot(
+                snapshotId,
+                request == null ? null : request.baseVersion(),
+                request == null ? null : request.baseContentHash());
         approvalApplicationService.consume(approvalId);
         return ApiResponse.success(restoredArtifact, "Artifact snapshot restored");
     }
@@ -121,7 +124,11 @@ public class ArtifactController {
                 actionType,
                 "ARTIFACT",
                 artifactId);
-        ArtifactApplicationService.ApplyDiffResult result = artifactApplicationService.applyDiff(artifactId, force);
+        ArtifactApplicationService.ApplyDiffResult result = artifactApplicationService.applyDiff(
+                artifactId,
+                force,
+                request == null ? null : request.baseVersion(),
+                request == null ? null : request.baseContentHash());
         approvalApplicationService.consume(approvalId);
         return ApiResponse.success(
                 new ApplyDiffResponse(
@@ -180,6 +187,6 @@ record ApplyDiffResponse(
         String snapshotId,
         boolean conflictBypassed) {}
 
-record ApplyDiffRequest(Boolean force, String approvalId) {}
+record ApplyDiffRequest(Boolean force, String approvalId, Integer baseVersion, String baseContentHash) {}
 
-record RestoreSnapshotRequest(String approvalId) {}
+record RestoreSnapshotRequest(String approvalId, Integer baseVersion, String baseContentHash) {}

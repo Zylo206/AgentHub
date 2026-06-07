@@ -1,5 +1,7 @@
 package com.agenthub.api.common;
 
+import com.agenthub.application.auth.AccessDeniedException;
+import com.agenthub.application.auth.AuthenticationRequiredException;
 import com.agenthub.common.ApiResponse;
 import java.util.NoSuchElementException;
 import org.springframework.http.HttpStatus;
@@ -15,6 +17,19 @@ import org.slf4j.LoggerFactory;
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(AuthenticationRequiredException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthenticationRequiredException(
+            AuthenticationRequiredException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.failure("UNAUTHORIZED", exception.getMessage()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(AccessDeniedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.failure("FORBIDDEN", exception.getMessage()));
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException exception) {

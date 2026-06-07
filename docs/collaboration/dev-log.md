@@ -8995,3 +8995,151 @@
 
 - `cd frontend && npm.cmd run build` 通过。
 - `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Artifact / Approval / Preview 和 1366x768、1536x864、1600x900 layout gate。
+
+## Phase 235：多人协作、账号权限、跨端冲突设计对齐
+
+### 目标
+
+- 对齐 AgentHub 自有生产协作模型：登录、RBAC、组织标签、Conversation 权限、Realtime 授权、Presence、断线恢复和 Artifact 乐观并发。
+- 将这些模式映射到 AgentHub 的 Conversation、Message、Artifact、TaskRun、Approval、Audit、Context、Attachment 和 Memory。
+
+### 修复内容
+
+- 新增 `docs/spec/collaboration-auth-sync-spec.md`，定义：
+  - `AuthPrincipal` / `CurrentUserProvider` / opt-in auth 边界。
+  - `PRIVATE` / `ORG` / `PUBLIC` 三层资源可见性。
+  - Conversation member role：`OWNER` / `EDITOR` / `REVIEWER` / `VIEWER`。
+  - SSE subscription 和 WebSocket control command 的权限校验。
+  - Presence、typing、active Artifact、device connection registry。
+  - Artifact `baseVersion` / `baseContentHash` 乐观并发和 conflict panel。
+  - Force Apply / Restore / Deploy 的高风险 approval 和 audit 要求。
+- 更新 `docs/spec/index.md`，加入多人协作、账号权限和冲突处理 spec。
+- 更新 `docs/plans/next.md`，把 Phase 236-240 作为后续生产化协作优先级。
+
+### 边界
+
+- 默认 memory + MOCK fallback 路径仍不要求登录，避免破坏当前验收主链路。
+- 本轮只落设计和实施边界，不接入半成品认证过滤器。
+- 多端协作先覆盖 Web 多标签页和 Tauri Desktop；移动端仍是后置能力。
+- 冲突处理采用乐观并发，不承诺 CRDT / OT 级实时多人编辑。
+
+## Phase 241：PPT / IDE 验收边界调整与 CSS owner 继续收敛
+
+### 目标
+
+- 按课题验收口径调整 PPT 和代码编辑边界：不追求完整在线 PPT 渲染或 IDE 级代码编辑。
+- 继续 CSS 收敛，只迁低风险组件族，不碰 Workspace 三栏宽度和响应式布局状态机。
+
+### 修复内容
+
+- 新增 `frontend/src/styles/components/agent-create.css`，承接全局 Agent 创建弹窗、本地 CLI 状态卡和响应式规则。
+- 将 Preview 页面最终兜底样式从 `workspace/legacy.css` 迁到 `frontend/src/styles/pages/preview.css`。
+- 从 `frontend/src/styles/layout/workspace-shell.css` 删除 Agent 创建卡片重复规则，layout owner 不再持有 agent-create 组件族。
+- 更新 `docs/plans/css-ownership.md`，新增 `agent-create` owner，并记录本轮迁移。
+- 更新 `docs/plans/next.md`、`docs/product-design.md`、`docs/spec/message-interaction-spec.md`：
+  - PPT 验收为文件级预览壳、metadata、下载入口、Context / Memory 交接。
+  - 代码编辑验收为轻量 Artifact 文本编辑、revision、diff、approval 和 applied revision。
+  - Monaco / CodeMirror、在线 PPT 逐页渲染、完整 IDE 作为后置增强。
+
+### 当前体积
+
+- `workspace/legacy.css`: 17382 行，较上轮 17710 行减少 328 行。
+- `layout/workspace-shell.css`: 334 行，较上轮 396 行减少 62 行。
+- `styles/pages/preview.css`: 239 行。
+- `styles/components/agent-create.css`: 110 行。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Agent 创建、Artifact / Approval / Preview、可选 REJECTION 恢复和 1366x768 / 1536x864 / 1600x900 layout gate。
+
+### 边界
+
+- 本轮未继续迁移 `coze-light.css`、`workspace/message.css`、`workspace/inspector.css`。
+- Preview 仍是 Local Preview / Static Snapshot / Not Cloud Deploy。
+- PPT 和代码编辑边界是验收口径调整，不代表实现了完整富媒体编辑或 IDE。
+
+## Phase 236-240：默认登录、权限、Realtime Presence 和 Artifact 冲突闭环
+
+### 修复内容
+
+- 删除协作权限 spec 和计划中的外部项目引用，改为 AgentHub 自有生产协作模型。
+- 默认启用 `agenthub.auth.enabled=true`，新增 `/api/auth/login`、`/api/auth/me`、`/api/auth/logout`。
+- 新增内置 demo/admin/reviewer 本地账号；前端和 smoke/E2E 脚本自动使用 `demo/demo`，避免破坏 memory + MOCK 验收链路。
+- Conversation 增加 `ownerUserId`、`orgTag`、`visibility`、`memberRoles`，memory/JDBC 仓储保留兼容默认值。
+- 会话、消息、附件、上下文、Memory、TaskRun、Artifact、Approval、Audit、Deployment、Realtime control 的主链路入口补充服务层或 API 层权限校验。
+- SSE 订阅支持 `access_token`，建立连接前校验 Conversation 读权限。
+- 新增 Presence API：`POST /api/conversations/{conversationId}/presence` 和 `GET /api/conversations/{conversationId}/presence`，发布 `PRESENCE_UPDATED` 事件。
+- Apply / Restore / Deploy 支持可选 `baseVersion` 和 `baseContentHash`，不匹配时返回 `409 CONFLICT`。
+
+### 验证
+
+- `cd backend && mvn -q -DskipTests compile` 通过。
+- `cd backend && mvn -q -DskipTests package` 通过；期间停止了占用 8080 并锁定 target jar 的旧 backend 进程。
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/smoke-test.mjs` 通过。
+- `node scripts/sse-smoke-test.mjs` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路和 1366x768 / 1536x864 / 1600x900 layout gate。
+- 轻量 REST 验证通过：Conversation visibility 更新为 `ORG/default-org`、`reviewer-user` 成员增删、Presence heartbeat/list 返回 1 个在线端。
+- 轻量 API smoke 通过：无 token 请求返回 401、Presence heartbeat 写入成功、stale Artifact restore 返回 409。
+
+### 边界
+
+- 当前认证是 AgentHub 内置 bearer token demo 实现，不是企业 IAM / SSO / OAuth / LDAP。
+- 默认登录已启用，但本地 demo 自动登录；真实账号体系、密码存储和用户管理仍是后续生产硬化项。
+- Presence 是协作提示，不是权限或审计来源。
+- Artifact 冲突采用乐观并发，不实现 CRDT / OT。
+
+## Phase 242：多人协作 UI、会话权限面板和 Artifact 冲突提示
+
+### 修复内容
+
+- Workspace 新增 `useWorkspacePresence` 和 `WorkspacePresenceBar`：
+  - 定期向 Presence API 写入当前用户、设备、输入状态、active Artifact 和 SSE 状态。
+  - 显示在线端、正在输入、当前用户和设备标识。
+  - SSE 客户端将 `PRESENCE_UPDATED` 作为已知事件处理，不再落入 unknown warning。
+- Workspace 新增 `WorkspaceAccessPanel`：
+  - 显示 Conversation visibility、owner、memberRoles。
+  - 支持 owner/admin 通过现有后端接口更新 `PRIVATE / ORG / PUBLIC`、组织标签、成员角色和移除成员。
+  - 权限不足仍由后端返回 403，前端不伪造可管理权限。
+- Artifact 高风险操作接入乐观并发基线：
+  - Apply / Force Apply 使用父 Artifact `version` 作为 baseVersion。
+  - Restore 使用 snapshot `version` 作为 baseVersion。
+  - Deploy 使用当前 Artifact `version` 作为 baseVersion。
+  - 409 CONFLICT 会进入 Artifact 冲突提示，而不是只作为普通错误条。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `cd backend && mvn -q -DskipTests compile` 通过。
+- `cd backend && mvn -q -DskipTests package` 通过；验证前重启了锁定 jar 的本地 backend 进程。
+- `node scripts/smoke-test.mjs` 通过。
+- `node scripts/sse-smoke-test.mjs` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路和 1366x768 / 1536x864 / 1600x900 layout gate。
+
+### 边界
+
+- Presence 是产品协作提示，不是 CRDT / OT，也不是多人同文档实时编辑。
+- 当前权限管理仍基于内置 bearer-token demo 账号；真实用户表、密码哈希、邀请、SSO / OAuth / LDAP 仍未实现。
+- Artifact 冲突仍是乐观并发控制，不提供三方合并或可视化冲突编辑器。
+
+## Phase 243：Agents 管理台布局可用性修复
+
+### 修复内容
+
+- 修复 `/agents` 页面被 legacy grid 样式挤压的问题：
+  - `AgentBuilderPage` 改为 `agent-builder-content` 两栏结构：左侧 Agent Directory，右侧 Create Agent / Local CLI / Adapter Test 纵向主栈。
+  - `agent-builder-shell` 改回 flex column，避免旧 `grid-column` 规则生成隐式窄列。
+  - `styles/pages/agents.css` 接管页面 owner 样式，覆盖 legacy 中导致文字竖排、右栏塌缩、按钮高度异常和内容裁切的规则。
+- 修复顶部 `⌘ / 检查本地 CLI` 入口：
+  - `/agents#local-cli` 初次进入和 hashchange 都会滚动到 Local CLI Health 区域。
+  - Local CLI 卡片保持 Headless Artifact-only 边界表达，不再显示桥接命令心智。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过。
+- 浏览器实测：
+  - `1920x768`：无横向滚动，Create Agent 区域宽度正常，输入框横排显示。
+  - `1366x768`：无横向滚动，shell 右边界在视口内，Create Agent 和 Local CLI 不再被裁切。
+  - `/agents#local-cli`：自动滚动到 Local CLI，目标区顶部约 86px，宽度正常。

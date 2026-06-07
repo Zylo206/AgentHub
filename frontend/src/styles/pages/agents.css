@@ -1,10 +1,9 @@
 .agent-builder-section-map {
-  grid-column: 2;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  width: min(960px, calc(100% - 48px));
-  margin: 10px auto 4px;
+  width: 100%;
+  margin: 0;
 }
 
 .agent-builder-section-map a {
@@ -33,7 +32,7 @@
 }
 
 .agent-builder-page [id] {
-  scroll-margin-top: 18px;
+  scroll-margin-top: 86px;
 }
 
 .agent-builder-advanced-config {
@@ -60,5 +59,332 @@
   .agent-builder-section-map {
     grid-template-columns: 1fr;
     width: calc(100% - 28px);
+  }
+}
+
+/* Agents page owner layer: override legacy workspace grid patches. */
+.agent-builder-page.simple-page {
+  min-height: calc(100dvh - 68px) !important;
+  padding: 18px 22px 32px !important;
+  overflow-x: hidden !important;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(37, 99, 235, 0.08), transparent 28%),
+    linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%) !important;
+}
+
+.agent-builder-page .agent-builder-shell {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+  grid-auto-columns: auto !important;
+  gap: 18px !important;
+  box-sizing: border-box !important;
+  width: min(1420px, 100%) !important;
+  max-width: 1420px !important;
+  min-height: auto !important;
+  margin: 0 auto !important;
+  padding: 20px !important;
+  overflow: visible !important;
+  border-radius: 26px !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+}
+
+.agent-builder-page .agent-builder-hero {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  margin: 0 !important;
+  padding: 22px !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  border-radius: 22px !important;
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.98)) !important;
+  color: #0f172a !important;
+}
+
+.agent-builder-page .agent-builder-hero h1,
+.agent-builder-page .agent-builder-hero p {
+  color: #0f172a !important;
+}
+
+.agent-builder-page .agent-builder-hero p {
+  max-width: 720px !important;
+  color: #475569 !important;
+}
+
+.agent-builder-page .agent-builder-section-map {
+  grid-column: auto !important;
+}
+
+.agent-builder-page .agent-builder-hero,
+.agent-builder-page .agent-builder-section-map,
+.agent-builder-page .agent-builder-content {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+}
+
+.agent-builder-content {
+  display: grid;
+  grid-template-columns: minmax(250px, 280px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  min-width: 0;
+}
+
+.agent-builder-main-stack {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.agent-builder-page .agent-builder-left-rail {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  position: sticky !important;
+  top: 84px !important;
+  display: grid !important;
+  gap: 12px !important;
+  width: auto !important;
+  max-height: calc(100dvh - 102px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: auto !important;
+  background: transparent !important;
+  color: #0f172a !important;
+}
+
+.agent-builder-page .agent-builder-flow,
+.agent-builder-page .conversational-agent-panel,
+.agent-builder-page .agent-builder-layout,
+.agent-builder-page .agent-builder-local-cli-panel,
+.agent-builder-page .adapter-test-panel,
+.agent-builder-page .builder-feedback,
+.agent-builder-page .builder-summary,
+.agent-builder-page .agent-builder-muted {
+  grid-column: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+.agent-builder-page .agent-builder-flow {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.agent-builder-page .agent-builder-flow span {
+  display: grid !important;
+  place-items: center !important;
+  min-height: 34px !important;
+  padding: 7px 8px !important;
+  border: 1px solid rgba(37, 99, 235, 0.16) !important;
+  border-radius: 999px !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  text-align: center !important;
+}
+
+.agent-builder-page .conversational-agent-panel,
+.agent-builder-page .agent-builder-local-cli-panel,
+.agent-builder-page .adapter-test-panel {
+  display: grid !important;
+  gap: 16px !important;
+  padding: 18px !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  border-radius: 22px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06) !important;
+}
+
+.agent-builder-page .conversational-agent-panel__header,
+.agent-builder-page .agent-builder-local-cli-panel__header,
+.agent-builder-page .adapter-test-panel__header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+  padding-bottom: 0 !important;
+  border-bottom: 0 !important;
+}
+
+.agent-builder-page .conversational-agent-panel h2,
+.agent-builder-page .agent-builder-local-cli-panel h2,
+.agent-builder-page .adapter-test-panel h2,
+.agent-builder-page .builder-summary h2 {
+  margin: 0 !important;
+  color: #0f172a !important;
+}
+
+.agent-builder-page .conversational-agent-panel p,
+.agent-builder-page .agent-builder-local-cli-panel p,
+.agent-builder-page .adapter-test-panel p,
+.agent-builder-page .builder-summary p {
+  color: #475569 !important;
+}
+
+.agent-builder-page .agent-builder-field {
+  min-width: 0 !important;
+}
+
+.agent-builder-page .agent-builder-field span,
+.agent-builder-page .agent-builder-capability-fieldset legend {
+  color: #0f172a !important;
+  writing-mode: horizontal-tb !important;
+  white-space: normal !important;
+}
+
+.agent-builder-page .agent-builder-field input,
+.agent-builder-page .agent-builder-field textarea,
+.agent-builder-page .agent-builder-field select {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 42px !important;
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+}
+
+.agent-builder-page .agent-builder-field textarea {
+  min-height: 110px !important;
+}
+
+.agent-builder-page .agent-builder-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr) !important;
+  gap: 16px !important;
+  align-items: start !important;
+}
+
+.agent-builder-page .agent-builder-form,
+.agent-builder-page .agent-builder-preview {
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 18px !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  border-radius: 20px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.agent-builder-page .agent-builder-preview {
+  position: sticky !important;
+  top: 84px !important;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06) !important;
+}
+
+.agent-builder-page .agent-builder-preview h2,
+.agent-builder-page .agent-builder-preview p {
+  color: #0f172a !important;
+  overflow-wrap: anywhere !important;
+}
+
+.agent-builder-page .agent-builder-actions {
+  display: flex !important;
+  justify-content: flex-start !important;
+}
+
+.agent-builder-page .agent-builder-actions .primary-button,
+.agent-builder-page .conversational-agent-panel__actions button,
+.agent-builder-page .adapter-test-form button,
+.agent-builder-page .local-cli-status-card__footer button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 40px !important;
+  padding: 8px 14px !important;
+  min-width: max-content !important;
+  white-space: normal !important;
+}
+
+.agent-builder-page .agent-builder-rail-card,
+.agent-builder-page .agent-builder-rail-section {
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05) !important;
+}
+
+.agent-builder-page .agent-builder-rail-card p,
+.agent-builder-page .agent-builder-rail-section small,
+.agent-builder-page .agent-builder-rail-title {
+  color: #475569 !important;
+}
+
+.agent-builder-page .agent-builder-rail-card__header strong,
+.agent-builder-page .agent-builder-rail-card__header span,
+.agent-builder-page .agent-builder-adapter-row strong {
+  color: #0f172a !important;
+}
+
+.agent-builder-page .agent-builder-rail-new-button {
+  min-height: 42px !important;
+  border-radius: 14px !important;
+}
+
+.agent-builder-page .local-cli-status-grid {
+  grid-template-columns: repeat(2, minmax(260px, 1fr)) !important;
+}
+
+.agent-builder-page .local-cli-status-card {
+  min-width: 0 !important;
+}
+
+.agent-builder-page .local-cli-status-card__facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 1180px) {
+  .agent-builder-content {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .agent-builder-page .agent-builder-layout,
+  .agent-builder-page .local-cli-status-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agent-builder-page .agent-builder-preview {
+    position: static !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .agent-builder-page.simple-page {
+    padding: 12px !important;
+  }
+
+  .agent-builder-page .agent-builder-shell {
+    width: 100% !important;
+    padding: 14px !important;
+  }
+
+  .agent-builder-content {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-builder-page .agent-builder-left-rail {
+    position: static !important;
+    max-height: none !important;
+  }
+
+  .agent-builder-page .agent-builder-section-map,
+  .agent-builder-page .agent-builder-flow {
+    grid-template-columns: 1fr !important;
+  }
+
+  .agent-builder-page .conversational-agent-panel__header,
+  .agent-builder-page .agent-builder-local-cli-panel__header,
+  .agent-builder-page .adapter-test-panel__header,
+  .agent-builder-page .agent-builder-hero {
+    flex-direction: column !important;
   }
 }

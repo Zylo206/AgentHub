@@ -148,3 +148,7 @@ Preview 消息：
 - Artifact 卡片只展示当前已知 metadata；真实质量仍由 Artifact Studio 和 Adapter quality gate 负责。
 - Deploy Preview 仍是本地静态预览。
 - Message Action Bar 是前端产品化入口，不改变后端 Orchestrator 主链路。
+## Coursework Boundary Update
+
+- PPT is accepted as a file-level preview capability: show metadata, preview shell, download action, and allow the file or related excerpt to be added to Context / Memory. Full online slide rendering is not required.
+- Code editing is accepted as lightweight Artifact editing: textarea content editing, revision instruction, diff summary, approval, and applied revision. Full IDE behavior such as Monaco, CodeMirror, AST patching, Git merge, or terminal sessions is not required.

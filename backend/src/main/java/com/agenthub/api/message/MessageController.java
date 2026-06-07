@@ -1,6 +1,7 @@
 package com.agenthub.api.message;
 
 import com.agenthub.application.attachment.AttachmentApplicationService;
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.application.orchestrator.OrchestratorAutoTriggerService;
 import com.agenthub.common.ApiResponse;
@@ -27,14 +28,17 @@ public class MessageController {
     private final MessageApplicationService messageApplicationService;
     private final OrchestratorAutoTriggerService orchestratorAutoTriggerService;
     private final AttachmentApplicationService attachmentApplicationService;
+    private final ConversationAccessService conversationAccessService;
 
     public MessageController(
             MessageApplicationService messageApplicationService,
             OrchestratorAutoTriggerService orchestratorAutoTriggerService,
-            AttachmentApplicationService attachmentApplicationService) {
+            AttachmentApplicationService attachmentApplicationService,
+            ConversationAccessService conversationAccessService) {
         this.messageApplicationService = messageApplicationService;
         this.orchestratorAutoTriggerService = orchestratorAutoTriggerService;
         this.attachmentApplicationService = attachmentApplicationService;
+        this.conversationAccessService = conversationAccessService;
     }
 
     @PostMapping
@@ -88,6 +92,7 @@ public class MessageController {
             @PathVariable("conversationId") String conversationId,
             @PathVariable("messageId") String messageId,
             @Valid @RequestBody(required = false) RunOrchestratorFromMessageRequest request) {
+        conversationAccessService.requireWritable(conversationId);
         String selectedAgentId = request == null ? null : request.selectedAgentId();
         String approvalId = request == null ? null : request.approvalId();
         return ApiResponse.success(
@@ -99,6 +104,7 @@ public class MessageController {
     public ApiResponse<?> getOrchestratorTriggerSuggestion(
             @PathVariable("conversationId") String conversationId,
             @PathVariable("messageId") String messageId) {
+        conversationAccessService.requireReadable(conversationId);
         return ApiResponse.success(
                 orchestratorAutoTriggerService.evaluateMessage(conversationId, messageId),
                 "Orchestrator trigger suggestion evaluated");

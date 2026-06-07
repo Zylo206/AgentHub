@@ -29,6 +29,7 @@ const REVISION_INSTRUCTION = [
   `${TEST_MARKER}: change the primary CTA copy to Continue securely,`,
   "add a visible loading-state note, and keep verification-code login."
 ].join(" ");
+let authToken = "";
 
 function pass(message) {
   console.log(`[PASS] ${message}`);
@@ -105,6 +106,9 @@ async function loadPlaywright() {
 }
 
 async function request(pathname, init = {}) {
+  if (!authToken && pathname !== "/api/auth/login") {
+    await loginForE2e();
+  }
   let response;
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
   try {
@@ -112,10 +116,12 @@ async function request(pathname, init = {}) {
       ...init,
       headers: isFormData
         ? {
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             ...(init.headers || {})
           }
         : {
             "Content-Type": "application/json",
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             ...(init.headers || {})
           }
     });
@@ -140,6 +146,19 @@ async function request(pathname, init = {}) {
     throw new Error(payload?.message || payload?.errorCode || `API failure from ${pathname}`);
   }
   return payload.data;
+}
+
+async function loginForE2e() {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "demo", password: "demo" })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.data?.token) {
+    throw new Error(payload?.message || `Browser E2E auth login failed: HTTP ${response.status}`);
+  }
+  authToken = payload.data.token;
 }
 
 async function waitForApiState(label, producer, predicate, timeout = 30000, interval = 500) {

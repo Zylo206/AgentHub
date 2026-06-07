@@ -2,7 +2,10 @@
 import { Link } from "react-router-dom";
 import {
   getAgents,
-  getArtifact
+  getArtifact,
+  removeConversationMember,
+  updateConversationVisibility,
+  upsertConversationMember
 } from "../../api/agenthubApi";
 import type { AdapterQualityMetrics } from "../../api/agenthubApi";
 import { AdapterQualityDashboard } from "../../features/agents/AdapterQualityDashboard";
@@ -37,9 +40,11 @@ import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
 import { WorkspaceArtifactInspectorShell } from "./WorkspaceArtifactInspectorShell";
+import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 import { WorkspaceChatLane } from "./WorkspaceChatLane";
 import { WorkspaceDiagnosticsDrawer } from "./WorkspaceDiagnosticsDrawer";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspacePresenceBar } from "./WorkspacePresenceBar";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import { useArtifactInspectorLayout } from "./useArtifactInspectorLayout";
@@ -49,6 +54,7 @@ import { useWorkspaceConversationActions } from "./useWorkspaceConversationActio
 import { useWorkspaceDataLoaders } from "./useWorkspaceDataLoaders";
 import { useWorkspaceInlineAgentCreation } from "./useWorkspaceInlineAgentCreation";
 import { useWorkspaceMessageActions } from "./useWorkspaceMessageActions";
+import { useWorkspacePresence } from "./useWorkspacePresence";
 import { useWorkspaceRealtime } from "./useWorkspaceRealtime";
 import { useWorkspaceTaskRunControls } from "./useWorkspaceTaskRunControls";
 import "../../styles/workspace.css";
@@ -146,6 +152,7 @@ export function WorkspacePage() {
   const [runningDemoTask, setRunningDemoTask] = useState(false);
   const [showDebugActions, setShowDebugActions] = useState(false);
   const [activeDiagnosticPanel, setActiveDiagnosticPanel] = useState<DiagnosticPanelKey | null>(null);
+  const [savingAccessPolicy, setSavingAccessPolicy] = useState(false);
   const [artifactInspectorCollapsed, setArtifactInspectorCollapsed] = useState(false);
   const { workspaceStyle, onArtifactInspectorResizeStart } = useArtifactInspectorLayout(artifactInspectorCollapsed);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
@@ -288,6 +295,17 @@ export function WorkspacePage() {
     loadConversationData,
     loadConversationIndex,
     setStreamingPreviewsByStepId
+  });
+  const {
+    currentUser,
+    deviceId: presenceDeviceId,
+    presenceError,
+    presenceRecords
+  } = useWorkspacePresence({
+    currentConversationId,
+    draftMessage,
+    selectedArtifactId,
+    realtimeStatus
   });
   const {
     deployIntentsByMessageId,
@@ -575,6 +593,74 @@ export function WorkspacePage() {
     setSelectedAgent(null);
   }
 
+  function replaceConversation(updatedConversation: Conversation) {
+    setConversations((current) =>
+      current.map((conversation) =>
+        getIdValue(conversation.id) === getIdValue(updatedConversation.id) ? updatedConversation : conversation
+      )
+    );
+  }
+
+  async function handleUpdateConversationVisibility(
+    visibility: "PRIVATE" | "ORG" | "PUBLIC",
+    orgTag: string | null
+  ) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    setSavingAccessPolicy(true);
+    setErrorMessage(null);
+    try {
+      const updatedConversation = await updateConversationVisibility(currentConversationId, visibility, orgTag);
+      replaceConversation(updatedConversation);
+      await loadConversationIndex();
+      setOperationMessage("会话权限已更新。");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingAccessPolicy(false);
+    }
+  }
+
+  async function handleUpsertConversationMember(userId: string, memberRole: string) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    setSavingAccessPolicy(true);
+    setErrorMessage(null);
+    try {
+      const updatedConversation = await upsertConversationMember(currentConversationId, userId, memberRole);
+      replaceConversation(updatedConversation);
+      await loadConversationIndex();
+      setOperationMessage(`成员 ${userId} 已设置为 ${memberRole}。`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingAccessPolicy(false);
+    }
+  }
+
+  async function handleRemoveConversationMember(userId: string) {
+    if (!currentConversationId) {
+      return;
+    }
+
+    setSavingAccessPolicy(true);
+    setErrorMessage(null);
+    try {
+      const updatedConversation = await removeConversationMember(currentConversationId, userId);
+      replaceConversation(updatedConversation);
+      await loadConversationIndex();
+      setOperationMessage(`成员 ${userId} 已移除。`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingAccessPolicy(false);
+    }
+  }
+
   const diagnosticSections = {
     taskrun: (
       <TaskRunPanel
@@ -663,6 +749,12 @@ export function WorkspacePage() {
           realtimeStatus={realtimeStatus}
           activeRealtimeRunSummary={activeRealtimeRunSummary}
         />
+        <WorkspacePresenceBar
+          currentUser={currentUser}
+          deviceId={presenceDeviceId}
+          error={presenceError}
+          records={presenceRecords}
+        />
 
         {errorMessage ? (
           <div className="workspace-error">
@@ -704,6 +796,13 @@ export function WorkspacePage() {
           pinnedContextCount={pinnedContexts.length}
           memoryCount={memories.length}
           artifactCount={artifacts.length}
+        />
+        <WorkspaceAccessPanel
+          conversation={currentConversation}
+          saving={savingAccessPolicy}
+          onUpdateVisibility={handleUpdateConversationVisibility}
+          onUpsertMember={handleUpsertConversationMember}
+          onRemoveMember={handleRemoveConversationMember}
         />
 
         {selectedAgent ? (

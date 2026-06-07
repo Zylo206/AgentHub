@@ -4,9 +4,22 @@ This is the default handoff entry for AgentHub. Every Agent should read this fil
 
 ## Current Stage
 
-AgentHub is in late MVP enhancement. The next stage is to keep moving from half-real / static fallback toward real dynamic capability. Demo video, mobile, real deployment platforms, and multi-node event bus are not current priorities. Desktop support is now an optional Tauri shell track for local file access, system notifications, and Agent process management; it must not replace the Web main client or become a default runtime dependency. Full multi-provider token streaming is not current priority; `OPENAI_COMPATIBLE` streaming HTTP v1 is now implemented as an opt-in execution-experience enhancement.
+AgentHub is in late MVP enhancement. The next stage is to keep moving from half-real / static fallback toward real dynamic capability. Demo video, mobile, real deployment platforms, PPT full online slide rendering, full IDE code editing, and multi-node event bus are not current priorities. Desktop support is now an optional Tauri shell track for local file access, system notifications, and Agent process management; it must not replace the Web main client or become a default runtime dependency. Full multi-provider token streaming is not current priority; `OPENAI_COMPATIBLE` streaming HTTP v1 is now implemented as an opt-in execution-experience enhancement. PPT acceptance is file-level preview/download plus Context/Memory handoff; code editing acceptance is lightweight Artifact edit/revision/diff/approval rather than Monaco/CodeMirror.
 
 ## Current Top Priorities
+
+0. **Align production collaboration, auth, and conflict design**
+   - `Done`: `docs/spec/collaboration-auth-sync-spec.md` captures the AgentHub-specific design for multi-user collaboration, account permissions, organization scopes, realtime authorization, presence, reconnect recovery, and Artifact optimistic conflict handling.
+   - `Design source`: AgentHub-owned production collaboration model: bearer-token login, role / org tags, private / organization / public resource visibility, realtime authorization, presence, reconnect recovery, and Artifact optimistic concurrency.
+   - `Boundary`: this is mapped to AgentHub resources: Conversation, Message, Artifact, TaskRun, Approval, Audit, Context, Attachment, and Memory.
+   - `Boundary`: auth is now enabled by default; frontend and smoke scripts use the demo account automatically so memory + MOCK fallback remains locally verifiable.
+   - `Done`: default login is enabled with AgentHub bearer-token demo accounts; frontend, smoke, SSE smoke, and browser E2E authenticate automatically.
+   - `Done`: Conversation has owner / org / visibility / member role metadata, with memory/JDBC compatibility defaults.
+   - `Done`: main service/API paths enforce conversation read/write authorization, SSE subscription authorization, presence heartbeat/list, and Artifact optimistic conflict checks for Apply / Restore / Deploy.
+   - `Done`: Workspace now has a lightweight Presence bar for online devices, typing state, active Artifact, and current user context.
+   - `Done`: Workspace now has a Conversation access panel for visibility, org tag, member role upsert, and member removal through backend-authorized APIs.
+   - `Done`: Artifact Apply / Restore / Deploy UI now sends baseVersion and surfaces 409 stale-operation conflicts as a product conflict notice.
+   - `Next`: harden real user management, persistent account storage, invite/member directory flows, and broader permission coverage for less-used maintenance endpoints.
 
 1. **Monitor real Adapter output quality convergence**
    - Focus on `OPENAI_COMPATIBLE -> REAL_FIRST -> REAL_ADAPTER Artifact`.

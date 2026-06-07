@@ -5,6 +5,7 @@ import com.agenthub.domain.conversation.Conversation;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.conversation.ConversationRepository;
 import com.agenthub.domain.conversation.ConversationType;
+import com.agenthub.domain.conversation.ConversationVisibility;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -28,9 +29,9 @@ public class JdbcConversationRepository implements ConversationRepository {
     public Conversation save(Conversation conversation) {
         String sql = """
                 REPLACE INTO agenthub_conversations
-                (id, title, type, participant_agent_ids_json, pinned, archived, unread_count,
+                (id, title, type, participant_agent_ids_json, owner_user_id, org_tag, visibility, member_roles_json, pinned, archived, unread_count,
                  last_read_at, last_message_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open();
                 var statement = connection.prepareStatement(sql)) {
@@ -39,13 +40,17 @@ public class JdbcConversationRepository implements ConversationRepository {
             statement.setString(3, conversation.getType().name());
             statement.setString(4, JdbcSerializationSupport.toJson(
                     conversation.getParticipantAgentIds().stream().map(AgentId::value).toList()));
-            statement.setBoolean(5, conversation.isPinned());
-            statement.setBoolean(6, conversation.isArchived());
-            statement.setInt(7, conversation.getUnreadCount());
-            statement.setTimestamp(8, JdbcSerializationSupport.timestamp(conversation.getLastReadAt()));
-            statement.setTimestamp(9, JdbcSerializationSupport.timestamp(conversation.getLastMessageAt()));
-            statement.setTimestamp(10, JdbcSerializationSupport.timestamp(conversation.getCreatedAt()));
-            statement.setTimestamp(11, JdbcSerializationSupport.timestamp(conversation.getUpdatedAt()));
+            statement.setString(5, conversation.getOwnerUserId());
+            statement.setString(6, conversation.getOrgTag());
+            statement.setString(7, conversation.getVisibility().name());
+            statement.setString(8, JdbcSerializationSupport.toJson(conversation.getMemberRoles()));
+            statement.setBoolean(9, conversation.isPinned());
+            statement.setBoolean(10, conversation.isArchived());
+            statement.setInt(11, conversation.getUnreadCount());
+            statement.setTimestamp(12, JdbcSerializationSupport.timestamp(conversation.getLastReadAt()));
+            statement.setTimestamp(13, JdbcSerializationSupport.timestamp(conversation.getLastMessageAt()));
+            statement.setTimestamp(14, JdbcSerializationSupport.timestamp(conversation.getCreatedAt()));
+            statement.setTimestamp(15, JdbcSerializationSupport.timestamp(conversation.getUpdatedAt()));
             statement.executeUpdate();
             return conversation;
         } catch (SQLException exception) {
@@ -100,6 +105,10 @@ public class JdbcConversationRepository implements ConversationRepository {
                 JdbcSerializationSupport.stringList(resultSet.getString("participant_agent_ids_json")).stream()
                         .map(AgentId::new)
                         .toList(),
+                resultSet.getString("owner_user_id"),
+                resultSet.getString("org_tag"),
+                parseVisibility(resultSet.getString("visibility")),
+                JdbcSerializationSupport.stringMap(resultSet.getString("member_roles_json")),
                 resultSet.getBoolean("pinned"),
                 resultSet.getBoolean("archived"),
                 resultSet.getInt("unread_count"),
@@ -118,6 +127,10 @@ public class JdbcConversationRepository implements ConversationRepository {
                         title VARCHAR(512) NOT NULL,
                         type VARCHAR(64) NOT NULL,
                         participant_agent_ids_json TEXT,
+                        owner_user_id VARCHAR(128) DEFAULT 'demo-user',
+                        org_tag VARCHAR(128) DEFAULT 'DEFAULT',
+                        visibility VARCHAR(32) DEFAULT 'PRIVATE',
+                        member_roles_json TEXT,
                         pinned BOOLEAN DEFAULT FALSE,
                         archived BOOLEAN DEFAULT FALSE,
                         unread_count INT DEFAULT 0,
@@ -128,6 +141,10 @@ public class JdbcConversationRepository implements ConversationRepository {
                     )
                     """);
             ensureColumn(connection, "agenthub_conversations", "pinned", "BOOLEAN DEFAULT FALSE");
+            ensureColumn(connection, "agenthub_conversations", "owner_user_id", "VARCHAR(128) DEFAULT 'demo-user'");
+            ensureColumn(connection, "agenthub_conversations", "org_tag", "VARCHAR(128) DEFAULT 'DEFAULT'");
+            ensureColumn(connection, "agenthub_conversations", "visibility", "VARCHAR(32) DEFAULT 'PRIVATE'");
+            ensureColumn(connection, "agenthub_conversations", "member_roles_json", "TEXT");
             ensureColumn(connection, "agenthub_conversations", "archived", "BOOLEAN DEFAULT FALSE");
             ensureColumn(connection, "agenthub_conversations", "unread_count", "INT DEFAULT 0");
             ensureColumn(connection, "agenthub_conversations", "last_read_at", "TIMESTAMP NULL");
@@ -147,6 +164,17 @@ public class JdbcConversationRepository implements ConversationRepository {
         }
         try (var statement = connection.createStatement()) {
             statement.executeUpdate("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + definition);
+        }
+    }
+
+    private ConversationVisibility parseVisibility(String value) {
+        if (value == null || value.isBlank()) {
+            return ConversationVisibility.PRIVATE;
+        }
+        try {
+            return ConversationVisibility.valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            return ConversationVisibility.PRIVATE;
         }
     }
 }

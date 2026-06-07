@@ -11,6 +11,7 @@ const REQUIRE_REAL_STREAMING_CONTROL =
   process.env.AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CONTROL === "true" ||
   process.env.AGENTHUB_SSE_SMOKE_REQUIRE_REAL_STREAMING_CANCEL === "true";
 const STREAMING_CANCEL_TIMEOUT_MS = Number(process.env.AGENTHUB_SSE_SMOKE_STREAMING_CANCEL_TIMEOUT_MS || (REQUIRE_REAL_STREAMING_CONTROL ? 180000 : 10000));
+let authToken = "";
 
 function pass(message) {
   console.log(`[PASS] ${message}`);
@@ -36,12 +37,16 @@ function getIdValue(value) {
 }
 
 async function request(path, init = {}) {
+  if (!authToken && path !== "/api/auth/login") {
+    await loginForSseSmoke();
+  }
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         ...(init.headers || {})
       }
     });
@@ -55,6 +60,19 @@ async function request(path, init = {}) {
     throw new Error(payload?.message || `HTTP ${response.status}`);
   }
   return payload.data;
+}
+
+async function loginForSseSmoke() {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "demo", password: "demo" })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.data?.token) {
+    throw new Error(payload?.message || `SSE smoke auth login failed: HTTP ${response.status}`);
+  }
+  authToken = payload.data.token;
 }
 
 function parseSseBlock(block) {
@@ -85,7 +103,10 @@ function parseEventPayload(event) {
 
 async function collectSseEvents(conversationId, expectedEventTypes, trigger) {
   const controller = new AbortController();
-  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events`, {
+  if (!authToken) {
+    await loginForSseSmoke();
+  }
+  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events?access_token=${encodeURIComponent(authToken)}`, {
     signal: controller.signal,
     headers: { Accept: "text/event-stream" }
   });
@@ -147,7 +168,10 @@ async function collectSseEvents(conversationId, expectedEventTypes, trigger) {
 
 async function collectReplayedSseEvents(conversationId, lastEventId, expectedEventTypes) {
   const controller = new AbortController();
-  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events`, {
+  if (!authToken) {
+    await loginForSseSmoke();
+  }
+  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events?access_token=${encodeURIComponent(authToken)}`, {
     signal: controller.signal,
     headers: {
       Accept: "text/event-stream",
@@ -211,7 +235,10 @@ async function collectReplayedSseEvents(conversationId, lastEventId, expectedEve
 
 async function waitForSseEvent(conversationId, expectedEventType, trigger, timeoutMs = 10000) {
   const controller = new AbortController();
-  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events`, {
+  if (!authToken) {
+    await loginForSseSmoke();
+  }
+  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events?access_token=${encodeURIComponent(authToken)}`, {
     signal: controller.signal,
     headers: { Accept: "text/event-stream" }
   });

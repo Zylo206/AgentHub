@@ -5,6 +5,10 @@ export interface Conversation {
   title: string;
   type: string;
   participantAgentIds: IdValue[];
+  ownerUserId?: string;
+  orgTag?: string;
+  visibility?: "PRIVATE" | "ORG" | "PUBLIC";
+  memberRoles?: Record<string, string>;
   pinned?: boolean;
   archived?: boolean;
   unreadCount?: number;

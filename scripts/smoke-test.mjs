@@ -37,6 +37,7 @@ const SMOKE_ATTACHMENTS = [
     contentPreview: "Smoke attachment: preserve verification-code login, blue CTA, and review notes."
   }
 ];
+let authToken = "";
 
 const DEMO_PROMPT = "帮我生成一个 React 登录页面，支持邮箱登录和验证码登录，同时生成 README，并检查代码质量。";
 const ACTIVE_DEMO_PROMPT = EXPECT_REVIEW_QUALITY_REJECTION
@@ -75,6 +76,9 @@ function getIdValue(value) {
 }
 
 async function request(path, init = {}) {
+  if (!authToken && path !== "/api/auth/login") {
+    await loginForSmoke();
+  }
   let response;
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
   try {
@@ -82,10 +86,12 @@ async function request(path, init = {}) {
       ...init,
       headers: isFormData
         ? {
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             ...(init.headers || {})
           }
         : {
             "Content-Type": "application/json",
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             ...(init.headers || {})
           }
     });
@@ -117,9 +123,14 @@ async function request(path, init = {}) {
 }
 
 async function requestBinary(path) {
+  if (!authToken) {
+    await loginForSmoke();
+  }
   let response;
   try {
-    response = await fetch(`${API_BASE}${path}`);
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+    });
   } catch (error) {
     throw new Error(`Cannot reach backend at ${API_BASE}. Start backend first. ${error.message}`);
   }
@@ -130,6 +141,19 @@ async function requestBinary(path) {
   const contentType = response.headers.get("content-type") || "";
   const bytes = new Uint8Array(await response.arrayBuffer());
   return { contentType, bytes, headers: response.headers };
+}
+
+async function loginForSmoke() {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "demo", password: "demo" })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.data?.token) {
+    throw new Error(payload?.message || `Smoke auth login failed: HTTP ${response.status}`);
+  }
+  authToken = payload.data.token;
 }
 
 async function uploadSmokeAttachment(conversationId) {
@@ -628,7 +652,9 @@ async function runSmokeTest() {
   ) {
     throw new Error(`message did not persist lightweight attachments: ${JSON.stringify(message.attachments)}`);
   }
-  const downloadedAttachment = await fetch(`${API_BASE}/api/attachments/${uploadedAttachment.attachmentId}/download`);
+  const downloadedAttachment = await fetch(`${API_BASE}/api/attachments/${uploadedAttachment.attachmentId}/download`, {
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+  });
   if (downloadedAttachment.status !== 200) {
     throw new Error(`attachment download expected HTTP 200, got ${downloadedAttachment.status}`);
   }

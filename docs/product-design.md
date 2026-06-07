@@ -472,3 +472,8 @@ V1.0 文档对应的产品验收标准：
 - Artifact 可以预览、修改、diff、apply、snapshot、restore、deploy preview。
 - 高风险操作必须有 Approval 和 Audit。
 - Browser E2E、API smoke、SSE smoke 能作为稳定回归入口。
+## 20. 课题边界更新：PPT 与代码编辑
+
+- PPT 能力不再作为“完整在线幻灯片渲染”缺口追踪；当前验收只要求用户能看到 PPT 文件级预览壳、metadata、下载入口，并能把相关文件加入 Context / Memory 或交给 Agent 处理。
+- Artifact 代码编辑不追求完整 IDE；当前验收只要求可查看、可编辑文本内容、生成 revision、查看 diff、走 Approval 后应用。
+- Monaco / CodeMirror、PPT 在线逐页渲染、复杂富媒体编辑均作为后置增强，不影响当前生产级对齐主线。

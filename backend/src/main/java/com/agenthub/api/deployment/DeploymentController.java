@@ -41,6 +41,11 @@ public class DeploymentController {
                 "DEMO_DEPLOY",
                 "ARTIFACT",
                 artifactId);
+        artifactApplicationService.validateExpectedArtifactState(
+                artifact,
+                request == null ? null : request.baseVersion(),
+                request == null ? null : request.baseContentHash(),
+                "create local preview");
         Object deployment = deploymentApplicationService.createDemoDeployment(artifactId);
         approvalApplicationService.consume(approvalId);
         return ApiResponse.success(deployment, "Demo deployment created");
@@ -61,6 +66,6 @@ public class DeploymentController {
         return ApiResponse.success(deploymentApplicationService.getDeployment(deploymentId));
     }
 
-    public record CreateDemoDeploymentRequest(String approvalId) {
+    public record CreateDemoDeploymentRequest(String approvalId, Integer baseVersion, String baseContentHash) {
     }
 }

@@ -4,6 +4,7 @@ import type { ArtifactSnapshot } from "./artifactSnapshotTypes";
 import { buildDiffSummary } from "./artifactLineage";
 import { getIdValue } from "../../utils/id";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus } from "../../utils/displayLabels";
+import { ApiError } from "../../api/agenthubApi";
 
 type ApprovalRisk = "LOW" | "MEDIUM" | "HIGH";
 
@@ -53,10 +54,30 @@ interface UseArtifactOperationControllerParams {
   conversationId: string | null;
   onSelectArtifact: (artifactId: string) => void;
   onCreateRevision: (artifactId: string, revisionInstruction: string) => Promise<void>;
-  onCreateDeployment: (artifactId: string, approvalId: string) => Promise<void>;
-  onRestoreSnapshot: (snapshotId: string, approvalId: string) => Promise<Artifact | null>;
-  onApplyDiff: (artifactId: string, approvalId: string) => Promise<Artifact | null>;
-  onForceApplyDiff: (artifactId: string, approvalId: string) => Promise<Artifact | null>;
+  onCreateDeployment: (
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) => Promise<void>;
+  onRestoreSnapshot: (
+    snapshotId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) => Promise<Artifact | null>;
+  onApplyDiff: (
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) => Promise<Artifact | null>;
+  onForceApplyDiff: (
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) => Promise<Artifact | null>;
   onSendSelectionToChat?: (selection: ArtifactSelectionReference) => void;
   onCreateApprovalRequest: (request: CreateApprovalRequestInput) => Promise<string | null>;
   onApproveApprovalRequest: (approvalId: string) => Promise<void>;
@@ -199,6 +220,13 @@ function isBlockingValidationStatus(status?: string | null): boolean {
   return normalized.includes("REJECT") || normalized.includes("FAIL") || normalized.includes("ERROR");
 }
 
+function isConflictError(error: unknown): boolean {
+  return (
+    (error instanceof ApiError && error.status === 409) ||
+    (error instanceof Error && error.message.toUpperCase().includes("CONFLICT"))
+  );
+}
+
 function buildQualityRevisionInstruction(artifact: Artifact): string | null {
   const reasons = [
     artifact.qualityReason ? `Address reviewer feedback: ${artifact.qualityReason}` : null,
@@ -316,6 +344,21 @@ export function useArtifactOperationController({
       `Type: ${displayArtifactType(snapshot.type)} / Status: ${displayStatus(snapshot.status)}`,
       `Language: ${snapshot.language || "plain"} / Snapshot content length: ${(snapshot.content || "").length} chars`
     ];
+  }
+
+  function findParentArtifact(artifact: Artifact): Artifact | null {
+    if (!artifact.parentArtifactId) {
+      return null;
+    }
+
+    return allArtifacts.find((item) => getIdValue(item.id) === artifact.parentArtifactId) ?? null;
+  }
+
+  function setConflictNotice(title: string, error?: unknown) {
+    const suffix = error instanceof Error ? ` 后端返回：${error.message}` : "";
+    setDiffConflictArtifactId(selectedArtifactId);
+    setDiffConflictMessage(`${title}。当前产物已被其他页面或设备更新，请刷新版本链后重新审查 Diff；如确认覆盖风险，可走 Force Apply / Restore / Deploy 的审批路径。${suffix}`);
+    setArtifactOperationMessage("检测到跨端版本冲突，已阻止本次高风险操作。");
   }
 
   useEffect(() => {
@@ -457,7 +500,15 @@ export function useArtifactOperationController({
       riskLevel: "MEDIUM",
       confirmLabel: "确认部署",
       execute: async (approvalId) => {
-        await onCreateDeployment(selectedArtifactId, approvalId);
+        try {
+          await onCreateDeployment(selectedArtifactId, approvalId, selectedArtifact?.version ?? null, null);
+        } catch (error) {
+          if (isConflictError(error)) {
+            setConflictNotice("预览生成被版本冲突阻止", error);
+            return;
+          }
+          throw error;
+        }
       }
     });
   }
@@ -505,7 +556,17 @@ export function useArtifactOperationController({
   }
 
   async function executeRestoreSnapshot(snapshotId: string, approvalId: string) {
-    const restoredArtifact = await onRestoreSnapshot(snapshotId, approvalId);
+    const snapshot = snapshots.find((item) => item.snapshotId === snapshotId);
+    let restoredArtifact: Artifact | null = null;
+    try {
+      restoredArtifact = await onRestoreSnapshot(snapshotId, approvalId, snapshot?.version ?? null, null);
+    } catch (error) {
+      if (isConflictError(error)) {
+        setConflictNotice("快照恢复被版本冲突阻止", error);
+        return;
+      }
+      throw error;
+    }
     if (restoredArtifact) {
       onSelectArtifact(getIdValue(restoredArtifact.id));
       setArtifactOperationMessage(`Restored snapshot as ${restoredArtifact.title} v${restoredArtifact.version}.`);
@@ -545,7 +606,17 @@ export function useArtifactOperationController({
 
   async function executeApplyDiffArtifact(artifact: Artifact, approvalId: string) {
     const artifactId = getIdValue(artifact.id);
-    const appliedArtifact = await onApplyDiff(artifactId, approvalId);
+    const parentArtifact = findParentArtifact(artifact);
+    let appliedArtifact: Artifact | null = null;
+    try {
+      appliedArtifact = await onApplyDiff(artifactId, approvalId, parentArtifact?.version ?? null, null);
+    } catch (error) {
+      if (isConflictError(error)) {
+        setConflictNotice("Diff 应用被版本冲突阻止", error);
+        return;
+      }
+      throw error;
+    }
 
     if (appliedArtifact) {
       setAppliedDiffArtifactId(getIdValue(appliedArtifact.id));
@@ -580,7 +651,8 @@ export function useArtifactOperationController({
 
   async function executeForceApplyDiffArtifact(artifact: Artifact, approvalId: string) {
     const artifactId = getIdValue(artifact.id);
-    const appliedArtifact = await onForceApplyDiff(artifactId, approvalId);
+    const parentArtifact = findParentArtifact(artifact);
+    const appliedArtifact = await onForceApplyDiff(artifactId, approvalId, parentArtifact?.version ?? null, null);
 
     if (appliedArtifact) {
       setAppliedDiffArtifactId(getIdValue(appliedArtifact.id));

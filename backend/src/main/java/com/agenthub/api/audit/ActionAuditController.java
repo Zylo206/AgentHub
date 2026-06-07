@@ -1,5 +1,6 @@
 package com.agenthub.api.audit;
 
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.application.audit.ActionAuditService;
 import com.agenthub.common.ApiResponse;
 import com.agenthub.domain.conversation.ConversationId;
@@ -17,13 +18,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class ActionAuditController {
 
     private final ActionAuditService actionAuditService;
+    private final ConversationAccessService conversationAccessService;
 
-    public ActionAuditController(ActionAuditService actionAuditService) {
+    public ActionAuditController(
+            ActionAuditService actionAuditService,
+            ConversationAccessService conversationAccessService) {
         this.actionAuditService = actionAuditService;
+        this.conversationAccessService = conversationAccessService;
     }
 
     @GetMapping("/conversations/{conversationId}/action-audits")
     public ApiResponse<?> listActionAudits(@PathVariable("conversationId") String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return ApiResponse.success(actionAuditService.listByConversation(conversationId));
     }
 
@@ -31,6 +37,7 @@ public class ActionAuditController {
     public ApiResponse<?> recordActionAudit(
             @PathVariable("conversationId") String conversationId,
             @Valid @RequestBody RecordActionAuditRequest request) {
+        conversationAccessService.requireWritable(conversationId);
         return ApiResponse.success(actionAuditService.record(
                 new ConversationId(conversationId),
                 request.actionType(),

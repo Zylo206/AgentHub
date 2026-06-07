@@ -1,6 +1,7 @@
 package com.agenthub.application.deployment;
 
 import com.agenthub.application.audit.ActionAuditService;
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
@@ -28,6 +29,7 @@ public class DeploymentApplicationService {
     private final ArtifactRepository artifactRepository;
     private final ArtifactSnapshotRepository artifactSnapshotRepository;
     private final DeploymentRepository deploymentRepository;
+    private final ConversationAccessService conversationAccessService;
     private final MessageApplicationService messageApplicationService;
     private final ActionAuditService actionAuditService;
     private final RealtimeEventPublisher realtimeEventPublisher;
@@ -38,6 +40,7 @@ public class DeploymentApplicationService {
             ArtifactRepository artifactRepository,
             ArtifactSnapshotRepository artifactSnapshotRepository,
             DeploymentRepository deploymentRepository,
+            ConversationAccessService conversationAccessService,
             MessageApplicationService messageApplicationService,
             ActionAuditService actionAuditService,
             RealtimeEventPublisher realtimeEventPublisher,
@@ -46,6 +49,7 @@ public class DeploymentApplicationService {
         this.artifactRepository = artifactRepository;
         this.artifactSnapshotRepository = artifactSnapshotRepository;
         this.deploymentRepository = deploymentRepository;
+        this.conversationAccessService = conversationAccessService;
         this.messageApplicationService = messageApplicationService;
         this.actionAuditService = actionAuditService;
         this.realtimeEventPublisher = realtimeEventPublisher;
@@ -56,6 +60,7 @@ public class DeploymentApplicationService {
     public DeploymentRecord createDemoDeployment(String artifactId) {
         Artifact artifact = artifactRepository.findById(new ArtifactId(artifactId))
                 .orElseThrow(() -> new NoSuchElementException("Artifact not found: " + artifactId));
+        conversationAccessService.requireWritable(artifact.getConversationId().value());
         ArtifactSnapshot snapshot = artifactSnapshotRepository.save(new ArtifactSnapshot(
                 idGenerator.nextId("snapshot"),
                 artifact.getId(),
@@ -108,16 +113,22 @@ public class DeploymentApplicationService {
     }
 
     public List<DeploymentRecord> listDeploymentsByConversation(String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return deploymentRepository.findByConversationId(new ConversationId(conversationId));
     }
 
     public List<DeploymentRecord> listDeploymentsByArtifact(String artifactId) {
+        Artifact artifact = artifactRepository.findById(new ArtifactId(artifactId))
+                .orElseThrow(() -> new NoSuchElementException("Artifact not found: " + artifactId));
+        conversationAccessService.requireReadable(artifact.getConversationId().value());
         return deploymentRepository.findByArtifactId(new ArtifactId(artifactId));
     }
 
     public DeploymentRecord getDeployment(String deploymentId) {
-        return deploymentRepository.findById(deploymentId)
+        DeploymentRecord record = deploymentRepository.findById(deploymentId)
                 .orElseThrow(() -> new NoSuchElementException("Deployment not found: " + deploymentId));
+        conversationAccessService.requireReadable(record.getConversationId().value());
+        return record;
     }
 
     private void appendDeployStatusMessage(DeploymentRecord deploymentRecord) {

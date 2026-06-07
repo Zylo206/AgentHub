@@ -1,6 +1,7 @@
 package com.agenthub.application.message;
 
 import com.agenthub.application.agent.AgentApplicationService;
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
@@ -26,6 +27,7 @@ public class MessageApplicationService {
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
     private final AgentApplicationService agentApplicationService;
+    private final ConversationAccessService conversationAccessService;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
@@ -34,12 +36,14 @@ public class MessageApplicationService {
             MessageRepository messageRepository,
             ConversationRepository conversationRepository,
             AgentApplicationService agentApplicationService,
+            ConversationAccessService conversationAccessService,
             RealtimeEventPublisher realtimeEventPublisher,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.agentApplicationService = agentApplicationService;
+        this.conversationAccessService = conversationAccessService;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
@@ -86,6 +90,7 @@ public class MessageApplicationService {
             String replyToMessageId,
             String quotedMessageId,
             List<MessageAttachment> attachments) {
+        conversationAccessService.requireWritable(conversationId);
         String normalizedTargetAgentId = normalizeTargetAgentId(targetAgentId);
         List<String> normalizedMentionedAgentIds = normalizeMentionedAgentIds(mentionedAgentIds);
         List<MessageAttachment> normalizedAttachments = normalizeAttachments(attachments);
@@ -130,6 +135,7 @@ public class MessageApplicationService {
     }
 
     public List<Message> listMessages(String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return messageRepository.findByConversationId(new ConversationId(conversationId));
     }
 
@@ -192,6 +198,7 @@ public class MessageApplicationService {
     }
 
     public Message regenerateAgentReply(String conversationId, String messageId) {
+        conversationAccessService.requireWritable(conversationId);
         ConversationId conversationRef = new ConversationId(conversationId);
         Message originalMessage = messageRepository.findById(new MessageId(messageId))
                 .orElseThrow(() -> new NoSuchElementException("Message not found: " + messageId));

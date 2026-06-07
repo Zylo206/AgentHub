@@ -1,5 +1,6 @@
 package com.agenthub.api.context;
 
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.application.context.ContextApplicationService;
 import com.agenthub.common.ApiResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,13 +15,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class ContextController {
 
     private final ContextApplicationService contextApplicationService;
+    private final ConversationAccessService conversationAccessService;
 
-    public ContextController(ContextApplicationService contextApplicationService) {
+    public ContextController(
+            ContextApplicationService contextApplicationService,
+            ConversationAccessService conversationAccessService) {
         this.contextApplicationService = contextApplicationService;
+        this.conversationAccessService = conversationAccessService;
     }
 
     @GetMapping("/conversations/{conversationId}/context-snapshots")
     public ApiResponse<?> listContextSnapshotsByConversation(@PathVariable("conversationId") String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return ApiResponse.success(
                 contextApplicationService.listContextSnapshotsByConversation(conversationId));
     }
@@ -32,6 +38,7 @@ public class ContextController {
 
     @GetMapping("/conversations/{conversationId}/pinned-contexts")
     public ApiResponse<?> listPinnedContextsByConversation(@PathVariable("conversationId") String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return ApiResponse.success(contextApplicationService.listPinnedContextsByConversation(conversationId));
     }
 
@@ -39,6 +46,7 @@ public class ContextController {
     public ApiResponse<?> pinMessage(
             @PathVariable("conversationId") String conversationId,
             @PathVariable("messageId") String messageId) {
+        conversationAccessService.requireWritable(conversationId);
         return ApiResponse.success(
                 contextApplicationService.pinMessage(conversationId, messageId),
                 "Message pinned as context");
@@ -48,6 +56,7 @@ public class ContextController {
     public ApiResponse<?> pinAttachment(
             @PathVariable("conversationId") String conversationId,
             @PathVariable("attachmentId") String attachmentId) {
+        conversationAccessService.requireWritable(conversationId);
         return ApiResponse.success(
                 contextApplicationService.pinAttachment(conversationId, attachmentId),
                 "Attachment pinned as context");

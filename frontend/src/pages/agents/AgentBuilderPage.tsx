@@ -79,6 +79,23 @@ export function AgentBuilderPage() {
     };
   }, []);
 
+  useEffect(() => {
+    function scrollToHashTarget() {
+      const targetId = window.location.hash.replace("#", "");
+      if (!targetId) {
+        return;
+      }
+
+      window.setTimeout(() => {
+        document.getElementById(targetId)?.scrollIntoView({ block: "start", behavior: "smooth" });
+      }, 50);
+    }
+
+    scrollToHashTarget();
+    window.addEventListener("hashchange", scrollToHashTarget);
+    return () => window.removeEventListener("hashchange", scrollToHashTarget);
+  }, []);
+
   const adapterOptions = useMemo(() => {
     return adapterDescriptors.length > 0 ? adapterDescriptors : getFallbackAdapterOptions();
   }, [adapterDescriptors]);
@@ -284,89 +301,93 @@ export function AgentBuilderPage() {
           </a>
         </nav>
 
-        <AgentDirectorySection
-          adapterOptions={adapterOptions}
-          availableAdapterCount={availableAdapterCount}
-          selectedToolCapabilities={selectedToolCapabilities}
-        />
+        <div className="agent-builder-content">
+          <AgentDirectorySection
+            adapterOptions={adapterOptions}
+            availableAdapterCount={availableAdapterCount}
+            selectedToolCapabilities={selectedToolCapabilities}
+          />
 
-        <div className="agent-builder-flow" aria-label="Agent creation flow">
-          <span>1. 自然语言草案</span>
-          <span>2. 关键字段确认</span>
-          <span>3. 高级配置折叠</span>
-          <span>4. Preferred Adapter</span>
-          <span>5. Workspace @Agent</span>
-        </div>
+          <div className="agent-builder-main-stack">
+            <div className="agent-builder-flow" aria-label="Agent creation flow">
+              <span>1. 自然语言草案</span>
+              <span>2. 关键字段确认</span>
+              <span>3. 高级配置折叠</span>
+              <span>4. Preferred Adapter</span>
+              <span>5. Workspace @Agent</span>
+            </div>
 
-        <CreateAgentSection
-          adapterOptions={adapterOptions}
-          name={name}
-          avatarUrl={avatarUrl}
-          systemPrompt={systemPrompt}
-          capabilityTags={capabilityTags}
-          selectedToolCapabilities={selectedToolCapabilities}
-          toolTags={toolTags}
-          preferredAdapterType={preferredAdapterType}
-          submitting={submitting}
-          createdAgent={createdAgent}
-          naturalAgentPrompt={naturalAgentPrompt}
-          draftRefinementPrompt={draftRefinementPrompt}
-          conversationalDraft={conversationalDraft}
-          creatingDraftAgent={creatingDraftAgent}
-          generatingAgentDraft={generatingAgentDraft}
-          effectiveToolTags={effectiveToolTags}
-          resolvedCapabilityNames={resolvedCapabilityNames}
-          selectedAdapterDescriptor={selectedAdapterDescriptor}
-          onNameChange={setName}
-          onAvatarUrlChange={setAvatarUrl}
-          onSystemPromptChange={setSystemPrompt}
-          onCapabilityTagsChange={setCapabilityTags}
-          onToolTagsChange={setToolTags}
-          onPreferredAdapterChange={setPreferredAdapterType}
-          onNaturalAgentPromptChange={setNaturalAgentPrompt}
-          onDraftRefinementPromptChange={setDraftRefinementPrompt}
-          onToggleToolCapability={toggleToolCapability}
-          onGenerateConversationalDraft={() => {
-            void handleGenerateConversationalDraft();
-          }}
-          onApplyConversationalDraft={handleApplyConversationalDraft}
-          onRefineConversationalDraft={handleRefineConversationalDraft}
-          onCreateConversationalDraftAgent={() => {
-            void handleCreateConversationalDraftAgent();
-          }}
-          onSubmit={(event) => {
-            void handleSubmit(event);
-          }}
-        />
+            <CreateAgentSection
+              adapterOptions={adapterOptions}
+              name={name}
+              avatarUrl={avatarUrl}
+              systemPrompt={systemPrompt}
+              capabilityTags={capabilityTags}
+              selectedToolCapabilities={selectedToolCapabilities}
+              toolTags={toolTags}
+              preferredAdapterType={preferredAdapterType}
+              submitting={submitting}
+              createdAgent={createdAgent}
+              naturalAgentPrompt={naturalAgentPrompt}
+              draftRefinementPrompt={draftRefinementPrompt}
+              conversationalDraft={conversationalDraft}
+              creatingDraftAgent={creatingDraftAgent}
+              generatingAgentDraft={generatingAgentDraft}
+              effectiveToolTags={effectiveToolTags}
+              resolvedCapabilityNames={resolvedCapabilityNames}
+              selectedAdapterDescriptor={selectedAdapterDescriptor}
+              onNameChange={setName}
+              onAvatarUrlChange={setAvatarUrl}
+              onSystemPromptChange={setSystemPrompt}
+              onCapabilityTagsChange={setCapabilityTags}
+              onToolTagsChange={setToolTags}
+              onPreferredAdapterChange={setPreferredAdapterType}
+              onNaturalAgentPromptChange={setNaturalAgentPrompt}
+              onDraftRefinementPromptChange={setDraftRefinementPrompt}
+              onToggleToolCapability={toggleToolCapability}
+              onGenerateConversationalDraft={() => {
+                void handleGenerateConversationalDraft();
+              }}
+              onApplyConversationalDraft={handleApplyConversationalDraft}
+              onRefineConversationalDraft={handleRefineConversationalDraft}
+              onCreateConversationalDraftAgent={() => {
+                void handleCreateConversationalDraftAgent();
+              }}
+              onSubmit={(event) => {
+                void handleSubmit(event);
+              }}
+            />
 
-        <LocalCliHealthSection
-          adapterOptions={adapterOptions}
-          preferredAdapterType={preferredAdapterType}
-          onSelectAdapter={setPreferredAdapterType}
-        />
+            <LocalCliHealthSection
+              adapterOptions={adapterOptions}
+              preferredAdapterType={preferredAdapterType}
+              onSelectAdapter={setPreferredAdapterType}
+            />
 
-        <AdapterTestSection
-          adapterOptions={adapterOptions}
-          adapterTestType={adapterTestType}
-          adapterTestPrompt={adapterTestPrompt}
-          testingAdapter={testingAdapter}
-          adapterTestError={adapterTestError}
-          adapterTestResult={adapterTestResult}
-          selectedTestAdapterDescriptor={selectedTestAdapterDescriptor}
-          selectedTestAdapterDepthProfile={selectedTestAdapterDepthProfile}
-          adapterTestQualityReport={adapterTestQualityReport}
-          parsedAdapterArtifacts={parsedAdapterArtifacts}
-          onAdapterTestTypeChange={setAdapterTestType}
-          onAdapterTestPromptChange={setAdapterTestPrompt}
-          onSubmit={(event) => {
-            void handleAdapterTest(event);
-          }}
-        />
+            <AdapterTestSection
+              adapterOptions={adapterOptions}
+              adapterTestType={adapterTestType}
+              adapterTestPrompt={adapterTestPrompt}
+              testingAdapter={testingAdapter}
+              adapterTestError={adapterTestError}
+              adapterTestResult={adapterTestResult}
+              selectedTestAdapterDescriptor={selectedTestAdapterDescriptor}
+              selectedTestAdapterDepthProfile={selectedTestAdapterDepthProfile}
+              adapterTestQualityReport={adapterTestQualityReport}
+              parsedAdapterArtifacts={parsedAdapterArtifacts}
+              onAdapterTestTypeChange={setAdapterTestType}
+              onAdapterTestPromptChange={setAdapterTestPrompt}
+              onSubmit={(event) => {
+                void handleAdapterTest(event);
+              }}
+            />
 
-        {errorMessage ? <div className="builder-feedback builder-feedback--error">{errorMessage}</div> : null}
-        {successMessage ? <div className="builder-feedback builder-feedback--success">{successMessage}</div> : null}
-        <div className="agent-builder-muted">
-          当前深接 Adapter：{deepAdapterCount}。STATIC / MOCK / FALLBACK 仅作为边界明确的兜底能力展示。
+            {errorMessage ? <div className="builder-feedback builder-feedback--error">{errorMessage}</div> : null}
+            {successMessage ? <div className="builder-feedback builder-feedback--success">{successMessage}</div> : null}
+            <div className="agent-builder-muted">
+              当前深接 Adapter：{deepAdapterCount}。STATIC / MOCK / FALLBACK 仅作为边界明确的兜底能力展示。
+            </div>
+          </div>
         </div>
       </div>
     </section>

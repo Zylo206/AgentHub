@@ -36,6 +36,12 @@
 |---|---|
 | `desktop-support-spec.md` | 可选 Tauri 桌面壳、本地文件访问、系统通知、Agent CLI 进程管理和安全边界 |
 
+## Production Collaboration Specs
+
+| Spec | 范围 |
+|---|---|
+| `collaboration-auth-sync-spec.md` | 多人协作、账号权限、组织空间、Realtime 授权、Presence 和 Artifact 冲突处理 |
+
 ## Boundary Rules
 
 - Mock、fixture、static fallback 不能写成真实生产能力。

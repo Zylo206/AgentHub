@@ -12,7 +12,8 @@ import {
   getArtifactSnapshotsByConversation,
   getDeploymentsByConversation,
   getMessages,
-  restoreArtifactSnapshotWithApproval
+  restoreArtifactSnapshotWithApproval,
+  ApiError
 } from "../../api/agenthubApi";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
 import type { ArtifactSnapshot } from "../../features/artifacts/artifactSnapshotTypes";
@@ -126,7 +127,12 @@ export function useWorkspaceArtifactOperations({
     }
   }
 
-  async function handleApplyArtifactDiff(artifactId: string, approvalId: string) {
+  async function handleApplyArtifactDiff(
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) {
     if (!currentConversationId) {
       setErrorMessage("请先创建或选择一个会话，再应用 Diff。");
       return null;
@@ -136,7 +142,7 @@ export function useWorkspaceArtifactOperations({
     setOperationMessage(null);
 
     try {
-      const applyResult = await applyArtifactDiff(artifactId, false, approvalId);
+      const applyResult = await applyArtifactDiff(artifactId, false, approvalId, baseVersion, baseContentHash);
       if (applyResult.conflict) {
         const lineStats = `Diff 仍包含新增 ${applyResult.addedLines} 行、删除 ${applyResult.removedLines} 行。`;
         setOperationMessage(`${applyResult.conflictReason || "检测到 Diff 应用冲突，请查看最新已应用产物。"} ${lineStats}`);
@@ -157,11 +163,19 @@ export function useWorkspaceArtifactOperations({
       return applyResult.appliedArtifact;
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      if (error instanceof ApiError && error.status === 409) {
+        throw error;
+      }
       return null;
     }
   }
 
-  async function handleForceApplyArtifactDiff(artifactId: string, approvalId: string) {
+  async function handleForceApplyArtifactDiff(
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) {
     if (!currentConversationId) {
       setErrorMessage("请先创建或选择一个会话，再强制应用 Diff。");
       return null;
@@ -171,7 +185,7 @@ export function useWorkspaceArtifactOperations({
     setOperationMessage(null);
 
     try {
-      const applyResult = await applyArtifactDiff(artifactId, true, approvalId);
+      const applyResult = await applyArtifactDiff(artifactId, true, approvalId, baseVersion, baseContentHash);
       if (!applyResult.appliedArtifact) {
         setOperationMessage("强制应用 Diff 未生成新产物。");
         return null;
@@ -190,11 +204,19 @@ export function useWorkspaceArtifactOperations({
       return applyResult.appliedArtifact;
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      if (error instanceof ApiError && error.status === 409) {
+        throw error;
+      }
       return null;
     }
   }
 
-  async function handleCreateDeployment(artifactId: string, approvalId: string) {
+  async function handleCreateDeployment(
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) {
     if (!currentConversationId) {
       setErrorMessage("请先创建或选择一个会话，再部署产物。");
       return;
@@ -204,7 +226,7 @@ export function useWorkspaceArtifactOperations({
     setErrorMessage(null);
 
     try {
-      const deployment = await createDemoDeployment(artifactId, approvalId);
+      const deployment = await createDemoDeployment(artifactId, approvalId, baseVersion, baseContentHash);
       const [refreshedMessages, refreshedDeployments, refreshedSnapshots, refreshedAudits] = await Promise.all([
         getMessages(currentConversationId),
         getDeploymentsByConversation(currentConversationId),
@@ -218,6 +240,9 @@ export function useWorkspaceArtifactOperations({
       setSelectedArtifactId(getIdValue(deployment.artifactId) || artifactId);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      if (error instanceof ApiError && error.status === 409) {
+        throw error;
+      }
     } finally {
       setDeployingArtifact(false);
     }
@@ -325,7 +350,13 @@ export function useWorkspaceArtifactOperations({
 
     try {
       await handleApproveApprovalRequest(deployIntent.approvalId);
-      const deployment = await createDemoDeployment(deployIntent.artifactId, deployIntent.approvalId);
+      const deployArtifact = artifacts.find((artifact) => getIdValue(artifact.id) === deployIntent.artifactId) ?? null;
+      const deployment = await createDemoDeployment(
+        deployIntent.artifactId,
+        deployIntent.approvalId,
+        deployArtifact?.version ?? null,
+        null
+      );
       const [refreshedMessages, refreshedDeployments, refreshedSnapshots, refreshedAudits] = await Promise.all([
         getMessages(currentConversationId),
         getDeploymentsByConversation(currentConversationId),
@@ -377,7 +408,12 @@ export function useWorkspaceArtifactOperations({
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  async function handleRestoreArtifactSnapshot(snapshotId: string, approvalId: string): Promise<Artifact | null> {
+  async function handleRestoreArtifactSnapshot(
+    snapshotId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ): Promise<Artifact | null> {
     if (!currentConversationId) {
       setErrorMessage("Please select a conversation before restoring a snapshot.");
       return null;
@@ -387,7 +423,12 @@ export function useWorkspaceArtifactOperations({
     setErrorMessage(null);
 
     try {
-      const restoredArtifact = await restoreArtifactSnapshotWithApproval(snapshotId, approvalId);
+      const restoredArtifact = await restoreArtifactSnapshotWithApproval(
+        snapshotId,
+        approvalId,
+        baseVersion,
+        baseContentHash
+      );
       await loadConversationData(currentConversationId);
       setShowAllArtifacts(true);
       setSelectedArtifactId(getIdValue(restoredArtifact.id));
@@ -395,6 +436,9 @@ export function useWorkspaceArtifactOperations({
       return restoredArtifact;
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      if (error instanceof ApiError && error.status === 409) {
+        throw error;
+      }
       return null;
     } finally {
       setRestoringSnapshot(false);

@@ -21,6 +21,7 @@ This map records the Phase 229 CSS ownership audit for the current frontend. It 
 | `empty-state` | `frontend/src/styles/components/empty-state.css` | `workspace.css`, `workspace/components.css` | Panel empty states and lightweight placeholder shells. |
 | `panel-shell` | `frontend/src/styles/components/panel-shell.css` | `workspace.css`, `workspace/shell.css`, `workspace/components.css` | Section headers, panel body shells, detail headers. |
 | `tabs` | `frontend/src/styles/components/tabs.css` | `workspace.css`, `workspace/components.css` | Inspector tabs, filter tabs, agent builder section map. |
+| `agent-create` | `frontend/src/styles/components/agent-create.css` | `workspace/legacy.css`, `production-alignment.css` | Global create-agent dialog, local CLI status cards, modal-level create-agent responsive rules. |
 
 ## Migration Rules
 
@@ -28,3 +29,9 @@ This map records the Phase 229 CSS ownership audit for the current frontend. It 
 - `workspace.css` is now a compatibility entrypoint only; owner styles should live under `styles/components`, `styles/pages`, `styles/layout`, or existing workspace subfiles.
 - `layout-guard.css` is now a compatibility entrypoint only; real layout guard rules live in `styles/layout/workspace-shell.css`.
 - Each migration round must run `cd frontend && npm.cmd run build` and `node scripts/e2e-browser.mjs`.
+
+## Phase 241 Update
+
+- `agent-create` rules were moved from `workspace/legacy.css` to `styles/components/agent-create.css`.
+- Preview page final guard rules were moved from `workspace/legacy.css` to `styles/pages/preview.css`.
+- PPT and IDE are no longer tracked as mandatory production gaps for this coursework: acceptance only requires visible file-level PPT preview/download and editable Artifact content with diff/revision, not full slide rendering or Monaco/CodeMirror.

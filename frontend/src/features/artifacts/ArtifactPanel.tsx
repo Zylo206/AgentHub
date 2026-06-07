@@ -39,11 +39,31 @@ interface ArtifactPanelProps {
   onSelectArtifact: (artifactId: string) => void;
   onShowAllArtifacts: () => void;
   onCreateRevision: (artifactId: string, revisionInstruction: string) => Promise<void>;
-  onCreateDeployment: (artifactId: string, approvalId: string) => Promise<void>;
+  onCreateDeployment: (
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) => Promise<void>;
   onDownloadArtifactBundle: (artifactIds?: string[]) => void;
-  onRestoreSnapshot: (snapshotId: string, approvalId: string) => Promise<Artifact | null>;
-  onApplyDiff: (artifactId: string, approvalId: string) => Promise<Artifact | null>;
-  onForceApplyDiff: (artifactId: string, approvalId: string) => Promise<Artifact | null>;
+  onRestoreSnapshot: (
+    snapshotId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) => Promise<Artifact | null>;
+  onApplyDiff: (
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) => Promise<Artifact | null>;
+  onForceApplyDiff: (
+    artifactId: string,
+    approvalId: string,
+    baseVersion?: number | null,
+    baseContentHash?: string | null
+  ) => Promise<Artifact | null>;
   onSendSelectionToChat?: (selection: ArtifactSelectionReference) => void;
   onCreateApprovalRequest: (request: {
     actionType: string;

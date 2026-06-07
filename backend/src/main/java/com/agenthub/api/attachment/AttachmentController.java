@@ -1,6 +1,7 @@
 package com.agenthub.api.attachment;
 
 import com.agenthub.application.attachment.AttachmentApplicationService;
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.common.ApiResponse;
 import com.agenthub.domain.attachment.AttachmentRecord;
 import java.nio.file.Path;
@@ -22,32 +23,41 @@ import org.springframework.web.multipart.MultipartFile;
 public class AttachmentController {
 
     private final AttachmentApplicationService attachmentApplicationService;
+    private final ConversationAccessService conversationAccessService;
 
-    public AttachmentController(AttachmentApplicationService attachmentApplicationService) {
+    public AttachmentController(
+            AttachmentApplicationService attachmentApplicationService,
+            ConversationAccessService conversationAccessService) {
         this.attachmentApplicationService = attachmentApplicationService;
+        this.conversationAccessService = conversationAccessService;
     }
 
     @PostMapping("/conversations/{conversationId}/attachments")
     public ApiResponse<?> uploadAttachment(
             @PathVariable("conversationId") String conversationId,
             @RequestParam("file") MultipartFile file) {
+        conversationAccessService.requireWritable(conversationId);
         AttachmentRecord attachment = attachmentApplicationService.upload(conversationId, file);
         return ApiResponse.success(attachment, "Attachment uploaded");
     }
 
     @GetMapping("/attachments/{attachmentId}")
     public ApiResponse<?> getAttachment(@PathVariable("attachmentId") String attachmentId) {
-        return ApiResponse.success(attachmentApplicationService.getAttachment(attachmentId));
+        AttachmentRecord attachment = attachmentApplicationService.getAttachment(attachmentId);
+        conversationAccessService.requireReadable(attachment.getConversationId().value());
+        return ApiResponse.success(attachment);
     }
 
     @GetMapping("/conversations/{conversationId}/attachments")
     public ApiResponse<?> listAttachmentsByConversation(@PathVariable("conversationId") String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return ApiResponse.success(attachmentApplicationService.listByConversation(conversationId));
     }
 
     @GetMapping("/attachments/{attachmentId}/download")
     public ResponseEntity<Resource> downloadAttachment(@PathVariable("attachmentId") String attachmentId) {
         AttachmentRecord attachment = attachmentApplicationService.getAttachment(attachmentId);
+        conversationAccessService.requireReadable(attachment.getConversationId().value());
         Path storagePath = attachmentApplicationService.resolveStoragePath(attachmentId);
         Resource resource = new FileSystemResource(storagePath);
         MediaType mediaType = MediaType.parseMediaType(

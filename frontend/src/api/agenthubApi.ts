@@ -29,6 +29,18 @@ interface ApiResponse<T> {
   errorCode: string | null;
 }
 
+export class ApiError extends Error {
+  status: number;
+  errorCode: string | null;
+
+  constructor(message: string, status: number, errorCode: string | null = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.errorCode = errorCode;
+  }
+}
+
 function isTauriRuntime(): boolean {
   if (typeof window === "undefined") {
     return false;
@@ -44,6 +56,30 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL ??
   (isTauriRuntime() ? "http://127.0.0.1:8080" : "http://localhost:8080");
 export const API_BASE_URL = API_BASE;
+const AUTH_TOKEN_STORAGE_KEY = "agenthub.auth.token";
+
+export interface AuthUser {
+  userId: string;
+  displayName: string;
+  role: string;
+  orgTags: string[];
+}
+
+export interface AuthLoginResult {
+  token: string;
+  user: AuthUser;
+}
+
+export interface PresenceRecord {
+  conversationId: string;
+  userId: string;
+  displayName: string;
+  deviceId: string;
+  status: string;
+  activeArtifactId?: string | null;
+  lastSeenEventId?: string | null;
+  updatedAt: string;
+}
 
 export interface RealtimeEvent {
   eventId: string;
@@ -68,29 +104,63 @@ export interface RealtimeRunState {
   errorMessage?: string | null;
 }
 
-export function getConversationEventsUrl(conversationId: string): string {
-  return `${API_BASE}/api/conversations/${conversationId}/events`;
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+function setAuthToken(token: string | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (token) {
+    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+  } else {
+    window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  }
+}
+
+function withAuthQuery(url: string): string {
+  const token = getAuthToken();
+  if (!token) {
+    return url;
+  }
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}access_token=${encodeURIComponent(token)}`;
+}
+
+export function getConversationEventsUrl(conversationId: string): string {
+  return withAuthQuery(`${API_BASE}/api/conversations/${conversationId}/events`);
+}
+
+async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized = true): Promise<T> {
   let response: Response;
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  let authToken = getAuthToken();
+  if (!authToken && path !== "/api/auth/login") {
+    const loginResult = await login("demo", "demo");
+    authToken = loginResult.token;
+  }
 
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       headers: isFormData
         ? {
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             ...(init?.headers ?? {})
           }
         : {
             "Content-Type": "application/json",
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             ...(init?.headers ?? {})
           }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "未知网络错误";
-    throw new Error(`请求失败：${message}`);
+    throw new ApiError(`请求失败：${message}`, 0);
   }
 
   let payload: ApiResponse<T> | null = null;
@@ -101,15 +171,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       payload = JSON.parse(text) as ApiResponse<T>;
     } catch {
       if (!response.ok) {
-        throw new Error(`请求失败，状态码：${response.status}`);
+        throw new ApiError(`请求失败，状态码：${response.status}`, response.status);
       }
       throw new Error("服务端响应格式无效");
     }
   }
 
+  if (response.status === 401 && retryOnUnauthorized && path !== "/api/auth/login") {
+    await login("demo", "demo");
+    return request<T>(path, init, false);
+  }
+
   if (!response.ok) {
     const message = payload?.message || `请求失败，状态码：${response.status}`;
-    throw new Error(message);
+    throw new ApiError(message, response.status, payload?.errorCode ?? null);
   }
 
   if (!payload) {
@@ -117,10 +192,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!payload.success) {
-    throw new Error(payload.message || payload.errorCode || "未知 API 错误");
+    throw new ApiError(payload.message || payload.errorCode || "未知 API 错误", response.status, payload.errorCode);
   }
 
   return payload.data;
+}
+
+export async function login(username: string, password: string): Promise<AuthLoginResult> {
+  const result = await request<AuthLoginResult>(
+    "/api/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({ username, password })
+    },
+    false
+  );
+  setAuthToken(result.token);
+  return result;
+}
+
+export function getCurrentUser(): Promise<AuthUser> {
+  return request<AuthUser>("/api/auth/me");
+}
+
+export async function logout(): Promise<void> {
+  await request<boolean>("/api/auth/logout", { method: "POST" }).catch(() => false);
+  setAuthToken(null);
 }
 
 export interface ArtifactRevisionResponse {
@@ -290,6 +387,53 @@ export function markConversationRead(conversationId: string): Promise<Conversati
   });
 }
 
+export function updateConversationVisibility(
+  conversationId: string,
+  visibility: "PRIVATE" | "ORG" | "PUBLIC",
+  orgTag?: string | null
+): Promise<Conversation> {
+  return request<Conversation>(`/api/conversations/${conversationId}/visibility`, {
+    method: "POST",
+    body: JSON.stringify({ visibility, orgTag: orgTag ?? null })
+  });
+}
+
+export function upsertConversationMember(
+  conversationId: string,
+  userId: string,
+  memberRole: "OWNER" | "EDITOR" | "REVIEWER" | "VIEWER" | string
+): Promise<Conversation> {
+  return request<Conversation>(`/api/conversations/${conversationId}/members/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ memberRole })
+  });
+}
+
+export function removeConversationMember(conversationId: string, userId: string): Promise<Conversation> {
+  return request<Conversation>(`/api/conversations/${conversationId}/members/${encodeURIComponent(userId)}`, {
+    method: "DELETE"
+  });
+}
+
+export function heartbeatConversationPresence(
+  conversationId: string,
+  requestBody: {
+    deviceId?: string | null;
+    status?: string | null;
+    activeArtifactId?: string | null;
+    lastSeenEventId?: string | null;
+  }
+): Promise<PresenceRecord> {
+  return request<PresenceRecord>(`/api/conversations/${conversationId}/presence`, {
+    method: "POST",
+    body: JSON.stringify(requestBody)
+  });
+}
+
+export function getConversationPresence(conversationId: string): Promise<PresenceRecord[]> {
+  return request<PresenceRecord[]>(`/api/conversations/${conversationId}/presence`);
+}
+
 export function sendMessage(
   conversationId: string,
   content: string,
@@ -348,7 +492,7 @@ export function uploadConversationAttachment(conversationId: string, file: File)
 }
 
 export function getAttachmentDownloadUrl(attachmentId: string): string {
-  return `${API_BASE}/api/attachments/${attachmentId}/download`;
+  return withAuthQuery(`${API_BASE}/api/attachments/${attachmentId}/download`);
 }
 
 export function getMessages(conversationId: string): Promise<Message[]> {
@@ -501,7 +645,7 @@ export function getArtifactBundleDownloadUrl(
     params.set("artifactIds", artifactIds.join(","));
   }
   params.set("includeRelated", includeRelated ? "true" : "false");
-  return `${API_BASE}/api/conversations/${conversationId}/artifact-bundle/download?${params.toString()}`;
+  return withAuthQuery(`${API_BASE}/api/conversations/${conversationId}/artifact-bundle/download?${params.toString()}`);
 }
 
 export function getArtifactSnapshotsByConversation(conversationId: string): Promise<ArtifactSnapshot[]> {
@@ -518,11 +662,17 @@ export function restoreArtifactSnapshot(snapshotId: string): Promise<Artifact> {
 
 export function restoreArtifactSnapshotWithApproval(
   snapshotId: string,
-  approvalId?: string | null
+  approvalId?: string | null,
+  baseVersion?: number | null,
+  baseContentHash?: string | null
 ): Promise<Artifact> {
   return request<Artifact>(`/api/artifact-snapshots/${snapshotId}/restore`, {
     method: "POST",
-    body: JSON.stringify({ approvalId: approvalId ?? null })
+    body: JSON.stringify({
+      approvalId: approvalId ?? null,
+      baseVersion: baseVersion ?? null,
+      baseContentHash: baseContentHash ?? null
+    })
   });
 }
 
@@ -597,18 +747,34 @@ export function createDemoArtifactRevision(
 export function applyArtifactDiff(
   artifactId: string,
   force = false,
-  approvalId?: string | null
+  approvalId?: string | null,
+  baseVersion?: number | null,
+  baseContentHash?: string | null
 ): Promise<ApplyDiffResponse> {
   return request<ApplyDiffResponse>(`/api/artifacts/${artifactId}/apply-diff`, {
     method: "POST",
-    body: JSON.stringify({ force, approvalId: approvalId ?? null })
+    body: JSON.stringify({
+      force,
+      approvalId: approvalId ?? null,
+      baseVersion: baseVersion ?? null,
+      baseContentHash: baseContentHash ?? null
+    })
   });
 }
 
-export function createDemoDeployment(artifactId: string, approvalId?: string | null): Promise<DeploymentRecord> {
+export function createDemoDeployment(
+  artifactId: string,
+  approvalId?: string | null,
+  baseVersion?: number | null,
+  baseContentHash?: string | null
+): Promise<DeploymentRecord> {
   return request<DeploymentRecord>(`/api/artifacts/${artifactId}/demo-deploy`, {
     method: "POST",
-    body: JSON.stringify({ approvalId: approvalId ?? null })
+    body: JSON.stringify({
+      approvalId: approvalId ?? null,
+      baseVersion: baseVersion ?? null,
+      baseContentHash: baseContentHash ?? null
+    })
   });
 }
 

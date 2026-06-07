@@ -26,3 +26,172 @@
 .task-run-explain-details > .adapter-routing-panel {
   margin: 0 12px 12px;
 }
+
+.workspace-presence-bar,
+.workspace-access-panel {
+  margin: 10px 16px 0;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--agenthub-color-text, #0f172a);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+}
+
+.workspace-presence-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.workspace-presence-bar__summary,
+.workspace-presence-bar__records {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-presence-bar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.14);
+}
+
+.workspace-presence-bar__summary span,
+.workspace-presence-bar__device,
+.workspace-presence-bar__error {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace-presence-bar__error {
+  color: #b45309;
+}
+
+.workspace-presence-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workspace-presence-pill small {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workspace-presence-pill--typing {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.workspace-access-panel {
+  overflow: hidden;
+}
+
+.workspace-access-panel__summary {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  color: var(--agenthub-color-text, #0f172a);
+  cursor: pointer;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.workspace-access-panel__summary span:last-child {
+  color: #2563eb;
+}
+
+.workspace-access-panel__body {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  padding: 12px 14px 14px;
+}
+
+.workspace-access-panel__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.workspace-access-panel label {
+  display: grid;
+  gap: 5px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workspace-access-panel input,
+.workspace-access-panel select {
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 6px 10px;
+}
+
+.workspace-access-panel__members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-access-panel__member,
+.workspace-access-panel__empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workspace-access-panel__member button {
+  border: 0;
+  background: transparent;
+  color: #dc2626;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+@media (max-width: 900px) {
+  .workspace-presence-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workspace-access-panel__row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,6 +1,7 @@
 package com.agenthub.application.artifact;
 
 import com.agenthub.application.audit.ActionAuditService;
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
@@ -13,6 +14,9 @@ import com.agenthub.domain.artifact.ArtifactSnapshotRepository;
 import com.agenthub.domain.artifact.ArtifactStatus;
 import com.agenthub.domain.conversation.ConversationId;
 import com.agenthub.domain.task.TaskRunId;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +29,7 @@ public class ArtifactApplicationService {
     private final ArtifactRepository artifactRepository;
     private final ArtifactSnapshotRepository artifactSnapshotRepository;
     private final ActionAuditService actionAuditService;
+    private final ConversationAccessService conversationAccessService;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
@@ -33,18 +38,21 @@ public class ArtifactApplicationService {
             ArtifactRepository artifactRepository,
             ArtifactSnapshotRepository artifactSnapshotRepository,
             ActionAuditService actionAuditService,
+            ConversationAccessService conversationAccessService,
             RealtimeEventPublisher realtimeEventPublisher,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.artifactRepository = artifactRepository;
         this.artifactSnapshotRepository = artifactSnapshotRepository;
         this.actionAuditService = actionAuditService;
+        this.conversationAccessService = conversationAccessService;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
     }
 
     public List<Artifact> listArtifactsByConversation(String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return artifactRepository.findByConversationId(new ConversationId(conversationId));
     }
 
@@ -53,26 +61,38 @@ public class ArtifactApplicationService {
     }
 
     public Artifact getArtifact(String artifactId) {
-        return artifactRepository.findById(new ArtifactId(artifactId))
+        Artifact artifact = artifactRepository.findById(new ArtifactId(artifactId))
                 .orElseThrow(() -> new NoSuchElementException("Artifact not found: " + artifactId));
+        conversationAccessService.requireReadable(artifact.getConversationId().value());
+        return artifact;
     }
 
     public List<ArtifactSnapshot> listSnapshotsByArtifact(String artifactId) {
+        getArtifact(artifactId);
         return artifactSnapshotRepository.findByArtifactId(new ArtifactId(artifactId));
     }
 
     public ArtifactSnapshot getSnapshot(String snapshotId) {
-        return artifactSnapshotRepository.findById(snapshotId)
+        ArtifactSnapshot snapshot = artifactSnapshotRepository.findById(snapshotId)
                 .orElseThrow(() -> new NoSuchElementException("Artifact snapshot not found: " + snapshotId));
+        conversationAccessService.requireReadable(snapshot.getConversationId().value());
+        return snapshot;
     }
 
     public List<ArtifactSnapshot> listSnapshotsByConversation(String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return artifactSnapshotRepository.findByConversationId(new ConversationId(conversationId));
     }
 
     public Artifact restoreSnapshot(String snapshotId) {
+        return restoreSnapshot(snapshotId, null, null);
+    }
+
+    public Artifact restoreSnapshot(String snapshotId, Integer baseVersion, String baseContentHash) {
         ArtifactSnapshot snapshot = getSnapshot(snapshotId);
+        conversationAccessService.requireWritable(snapshot.getConversationId().value());
         Artifact currentArtifact = getArtifact(snapshot.getArtifactId().value());
+        validateExpectedArtifactState(currentArtifact, baseVersion, baseContentHash, "restore snapshot");
         createSnapshot(currentArtifact, "RESTORE_BEFORE");
         Instant now = timeProvider.now();
         Artifact restoredArtifact = new Artifact(
@@ -106,13 +126,19 @@ public class ArtifactApplicationService {
     }
 
     public ApplyDiffResult applyDiff(String artifactId, boolean force) {
+        return applyDiff(artifactId, force, null, null);
+    }
+
+    public ApplyDiffResult applyDiff(String artifactId, boolean force, Integer baseVersion, String baseContentHash) {
         Artifact revisionArtifact = getArtifact(artifactId);
+        conversationAccessService.requireWritable(revisionArtifact.getConversationId().value());
         String parentArtifactId = revisionArtifact.getParentArtifactId();
         if (parentArtifactId == null || parentArtifactId.isBlank()) {
             throw new IllegalArgumentException("Only revision artifacts with a parent can be applied.");
         }
 
         Artifact parentArtifact = getArtifact(parentArtifactId);
+        validateExpectedArtifactState(parentArtifact, baseVersion, baseContentHash, "apply diff");
         LinePatchResult patchResult = buildAndApplyLinePatch(parentArtifact.getContent(), revisionArtifact.getContent());
         if (!patchResult.appliedContent().equals(revisionArtifact.getContent())) {
             throw new IllegalStateException("Line patch application did not reproduce the revision artifact content.");
@@ -206,6 +232,38 @@ public class ArtifactApplicationService {
                 operationType,
                 timeProvider.now());
         return artifactSnapshotRepository.save(snapshot);
+    }
+
+    public void validateExpectedArtifactState(
+            Artifact artifact,
+            Integer baseVersion,
+            String baseContentHash,
+            String operation) {
+        if (baseVersion != null && artifact.getVersion() != baseVersion) {
+            throw new IllegalStateException("Artifact conflict while attempting to "
+                    + operation
+                    + ": expected version "
+                    + baseVersion
+                    + " but current version is "
+                    + artifact.getVersion()
+                    + ".");
+        }
+        String normalizedHash = baseContentHash == null ? "" : baseContentHash.trim();
+        if (!normalizedHash.isEmpty() && !contentHash(artifact.getContent()).equalsIgnoreCase(normalizedHash)) {
+            throw new IllegalStateException("Artifact conflict while attempting to "
+                    + operation
+                    + ": content changed on another device.");
+        }
+    }
+
+    public String contentHash(String content) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest((content == null ? "" : content).getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private Artifact findLatestAppliedArtifact(Artifact revisionArtifact) {

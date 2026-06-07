@@ -1,6 +1,7 @@
 package com.agenthub.application.realtime;
 
 import com.agenthub.application.audit.ActionAuditService;
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.common.TimeProvider;
 import com.agenthub.domain.task.TaskRepository;
 import com.agenthub.domain.task.TaskRun;
@@ -19,6 +20,7 @@ public class RealtimeControlService {
     private static final Logger logger = LoggerFactory.getLogger(RealtimeControlService.class);
 
     private final TaskRepository taskRepository;
+    private final ConversationAccessService conversationAccessService;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final RealtimeRunStateService realtimeRunStateService;
     private final RunCancellationRegistry runCancellationRegistry;
@@ -27,12 +29,14 @@ public class RealtimeControlService {
 
     public RealtimeControlService(
             TaskRepository taskRepository,
+            ConversationAccessService conversationAccessService,
             RealtimeEventPublisher realtimeEventPublisher,
             RealtimeRunStateService realtimeRunStateService,
             RunCancellationRegistry runCancellationRegistry,
             ActionAuditService actionAuditService,
             TimeProvider timeProvider) {
         this.taskRepository = taskRepository;
+        this.conversationAccessService = conversationAccessService;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.realtimeRunStateService = realtimeRunStateService;
         this.runCancellationRegistry = runCancellationRegistry;
@@ -56,6 +60,7 @@ public class RealtimeControlService {
         Instant now = timeProvider.now();
         TaskRun taskRun = taskRepository.findTaskRunById(new TaskRunId(taskRunId))
                 .orElseThrow(() -> new NoSuchElementException("TaskRun not found: " + taskRunId));
+        conversationAccessService.requireWritable(taskRun.getConversationId().value());
 
         if (isTerminal(taskRun.getStatus())) {
             safePublishRejected(taskRun, action, reason, "TaskRun is already terminal: " + taskRun.getStatus());

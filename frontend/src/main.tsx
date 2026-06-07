@@ -5,6 +5,7 @@ import App from "./App";
 import "./styles/global.css";
 import "./styles/components/disclosure.css";
 import "./styles/components/status.css";
+import "./styles/components/agent-create.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

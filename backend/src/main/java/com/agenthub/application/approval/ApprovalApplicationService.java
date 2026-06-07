@@ -1,6 +1,7 @@
 package com.agenthub.application.approval;
 
 import com.agenthub.application.audit.ActionAuditService;
+import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.common.IdGenerator;
@@ -22,6 +23,7 @@ public class ApprovalApplicationService {
 
     private final ApprovalRepository approvalRepository;
     private final ActionAuditService actionAuditService;
+    private final ConversationAccessService conversationAccessService;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final IdGenerator idGenerator;
     private final TimeProvider timeProvider;
@@ -29,11 +31,13 @@ public class ApprovalApplicationService {
     public ApprovalApplicationService(
             ApprovalRepository approvalRepository,
             ActionAuditService actionAuditService,
+            ConversationAccessService conversationAccessService,
             RealtimeEventPublisher realtimeEventPublisher,
             IdGenerator idGenerator,
             TimeProvider timeProvider) {
         this.approvalRepository = approvalRepository;
         this.actionAuditService = actionAuditService;
+        this.conversationAccessService = conversationAccessService;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.idGenerator = idGenerator;
         this.timeProvider = timeProvider;
@@ -47,6 +51,7 @@ public class ApprovalApplicationService {
             String riskLevel,
             String summary,
             List<String> affectedItems) {
+        conversationAccessService.requireWritable(conversationId);
         Instant now = timeProvider.now();
         ApprovalRequest approvalRequest = approvalRepository.save(new ApprovalRequest(
                 idGenerator.nextId("approval"),
@@ -74,6 +79,7 @@ public class ApprovalApplicationService {
 
     public ApprovalRequest approve(String approvalId) {
         ApprovalRequest approvalRequest = requireApproval(approvalId);
+        conversationAccessService.requireWritable(approvalRequest.getConversationId().value());
         Instant now = timeProvider.now();
         ensurePending(approvalRequest, now);
         ApprovalRequest approved = approvalRepository.save(approvalRequest.withStatus(ApprovalStatus.APPROVED, now));
@@ -90,6 +96,7 @@ public class ApprovalApplicationService {
 
     public ApprovalRequest cancel(String approvalId) {
         ApprovalRequest approvalRequest = requireApproval(approvalId);
+        conversationAccessService.requireWritable(approvalRequest.getConversationId().value());
         Instant now = timeProvider.now();
         ensurePending(approvalRequest, now);
         ApprovalRequest cancelled = approvalRepository.save(approvalRequest.withStatus(ApprovalStatus.CANCELLED, now));
@@ -114,6 +121,7 @@ public class ApprovalApplicationService {
             throw new IllegalArgumentException("approvalId is required for this high-risk operation.");
         }
         ApprovalRequest approvalRequest = requireApproval(approvalId);
+        conversationAccessService.requireWritable(approvalRequest.getConversationId().value());
         Instant now = timeProvider.now();
         if (approvalRequest.isExpired(now)) {
             ApprovalRequest expired = approvalRepository.save(approvalRequest.withStatus(ApprovalStatus.EXPIRED, now));
@@ -141,6 +149,7 @@ public class ApprovalApplicationService {
 
     public ApprovalRequest consume(String approvalId) {
         ApprovalRequest approvalRequest = requireApproval(approvalId);
+        conversationAccessService.requireWritable(approvalRequest.getConversationId().value());
         if (approvalRequest.getStatus() != ApprovalStatus.APPROVED) {
             throw new IllegalStateException("Only APPROVED approval requests can be consumed.");
         }
@@ -158,6 +167,7 @@ public class ApprovalApplicationService {
     }
 
     public List<ApprovalRequest> listByConversation(String conversationId) {
+        conversationAccessService.requireReadable(conversationId);
         return approvalRepository.findByConversationId(new ConversationId(conversationId));
     }
 

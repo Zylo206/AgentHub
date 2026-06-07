@@ -1,0 +1,110 @@
+.agent-create-dialog {
+  display: flex !important;
+  flex-direction: column !important;
+  width: min(860px, calc(100vw - 48px)) !important;
+  max-height: min(760px, calc(100vh - 40px)) !important;
+  padding: 26px !important;
+  overflow: auto !important;
+  border-radius: 24px !important;
+}
+
+.agent-create-dialog__header {
+  position: sticky !important;
+  top: -26px !important;
+  z-index: 2 !important;
+  margin: -2px -2px 18px !important;
+  padding: 2px 2px 14px !important;
+  background: linear-gradient(180deg, #ffffff 82%, rgba(255, 255, 255, 0)) !important;
+}
+
+.agent-create-dialog h2 {
+  margin-bottom: 6px !important;
+}
+
+.agent-create-draft {
+  overflow: visible !important;
+}
+
+.agent-create-tools {
+  grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)) !important;
+}
+
+.agent-create-local-steps {
+  margin-bottom: 18px !important;
+}
+
+.agent-create-local-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin-bottom: 16px !important;
+}
+
+.agent-create-local-card {
+  display: grid !important;
+  gap: 12px !important;
+  padding: 14px !important;
+  border: 1px solid rgba(31, 35, 41, 0.1) !important;
+  border-radius: 18px !important;
+  background: #fbfbfa !important;
+}
+
+.agent-create-local-card__header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+}
+
+.agent-create-local-card__header strong {
+  color: #111827 !important;
+  font-size: 15px !important;
+}
+
+.agent-create-local-card__header small,
+.agent-create-local-card p {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+.agent-create-local-card dl {
+  display: grid !important;
+  gap: 8px !important;
+  margin: 0 !important;
+}
+
+.agent-create-local-card dl div {
+  display: grid !important;
+  grid-template-columns: 74px minmax(0, 1fr) !important;
+  gap: 8px !important;
+}
+
+.agent-create-local-card dt {
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.agent-create-local-card dd {
+  margin: 0 !important;
+  color: #1f2937 !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.agent-create-cli-command {
+  min-height: 66px !important;
+}
+
+.agent-create-local-boundary {
+  background: #f7f9ff !important;
+}
+
+@media (max-width: 900px) {
+  .agent-create-local-grid,
+  .agent-create-draft__grid {
+    grid-template-columns: 1fr !important;
+  }
+}

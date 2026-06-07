@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 final class JdbcSerializationSupport {
 
@@ -14,6 +15,7 @@ final class JdbcSerializationSupport {
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {};
     private static final TypeReference<List<Integer>> INTEGER_LIST = new TypeReference<>() {};
     private static final TypeReference<List<MessageAttachment>> ATTACHMENT_LIST = new TypeReference<>() {};
+    private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {};
 
     private JdbcSerializationSupport() {
     }
@@ -36,6 +38,10 @@ final class JdbcSerializationSupport {
 
     static List<MessageAttachment> attachmentList(String json) {
         return read(json, ATTACHMENT_LIST, List.of());
+    }
+
+    static Map<String, String> stringMap(String json) {
+        return read(json, STRING_MAP, Map.of());
     }
 
     static List<ArtifactId> artifactIds(String json) {
