@@ -1,0 +1,36 @@
+.surface-card,
+.message-protocol-card,
+.message-auto-trigger,
+.message-agent-creation,
+.message-deploy-intent,
+.message-deploy-status,
+.message-artifact-card,
+.message-attachment-card,
+.artifact-scaffold-inspector,
+.artifact-delivery-workbench,
+.agent-builder-rail-card,
+.agent-builder-adapter-card,
+.adapter-test-result,
+.builder-summary {
+  border: 1px solid rgba(133, 151, 181, 0.2);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2937;
+  box-shadow: 0 18px 50px rgba(31, 41, 55, 0.08);
+}
+
+.message-protocol-card,
+.message-auto-trigger,
+.message-agent-creation,
+.message-deploy-intent,
+.message-deploy-status,
+.message-artifact-card,
+.message-attachment-card {
+  box-shadow: 0 12px 30px rgba(31, 41, 55, 0.06);
+}
+
+.artifact-delivery-workbench,
+.artifact-scaffold-inspector,
+.adapter-test-result {
+  overflow: hidden;
+}

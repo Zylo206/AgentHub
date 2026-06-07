@@ -1,0 +1,40 @@
+.section-header,
+.artifact-detail-section__header,
+.task-panel__header,
+.artifact-preview-dock__header,
+.adapter-test-panel__header,
+.agent-builder-local-cli-panel__header,
+.conversational-agent-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-header h3,
+.task-panel__header h3,
+.adapter-test-panel__header h2,
+.agent-builder-local-cli-panel__header h2,
+.conversational-agent-panel__header h2 {
+  margin: 0;
+  color: #172033;
+}
+
+.section-header p,
+.task-panel__header p,
+.adapter-test-panel__header p,
+.agent-builder-local-cli-panel__header p,
+.conversational-agent-panel__header p {
+  margin: 4px 0 0;
+  color: #5f6f86;
+}
+
+.workspace-panel-shell,
+.artifact-panel__sidebar,
+.artifact-panel__detail,
+.task-panel,
+.context-panel,
+.desktop-capability-panel {
+  min-width: 0;
+  color: #1f2937;
+}

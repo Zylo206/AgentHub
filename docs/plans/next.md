@@ -261,7 +261,11 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Agents Builder parent page now composes `AgentDirectorySection`, `CreateAgentSection`, `LocalCliHealthSection`, and `AdapterTestSection`; advanced Agent policy fields stay collapsed by default.
    - `Done`: status / badge / tag / chip component styling now starts in `styles/components/status.css` instead of adding more rules to `workspace.css`.
    - `Done`: Message Artifact cards now label backend Artifact records as real evidence and state that `/preview/:artifactId` is a local static Preview URL, not a cloud deployment.
-   - `Boundary`: this is still an incremental stylesheet extraction; large legacy rules remain in `workspace.css` and `layout-guard.css`, so workspace-wide component CSS migration remains active work.
+   - `Done`: CSS ownership is now documented in `docs/plans/css-ownership.md`, covering layout, message, artifact, agents, preview, desktop, status, diagnostics, buttons, cards, empty-state, panel-shell, and tabs.
+   - `Done`: `workspace.css` is now a small compatibility entrypoint that imports `workspace/legacy.css` plus owner component styles; new business rules should not be added there.
+   - `Done`: `layout-guard.css` is now a one-line compatibility entrypoint; the previous guard rules live under `styles/layout/workspace-shell.css`.
+   - `Done`: low-risk component owner files now exist for buttons, cards, empty states, panel shell, tabs, message, and artifact styles.
+   - `Boundary`: large legacy rules still remain in `workspace/legacy.css`; future work should delete duplicated selectors from that compatibility layer after each owner file is proven stable.
 
 13. **Add optional Tauri desktop support**
    - `Done`: `docs/spec/desktop-support-spec.md` defines the desktop support contract, including local file access, system notifications, Agent CLI process management, and boundaries.

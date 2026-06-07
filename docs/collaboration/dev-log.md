@@ -8955,3 +8955,43 @@
 - `cd frontend && npm.cmd run build` 通过。
 - `node scripts/e2e-browser.mjs` 通过，包含 TaskRun summary strip、Explain 展开后 router evidence、Agent 创建、Artifact / Approval / Preview 和三尺寸 layout gate。
 - `node scripts/smoke-test.mjs` 通过，继续验证 apply diff / force apply / deploy / restore 缺少 `approvalId` 时后端拒绝。
+
+## Phase 229-234：CSS owner 表、组件族迁移与 legacy 入口收敛
+
+### 目标
+
+- 将 `workspace.css` 和 `layout-guard.css` 从大体量业务样式文件收敛为兼容入口。
+- 建立 CSS owner 表，明确 layout、message、artifact、agents、preview、desktop、status、diagnostics、button、card、empty-state、panel-shell、tabs 的后续归属。
+- 先迁低风险组件族，不碰 Workspace 三栏宽度、响应式断点和业务状态逻辑。
+
+### 修复内容
+
+- Phase 229：新增 `docs/plans/css-ownership.md`，记录 CSS owner 表和迁移规则。
+- Phase 230：新增低风险组件族文件：
+  - `styles/components/buttons.css`
+  - `styles/components/cards.css`
+  - `styles/components/empty-state.css`
+  - `styles/components/panel-shell.css`
+  - `styles/components/tabs.css`
+- Phase 231：将 `workspace.css` 改为聚合入口，历史规则移动到 `styles/workspace/legacy.css`，后续禁止继续向 `workspace.css` 添加业务样式。
+- Phase 232：新增 `styles/components/message.css` 和 `styles/components/artifact.css`，承接 Message / Artifact 证据边界、基础卡片和安全文本样式。
+- Phase 233：将 `workspace/layout-guard.css` 压缩为兼容入口，原规则移动到 `styles/layout/workspace-shell.css`。
+- Phase 234：`workspace.css` 从 17710 行降到 8 行，`layout-guard.css` 从 396 行降到 1 行。
+
+### 当前体积
+
+- `workspace.css`: 8 行。
+- `workspace/legacy.css`: 17710 行，短期兼容层。
+- `workspace/layout-guard.css`: 1 行。
+- `layout/workspace-shell.css`: 396 行，layout owner 文件。
+
+### 边界
+
+- 本轮采用 legacy 兼容层以降低视觉回归风险；并未逐条删除历史重复规则。
+- 后续继续迁移时，应从 `workspace/legacy.css` 中按 owner 删除已稳定迁出的规则，逐步降低总 CSS 体积。
+- Browser 插件在本会话不可用，按仓库 Playwright E2E 路径完成验证。
+
+### 本轮验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Artifact / Approval / Preview 和 1366x768、1536x864、1600x900 layout gate。

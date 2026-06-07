@@ -1,0 +1,31 @@
+.panel-empty,
+.task-panel__empty,
+.message-stream__empty,
+.conversation-empty-im,
+.artifact-list-empty,
+.preview-page__state {
+  border: 1px dashed rgba(133, 151, 181, 0.28);
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.86);
+  color: #526179;
+}
+
+.panel-empty,
+.task-panel__empty,
+.message-stream__empty,
+.artifact-list-empty {
+  padding: 18px;
+}
+
+.conversation-empty-im,
+.preview-page__state {
+  padding: 24px;
+}
+
+.panel-empty strong,
+.task-panel__empty strong,
+.message-stream__empty strong,
+.conversation-empty-im strong,
+.preview-page__state strong {
+  color: #172033;
+}

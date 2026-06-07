@@ -1,0 +1,52 @@
+.primary-button,
+.secondary-button,
+.message-action-button,
+.artifact-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.primary-button {
+  border: 1px solid rgba(27, 68, 171, 0.2);
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+}
+
+.secondary-button,
+.message-action-button,
+.artifact-link {
+  border: 1px solid rgba(123, 143, 176, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  color: #213047;
+}
+
+.primary-button:hover:not(:disabled),
+.secondary-button:hover:not(:disabled),
+.message-action-button:hover:not(:disabled),
+.artifact-link:hover {
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.message-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.message-action-button--primary,
+.artifact-link--preview {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(219, 234, 254, 0.95);
+  color: #1d4ed8;
+}

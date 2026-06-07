@@ -1,0 +1,30 @@
+.message-bubble,
+.message-bubble__body,
+.message-type-ribbon,
+.message-action-bar,
+.message-target-agent,
+.message-auto-trigger__evidence-note,
+.message-artifact-card__evidence-note {
+  min-width: 0;
+}
+
+.message-auto-trigger__evidence-note,
+.message-artifact-card__evidence-note {
+  margin: 8px 0 0;
+  color: #526179;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.message-artifact-card__evidence-note {
+  border-top: 1px solid rgba(133, 151, 181, 0.16);
+  padding-top: 8px;
+}
+
+.message-target-agent--routing small {
+  color: #526179;
+}
+
+.message-action-bar {
+  color: #213047;
+}
