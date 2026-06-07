@@ -36,19 +36,19 @@ export function WorkspaceHeader({
           <span className="workspace-main__eyebrow">IM-first multi-agent workspace</span>
           <h2>{currentConversation.title || "未选择会话"}</h2>
           <p>
-            {displayConversationType(currentConversation.type)} · {participantCount} 个 Agent ·
-            发送任务消息后确认协作，Orchestrator 会分派、执行并汇总产物。
+            {displayConversationType(currentConversation.type)} / {participantCount} 个 Agent / 发送任务后确认协作，
+            Orchestrator 会分派、执行并汇总产物。
           </p>
         </div>
         <div className="workspace-main__mode-card" aria-label="当前协作模式">
-          <strong>{isGroup ? "群聊协作" : "单聊优先"}</strong>
-          <span>消息流 · TaskRun · Artifact</span>
+          <strong>{isGroup ? "群组协作" : "单聊优先"}</strong>
+          <span>消息流 / TaskRun / Artifact</span>
         </div>
       </div>
 
       <div className="workspace-session-strip" aria-label="当前会话状态">
         <span className="workspace-session-strip__status">运行中</span>
-        <span>Orchestrator → Specialist Agents → Reviewer</span>
+        <span>Orchestrator -&gt; Specialist Agents -&gt; Reviewer</span>
         <span>{actionAuditCount} 条审计记录</span>
         <span>{realtimeStatus}</span>
       </div>

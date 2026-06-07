@@ -177,7 +177,7 @@ export function CreateAgentSection({
                   data-testid="conversational-agent-refinement"
                   value={draftRefinementPrompt}
                   onChange={(event) => onDraftRefinementPromptChange(event.target.value)}
-                  placeholder="例如：再加 deploy 能力，改用 Codex，并补充安全评审职责。"
+                  placeholder="例如：再加 deploy 能力，改用 Codex，并补充安全审计职责。"
                 />
               </label>
               <button

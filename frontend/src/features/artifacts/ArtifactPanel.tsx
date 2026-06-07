@@ -6,18 +6,21 @@ import {
   type ArtifactDiagnosticEntry
 } from "./ArtifactDeliveryWorkbench";
 import { ArtifactDeployPanel } from "./ArtifactDeployPanel";
-import { ArtifactInspectorMetrics } from "./ArtifactInspectorMetrics";
+import { ArtifactHeroCard } from "./ArtifactHeroCard";
 import { ArtifactInspectorTabs } from "./ArtifactInspectorTabs";
+import { ArtifactInspectorTabsBody } from "./ArtifactInspectorTabsBody";
 import { ArtifactListPane } from "./ArtifactListPane";
+import { ArtifactOperationBar } from "./ArtifactOperationBar";
+import { ArtifactPreviewDock } from "./ArtifactPreviewDock";
 import { ArtifactRevisionWorkspace } from "./ArtifactRevisionWorkspace";
 import { ArtifactSnapshotTimeline } from "./ArtifactSnapshotTimeline";
+import { ArtifactTrustGrid } from "./ArtifactTrustGrid";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import type { Artifact, ArtifactSelectionReference } from "./artifactTypes";
 import type { ArtifactSnapshot } from "./artifactSnapshotTypes";
 import type { DeploymentRecord } from "../deployments/deploymentTypes";
 import { getVersionHistoryEntries } from "./artifactLineage";
 import { useArtifactOperationController, type ArtifactInspectorTab } from "./useArtifactOperationController";
-import { formatId, getIdValue } from "../../utils/id";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus } from "../../utils/displayLabels";
 
 interface ArtifactPanelProps {
@@ -320,24 +323,6 @@ function buildArtifactDiagnostics(
   ];
 }
 
-function renderArtifactContent(artifact: Artifact) {
-  if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
-    return (
-      <iframe
-        className="artifact-preview__frame"
-        title={artifact.title}
-        srcDoc={artifact.content}
-      />
-    );
-  }
-
-  return (
-    <pre className="artifact-preview__code">
-      <code>{artifact.content}</code>
-    </pre>
-  );
-}
-
 function truncateText(value: string, maxLength = 96): string {
   if (value.length <= maxLength) {
     return value;
@@ -387,6 +372,30 @@ export function ArtifactPanel({
     : "neutral";
   const selectedArtifactDiagnostics = selectedArtifact
     ? buildArtifactDiagnostics(selectedArtifact, selectedArtifactFallbackReason)
+    : [];
+  const selectedArtifactMetrics = selectedArtifact
+    ? [
+        {
+          label: "来源",
+          value: displayArtifactSourceKind(selectedArtifact.sourceKind || "STATIC_TEMPLATE"),
+          detail: selectedArtifact.sourceAdapterType || selectedArtifact.generationMode || "fallback-ready"
+        },
+        {
+          label: "质量",
+          value: selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome || "NOT_EVALUATED",
+          detail: "score " + formatQualityScore(selectedArtifact.qualityScore)
+        },
+        {
+          label: "构建",
+          value: formatBuildValidationValue(selectedArtifact),
+          detail: selectedArtifact.buildValidationReason || "无阻断原因"
+        },
+        {
+          label: "运行",
+          value: displayStatus(selectedArtifact.status),
+          detail: selectedArtifact.realAdapterOutcome || selectedArtifact.generationMode || "本地静态边界"
+        }
+      ]
     : [];
   const {
     activeInspectorTab,
@@ -517,142 +526,6 @@ export function ArtifactPanel({
               relatedCount={Math.max(versionEntries.length - 1, 0)}
               onChange={setActiveInspectorTab}
             />
-            <div className="artifact-preview__meta">
-              <div>
-                <strong>{selectedArtifact.title}</strong>
-                <p>
-                  {displayArtifactType(selectedArtifact.type)} / {displayStatus(selectedArtifact.status)} / v{selectedArtifact.version}
-                </p>
-                {selectedArtifact.sourceKind ? (
-                  <p className="artifact-preview__line">
-                    来源：{displayArtifactSourceKind(selectedArtifact.sourceKind)}
-                    {selectedArtifact.sourceAdapterType ? "/ Adapter: " + selectedArtifact.sourceAdapterType : ""}
-                    {selectedArtifact.sourceTaskStepId ? "/ Step: " + selectedArtifact.sourceTaskStepId : ""}
-                    {selectedArtifact.generationMode ? "/ Mode: " + selectedArtifact.generationMode : ""}
-                  </p>
-                ) : null}
-                {selectedArtifact.sourceKind ? (
-                  <p className="artifact-preview__line">
-                    {selectedArtifact.sourceKind === "REAL_ADAPTER" ? "真实 Adapter 输出" : "静态或 fallback 输出"}：{selectedArtifact.qualityStatus || "UNKNOWN"}
-                  </p>
-                ) : null}
-                <p className="artifact-preview__line">
-                  真实 Adapter 结果：{selectedArtifact.realAdapterOutcome || "FALLBACK"}
-                </p>
-                {selectedArtifact.sourceKind === "REAL_ADAPTER" ? (
-                  <p className="artifact-preview__line">构建校验：{formatBuildValidationValue(selectedArtifact)}</p>
-                ) : null}
-                {selectedArtifact.buildValidationReason ? (
-                  <p className="artifact-preview__line">构建原因：{selectedArtifact.buildValidationReason}</p>
-                ) : null}
-                <p className="artifact-preview__line">质量分：{formatQualityScore(selectedArtifact.qualityScore)}</p>
-                {selectedArtifactFallbackReason ? (
-                  <p className="artifact-preview__line">Fallback 原因：{selectedArtifactFallbackReason}</p>
-                ) : null}
-                {selectedArtifact.qualityReason ? (
-                  <p className="artifact-preview__line">质量原因：{selectedArtifact.qualityReason}</p>
-                ) : null}
-                {selectedArtifactGateAction ? (
-                  <div className="quality-gate-action artifact-preview__gate-action">
-                    <strong>{selectedArtifactGateAction.title}</strong>
-                    <p>失败原因：{selectedArtifactGateAction.reason}</p>
-                    <p>修复路径：{selectedArtifactGateAction.nextStep}</p>
-                  </div>
-                ) : null}
-                {selectedVersionEntry?.parentArtifact ? (
-                  <p className="artifact-preview__line revision-origin">
-                    基于 {selectedVersionEntry.parentArtifact.title} v{selectedVersionEntry.parentArtifact.version}
-                  </p>
-                ) : selectedArtifact.revisionInstruction ? (
-                  <p className="artifact-preview__line revision-origin">
-                    该 Revision 产物基于当前会话中的历史版本生成。
-                  </p>
-                ) : null}
-              </div>
-              <div className="artifact-preview__meta-right">
-                <span>{formatId(selectedArtifact.id)}</span>
-                <span>{selectedArtifact.language || "plain"}</span>
-              </div>
-            </div>
-            <ArtifactInspectorMetrics
-              metrics={[
-                {
-                  label: "来源",
-                  value: displayArtifactSourceKind(selectedArtifact.sourceKind || "STATIC_TEMPLATE"),
-                  detail: selectedArtifact.sourceAdapterType || selectedArtifact.generationMode || "fallback-ready"
-                },
-                {
-                  label: "质量",
-                  value: selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome || "NOT_EVALUATED",
-                  detail: "score " + formatQualityScore(selectedArtifact.qualityScore)
-                },
-                {
-                  label: "构建",
-                  value: formatBuildValidationValue(selectedArtifact),
-                  detail: selectedArtifact.buildValidationReason || "无阻断原因"
-                },
-                {
-                  label: "运行",
-                  value: displayStatus(selectedArtifact.status),
-                  detail: selectedArtifact.realAdapterOutcome || selectedArtifact.generationMode || "本地静态边界"
-                }
-              ]}
-            />
-            <ArtifactDeliveryWorkbench
-              artifact={selectedArtifact}
-              allArtifacts={allArtifacts}
-              snapshots={snapshots}
-              deployments={deployments}
-              fallbackReason={selectedArtifactFallbackReason}
-              gateAction={selectedArtifactGateAction}
-              cockpitTone={selectedArtifactCockpitTone}
-              diagnostics={selectedArtifactDiagnostics}
-              cockpitLabel={getArtifactCockpitLabel(selectedArtifact, selectedArtifactFallbackReason)}
-              cockpitDescription={getArtifactCockpitDescription(selectedArtifact, selectedArtifactFallbackReason)}
-              sourceDescription={getArtifactSourceDescription(selectedArtifact)}
-              qualityDescription={getArtifactQualityDescription(selectedArtifact)}
-              sourceBadgeTone={getArtifactBadgeTone(selectedArtifact.sourceKind)}
-              qualityBadgeTone={getArtifactBadgeTone(selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome)}
-              buildBadgeTone={getArtifactBadgeTone(formatBuildValidationValue(selectedArtifact))}
-              buildValidationLabel={formatBuildValidationValue(selectedArtifact)}
-              qualityScoreLabel={formatQualityScore(selectedArtifact.qualityScore)}
-              sizeLabel={formatArtifactSize(selectedArtifact.content)}
-            />
-            <section className="artifact-preview-dock" data-testid="artifact-preview-dock">
-              <div className="artifact-preview-dock__header">
-                <div>
-                  <span>本地预览</span>
-                  <strong>{selectedArtifact.type === "WEB_PREVIEW" ? "内嵌 Web 预览" : "内容快照"}</strong>
-                </div>
-                <a href={"/preview/" + getIdValue(selectedArtifact.id)} target="_blank" rel="noreferrer">
-                  打开独立预览
-                </a>
-              </div>
-              <div className="artifact-preview-dock__body">{renderArtifactContent(selectedArtifact)}</div>
-            </section>
-            <div className="artifact-preview__actions">
-              <button
-                type="button"
-                className="secondary-button artifact-preview__action-button"
-                disabled={!selectedArtifact.content}
-                onClick={() => {
-                  void handleCopyArtifactContent(selectedArtifact);
-                }}
-              >
-                复制内容
-              </button>
-              <button
-                type="button"
-                className="secondary-button artifact-preview__action-button"
-                disabled={!selectedArtifact.content}
-                onClick={() => handleDownloadArtifact(selectedArtifact)}
-              >
-                下载文件
-              </button>
-              {artifactOperationMessage ? (
-                <span className="artifact-preview__operation-message">{artifactOperationMessage}</span>
-              ) : null}
-            </div>
             {pendingApproval ? (
               <ArtifactApprovalGatePanel
                 approval={pendingApproval}
@@ -664,71 +537,126 @@ export function ArtifactPanel({
                 }}
               />
             ) : null}
-            <ArtifactRevisionWorkspace
-              artifact={selectedArtifact}
-              allArtifacts={allArtifacts}
-              revisingArtifact={revisingArtifact}
-              isEditingSelectedArtifact={isEditingSelectedArtifact}
-              draftContent={draftContent}
-              draftNote={draftNote}
-              draftSelection={draftSelection}
-              draftDiffPreview={draftDiffPreview}
-              revisionInstruction={revisionInstruction}
-              appliedDiffArtifactId={appliedDiffArtifactId}
-              diffConflictArtifactId={diffConflictArtifactId}
-              diffConflictMessage={diffConflictMessage}
-              canSendSelectionToChat={Boolean(onSendSelectionToChat)}
-              onStartContentEdit={handleStartContentEdit}
-              onCancelContentEdit={handleCancelContentEdit}
-              onDraftContentChange={setDraftContent}
-              onDraftNoteChange={setDraftNote}
-              onDraftSelectionChange={handleDraftSelectionChange}
-              onCreateDraftRevision={() => {
-                void handleCreateDraftRevision();
-              }}
-              onSendSelectionToChat={handleSendSelectionToChat}
-              onRevisionInstructionChange={setRevisionInstruction}
-              onCreateRevision={() => {
-                void handleCreateRevision();
-              }}
-              onApplyDiff={(artifact) => {
-                void handleApplyDiffArtifact(artifact);
-              }}
-              onForceApplyDiff={(artifact) => {
-                void handleForceApplyDiffArtifact(artifact);
-              }}
-            />
-            <ArtifactDeployPanel
-              artifact={selectedArtifact}
-              deployments={deployments}
-              deployingArtifact={deployingArtifact}
-              onDownloadBundle={() => onDownloadArtifactBundle(selectedArtifactId ? [selectedArtifactId] : [])}
-              onCreateDeployment={() => {
-                void handleCreateDeployment();
-              }}
-              onCopyPreviewUrl={(previewUrl) => {
-                void handleCopyPreviewUrl(previewUrl);
-              }}
-            />
-            <VersionHistoryPanel
-              artifacts={allArtifacts}
-              selectedArtifact={selectedArtifact}
-              selectedArtifactId={selectedArtifactId}
-              onSelectArtifact={onSelectArtifact}
-            />
-            <ArtifactSnapshotTimeline
-              snapshots={snapshots}
-              restoringSnapshot={restoringSnapshot}
-              onRestoreSnapshot={(snapshotId) => {
-                void handleRestoreSnapshot(snapshotId);
-              }}
-            />
-            <ArtifactAuditPanel
-              artifact={selectedArtifact}
-              selectedVersionEntry={selectedVersionEntry}
-              versionCount={versionEntries.length}
-              revisionInstructionLabel={
-                selectedArtifact.revisionInstruction ? truncateText(selectedArtifact.revisionInstruction, 72) : "无"
+            <ArtifactInspectorTabsBody
+              activeTab={activeInspectorTab}
+              overview={
+                <>
+                  <ArtifactHeroCard
+                    artifact={selectedArtifact}
+                    fallbackReason={selectedArtifactFallbackReason}
+                    gateAction={selectedArtifactGateAction}
+                    selectedVersionEntry={selectedVersionEntry}
+                    buildValidationLabel={formatBuildValidationValue(selectedArtifact)}
+                    qualityScoreLabel={formatQualityScore(selectedArtifact.qualityScore)}
+                  />
+                  <ArtifactTrustGrid metrics={selectedArtifactMetrics} />
+                  <ArtifactPreviewDock artifact={selectedArtifact} />
+                  <ArtifactOperationBar
+                    artifact={selectedArtifact}
+                    operationMessage={artifactOperationMessage}
+                    onCopy={handleCopyArtifactContent}
+                    onDownload={handleDownloadArtifact}
+                  />
+                </>
+              }
+              diff={
+                <ArtifactRevisionWorkspace
+                  artifact={selectedArtifact}
+                  allArtifacts={allArtifacts}
+                  revisingArtifact={revisingArtifact}
+                  isEditingSelectedArtifact={isEditingSelectedArtifact}
+                  draftContent={draftContent}
+                  draftNote={draftNote}
+                  draftSelection={draftSelection}
+                  draftDiffPreview={draftDiffPreview}
+                  revisionInstruction={revisionInstruction}
+                  appliedDiffArtifactId={appliedDiffArtifactId}
+                  diffConflictArtifactId={diffConflictArtifactId}
+                  diffConflictMessage={diffConflictMessage}
+                  canSendSelectionToChat={Boolean(onSendSelectionToChat)}
+                  onStartContentEdit={handleStartContentEdit}
+                  onCancelContentEdit={handleCancelContentEdit}
+                  onDraftContentChange={setDraftContent}
+                  onDraftNoteChange={setDraftNote}
+                  onDraftSelectionChange={handleDraftSelectionChange}
+                  onCreateDraftRevision={() => {
+                    void handleCreateDraftRevision();
+                  }}
+                  onSendSelectionToChat={handleSendSelectionToChat}
+                  onRevisionInstructionChange={setRevisionInstruction}
+                  onCreateRevision={() => {
+                    void handleCreateRevision();
+                  }}
+                  onApplyDiff={(artifact) => {
+                    void handleApplyDiffArtifact(artifact);
+                  }}
+                  onForceApplyDiff={(artifact) => {
+                    void handleForceApplyDiffArtifact(artifact);
+                  }}
+                />
+              }
+              versions={
+                <VersionHistoryPanel
+                  artifacts={allArtifacts}
+                  selectedArtifact={selectedArtifact}
+                  selectedArtifactId={selectedArtifactId}
+                  onSelectArtifact={onSelectArtifact}
+                />
+              }
+              snapshots={
+                <ArtifactSnapshotTimeline
+                  snapshots={snapshots}
+                  restoringSnapshot={restoringSnapshot}
+                  onRestoreSnapshot={(snapshotId) => {
+                    void handleRestoreSnapshot(snapshotId);
+                  }}
+                />
+              }
+              deploy={
+                <ArtifactDeployPanel
+                  artifact={selectedArtifact}
+                  deployments={deployments}
+                  deployingArtifact={deployingArtifact}
+                  onDownloadBundle={() => onDownloadArtifactBundle(selectedArtifactId ? [selectedArtifactId] : [])}
+                  onCreateDeployment={() => {
+                    void handleCreateDeployment();
+                  }}
+                  onCopyPreviewUrl={(previewUrl) => {
+                    void handleCopyPreviewUrl(previewUrl);
+                  }}
+                />
+              }
+              audit={
+                <ArtifactAuditPanel
+                  artifact={selectedArtifact}
+                  selectedVersionEntry={selectedVersionEntry}
+                  versionCount={versionEntries.length}
+                  revisionInstructionLabel={
+                    selectedArtifact.revisionInstruction ? truncateText(selectedArtifact.revisionInstruction, 72) : "无"
+                  }
+                />
+              }
+              related={
+                <ArtifactDeliveryWorkbench
+                  artifact={selectedArtifact}
+                  allArtifacts={allArtifacts}
+                  snapshots={snapshots}
+                  deployments={deployments}
+                  fallbackReason={selectedArtifactFallbackReason}
+                  gateAction={selectedArtifactGateAction}
+                  cockpitTone={selectedArtifactCockpitTone}
+                  diagnostics={selectedArtifactDiagnostics}
+                  cockpitLabel={getArtifactCockpitLabel(selectedArtifact, selectedArtifactFallbackReason)}
+                  cockpitDescription={getArtifactCockpitDescription(selectedArtifact, selectedArtifactFallbackReason)}
+                  sourceDescription={getArtifactSourceDescription(selectedArtifact)}
+                  qualityDescription={getArtifactQualityDescription(selectedArtifact)}
+                  sourceBadgeTone={getArtifactBadgeTone(selectedArtifact.sourceKind)}
+                  qualityBadgeTone={getArtifactBadgeTone(selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome)}
+                  buildBadgeTone={getArtifactBadgeTone(formatBuildValidationValue(selectedArtifact))}
+                  buildValidationLabel={formatBuildValidationValue(selectedArtifact)}
+                  qualityScoreLabel={formatQualityScore(selectedArtifact.qualityScore)}
+                  sizeLabel={formatArtifactSize(selectedArtifact.content)}
+                />
               }
             />
           </div>

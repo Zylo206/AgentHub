@@ -1,0 +1,61 @@
+.workspace-page .workspace-chat-lane {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.workspace-page .workspace-chat-lane__stream {
+  min-height: 360px;
+}
+
+.workspace-page .workspace-chat-lane__feed > .message-stream {
+  padding-bottom: 300px !important;
+  scroll-padding-bottom: 320px !important;
+}
+
+.workspace-page .message-stream .message-row,
+.workspace-page .message-stream__status-row {
+  scroll-margin-bottom: 320px !important;
+}
+
+.workspace-page .workspace-chat-lane__composer {
+  pointer-events: none !important;
+}
+
+.workspace-page .workspace-chat-lane__composer > .chat-input,
+.workspace-page .workspace-chat-lane__composer > .chat-input * {
+  pointer-events: auto !important;
+}
+
+.workspace-page .message-evidence-card {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.84);
+}
+
+.workspace-page .message-evidence-card--draft {
+  border-color: rgba(59, 130, 246, 0.22);
+  background: rgba(239, 246, 255, 0.78);
+}
+
+.workspace-page .message-evidence-card--backend {
+  border-color: rgba(16, 185, 129, 0.26);
+  background: rgba(236, 253, 245, 0.74);
+}
+
+.workspace-page .message-evidence-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  .workspace-page .workspace-chat-lane__stream {
+    min-height: 320px;
+  }
+}

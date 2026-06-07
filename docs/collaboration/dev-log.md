@@ -9143,3 +9143,143 @@
   - `1920x768`：无横向滚动，Create Agent 区域宽度正常，输入框横排显示。
   - `1366x768`：无横向滚动，shell 右边界在视口内，Create Agent 和 Local CLI 不再被裁切。
   - `/agents#local-cli`：自动滚动到 Local CLI，目标区顶部约 86px，宽度正常。
+
+## Phase 244：Workspace 中间对话栏产品化优化
+
+### 修复内容
+
+- `WorkspaceChatLane` 增加稳定的 `feed / composer` 结构：
+  - 消息流独立滚动，composer 固定在底部。
+  - diagnostics 保持底部轻入口，不挤占主消息流。
+- 中栏页面级样式接管关键布局：
+  - Presence 从大块状态条压缩为单行协作状态。
+  - 协作确认工具条和主路径 guide 降低高度与视觉噪音。
+  - MessageStream 增加底部滚动余量，避免最后一条消息被 composer 遮挡。
+  - ChatInput 改为更紧凑的 IM composer。
+- `MessageBubble` 抽出 `MessageActionBar`：
+  - 操作条从长内容底部上移到消息头部附近。
+  - 复制、引用、回复、Pin、Memory、重跑、重新生成不再依赖 hover 展开后的不稳定点击区域。
+- Deploy intent 主 CTA 改为 body portal 浮动确认条：
+  - 待确认 / 待审批时固定在 composer 上方。
+  - 明确展示 `Local Preview / Static Snapshot / Not Cloud Deploy` 边界。
+  - 避免本地静态预览确认按钮落在历史消息底部，被 composer 或 workspace stacking context 拦截。
+- 补强会话列表操作按钮 hit-test 层级，避免置顶 / 归档按钮被 conversation card 父层拦截。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含：
+  - Message Action Bar copy / quote / reply / pin / memory。
+  - TaskRun / Context / Adapter / Artifact / Diff / Apply / Restore / Deploy / Preview 主链路。
+  - `1366x768`、`1536x864`、`1600x900` layout gate。
+- Browser 插件实测 `/workspace`：
+  - `1366x768` 无横向滚动。
+  - console 无 error / warning。
+  - Presence 高度约 42px，协作工具条约 50px。
+  - MessageStream 独立滚动，composer focus 正常。
+
+### 边界
+
+- 本轮只优化 Workspace 中间对话栏和相关点击稳定性，不继续扩展右侧 Artifact Inspector 或 Agents 页面视觉。
+- Deploy 浮动确认条仍然表示本地静态预览，不表示真实云部署。
+
+## Phase 245：Workspace 中栏与产物工作栏设计优化
+
+### 修复内容
+
+- 使用 Product Design 流程按现有 AgentHub 设计系统做界面收敛，不引入新 UI 框架。
+- 中间对话栏从多张独立状态卡堆叠，改为更轻的任务指挥区：
+  - Header 只保留会话标题和必要说明。
+  - Presence 压缩为单行在线状态。
+  - 协作确认工具条和主路径 guide 降低高度、减少边框噪音。
+  - 选中 Agent 横幅改为轻量路由提示。
+  - Composer 再次压缩，保证 1366x768 下 MessageStream 高度满足 layout gate。
+- 产物工作栏做首屏可读性优化：
+  - Header sticky，工作栏在滚动时仍保留上下文。
+  - 当前产物卡完整显示，不再只露出顶部色块。
+  - Inspector tabs 改为横向单行滚动，减少纵向占用。
+  - Overview 首屏稳定显示当前产物、状态指标、内容快照和复制/下载操作。
+  - 保持 `Local Preview / Static Snapshot / Not Cloud Deploy` 的产品边界，不把本地静态预览描述为真实云部署。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Artifact Diff/Apply/Restore/Deploy/Preview、Message Action Bar 和三尺寸 layout gate。
+- Browser 插件实测 `/workspace`：
+  - `1366x768` 无横向滚动。
+  - console 无 error / warning。
+  - Artifact 工作栏首屏可见当前产物、tab、状态指标、内容预览和操作按钮。
+
+### 边界
+
+- 本轮只做 Workspace 中栏和 Artifact Inspector 视觉/布局优化，没有改后端 API 和 Artifact 操作语义。
+- 右栏仍沿用现有 ArtifactPanel 结构；后续如需更彻底产品化，应继续拆 `ArtifactPanel` 的 UI 子区，而不是继续叠加全局覆盖。
+
+## Phase 246-250：Workspace 指挥区与 Artifact Inspector 结构化
+
+### 修复内容
+
+- 右侧 Artifact Inspector 不再把概览、Diff、版本、快照、部署和审计堆在同一视觉层级：
+  - 新增 `ArtifactHeroCard`、`ArtifactTrustGrid`、`ArtifactPreviewDock`、`ArtifactOperationBar`、`ArtifactInspectorTabsBody`。
+  - Overview 首屏固定表达当前产物、来源 / 质量 / 构建 / 运行、本地预览、复制和下载。
+  - Diff、版本、快照、部署、审计、关联证据进入明确 tab body。
+- 中间栏顶部抽出 `WorkspaceCommandDeck`：
+  - Header、Presence、Collaboration Toolbar、通知和选中 Agent 横幅合并为任务指挥区。
+  - 会话摘要和权限面板默认进入折叠的高级详情，降低首屏堆叠。
+  - 修复 Workspace 顶部组件中残留的损坏文案，恢复稳定中文表达。
+- 消息气泡证据分层：
+  - `message-target-agent` 和 `message-auto-trigger` 标记为前端协作草案。
+  - Artifact 卡片标记为后端 Artifact 记录，继续说明本地静态预览不是云部署。
+- 样式所有权继续拆分：
+  - 新增 `styles/pages/workspace-command-deck.css`、`styles/pages/workspace-chat-lane.css`、`styles/pages/artifact-inspector.css`。
+  - 本轮新增样式不再继续写入 `styles/pages/workspace.css`。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Message Action Bar、TaskRun、Artifact Diff / Apply / Restore / Deploy / Preview 和三尺寸 layout gate。
+- Browser 插件实测：
+  - `/workspace`：`1366x768`、`1536x864`、`1600x900` 无横向滚动。
+  - `/workspace`：CommandDeck 高度约 147px，MessageStream 分别约 438px / 527px / 563px。
+  - `/workspace`：CommandDeck 与 MessageStream 无重叠，MessageStream 与 composer 无重叠。
+  - `/agents`：`1366x768` 无横向滚动，Agent Builder 可滚动且主路径可见。
+  - `/desktop`：`1366x768` 无横向滚动，Desktop Console 改为浅色产品卡片系统。
+
+### 边界
+
+- 本轮没有修改后端 API、Artifact approval / restore / deploy 语义。
+- `styles/pages/workspace.css` 的历史 Phase 244 / 245 规则仍保留，后续需要按组件族安全迁移后再删除，避免一次性删规则导致视觉回退。
+
+## Phase 251-255：前端生产级收口与 Desktop Console 文案修复
+
+### 修复内容
+
+- Workspace 任务指挥区继续收口：
+  - `WorkspaceCommandDeck` 高级区明确改为 `Explain / Advanced`。
+  - 协作工具条恢复稳定中文文案，只保留确认协作、调试入口和主路径 guide。
+  - `workspace-command-deck.css` 改为 owner 文件内维护展开 / 收起文案和紧凑尺寸约束。
+- Agents 管理台恢复产品级中文：
+  - `AgentBuilderPage`、`AgentDirectorySection`、`CreateAgentSection`、`LocalCliHealthSection`、`AdapterTestSection` 清理乱码文案。
+  - 继续保持四区结构：Agent Directory、Create Agent、Local CLI Health、Adapter Test。
+  - 创建 Agent 默认突出自然语言草案和关键字段；System Prompt、Tool Capability、Adapter policy 保持折叠。
+  - Claude Code / Codex 继续表达为 headless Artifact-only 接入，不声明完整平台深集成。
+- Desktop Console 闭环展示产品化：
+  - `DesktopConsolePage` 和 `DesktopCapabilityPanel` 恢复稳定中文文案。
+  - 文件预览、Context / Memory 候选、系统通知、Agent CLI 探测、backend managed process 改为四个产品 tab。
+  - Web 模式明确降级为“需要 Tauri 壳才能使用本地能力”，不影响 Web 主链路。
+- 边界口径继续保持：
+  - Preview / Deploy 仍是本地静态预览，不表达真实云部署。
+  - PPT 仍是 metadata / download / Context handoff，不做完整在线渲染。
+  - 本轮不新增 UI 框架，不改后端 API。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Agent 创建、Artifact Diff / Apply / Restore / Deploy / Preview 和三尺寸 layout gate。
+- `node scripts/smoke-test.mjs` 通过，包含 approvalId 缺失拒绝、Diff conflict、Deploy、Bundle、Restore、Audit 和 Context Retrieval。
+- `node scripts/sse-smoke-test.mjs` 通过，包含 SSE 事件、Last-Event-ID replay、active realtime state 和终态 TaskRun cancel 拒绝。
+
+### 边界
+
+- 当前会话未暴露独立 Browser MCP 导航工具；E2E 已使用仓库 Playwright 路径完成浏览器级三尺寸 gate。
+- `workspace/legacy.css` 仍是大体量兼容层，本轮只修可见文案和 owner CSS，不做一次性删除以避免视觉回归。

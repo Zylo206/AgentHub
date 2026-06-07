@@ -58,3 +58,167 @@
     display: grid;
   }
 }
+
+/* Phase 250: make the standalone Desktop Console read like product cards, not a debug terminal. */
+.desktop-console-page .desktop-console {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.1);
+}
+
+.desktop-console-page .desktop-console__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.1), transparent 34%),
+    #f8fafc;
+}
+
+.desktop-console-page .desktop-console__header strong {
+  display: block;
+  color: #0f172a;
+  font-size: 1.15rem;
+}
+
+.desktop-console-page .desktop-console__header p,
+.desktop-console-page .desktop-console__card-header p,
+.desktop-console-page .desktop-console__empty {
+  color: #64748b;
+}
+
+.desktop-console-page .desktop-console__metrics,
+.desktop-console-page .desktop-console__grid {
+  display: grid;
+  gap: 12px;
+}
+
+.desktop-console-page .desktop-console__metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.desktop-console-page .desktop-console__metrics article,
+.desktop-console-page .desktop-console__card,
+.desktop-console-page .desktop-console__boundary {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 20px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+}
+
+.desktop-console-page .desktop-console__metrics article {
+  padding: 12px;
+}
+
+.desktop-console-page .desktop-console__metrics span,
+.desktop-console-page .desktop-console__eyebrow,
+.desktop-console-page .desktop-console__card-header span {
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-console-page .desktop-console__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.desktop-console-page .desktop-console__tab {
+  min-height: 38px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #475569;
+  font-weight: 850;
+}
+
+.desktop-console-page .desktop-console__tab--active {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+}
+
+.desktop-console-page .desktop-console__grid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  align-items: start;
+}
+
+.desktop-console-page .desktop-console__card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.desktop-console-page .desktop-console__card--span {
+  grid-column: span 2;
+}
+
+.desktop-console-page .desktop-console__card-header,
+.desktop-console-page .desktop-console__row,
+.desktop-console-page .desktop-console__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.desktop-console-page .desktop-console__card-header {
+  justify-content: space-between;
+}
+
+.desktop-console-page .desktop-console__row input,
+.desktop-console-page .desktop-console__card input {
+  min-width: 0;
+  min-height: 38px;
+  flex: 1 1 auto;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 8px 10px;
+}
+
+.desktop-console-page .desktop-console__preview,
+.desktop-console-page .desktop-console__process-log {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 12px;
+}
+
+@media (max-width: 900px) {
+  .desktop-console-page .desktop-console__metrics,
+  .desktop-console-page .desktop-console__tabs,
+  .desktop-console-page .desktop-console__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-console-page .desktop-console__card--span {
+    grid-column: auto;
+  }
+
+  .desktop-console-page .desktop-console__card-header,
+  .desktop-console-page .desktop-console__row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

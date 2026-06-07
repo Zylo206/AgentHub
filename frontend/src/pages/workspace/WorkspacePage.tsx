@@ -42,6 +42,7 @@ import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
 import { WorkspaceArtifactInspectorShell } from "./WorkspaceArtifactInspectorShell";
 import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 import { WorkspaceChatLane } from "./WorkspaceChatLane";
+import { WorkspaceCommandDeck } from "./WorkspaceCommandDeck";
 import { WorkspaceDiagnosticsDrawer } from "./WorkspaceDiagnosticsDrawer";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspacePresenceBar } from "./WorkspacePresenceBar";
@@ -69,6 +70,9 @@ import "../../styles/workspace/layout-guard.css";
 import "../../styles/production-alignment.css";
 import "../../styles/workspace/production.css";
 import "../../styles/pages/workspace.css";
+import "../../styles/pages/workspace-command-deck.css";
+import "../../styles/pages/workspace-chat-lane.css";
+import "../../styles/pages/artifact-inspector.css";
 
 type DiagnosticPanelKey = "taskrun" | "context" | "adapter" | "audit" | "local";
 const DIAGNOSTIC_PANELS: Array<{ key: DiagnosticPanelKey; label: string; summary: string }> = [
@@ -714,6 +718,74 @@ export function WorkspacePage() {
     )
   };
 
+  const commandDeckNotices = (
+    <>
+      {errorMessage ? (
+        <div className="workspace-error">
+          <span>{errorMessage}</span>
+          <button type="button" className="secondary-button" onClick={() => setErrorMessage(null)}>
+            关闭
+          </button>
+        </div>
+      ) : null}
+      {operationMessage ? (
+        <div className="workspace-notice">
+          <span>{operationMessage}</span>
+          <button type="button" className="secondary-button" onClick={() => setOperationMessage(null)}>
+            关闭
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const commandDeckSelectedAgentBanner = selectedAgent ? (
+    <div className="selected-agent-banner">
+      <div>
+        <div className="selected-agent-name">当前 Agent：{selectedAgent.name}</div>
+        <div className="selected-agent-adapter">
+          首选 Adapter：{selectedAgent.preferredAdapterType || "MOCK"} / 角色：{displayAgentRole(selectedAgent.role)}
+        </div>
+        {selectedAgentAdapterDescriptor ? (
+          <div className="selected-agent-health">
+            <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(selectedAgentAdapterDescriptor.status)}`}>
+              Adapter 状态：{displayStatus(selectedAgentAdapterDescriptor.status)}
+            </span>
+            {selectedAgentAdapterDescriptor.status !== "AVAILABLE" ? (
+              <span className="selected-agent-health__hint">不可用时会回退到 MOCK。</span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <button type="button" className="secondary-button clear-selected-agent-button" onClick={handleClearSelectedAgent}>
+        清除选择
+      </button>
+    </div>
+  ) : null;
+
+  const commandDeckAdvanced = (
+    <>
+      <WorkspaceSessionSummary
+        currentConversation={currentConversation}
+        selectedAgent={selectedAgent}
+        selectedAgentAdapterDescriptor={selectedAgentAdapterDescriptor}
+        participants={currentParticipantAgents}
+        messages={messages}
+        latestTaskRun={selectedTaskRun}
+        pinnedContextCount={pinnedContexts.length}
+        memoryCount={memories.length}
+        artifactCount={artifacts.length}
+      />
+      <WorkspaceAccessPanel
+        conversation={currentConversation}
+        saving={savingAccessPolicy}
+        onUpdateVisibility={handleUpdateConversationVisibility}
+        onUpsertMember={handleUpsertConversationMember}
+        onRemoveMember={handleRemoveConversationMember}
+      />
+    </>
+  );
+
   return (
     <section
       className={`workspace-page ${artifactInspectorCollapsed ? "workspace-page--artifact-inspector-collapsed" : ""}`}
@@ -742,92 +814,42 @@ export function WorkspacePage() {
       />
 
       <main className={`workspace-main ${currentConversationId ? "" : "workspace-main--empty"}`}>
-        <WorkspaceHeader
-          currentConversation={currentConversation}
-          currentParticipantAgents={currentParticipantAgents}
-          actionAuditCount={actionAudits.length}
-          realtimeStatus={realtimeStatus}
-          activeRealtimeRunSummary={activeRealtimeRunSummary}
+        <WorkspaceCommandDeck
+          header={
+            <WorkspaceHeader
+              currentConversation={currentConversation}
+              currentParticipantAgents={currentParticipantAgents}
+              actionAuditCount={actionAudits.length}
+              realtimeStatus={realtimeStatus}
+              activeRealtimeRunSummary={activeRealtimeRunSummary}
+            />
+          }
+          presence={
+            <WorkspacePresenceBar
+              currentUser={currentUser}
+              deviceId={presenceDeviceId}
+              error={presenceError}
+              records={presenceRecords}
+            />
+          }
+          notices={commandDeckNotices}
+          toolbar={
+            <WorkspaceCollaborationToolbar
+              currentConversationId={currentConversationId}
+              latestUserMessage={latestUserMessage}
+              latestTriggerReady={latestTriggerReady}
+              latestTriggerPrimaryLabel={latestTriggerPrimaryLabel}
+              autoTriggerRunningMessageId={autoTriggerRunningMessageId}
+              showDebugActions={showDebugActions}
+              runningDemoTask={runningDemoTask}
+              onStartCollaboration={handleConfirmOrchestratorTrigger}
+              onToggleDebugActions={() => setShowDebugActions((current) => !current)}
+              onRunManualDebug={handleRunDemoTask}
+            />
+          }
+          selectedAgentBanner={commandDeckSelectedAgentBanner}
+          advanced={commandDeckAdvanced}
         />
-        <WorkspacePresenceBar
-          currentUser={currentUser}
-          deviceId={presenceDeviceId}
-          error={presenceError}
-          records={presenceRecords}
-        />
-
-        {errorMessage ? (
-          <div className="workspace-error">
-            <span>{errorMessage}</span>
-            <button type="button" className="secondary-button" onClick={() => setErrorMessage(null)}>
-              关闭
-            </button>
-          </div>
-        ) : null}
-        {operationMessage ? (
-          <div className="workspace-notice">
-            <span>{operationMessage}</span>
-            <button type="button" className="secondary-button" onClick={() => setOperationMessage(null)}>
-              关闭
-            </button>
-          </div>
-        ) : null}
-
-        <WorkspaceCollaborationToolbar
-          currentConversationId={currentConversationId}
-          latestUserMessage={latestUserMessage}
-          latestTriggerReady={latestTriggerReady}
-          latestTriggerPrimaryLabel={latestTriggerPrimaryLabel}
-          autoTriggerRunningMessageId={autoTriggerRunningMessageId}
-          showDebugActions={showDebugActions}
-          runningDemoTask={runningDemoTask}
-          onStartCollaboration={handleConfirmOrchestratorTrigger}
-          onToggleDebugActions={() => setShowDebugActions((current) => !current)}
-          onRunManualDebug={handleRunDemoTask}
-        />
-
-        <WorkspaceSessionSummary
-          currentConversation={currentConversation}
-          selectedAgent={selectedAgent}
-          selectedAgentAdapterDescriptor={selectedAgentAdapterDescriptor}
-          participants={currentParticipantAgents}
-          messages={messages}
-          latestTaskRun={selectedTaskRun}
-          pinnedContextCount={pinnedContexts.length}
-          memoryCount={memories.length}
-          artifactCount={artifacts.length}
-        />
-        <WorkspaceAccessPanel
-          conversation={currentConversation}
-          saving={savingAccessPolicy}
-          onUpdateVisibility={handleUpdateConversationVisibility}
-          onUpsertMember={handleUpsertConversationMember}
-          onRemoveMember={handleRemoveConversationMember}
-        />
-
-        {selectedAgent ? (
-          <div className="selected-agent-banner">
-            <div>
-              <div className="selected-agent-name">当前 Agent：{selectedAgent.name}</div>
-              <div className="selected-agent-adapter">
-                首选 Adapter：{selectedAgent.preferredAdapterType || "MOCK"} / 角色：{displayAgentRole(selectedAgent.role)}
-              </div>
-              {selectedAgentAdapterDescriptor ? (
-                <div className="selected-agent-health">
-                  <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(selectedAgentAdapterDescriptor.status)}`}>
-                    Adapter 状态：{displayStatus(selectedAgentAdapterDescriptor.status)}
-                  </span>
-                  {selectedAgentAdapterDescriptor.status !== "AVAILABLE" ? (
-                    <span className="selected-agent-health__hint">不可用时会回退到 MOCK。</span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-            <button type="button" className="secondary-button clear-selected-agent-button" onClick={handleClearSelectedAgent}>
-              清除选择
-            </button>
-          </div>
-        ) : null}
 
         <WorkspaceChatLane
           messageStream={

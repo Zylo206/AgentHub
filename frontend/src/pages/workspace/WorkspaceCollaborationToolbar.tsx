@@ -36,7 +36,7 @@ export function WorkspaceCollaborationToolbar({
       <div className="workspace-main__toolbar workspace-main__toolbar--collaboration">
         <div className="section-header">
           <h3>协作消息流</h3>
-          <span>发送任务消息后确认启动，多 Agent 会在同一会话中依次回复。</span>
+          <span>发送任务后确认启动，多 Agent 会在同一会话中依次回复。</span>
         </div>
         <div className="workspace-main__collaboration-actions" data-testid="workspace-collaboration-actions">
           <button
@@ -82,11 +82,11 @@ export function WorkspaceCollaborationToolbar({
       <div className="workspace-main__flow-guide" data-testid="workspace-flow-guide" aria-label="Agent collaboration flow">
         <span>主路径</span>
         <strong>发送任务</strong>
-        <em>→</em>
+        <em>-&gt;</em>
         <strong>确认协作</strong>
-        <em>→</em>
+        <em>-&gt;</em>
         <strong>多 Agent 回复</strong>
-        <em>→</em>
+        <em>-&gt;</em>
         <strong>Artifact / Diff / Deploy</strong>
       </div>
     </>

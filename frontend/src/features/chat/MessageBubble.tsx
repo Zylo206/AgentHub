@@ -4,6 +4,7 @@ import type { AgentCreationDraft } from "../agents/conversationalAgentDraft";
 import type { DeployIntentDraft, LightweightAttachment, Message, OrchestratorTriggerSuggestion } from "./chatTypes";
 import { getAttachmentDownloadUrl } from "../../api/agenthubApi";
 import { formatId, getIdValue } from "../../utils/id";
+import { createPortal } from "react-dom";
 
 interface MessageBubbleProps {
   message: Message;
@@ -141,6 +142,95 @@ function getMessagePreview(message: Message): string {
 
 function getApprovalStatus(approval?: ApprovalRequest | null): string | null {
   return approval?.status ? approval.status.toUpperCase() : null;
+}
+
+function MessageActionBar({
+  message,
+  messageId,
+  pinnedContextId,
+  savedAsMemory,
+  rerunning,
+  regenerating,
+  onCopyMessage,
+  onQuoteMessage,
+  onReplyMessage,
+  onRerunFromMessage,
+  onRegenerateAgentReply,
+  onTogglePin,
+  onSaveAsMemory
+}: Pick<
+  MessageBubbleProps,
+  | "message"
+  | "pinnedContextId"
+  | "savedAsMemory"
+  | "rerunning"
+  | "regenerating"
+  | "onCopyMessage"
+  | "onQuoteMessage"
+  | "onReplyMessage"
+  | "onRerunFromMessage"
+  | "onRegenerateAgentReply"
+  | "onTogglePin"
+  | "onSaveAsMemory"
+> & { messageId: string }) {
+  return (
+    <div className="message-action-bar" data-testid="message-action-bar">
+      <div className="message-action-bar__label">
+        <span>Message Action Bar</span>
+        <strong>{message.senderType === "AGENT" ? "Agent 回复操作" : message.senderType === "USER" ? "用户消息操作" : "系统消息操作"}</strong>
+      </div>
+      <div className="message-action-bar__buttons">
+        <button type="button" className="message-action-button" data-testid="message-copy-button" onClick={() => onCopyMessage(message)}>
+          复制
+        </button>
+        <button type="button" className="message-action-button" data-testid="message-quote-button" onClick={() => onQuoteMessage(message)}>
+          引用
+        </button>
+        <button type="button" className="message-action-button" data-testid="message-reply-button" onClick={() => onReplyMessage(message)}>
+          回复
+        </button>
+        {message.senderType === "USER" ? (
+          <button
+            type="button"
+            className="message-action-button message-action-button--primary"
+            data-testid="message-rerun-button"
+            disabled={rerunning}
+            onClick={() => onRerunFromMessage(message)}
+          >
+            {rerunning ? "重新运行中..." : "从此消息重新运行"}
+          </button>
+        ) : null}
+        {message.senderType === "AGENT" ? (
+          <button
+            type="button"
+            className="message-action-button message-action-button--primary"
+            data-testid="message-regenerate-button"
+            disabled={regenerating}
+            onClick={() => onRegenerateAgentReply(message)}
+          >
+            {regenerating ? "重新生成中..." : "重新生成回复"}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={`message-action-button message-pin-button ${pinnedContextId ? "message-pin-button--active" : ""}`}
+          data-testid="message-pin-button"
+          onClick={() => onTogglePin(messageId, pinnedContextId)}
+          aria-pressed={Boolean(pinnedContextId)}
+        >
+          {pinnedContextId ? "已固定 / 取消固定" : "固定到 Context"}
+        </button>
+        <button
+          type="button"
+          className={`message-action-button ${savedAsMemory ? "message-action-button--active" : ""}`}
+          data-testid="message-memory-button"
+          onClick={() => onSaveAsMemory(message)}
+        >
+          {savedAsMemory ? "已保存记忆" : "保存为记忆"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function getAutoTriggerStatus(
@@ -455,6 +545,64 @@ export function MessageBubble({
           {regenerating ? <em>再生成中</em> : null}
         </div>
 
+        <MessageActionBar
+          message={message}
+          messageId={messageId}
+          pinnedContextId={pinnedContextId}
+          savedAsMemory={savedAsMemory}
+          rerunning={rerunning}
+          regenerating={regenerating}
+          onCopyMessage={onCopyMessage}
+          onQuoteMessage={onQuoteMessage}
+          onReplyMessage={onReplyMessage}
+          onRerunFromMessage={onRerunFromMessage}
+          onRegenerateAgentReply={onRegenerateAgentReply}
+          onTogglePin={onTogglePin}
+          onSaveAsMemory={onSaveAsMemory}
+        />
+
+        {deployIntent && deployIntent.status !== "COMPLETED" && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="message-inline-primary-actions message-inline-primary-actions--deploy"
+                data-testid="message-deploy-primary-actions"
+                style={{
+                  bottom: 104,
+                  left: "50%",
+                  position: "fixed",
+                  transform: "translateX(-50%)",
+                  width: "min(520px, calc(100vw - 48px))",
+                  zIndex: 1000
+                }}
+              >
+                {deployIntent.status === "PENDING" ? (
+                  <button
+                    type="button"
+                    className="message-action-button message-action-button--primary"
+                    data-testid="message-start-deploy"
+                    disabled={deployIntentRunning || !deployIntentArtifact}
+                    onClick={() => onStartDeployIntent(message, deployIntentArtifact ? getIdValue(deployIntentArtifact.id) : deployIntent.artifactId)}
+                  >
+                    {deployIntentRunning ? "创建审批中..." : "确认生成预览 URL"}
+                  </button>
+                ) : null}
+                {deployIntent.status === "APPROVAL_REQUIRED" ? (
+                  <button
+                    type="button"
+                    className="message-action-button message-action-button--primary"
+                    data-testid="message-approve-deploy"
+                    disabled={deployIntentRunning}
+                    onClick={() => onApproveDeployIntent(getIdValue(message.id))}
+                  >
+                    {deployIntentRunning ? "部署中..." : "审批并生成预览"}
+                  </button>
+                ) : null}
+                <span>Local Preview / Static Snapshot / Not Cloud Deploy</span>
+              </div>,
+              document.body
+            )
+          : null}
+
         {protocolLabel ? (
           <div className={`message-protocol-card message-protocol-card--${protocolLabel.toLowerCase()}`}>
             <div>
@@ -492,65 +640,12 @@ export function MessageBubble({
           </div>
         ) : null}
 
-        <div className="message-action-bar" data-testid="message-action-bar">
-          <div className="message-action-bar__label">
-            <span>Message Action Bar</span>
-            <strong>{message.senderType === "AGENT" ? "Agent 回复操作" : message.senderType === "USER" ? "用户消息操作" : "系统消息操作"}</strong>
-          </div>
-          <div className="message-action-bar__buttons">
-          <button type="button" className="message-action-button" data-testid="message-copy-button" onClick={() => onCopyMessage(message)}>
-            复制
-          </button>
-          <button type="button" className="message-action-button" data-testid="message-quote-button" onClick={() => onQuoteMessage(message)}>
-            引用
-          </button>
-          <button type="button" className="message-action-button" data-testid="message-reply-button" onClick={() => onReplyMessage(message)}>
-            回复
-          </button>
-          {message.senderType === "USER" ? (
-            <button
-              type="button"
-              className="message-action-button message-action-button--primary"
-              data-testid="message-rerun-button"
-              disabled={rerunning}
-              onClick={() => onRerunFromMessage(message)}
-            >
-              {rerunning ? "重新运行中..." : "从此消息重新运行"}
-            </button>
-          ) : null}
-          {message.senderType === "AGENT" ? (
-            <button
-              type="button"
-              className="message-action-button message-action-button--primary"
-              data-testid="message-regenerate-button"
-              disabled={regenerating}
-              onClick={() => onRegenerateAgentReply(message)}
-            >
-              {regenerating ? "重新生成中..." : "重新生成回复"}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={`message-action-button message-pin-button ${pinnedContextId ? "message-pin-button--active" : ""}`}
-            data-testid="message-pin-button"
-            onClick={() => onTogglePin(messageId, pinnedContextId)}
-            aria-pressed={Boolean(pinnedContextId)}
-          >
-            {pinnedContextId ? "已固定 / 取消固定" : "固定到 Context"}
-          </button>
-          <button
-            type="button"
-            className={`message-action-button ${savedAsMemory ? "message-action-button--active" : ""}`}
-            data-testid="message-memory-button"
-            onClick={() => onSaveAsMemory(message)}
-          >
-            {savedAsMemory ? "已保存记忆" : "保存为记忆"}
-          </button>
-          </div>
-        </div>
-
         {message.senderType === "USER" && (message.targetAgentId || (message.mentionedAgentIds?.length ?? 0) > 0) ? (
-          <div className="message-target-agent message-target-agent--routing" data-testid="message-target-agent">
+          <div
+            className="message-target-agent message-target-agent--routing message-evidence-card message-evidence-card--draft"
+            data-testid="message-target-agent"
+          >
+            <strong className="message-evidence-label">前端协作草案</strong>
             <span>{(message.mentionedAgentIds?.length ?? 0) > 1 ? "协作对象草案：" : "指定协作对象："}</span>
             <span className="message-target-agent-name">
               @{targetAgentLabel || "已指定 Agent"}
@@ -563,11 +658,12 @@ export function MessageBubble({
 
         {autoTriggerStatus ? (
           <div
-            className={`message-auto-trigger message-auto-trigger--${autoTriggerStatus.tone}`}
+            className={`message-auto-trigger message-auto-trigger--${autoTriggerStatus.tone} message-evidence-card message-evidence-card--draft`}
             data-testid="message-auto-trigger"
           >
             <div className="message-auto-trigger__header">
               <div>
+                <span className="message-evidence-label">待确认协作草案</span>
                 <strong>{autoTriggerStatus.label}</strong>
                 <p>{autoTriggerStatus.detail}</p>
               </div>
@@ -727,6 +823,26 @@ export function MessageBubble({
               </div>
               <span>{getDeployIntentStatusLabel(deployIntent.status)}</span>
             </div>
+            <div className="message-auto-trigger__actions message-deploy-intent__actions">
+              {deployIntentArtifact ? (
+                <button
+                  type="button"
+                  className="message-action-button"
+                  data-testid="message-download-bundle"
+                  onClick={() => onDownloadArtifactBundle([getIdValue(deployIntentArtifact.id)])}
+                >
+                  下载源码包
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="message-action-button"
+                disabled={deployIntentRunning || deployIntent.status === "COMPLETED"}
+                onClick={() => onCancelDeployIntent(getIdValue(message.id))}
+              >
+                取消
+              </button>
+            </div>
             <div className="message-deploy-intent__flow" data-testid="message-deploy-intent-flow">
               <span>聊天确认</span>
               <strong>确认产物</strong>
@@ -758,48 +874,6 @@ export function MessageBubble({
               </div>
             </div>
             {deployIntent.errorMessage ? <p className="message-deploy-intent__error">{deployIntent.errorMessage}</p> : null}
-            <div className="message-auto-trigger__actions">
-              {deployIntent.status === "PENDING" ? (
-                <button
-                  type="button"
-                  className="message-action-button message-action-button--primary"
-                  data-testid="message-start-deploy"
-                  disabled={deployIntentRunning || !deployIntentArtifact}
-                  onClick={() => onStartDeployIntent(message, deployIntentArtifact ? getIdValue(deployIntentArtifact.id) : deployIntent.artifactId)}
-                >
-                  {deployIntentRunning ? "创建审批中..." : "确认生成预览 URL"}
-                </button>
-              ) : null}
-              {deployIntent.status === "APPROVAL_REQUIRED" ? (
-                <button
-                  type="button"
-                  className="message-action-button message-action-button--primary"
-                  data-testid="message-approve-deploy"
-                  disabled={deployIntentRunning}
-                  onClick={() => onApproveDeployIntent(getIdValue(message.id))}
-                >
-                  {deployIntentRunning ? "部署中..." : "审批并生成预览"}
-                </button>
-              ) : null}
-              {deployIntentArtifact ? (
-                <button
-                  type="button"
-                  className="message-action-button"
-                  data-testid="message-download-bundle"
-                  onClick={() => onDownloadArtifactBundle([getIdValue(deployIntentArtifact.id)])}
-                >
-                  下载源码包
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="message-action-button"
-                disabled={deployIntentRunning || deployIntent.status === "COMPLETED"}
-                onClick={() => onCancelDeployIntent(getIdValue(message.id))}
-              >
-                取消
-              </button>
-            </div>
           </div>
         ) : null}
 
@@ -901,7 +975,11 @@ export function MessageBubble({
             {artifactIds.map((artifactId) => {
               const artifact = artifacts.find((item) => getIdValue(item.id) === artifactId);
               return (
-                <article className="message-artifact-card" data-testid="message-artifact-card" key={artifactId}>
+                <article
+                  className="message-artifact-card message-evidence-card message-evidence-card--backend"
+                  data-testid="message-artifact-card"
+                  key={artifactId}
+                >
                   <div className="message-artifact-card__header">
                     <span className="message-artifact-card__icon" aria-hidden="true">
                       {artifact?.type === "API_CONTRACT" ? "API" : artifact?.type === "REVIEW_REPORT" ? "R" : "A"}

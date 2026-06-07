@@ -9,9 +9,13 @@ interface WorkspaceChatLaneProps {
 export function WorkspaceChatLane({ messageStream, composer, diagnostics }: WorkspaceChatLaneProps) {
   return (
     <div className="workspace-main__content">
-      <section className="workspace-chat-lane" aria-label="IM collaboration lane">
-        {messageStream}
-        {composer}
+      <section className="workspace-chat-lane workspace-chat-lane--product" aria-label="IM collaboration lane">
+        <div className="workspace-chat-lane__feed" data-testid="workspace-chat-feed">
+          {messageStream}
+        </div>
+        <div className="workspace-chat-lane__composer" data-testid="workspace-chat-composer">
+          {composer}
+        </div>
       </section>
       {diagnostics}
     </div>

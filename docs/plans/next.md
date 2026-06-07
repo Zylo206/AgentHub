@@ -278,6 +278,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: `workspace.css` is now a small compatibility entrypoint that imports `workspace/legacy.css` plus owner component styles; new business rules should not be added there.
    - `Done`: `layout-guard.css` is now a one-line compatibility entrypoint; the previous guard rules live under `styles/layout/workspace-shell.css`.
    - `Done`: low-risk component owner files now exist for buttons, cards, empty states, panel shell, tabs, message, and artifact styles.
+   - `Done`: Phase 251-255 tightened the Workspace command deck copy / layout, restored product Chinese copy across Agents and Desktop Console, and kept new CommandDeck rules in the owner CSS file instead of expanding legacy workspace CSS.
    - `Boundary`: large legacy rules still remain in `workspace/legacy.css`; future work should delete duplicated selectors from that compatibility layer after each owner file is proven stable.
 
 13. **Add optional Tauri desktop support**
@@ -300,6 +301,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Desktop local files can now be promoted directly to Context / Memory after upload through new attachment pin / memory APIs, without waiting for the user to send a chat message first.
    - `Done`: Desktop notification rules are configurable and persisted through the Tauri desktop config; notification history items can route back to known AgentHub resources such as TaskRun targets.
    - `Done`: Desktop runtime management now includes periodic managed-process refresh, backend port diagnostics for `127.0.0.1:8080`, and persisted runtime settings for recent directories, CLI commands, backend jar path, and working directory.
+   - `Done`: Desktop Console visible copy is normalized to production Chinese and grouped into product tabs for files, notifications, Agent CLI health, and backend process management.
    - `Boundary`: desktop support is optional; normal Web build, smoke, and Browser E2E must not require Tauri, native packaging, or desktop permissions.
    - `Boundary`: desktop process management only controls processes started through the Tauri shell and does not replace OS service management.
    - `Boundary`: full installer bundling still needs WiX download access or a preinstalled WiX toolset.

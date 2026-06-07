@@ -35,12 +35,7 @@ function formatUpdatedAt(value: string): string {
   return `${minutes}m 前`;
 }
 
-export function WorkspacePresenceBar({
-  currentUser,
-  deviceId,
-  error,
-  records
-}: WorkspacePresenceBarProps) {
+export function WorkspacePresenceBar({ currentUser, deviceId, error, records }: WorkspacePresenceBarProps) {
   const activeRecords = records.slice(0, 6);
 
   return (
@@ -61,7 +56,7 @@ export function WorkspacePresenceBar({
               title={record.activeArtifactId ? `正在查看 Artifact ${record.activeArtifactId}` : undefined}
             >
               {record.displayName || record.userId}
-              <small>{formatPresenceStatus(record.status)} · {formatUpdatedAt(record.updatedAt)}</small>
+              <small>{formatPresenceStatus(record.status)} / {formatUpdatedAt(record.updatedAt)}</small>
             </span>
           ))
         ) : (
