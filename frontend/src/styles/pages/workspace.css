@@ -1,0 +1,28 @@
+.task-run-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.task-run-summary-strip span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.92);
+  color: var(--agenthub-color-text, #0f172a);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.task-run-explain-details {
+  margin-top: 12px;
+}
+
+.task-run-explain-details > .orchestrator-explain-panel,
+.task-run-explain-details > .adapter-routing-panel {
+  margin: 0 12px 12px;
+}

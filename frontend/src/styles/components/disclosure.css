@@ -1,0 +1,45 @@
+.agenthub-disclosure {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.agenthub-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--agenthub-color-text, #0f172a);
+  font-weight: 800;
+}
+
+.agenthub-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agenthub-disclosure > summary::after {
+  content: "+";
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--agenthub-status-info, #2563eb);
+  font-weight: 900;
+}
+
+.agenthub-disclosure[open] > summary::after {
+  content: "-";
+}
+
+.agenthub-disclosure > summary small {
+  color: var(--agenthub-color-text-muted, #64748b);
+  font-size: 12px;
+  font-weight: 700;
+}

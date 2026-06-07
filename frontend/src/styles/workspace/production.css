@@ -136,6 +136,17 @@
   color: #667085 !important;
 }
 
+.workspace-page .message-auto-trigger__evidence-note {
+  margin: 8px 0 0;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 12px;
+  background: rgba(239, 246, 255, 0.82);
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
+
 @media (max-width: 1536px) {
   .workspace-page {
     grid-template-columns:

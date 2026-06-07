@@ -683,6 +683,15 @@ async function collapseDiagnosticTab(page, tabKey) {
     });
 }
 
+async function expandTaskRunExplain(page) {
+  const details = page.getByTestId("task-run-explain-details").first();
+  await details.waitFor({ state: "visible", timeout: 10000 });
+  const isOpen = await details.evaluate((element) => element.hasAttribute("open"));
+  if (!isOpen) {
+    await details.locator("summary").click();
+  }
+}
+
 async function verifyContextPanel(page, conversationId) {
   await openDiagnosticTab(page, "context");
   await waitForVisible(page, "[data-testid='context-panel']", "context panel");
@@ -1188,6 +1197,8 @@ async function runBrowserE2e() {
     await step("custom Agent is routed into TaskRun", () => verifyCustomAgentRouting(conversationId, customAgent));
     await openDiagnosticTab(page, "taskrun");
     await waitForVisible(page, "[data-testid='task-run-panel']", "TaskRun panel");
+    await waitForVisible(page, "[data-testid='task-run-summary-strip']", "TaskRun summary strip");
+    await expandTaskRunExplain(page);
     await waitForVisible(page, "[data-testid='orchestrator-route-evidence']", "router evidence chips");
     await waitForVisible(page, ".message-bubble--agent-protocol", "agent protocol message");
     await collapseDiagnosticTab(page, "taskrun");
@@ -1200,6 +1211,7 @@ async function runBrowserE2e() {
     if (EXPECT_AUTO_TRIGGER_APPROVAL) {
       await waitForVisible(page, "[data-testid='message-auto-trigger']", "message auto-trigger card");
     }
+    await expandTaskRunExplain(page);
     await waitForVisible(page, "[data-testid='orchestrator-explain-panel']", "orchestrator explain panel");
     await step("Context panel shows TaskRun snapshot", () => verifyContextPanel(page, conversationId));
     await step("Context Search retrieves multiple source types", () => verifyContextSourceDiversity(conversationId));

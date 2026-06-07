@@ -30,8 +30,8 @@ export const TOOL_CAPABILITY_OPTIONS: ToolCapabilityOption[] = [
   },
   {
     key: "deploy",
-    label: "部署发布",
-    description: "处理部署、发布状态和本地 Preview 发布流程",
+    label: "部署预览",
+    description: "处理部署意图、发布状态和本地 Preview 流程",
     resolvedCapabilities: ["DEPLOYMENT", "DEPLOY_PREVIEW"]
   },
   {

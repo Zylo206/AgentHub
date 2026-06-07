@@ -8850,3 +8850,108 @@
 - 本轮没有重写 DesktopCapabilityPanel 内部 Tauri 功能实现；只是把入口和页面所有权拆清楚。
 - Browser 插件截图调用在本轮出现 CDP 截图超时，未作为最终验收依据；命令级构建、E2E、smoke、SSE 均通过。
 - `workspace.css` 和 `layout-guard.css` 仍然存在，后续需要继续按组件所有权迁移，不应继续扩大兜底覆盖层。
+
+## Phase 217：Workspace / Message / Artifact 继续生产级收敛
+
+### 目标
+
+- 继续处理前端问题报告中的未完成项，优先降低“前端推断被误读成后端证据”和 Workspace / Artifact 巨型组件耦合风险。
+- 保持 IM-first 主链路、Artifact 审批 / Diff / Deploy / Snapshot 契约和现有 E2E 行为不变。
+
+### 修复内容
+
+- MessageBubble 将“预计参与 Agent / 预计产物”和 `targetAgentId / mentionedAgentIds` 暴露文案改为“协作对象草案 / 产物意图草案”。
+- MessageBubble 新增证据边界说明：前端草案只来自轻量解析，真实执行以 Orchestrator Explain、TaskRun、TaskGraph、Artifact 记录为准。
+- WorkspacePage 继续拆分会话操作和 TaskRun 控制：
+  - `useWorkspaceConversationActions`
+  - `useWorkspaceTaskRunControls`
+- ArtifactPanel 先完成低风险拆分，将左侧 Artifact 列表和空示例抽为 `ArtifactListPane`，避免在本轮触碰审批、恢复、部署等高风险执行路径。
+- `workspace/production.css` 增加消息证据边界样式，继续把新增规则放入生产化分层文件而不是扩大 `workspace.css`。
+
+### 边界
+
+- 本轮不是 ArtifactPanel 的完整 operation reducer/state machine 重写；Apply / Restore / Deploy / Approval 仍留在父组件，后续需要继续拆。
+- 本轮不是 CSS 彻底迁移；`workspace.css` 和 `layout-guard.css` 仍存在，后续继续按组件所有权迁移。
+
+## Phase 218-223：生产级收敛继续推进
+
+### 目标
+
+- 让 WorkspacePage 更接近页面组装层，继续降低消息、inline Agent、审批编排对主页面的耦合。
+- 在不重写高风险 Artifact 执行链路的前提下，继续拆分 ArtifactPanel 展示层。
+- 继续降低默认界面密度，并强化 Preview 的 local/static/fallback 边界。
+
+### 修复内容
+
+- Phase 218：WorkspacePage 继续拆分为页面组装层，新增：
+  - `useWorkspaceMessageActions`
+  - `useWorkspaceInlineAgentCreation`
+  - `useWorkspaceApprovalActions`
+- Phase 218：消息发送、附件上传、引用 / 回复、pin、memory、rerun、regenerate、聊天内 Agent 创建和 Orchestrator run approval 已从 WorkspacePage 迁出。
+- Phase 219：ArtifactPanel 继续拆分纯展示层，新增：
+  - `ArtifactApprovalGatePanel`
+  - `ArtifactAuditPanel`
+  - `ArtifactRevisionWorkspace`
+- Phase 219：新增 `useArtifactOperationController`，集中管理 revision instruction、draft diff、approval gate、apply / force apply、restore、deploy、copy / download、operation message 和 conflict state。
+- Phase 219：ArtifactPanel 父组件不再直接持有高风险操作状态和执行函数，只负责将 controller state / actions 传给子面板。
+- Phase 220：ChatInput 默认 Explain 不再展示 fallback / adapter chip，主输入区只保留协作对象、附件、引用和产物选区等用户可理解信息。
+- Phase 220：TaskRunPanel 默认只展示 run summary strip；Router / Executor / Aggregator / TaskGraph / Adapter scoring 进入 `Explain / Advanced` 折叠区，E2E 会主动展开后验证高级证据。
+- Phase 221：`/agents` 增加四区导航和语义锚点：Agent Directory、Create Agent、Local CLI Health、Adapter Test。
+- Phase 221：`/agents` Builder 将 System Prompt、Tool Capability、兼容 toolTags、preferred Adapter 和 Adapter policy 收进默认折叠的高级配置区，保留自然语言创建、基础字段和 Local CLI Health 作为主路径。
+- Phase 222：Preview 顶部固定展示 `Local Preview / Static Snapshot / Not Cloud Deploy`，版本区从 release 语义改为 preview snapshot / local candidate。
+- Phase 223：新增 `styles/pages/preview.css` 和 `styles/pages/agents.css`，Preview / Agents 新规则不再继续写入 `workspace.css`。
+- Phase 223：新增 `styles/components/disclosure.css` 和 `styles/pages/workspace.css`，把本轮通用折叠面板与 TaskRun summary strip 规则放入明确分层，不再扩大 `workspace.css`。
+
+### 当前体积
+
+- `WorkspacePage.tsx`: 840 行，已低于 900-1000 行目标。
+- `ArtifactPanel.tsx`: 719 行，已低于 900-1000 行目标。
+
+### 边界
+
+- Artifact operation controller 已完成第一版集中化，Revision Workspace 也已从父组件拆出；后续可继续拆 cockpit / preview / snapshot 视觉层。
+- `/agents` Builder 已建立四区入口并完成高级配置默认折叠；后续仍可继续压缩右侧 inspector 的信息密度。
+- CSS 收敛已新增 page 和 component stylesheet 起点，但尚未迁移 `workspace.css` 和 `layout-guard.css` 的历史规则。
+
+### 本轮验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，新增验证 `task-run-summary-strip` 并展开 `task-run-explain-details` 后检查 Router / Orchestrator evidence。
+- `node scripts/smoke-test.mjs` 通过，继续验证 apply diff / force apply / deploy / restore 缺少 `approvalId` 时后端拒绝。
+
+## Phase 224-228：文案边界、TaskRun 拆分、Agents 压缩与状态 CSS
+
+### 目标
+
+- 统一 Artifact、TaskRun、Agent Builder、Preview 的中文产品化文案，同时保留 `REAL_ADAPTER`、`MOCK`、`STATIC`、`FALLBACK` 等必要技术枚举。
+- 继续拆分 TaskRunPanel 和 Agents 页面，让主文件只负责组合，降低后续 UI 回归风险。
+- 只迁移 status / badge / tag / chip 组件族样式，不做大规模 layout 搬迁。
+- 强化 Message / Artifact 证据边界，避免把前端草案误读成后端真实编排结果。
+
+### 修复内容
+
+- Phase 224：修复 Artifact 详情、Revision Workspace、Approval Gate、Audit Panel 的乱码和临时英文文案。
+- Phase 224：重写 PreviewPage 可见文案，顶部固定展示 `Local Preview / Static Snapshot / Not Cloud Deploy`，并明确不执行真实构建、不发布公网地址、不绕过审批审计。
+- Phase 225：TaskRunPanel 拆成 `TaskRunSummaryStrip`、`OrchestratorExplainDetails`、`TaskStepList`、`AdapterRoutingExplainPanel`，主文件降为页面组合层。
+- Phase 226：Agents 页面拆成 `AgentDirectorySection`、`CreateAgentSection`、`LocalCliHealthSection`、`AdapterTestSection`，默认主路径突出自然语言创建和关键字段，高级配置继续折叠。
+- Phase 226：修复 `TOOL_CAPABILITY_OPTIONS` 的可见中文标签和说明，避免 Agent Builder 继续展示乱码。
+- Phase 227：新增 `styles/components/status.css`，集中 status-pill、adapter-health-pill、artifact-source-badge、agent-tag、tag-chip、depth badge 的基础状态色。
+- Phase 228：Message Artifact 卡增加“真实 Artifact 证据”与本地静态 Preview 边界说明，Preview 链接文案改为“打开本地 Preview”。
+
+### 当前体积
+
+- `TaskRunPanel.tsx`: 220 行，低于 600-700 行目标。
+- `AgentBuilderPage.tsx`: 373 行，低于 700-850 行目标。
+- `ArtifactPanel.tsx`: 719 行，继续保持低于 900-1000 行目标。
+
+### 边界
+
+- 本轮未删除 `workspace.css` 和 `layout-guard.css`，只是完成 status 组件族的第二轮分层入口。
+- Preview 仍是本地/static/fallback 预览，不是 Vercel / Netlify / Docker / Kubernetes 发布。
+- Agents 页面保留 MOCK/static fallback，但明确不能展示为真实 CLI 或真实 Provider 成功。
+
+### 本轮验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 TaskRun summary strip、Explain 展开后 router evidence、Agent 创建、Artifact / Approval / Preview 和三尺寸 layout gate。
+- `node scripts/smoke-test.mjs` 通过，继续验证 apply diff / force apply / deploy / restore 缺少 `approvalId` 时后端拒绝。

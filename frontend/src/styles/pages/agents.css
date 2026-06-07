@@ -1,0 +1,64 @@
+.agent-builder-section-map {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  width: min(960px, calc(100% - 48px));
+  margin: 10px auto 4px;
+}
+
+.agent-builder-section-map a {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #111827;
+  text-decoration: none;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+
+.agent-builder-section-map strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.agent-builder-section-map span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agent-builder-page [id] {
+  scroll-margin-top: 18px;
+}
+
+.agent-builder-advanced-config {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 2px;
+}
+
+.agent-builder-advanced-config > :not(summary) {
+  margin-inline: 14px;
+}
+
+.agent-builder-advanced-config > :last-child {
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1200px) {
+  .agent-builder-section-map {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .agent-builder-section-map {
+    grid-template-columns: 1fr;
+    width: calc(100% - 28px);
+  }
+}

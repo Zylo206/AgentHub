@@ -215,7 +215,7 @@ function hasAnyToken(content: string, tokens: string[]): boolean {
   return tokens.some((token) => lower.includes(token.toLowerCase()));
 }
 
-function getExpectedAgents(message: Message, targetAgentLabel?: string | null): string[] {
+function getPlannedAgents(message: Message, targetAgentLabel?: string | null): string[] {
   const content = message.content || "";
   const agents = ["Orchestrator"];
 
@@ -238,7 +238,7 @@ function getExpectedAgents(message: Message, targetAgentLabel?: string | null): 
   return Array.from(new Set(agents));
 }
 
-function getExpectedArtifacts(message: Message): string[] {
+function getPlannedArtifacts(message: Message): string[] {
   const content = message.content || "";
   const artifacts: string[] = [];
 
@@ -414,8 +414,8 @@ export function MessageBubble({
   const autoTriggerStatus = getAutoTriggerStatus(autoTriggerSuggestion, autoTriggerApproval);
   const pendingTriggerApproval = autoTriggerApproval ?? autoTriggerSuggestion?.pendingApproval ?? null;
   const canCancelTriggerApproval = pendingTriggerApproval?.status?.toUpperCase() === "PENDING";
-  const expectedAgents = getExpectedAgents(message, targetAgentLabel);
-  const expectedArtifacts = getExpectedArtifacts(message);
+  const plannedAgents = getPlannedAgents(message, targetAgentLabel);
+  const plannedArtifacts = getPlannedArtifacts(message);
   const contextSources = getContextSources(message);
   const blockerAnchorId = `message-blockers-${messageId}`;
 
@@ -551,14 +551,12 @@ export function MessageBubble({
 
         {message.senderType === "USER" && (message.targetAgentId || (message.mentionedAgentIds?.length ?? 0) > 0) ? (
           <div className="message-target-agent message-target-agent--routing" data-testid="message-target-agent">
-            <span>{(message.mentionedAgentIds?.length ?? 0) > 1 ? "多 Agent 路由：" : "路由目标："}</span>
+            <span>{(message.mentionedAgentIds?.length ?? 0) > 1 ? "协作对象草案：" : "指定协作对象："}</span>
             <span className="message-target-agent-name">
-              @{targetAgentLabel || message.targetAgentId}
+              @{targetAgentLabel || "已指定 Agent"}
             </span>
             <small>
-              {(message.mentionedAgentIds?.length ?? 0) > 1
-                ? "写入 mentionedAgentIds，Orchestrator 会把这些 Agent 纳入 TaskGraph。"
-                : "写入 targetAgentId，作为 selectedAgent 优先路由。"}
+              这是发送时解析出的协作意图，真实执行以 TaskRun / TaskGraph 记录为准。
             </small>
           </div>
         ) : null}
@@ -588,17 +586,17 @@ export function MessageBubble({
                 <p>{getTaskSummary(message)}</p>
               </div>
               <div className="message-auto-trigger__plan-cell">
-                <span>预计参与 Agent</span>
+                <span>协作对象草案</span>
                 <div className="message-auto-trigger__plan-chips">
-                  {expectedAgents.map((agent) => (
+                  {plannedAgents.map((agent) => (
                     <strong key={agent}>{agent}</strong>
                   ))}
                 </div>
               </div>
               <div className="message-auto-trigger__plan-cell">
-                <span>预计产物</span>
+                <span>产物意图草案</span>
                 <div className="message-auto-trigger__plan-chips">
-                  {expectedArtifacts.map((artifactType) => (
+                  {plannedArtifacts.map((artifactType) => (
                     <strong key={artifactType}>{artifactType}</strong>
                   ))}
                 </div>
@@ -608,6 +606,9 @@ export function MessageBubble({
                 <p>{contextSources.join(" / ")}</p>
               </div>
             </div>
+            <p className="message-auto-trigger__evidence-note">
+              草案来自前端轻量解析；启动后请以 Orchestrator Explain、TaskRun、TaskGraph 和 Artifact 记录作为真实证据。
+            </p>
             <div className="message-auto-trigger__actions">
               {autoTriggerStatus.canRun ? (
                 <button
@@ -680,7 +681,7 @@ export function MessageBubble({
             </div>
             <p className="message-agent-creation__prompt">{agentCreationDraft.systemPrompt}</p>
             {agentCreationDraft.fallbackReason ? (
-              <p className="message-agent-creation__prompt">Fallback reason: {agentCreationDraft.fallbackReason}</p>
+              <p className="message-agent-creation__prompt">Fallback 原因：{agentCreationDraft.fallbackReason}</p>
             ) : null}
             <div className="message-agent-creation__reasons">
               {agentCreationDraft.reasoning.map((reason) => (
@@ -906,7 +907,7 @@ export function MessageBubble({
                       {artifact?.type === "API_CONTRACT" ? "API" : artifact?.type === "REVIEW_REPORT" ? "R" : "A"}
                     </span>
                     <div>
-                      <span>Artifact / {artifact?.type || "UNKNOWN"}</span>
+                      <span>真实 Artifact 证据 / {artifact?.type || "UNKNOWN"}</span>
                       <strong>{artifact?.title || artifactId}</strong>
                     </div>
                     <em>{artifact?.type || "UNKNOWN"}</em>
@@ -916,12 +917,15 @@ export function MessageBubble({
                     <span>质量：{artifact ? getQualityLabel(artifact) : "UNKNOWN"}</span>
                     {artifact?.language ? <span>语言：{artifact.language}</span> : null}
                   </div>
+                  <p className="message-artifact-card__evidence-note">
+                    该卡片来自后端 Artifact 记录；预览为本地静态 URL，不代表真实云部署。
+                  </p>
                   <div className="message-artifact-card__actions">
                     <button type="button" className="artifact-link" onClick={() => onSelectArtifact(artifactId)}>
                       选择产物
                     </button>
                     <a className="artifact-link artifact-link--preview" href={`/preview/${artifactId}`} target="_blank" rel="noreferrer">
-                      打开 Preview
+                      打开本地 Preview
                     </a>
                   </div>
                 </article>

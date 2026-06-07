@@ -119,7 +119,7 @@ export function ChatInput({
       title: "To: Orchestrator 自动分派",
       detail: "未指定 Agent 时，将按任务意图、工具能力和可用性选择内置或自建 Agent。",
       agents: [],
-      adapters: ["MOCK fallback 可用"],
+      adapters: [],
       capabilities: []
     };
   }, [agents, selectedAgent, value]);
@@ -266,9 +266,6 @@ export function ChatInput({
             <div className="chat-routing-preview__chips">
               {routingPreview.agents.map((agent) => (
                 <em key={getIdValue(agent.id)}>@{agent.name}</em>
-              ))}
-              {routingPreview.adapters.map((adapter) => (
-                <em key={adapter}>{adapter}</em>
               ))}
               {routingPreview.capabilities.map((capability) => (
                 <em key={capability}>{capability}</em>

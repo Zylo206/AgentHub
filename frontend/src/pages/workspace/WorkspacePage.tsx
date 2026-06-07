@@ -1,40 +1,14 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  createAgent,
-  createConversation,
-  draftAgentFromNaturalLanguage,
-  approveApprovalRequest,
-  cancelTaskRun,
-  createApprovalRequest,
-  createDemoTask,
   getAgents,
-  getArtifact,
-  getConversation,
-  getMemoriesByConversation,
-  getMessages,
-  getApprovalRequestsByConversation,
-  getOrchestratorTriggerSuggestion,
-  getPinnedContextsByConversation,
-  archiveConversation,
-  markConversationRead,
-  pinConversation,
-  pinMessageAsContext,
-  regenerateAgentReply,
-  runOrchestratorFromMessage,
-  saveMessageAsMemory,
-  sendMessage,
-  stopTaskRun,
-  uploadConversationAttachment,
-  unarchiveConversation,
-  unpinConversation,
-  unpinContext
+  getArtifact
 } from "../../api/agenthubApi";
 import type { AdapterQualityMetrics } from "../../api/agenthubApi";
 import { AdapterQualityDashboard } from "../../features/agents/AdapterQualityDashboard";
 import { AdapterRoutingPanel } from "../../features/agents/AdapterRoutingPanel";
 import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
-import { inferAgentCreationDraft, type AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
+import type { AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel";
 import type { Artifact, ArtifactSelectionReference } from "../../features/artifacts/artifactTypes";
 import type { ArtifactSnapshot } from "../../features/artifacts/artifactSnapshotTypes";
@@ -42,7 +16,6 @@ import type { ApprovalRequest } from "../../features/approval/approvalTypes";
 import { ActionAuditTimelinePanel } from "../../features/audit/ActionAuditTimelinePanel";
 import type { ActionAuditLog } from "../../features/audit/auditTypes";
 import { ChatInput } from "../../features/chat/ChatInput";
-import { parseLeadingAgentMention } from "../../features/chat/agentMention";
 import { MessageStream } from "../../features/chat/MessageStream";
 import { TaskRunPanel } from "../../features/chat/TaskRunPanel";
 import type {
@@ -70,9 +43,14 @@ import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import { useArtifactInspectorLayout } from "./useArtifactInspectorLayout";
+import { useWorkspaceApprovalActions } from "./useWorkspaceApprovalActions";
 import { useWorkspaceArtifactOperations } from "./useWorkspaceArtifactOperations";
+import { useWorkspaceConversationActions } from "./useWorkspaceConversationActions";
 import { useWorkspaceDataLoaders } from "./useWorkspaceDataLoaders";
+import { useWorkspaceInlineAgentCreation } from "./useWorkspaceInlineAgentCreation";
+import { useWorkspaceMessageActions } from "./useWorkspaceMessageActions";
 import { useWorkspaceRealtime } from "./useWorkspaceRealtime";
+import { useWorkspaceTaskRunControls } from "./useWorkspaceTaskRunControls";
 import "../../styles/workspace.css";
 import "../../styles/workspace/tokens.css";
 import "../../styles/workspace/shell.css";
@@ -84,6 +62,7 @@ import "../../styles/workspace/inspector.css";
 import "../../styles/workspace/layout-guard.css";
 import "../../styles/production-alignment.css";
 import "../../styles/workspace/production.css";
+import "../../styles/pages/workspace.css";
 
 type DiagnosticPanelKey = "taskrun" | "context" | "adapter" | "audit" | "local";
 const DIAGNOSTIC_PANELS: Array<{ key: DiagnosticPanelKey; label: string; summary: string }> = [
@@ -96,12 +75,6 @@ const DIAGNOSTIC_PANELS: Array<{ key: DiagnosticPanelKey; label: string; summary
 
 const PRODUCT_DEMO_PROMPT =
   "帮我生成一个 React 登录页面，要求支持邮箱登录和验证码登录，同时生成 README，最后检查代码质量并给出修改建议。";
-
-const DEPLOY_INTENT_PATTERN = /(部署|发布|生成预览|预览\s*url|preview\s*url|open\s*preview)/i;
-
-function isDeployIntent(content: string): boolean {
-  return DEPLOY_INTENT_PATTERN.test(content || "");
-}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -352,6 +325,120 @@ export function WorkspacePage() {
     setErrorMessage,
     setOperationMessage
   });
+  const {
+    handleCreateDemoConversation,
+    handleConversationQueryChange,
+    handleConversationFilterChange,
+    handleSelectConversation,
+    handleToggleConversationPinned,
+    handleArchiveConversation,
+    handleRestoreConversation
+  } = useWorkspaceConversationActions({
+    conversationQuery,
+    conversationFilter,
+    loadConversationIndex,
+    setCurrentConversationId,
+    setCreatingConversation,
+    setConversationQuery,
+    setConversationFilter,
+    setConversations,
+    setArtifactSelectionReference,
+    setErrorMessage
+  });
+  const {
+    handleCancelTaskRun,
+    handleStopTaskRun,
+    handleSelectTaskStep,
+    handleShowAllArtifacts
+  } = useWorkspaceTaskRunControls({
+    currentConversationId,
+    loadConversationData,
+    setSelectedTaskRunId,
+    setSelectedTaskStepId,
+    setSelectedArtifactId,
+    setShowAllArtifacts,
+    setErrorMessage,
+    setOperationMessage
+  });
+  const {
+    handleConfirmAgentCreation,
+    handleCancelAgentCreation
+  } = useWorkspaceInlineAgentCreation({
+    agentCreationDraftsByMessageId,
+    setAgentCreationDraftsByMessageId,
+    setAgentCreationRunningMessageId,
+    setAgents,
+    setSelectedAgent,
+    setErrorMessage,
+    setOperationMessage
+  });
+  const {
+    handleRefreshOrchestratorSuggestion,
+    handleConfirmOrchestratorTrigger
+  } = useWorkspaceApprovalActions({
+    currentConversationId,
+    selectedAgent,
+    triggerSuggestionsByMessageId,
+    approvalByMessageId,
+    loadConversationData,
+    setAutoTriggerRunningMessageId,
+    setApprovalRequests,
+    setTriggerSuggestionsByMessageId,
+    setConversations,
+    setSelectedTaskRunId,
+    setSelectedTaskStepId,
+    setShowAllArtifacts,
+    setErrorMessage,
+    setOperationMessage
+  });
+  const {
+    handleSendArtifactSelectionToChat,
+    handleSendMessage,
+    handleUploadAttachments,
+    handleToggleMessagePin,
+    handleSaveMessageAsMemory,
+    handleCopyMessage,
+    handleQuoteMessage,
+    handleReplyMessage,
+    handleRunDemoTask,
+    handleRerunFromMessage,
+    handleRegenerateAgentReply
+  } = useWorkspaceMessageActions({
+    currentConversationId,
+    productDemoPrompt: PRODUCT_DEMO_PROMPT,
+    draftMessage,
+    draftAttachments,
+    agents,
+    selectedAgent,
+    latestUserMessage,
+    quotedMessage,
+    quoteMode,
+    artifactSelectionReference,
+    loadConversationData,
+    loadConversationIndex,
+    onCreateArtifactRevision: handleCreateArtifactRevision,
+    onQueueDeployIntent: handleQueueDeployIntent,
+    setDraftMessage,
+    setDraftAttachments,
+    setSendingMessage,
+    setRunningDemoTask,
+    setRerunningMessageId,
+    setRegeneratingMessageId,
+    setErrorMessage,
+    setOperationMessage,
+    setAgentCreationDraftsByMessageId,
+    setSelectedAgent,
+    setQuotedMessage,
+    setQuoteMode,
+    setArtifactSelectionReference,
+    setPinnedContexts,
+    setMemories,
+    setMessages,
+    setConversations,
+    setSelectedTaskRunId,
+    setSelectedTaskStepId,
+    setShowAllArtifacts
+  });
 
   useEffect(() => {
     void loadInitialData();
@@ -383,7 +470,7 @@ export function WorkspacePage() {
 
     window.addEventListener("agenthub:create-conversation", handleCreateConversationRequest);
     return () => window.removeEventListener("agenthub:create-conversation", handleCreateConversationRequest);
-  }, []);
+  }, [handleCreateDemoConversation]);
 
   useEffect(() => {
     if (!currentConversationId) {
@@ -486,612 +573,6 @@ export function WorkspacePage() {
 
   function handleClearSelectedAgent() {
     setSelectedAgent(null);
-  }
-
-  async function handleCreateDemoConversation() {
-    setCreatingConversation(true);
-    setErrorMessage(null);
-
-    try {
-      const conversation = await createConversation("登录页 Demo", "GROUP");
-      const createdId = getIdValue(conversation.id);
-
-      setConversations((previous) => {
-        const next = previous.filter((item) => getIdValue(item.id) !== createdId);
-        return [conversation, ...next];
-      });
-      setCurrentConversationId(createdId);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setCreatingConversation(false);
-    }
-  }
-
-  async function handleConversationQueryChange(nextQuery: string) {
-    setConversationQuery(nextQuery);
-    setErrorMessage(null);
-    try {
-      await loadConversationIndex(nextQuery, conversationFilter);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleConversationFilterChange(nextFilter: ConversationFilter) {
-    setConversationFilter(nextFilter);
-    setErrorMessage(null);
-    try {
-      await loadConversationIndex(conversationQuery, nextFilter);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleSelectConversation(conversationId: string) {
-    setCurrentConversationId(conversationId);
-    setArtifactSelectionReference(null);
-    try {
-      const updatedConversation = await markConversationRead(conversationId);
-      setConversations((previous) =>
-        previous.map((conversation) =>
-          getIdValue(conversation.id) === conversationId ? updatedConversation : conversation
-        )
-      );
-    } catch (error) {
-      console.warn("Failed to mark conversation as read.", error);
-    }
-  }
-
-  async function handleToggleConversationPinned(conversation: Conversation) {
-    const conversationId = getIdValue(conversation.id);
-    setErrorMessage(null);
-    try {
-      if (conversation.pinned) {
-        await unpinConversation(conversationId);
-      } else {
-        await pinConversation(conversationId);
-      }
-      await loadConversationIndex();
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleArchiveConversation(conversation: Conversation) {
-    const conversationId = getIdValue(conversation.id);
-    setErrorMessage(null);
-    try {
-      await archiveConversation(conversationId);
-      await loadConversationIndex();
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleRestoreConversation(conversation: Conversation) {
-    const conversationId = getIdValue(conversation.id);
-    setErrorMessage(null);
-    try {
-      await unarchiveConversation(conversationId);
-      await loadConversationIndex();
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  function buildArtifactSelectionRevisionInstruction(
-    selection: ArtifactSelectionReference,
-    userRequest: string,
-    sourceMessageId: string | null
-  ): string {
-    return [
-      `用户在聊天中请求对 Artifact "${selection.artifactTitle}" v${selection.artifactVersion} 做局部修改。`,
-      `Artifact ID: ${selection.artifactId}`,
-      `选区范围: 第 ${selection.startLine}-${selection.endLine} 行`,
-      `语言: ${selection.language || selection.artifactType}`,
-      sourceMessageId ? `来源聊天消息: ${sourceMessageId}` : null,
-      "",
-      "用户修改要求:",
-      userRequest,
-      "",
-      "选中的代码片段:",
-      selection.selectedText,
-      "",
-      "请只围绕选中片段生成新的 Draft Revision；不要直接覆盖当前 Artifact。生成后仍需通过 Diff Summary 与 Approval Gate 应用。"
-    ].filter(Boolean).join("\n");
-  }
-
-  function handleSendArtifactSelectionToChat(selection: ArtifactSelectionReference) {
-    setArtifactSelectionReference(selection);
-    setDraftMessage((current) => {
-      if (current.trim() && current !== PRODUCT_DEMO_PROMPT) {
-        return current;
-      }
-      return `请基于选中的 ${selection.artifactTitle} 第 ${selection.startLine}-${selection.endLine} 行做局部修改：`;
-    });
-    setOperationMessage("已引用选中的 Artifact 代码片段。请在聊天框描述修改需求并发送。");
-  }
-
-  async function runArtifactSelectionRevisionFromChat(
-    selection: ArtifactSelectionReference,
-    userRequest: string,
-    sourceMessageId: string
-  ) {
-    if (!currentConversationId) {
-      return;
-    }
-
-    try {
-      const revisionInstruction = buildArtifactSelectionRevisionInstruction(
-        selection,
-        userRequest,
-        sourceMessageId
-      );
-      await handleCreateArtifactRevision(selection.artifactId, revisionInstruction);
-      setOperationMessage("已根据聊天中的局部修改请求生成 Draft Revision，请在右侧 Diff Preview 中审批应用。");
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleSendMessage() {
-    if (!currentConversationId || (!draftMessage.trim() && draftAttachments.length === 0)) {
-      return;
-    }
-
-    const parsedMention = parseLeadingAgentMention(draftMessage, agents);
-    if (parsedMention.error) {
-      setErrorMessage(parsedMention.error);
-      return;
-    }
-
-    const mentionedAgents = parsedMention.matchedAgents;
-    const targetAgent = mentionedAgents[0] ?? selectedAgent;
-    const contentToSend = mentionedAgents.length > 0 ? parsedMention.cleanedContent.trim() : draftMessage.trim();
-
-    if (!contentToSend && draftAttachments.length === 0) {
-      setErrorMessage(parsedMention.rawMention ? `请在 ${parsedMention.rawMention} 后补充消息内容。` : "请先输入消息内容。");
-      return;
-    }
-
-    const referencedMessageId = quotedMessage ? getIdValue(quotedMessage.id) : null;
-    const selectedArtifactSnippet = artifactSelectionReference;
-
-    setSendingMessage(true);
-    setErrorMessage(null);
-    setOperationMessage(null);
-
-    try {
-      const sentMessage = await sendMessage(
-        currentConversationId,
-        contentToSend,
-        targetAgent ? getIdValue(targetAgent.id) : null,
-        mentionedAgents.map((agent) => getIdValue(agent.id)).filter(Boolean),
-        quoteMode === "reply" ? referencedMessageId : null,
-        referencedMessageId,
-        draftAttachments
-      );
-      const sentMessageId = getIdValue(sentMessage.id);
-      if (selectedArtifactSnippet) {
-        void runArtifactSelectionRevisionFromChat(
-          selectedArtifactSnippet,
-          contentToSend,
-          sentMessageId
-        );
-        setOperationMessage("已发送局部修改请求，系统正在后台生成 Draft Revision。");
-      }
-      const localAgentCreationDraft = inferAgentCreationDraft(contentToSend);
-      if (localAgentCreationDraft) {
-        const messageId = getIdValue(sentMessage.id);
-        let agentCreationDraft = localAgentCreationDraft;
-        try {
-          agentCreationDraft = await draftAgentFromNaturalLanguage(contentToSend);
-        } catch {
-          agentCreationDraft = {
-            ...localAgentCreationDraft,
-            draftSource: "CLIENT_RULE_BASED_FALLBACK",
-            fallbackReason: "Backend natural-language draft API was unavailable."
-          };
-        }
-        setAgentCreationDraftsByMessageId((current) => ({
-          ...current,
-          [messageId]: agentCreationDraft
-        }));
-        setOperationMessage("已识别为创建 Agent 请求，请在消息卡片中确认草案。");
-      }
-      if (parsedMention.matchedAgent) {
-        setSelectedAgent(parsedMention.matchedAgent);
-      }
-      if (isDeployIntent(contentToSend)) {
-        handleQueueDeployIntent(sentMessage);
-        setOperationMessage("已识别部署 / 发布意图，请在消息卡片中确认生成本地静态预览 URL。");
-      }
-      await loadConversationData(currentConversationId);
-      await loadConversationIndex();
-      setDraftMessage("");
-      setDraftAttachments([]);
-      setQuotedMessage(null);
-      setQuoteMode("quote");
-      setArtifactSelectionReference(null);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setSendingMessage(false);
-    }
-  }
-
-  async function handleConfirmAgentCreation(messageId: string) {
-    const draft = agentCreationDraftsByMessageId[messageId];
-    if (!draft) {
-      return;
-    }
-
-    setAgentCreationRunningMessageId(messageId);
-    setErrorMessage(null);
-    setOperationMessage(null);
-
-    try {
-      const createdAgent = await createAgent({
-        name: draft.name,
-        avatarUrl: draft.avatarUrl,
-        systemPrompt: draft.systemPrompt,
-        capabilityTags: draft.capabilityTags,
-        toolTags: draft.toolTags,
-        preferredAdapterType: draft.preferredAdapterType
-      });
-      setAgents(await getAgents());
-      setSelectedAgent(createdAgent);
-      setAgentCreationDraftsByMessageId((current) => {
-        const next = { ...current };
-        delete next[messageId];
-        return next;
-      });
-      setOperationMessage(`已创建 ${createdAgent.name}。现在可以在输入框使用 @${createdAgent.name} 参与协作。`);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setAgentCreationRunningMessageId(null);
-    }
-  }
-
-  function handleCancelAgentCreation(messageId: string) {
-    setAgentCreationDraftsByMessageId((current) => {
-      const next = { ...current };
-      delete next[messageId];
-      return next;
-    });
-    setOperationMessage("已取消本次 Agent 创建草案。");
-  }
-
-  async function handleUploadAttachments(files: File[]): Promise<LightweightAttachment[]> {
-    if (!currentConversationId) {
-      throw new Error("Please select a conversation before uploading attachments.");
-    }
-
-    const uploadedAttachments = await Promise.all(
-      files.map(async (file) => {
-        const attachment = await uploadConversationAttachment(currentConversationId, file);
-        return {
-          attachmentId: attachment.attachmentId,
-          id: attachment.attachmentId,
-          fileName: attachment.fileName,
-          contentType: attachment.contentType || "application/octet-stream",
-          mimeType: attachment.contentType || "application/octet-stream",
-          size: attachment.sizeBytes,
-          sizeBytes: attachment.sizeBytes,
-          contentPreview: attachment.contentPreview || "",
-          previewText: attachment.contentPreview || "",
-          source: "UPLOADED_FILE"
-        };
-      })
-    );
-    return uploadedAttachments;
-  }
-
-  async function handleToggleMessagePin(messageId: string, pinnedContextId?: string | null) {
-    if (!currentConversationId) {
-      return;
-    }
-
-    setErrorMessage(null);
-
-    try {
-      if (pinnedContextId) {
-        await unpinContext(pinnedContextId);
-      } else {
-        await pinMessageAsContext(currentConversationId, messageId);
-      }
-
-      const refreshedPinnedContexts = await getPinnedContextsByConversation(currentConversationId);
-      setPinnedContexts(refreshedPinnedContexts);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleSaveMessageAsMemory(message: Message) {
-    if (!currentConversationId) {
-      return;
-    }
-
-    const messageId = getIdValue(message.id);
-    if (!messageId) {
-      setErrorMessage("无法识别消息 ID，不能保存为长期记忆。");
-      return;
-    }
-
-    setErrorMessage(null);
-    setOperationMessage(null);
-
-    try {
-      await saveMessageAsMemory(currentConversationId, messageId, "PROJECT_FACT");
-      const refreshedMemories = await getMemoriesByConversation(currentConversationId);
-      setMemories(refreshedMemories);
-      setOperationMessage("消息已保存为长期记忆。");
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function copyTextToClipboard(text: string) {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    document.body.removeChild(textarea);
-  }
-
-  async function handleCopyMessage(message: Message) {
-    setErrorMessage(null);
-
-    try {
-      await copyTextToClipboard(message.content);
-      setOperationMessage("消息内容已复制。");
-    } catch (error) {
-      setErrorMessage(`复制失败：${getErrorMessage(error)}`);
-    }
-  }
-
-  function handleQuoteMessage(message: Message) {
-    setQuotedMessage(message);
-    setQuoteMode("quote");
-    setOperationMessage("已引用消息，发送时会带入引用内容。");
-  }
-
-  function handleReplyMessage(message: Message) {
-    setQuotedMessage(message);
-    setQuoteMode("reply");
-    setOperationMessage("已选择回复消息，发送时会带入被回复内容。");
-  }
-
-  async function runDemoTaskFromMessage(message: Message) {
-    const sourceConversationId = currentConversationId;
-    if (!sourceConversationId) {
-      return;
-    }
-
-    const sourceMessageId = getIdValue(message.id);
-    if (!sourceMessageId) {
-      setErrorMessage("无法识别消息 ID，不能重新运行 Demo Task。");
-      return;
-    }
-
-    setRunningDemoTask(true);
-    setRerunningMessageId(sourceMessageId);
-    setErrorMessage(null);
-    setOperationMessage(null);
-
-    try {
-      const createdTaskRun = await createDemoTask(
-        sourceConversationId,
-        sourceMessageId,
-        message.content,
-        selectedAgent ? getIdValue(selectedAgent.id) : null
-      );
-      const createdTaskRunId = getIdValue(createdTaskRun.id);
-      const refreshedConversation = await getConversation(sourceConversationId);
-
-      await loadConversationData(sourceConversationId);
-      setConversations((previous) =>
-        previous.map((conversation) =>
-          getIdValue(conversation.id) === sourceConversationId ? refreshedConversation : conversation
-        )
-      );
-      setSelectedTaskRunId(createdTaskRunId);
-      setSelectedTaskStepId(null);
-      setShowAllArtifacts(true);
-      setOperationMessage("已基于选中消息重新运行 Demo Task。");
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setRunningDemoTask(false);
-      setRerunningMessageId(null);
-    }
-  }
-
-  async function handleRunDemoTask() {
-    if (!currentConversationId || !latestUserMessage) {
-      setErrorMessage("请先发送一条用户消息，再运行 Demo Task。");
-      return;
-    }
-
-    await runDemoTaskFromMessage(latestUserMessage);
-  }
-
-  async function handleRerunFromMessage(message: Message) {
-    if (message.senderType !== "USER") {
-      return;
-    }
-
-    await runDemoTaskFromMessage(message);
-  }
-
-  async function handleRefreshOrchestratorSuggestion(message: Message) {
-    if (!currentConversationId || message.senderType !== "USER") {
-      return;
-    }
-
-    const messageId = getIdValue(message.id);
-    setErrorMessage(null);
-
-    try {
-      const suggestion = await getOrchestratorTriggerSuggestion(currentConversationId, messageId);
-      const refreshedApprovals = await getApprovalRequestsByConversation(currentConversationId);
-      setTriggerSuggestionsByMessageId((previous) => ({ ...previous, [messageId]: suggestion }));
-      setApprovalRequests(refreshedApprovals);
-      setOperationMessage("Auto-trigger suggestion refreshed.");
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleConfirmOrchestratorTrigger(message: Message) {
-    if (!currentConversationId || message.senderType !== "USER") {
-      return;
-    }
-
-    const messageId = getIdValue(message.id);
-    const suggestion = triggerSuggestionsByMessageId[messageId];
-    if (!suggestion?.matched) {
-      setErrorMessage("No matched auto-trigger suggestion is available for this message.");
-      return;
-    }
-
-    setAutoTriggerRunningMessageId(messageId);
-    setErrorMessage(null);
-    setOperationMessage(null);
-
-    try {
-      let approvalId: string | null = null;
-      if (suggestion.requireApproval) {
-        let approval = approvalByMessageId[messageId] ?? suggestion.pendingApproval ?? null;
-        const approvalStatus = approval?.status.toUpperCase() ?? null;
-        if (!approval || approvalStatus === "CANCELLED" || approvalStatus === "EXPIRED") {
-          approval = await createApprovalRequest(currentConversationId, {
-            actionType: "ORCHESTRATOR_RUN",
-            targetType: "MESSAGE",
-            targetId: messageId,
-            riskLevel: "MEDIUM",
-            summary: "Run Orchestrator from message after auto-trigger match.",
-            affectedItems: [
-              `messageId=${messageId}`,
-              `mode=${suggestion.mode}`,
-              `reason=${suggestion.reason}`
-            ]
-          });
-          const refreshedApprovals = await getApprovalRequestsByConversation(currentConversationId);
-          setApprovalRequests(refreshedApprovals);
-          setOperationMessage("已创建 Agent 协作确认请求，请再次点击批准并运行。");
-          return;
-        }
-
-        approvalId = approval.approvalId;
-        if (approval.status.toUpperCase() !== "APPROVED") {
-          await approveApprovalRequest(approvalId);
-        }
-      }
-
-      const taskRun = await runOrchestratorFromMessage(currentConversationId, messageId, {
-        selectedAgentId: selectedAgent ? getIdValue(selectedAgent.id) : null,
-        approvalId
-      });
-      const refreshedConversation = await getConversation(currentConversationId);
-
-      await loadConversationData(currentConversationId);
-      setConversations((previous) =>
-        previous.map((conversation) =>
-          getIdValue(conversation.id) === currentConversationId ? refreshedConversation : conversation
-        )
-      );
-      setSelectedTaskRunId(getIdValue(taskRun.id));
-      setSelectedTaskStepId(null);
-      setShowAllArtifacts(true);
-      setOperationMessage("Approved auto-trigger flow and started Agent collaboration.");
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setAutoTriggerRunningMessageId(null);
-    }
-  }
-
-  async function handleRegenerateAgentReply(message: Message) {
-    if (!currentConversationId || message.senderType !== "AGENT") {
-      return;
-    }
-
-    const messageId = getIdValue(message.id);
-    setRegeneratingMessageId(messageId);
-    setErrorMessage(null);
-    setOperationMessage(null);
-
-    try {
-      const regeneratedMessage = await regenerateAgentReply(currentConversationId, messageId);
-      const refreshedMessages = await getMessages(currentConversationId);
-      setMessages(refreshedMessages);
-      setOperationMessage(`已重新生成单条 Agent 回复：${getIdValue(regeneratedMessage.id)}`);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setRegeneratingMessageId(null);
-    }
-  }
-
-  async function handleCancelTaskRun(taskRunId: string) {
-    if (!currentConversationId) {
-      return;
-    }
-
-    setErrorMessage(null);
-    setOperationMessage(null);
-    try {
-      const result = await cancelTaskRun(taskRunId, "Workspace user requested cancel.");
-      await loadConversationData(currentConversationId);
-      setOperationMessage(result.message || `Cancel result: ${result.status}`);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleStopTaskRun(taskRunId: string) {
-    if (!currentConversationId) {
-      return;
-    }
-
-    setErrorMessage(null);
-    setOperationMessage(null);
-    try {
-      const result = await stopTaskRun(taskRunId, "Workspace user requested stop.");
-      await loadConversationData(currentConversationId);
-      setOperationMessage(result.message || `Stop result: ${result.status}`);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  function handleSelectTaskStep(taskRunId: string, step: TaskStep) {
-    setSelectedTaskRunId(taskRunId);
-    setSelectedTaskStepId(getIdValue(step.id));
-    setShowAllArtifacts(false);
-
-    const firstArtifactId = step.producedArtifactIds.length > 0 ? getIdValue(step.producedArtifactIds[0]) : null;
-
-    if (firstArtifactId) {
-      setSelectedArtifactId(firstArtifactId);
-    }
-  }
-
-  function handleShowAllArtifacts() {
-    setShowAllArtifacts(true);
   }
 
   const diagnosticSections = {

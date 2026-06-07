@@ -212,7 +212,14 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: WorkspacePage production decomposition now extracts data loading, SSE realtime handling, and Artifact high-risk operations into dedicated hooks while preserving the Browser E2E contract.
    - `Done`: Desktop Console is now an independent `/desktop` route; Workspace keeps only a lightweight Local diagnostics entry and no longer mounts the full Tauri file / notification / process console by default.
    - `Done`: Workspace and Desktop production CSS has started moving out of the catch-all `production-alignment.css` into `styles/workspace/production.css` and `styles/desktop.css`.
+   - `Done`: WorkspacePage production decomposition now also extracts conversation actions and TaskRun control actions into dedicated hooks.
+   - `Done`: WorkspacePage now extracts message actions, inline Agent creation, and Orchestrator approval actions into dedicated hooks; the page is now primarily state wiring plus layout composition.
+   - `Done`: MessageBubble now separates front-end collaboration drafts from real orchestration evidence and no longer exposes `targetAgentId` / `mentionedAgentIds` field names in user-facing copy.
+   - `Done`: ChatInput default Explain no longer shows fallback / adapter chips in the main composer path.
+   - `Done`: TaskRunPanel now defaults to a compact run summary strip and moves Router / Executor / Aggregator / TaskGraph / Adapter scoring into an expandable `Explain / Advanced` section.
+   - `Done`: `/agents` Builder now keeps System Prompt, Tool Capability, compatible toolTags, preferred Adapter, and Adapter policy in a collapsed advanced configuration section by default.
    - `Boundary`: `workspace.css`, `coze-light.css`, and `layout-guard.css` still need further component-owned migration; the current split is a productionization step, not a complete design-system rewrite.
+   - `Boundary`: WorkspacePage still owns state wiring, selected detail loading, diagnostic section assembly, and layout composition; this is intentional until Artifact and diagnostics boundaries are fully stable.
    - `Boundary`: the backend still keeps the manual demo-task API for smoke tests, fallback verification, and local debugging.
 
 11. **Normalize Browser E2E as the UI regression gate**
@@ -228,6 +235,10 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Diff Summary now includes an apply-time trust check that explains approval, conflict, line impact, and snapshot/restore safety before users apply or force-apply a patch.
    - `Done`: ArtifactPanel now surfaces the same trust model in the main delivery workbench before users reach Apply Diff, Restore, or Deploy controls.
    - `Done`: ArtifactPanel has started component decomposition with `ArtifactDeliveryWorkbench`, `ArtifactDeployPanel`, and `ArtifactSnapshotTimeline`; approval and mutation handlers remain in the parent panel.
+   - `Done`: ArtifactPanel now extracts the left Artifact list / scaffold lane into `ArtifactListPane`, reducing parent-panel responsibility without touching high-risk mutation paths.
+   - `Done`: ArtifactPanel now extracts Approval Gate rendering and audit / related summary rendering into dedicated components.
+   - `Done`: ArtifactPanel now uses `useArtifactOperationController` to own revision instruction, draft diff, approval gate, apply / force apply, restore, deploy, operation message, and conflict state.
+   - `Done`: ArtifactPanel now extracts `ArtifactRevisionWorkspace`, so content editing, Draft Revision, revision instruction, and Diff Summary UI no longer live in the parent panel.
    - `Done`: ArtifactPanel now supports a content edit mode with textarea draft editing, selected line/snippet capture, local modification notes, draft diff preview, and Draft Revision generation that still requires Diff Summary plus Approval Gate before apply.
    - `Done`: Browser E2E now exercises the Artifact content editor path before creating a revision and applying diff.
    - `Done`: Artifact code selection can now be sent into ChatInput as an Artifact-local modification reference; sending the chat request writes the user message and creates a Draft Revision from the selected line range / snippet context.
@@ -236,7 +247,21 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Artifact Bundle download now has a backend zip endpoint and UI entry points from the Deploy panel / Deploy intent card, packaging AgentHub Artifact content instead of workspace source files.
    - `Done`: Web main client has been rechecked as the primary delivery surface: ChatInput main-path Chinese copy is normalized, `/workspace` has responsive hardening for 1536px, 1366px, and tablet widths, and Browser E2E still covers the IM-first collaboration -> Artifact -> Approval -> Preview path.
    - `Boundary`: line diff remains lightweight and conflict handling is explicit user approval, not automated semantic merge.
+   - `Boundary`: ArtifactPanel operation ownership and Revision Workspace are now extracted; cockpit / preview / snapshot visual sections can still be split further.
    - `Boundary`: deployment remains local static Preview; no Vercel / Netlify / Docker / Kubernetes deployment is performed.
+
+14. **Continue CSS and Preview boundary convergence**
+   - `Done`: Preview route now labels the surface as `Local Preview / Static Snapshot / Not Cloud Deploy` and avoids release / cloud-deploy wording for local snapshots.
+   - `Done`: Preview-specific new rules now start in `styles/pages/preview.css` instead of expanding `workspace.css`.
+   - `Done`: Agents Builder now has explicit four-section navigation for Agent Directory, Create Agent, Local CLI Health, and Adapter Test.
+   - `Done`: Agents page-specific new rules now start in `styles/pages/agents.css` instead of expanding `workspace.css`.
+   - `Done`: reusable disclosure styles now live in `styles/components/disclosure.css`, and TaskRun summary strip rules start in `styles/pages/workspace.css`.
+   - `Done`: Artifact / Revision / Approval / Audit / Preview visible copy has been normalized to Chinese product copy while retaining necessary technical enums such as `REAL_ADAPTER`, `MOCK`, `STATIC`, and `FALLBACK`.
+   - `Done`: TaskRunPanel now has dedicated `TaskRunSummaryStrip`, `OrchestratorExplainDetails`, `TaskStepList`, and `AdapterRoutingExplainPanel` components; the parent panel is now a small composition layer.
+   - `Done`: Agents Builder parent page now composes `AgentDirectorySection`, `CreateAgentSection`, `LocalCliHealthSection`, and `AdapterTestSection`; advanced Agent policy fields stay collapsed by default.
+   - `Done`: status / badge / tag / chip component styling now starts in `styles/components/status.css` instead of adding more rules to `workspace.css`.
+   - `Done`: Message Artifact cards now label backend Artifact records as real evidence and state that `/preview/:artifactId` is a local static Preview URL, not a cloud deployment.
+   - `Boundary`: this is still an incremental stylesheet extraction; large legacy rules remain in `workspace.css` and `layout-guard.css`, so workspace-wide component CSS migration remains active work.
 
 13. **Add optional Tauri desktop support**
    - `Done`: `docs/spec/desktop-support-spec.md` defines the desktop support contract, including local file access, system notifications, Agent CLI process management, and boundaries.
