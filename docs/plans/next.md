@@ -28,7 +28,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Partial`: Desktop Console CLI probes identify local `claude` / `codex` paths, but the product UI still reports `0/2 available` and does not expose full version / auth / schema / stream / sandbox conclusions there.
    - `Known issue`: backend managed process default jar path is relative to the Tauri runtime directory and fails until the user enters the absolute backend jar path.
    - `Next`: harden real user management, persistent account storage, invite/member directory flows, and broader permission coverage for less-used maintenance endpoints.
-   - `Next`: add production member-management UI, richer presence details such as selection ranges, and a fuller Conflict Panel workflow for compare / force / cancel decisions. CRDT / OT and multi-node event bus remain deferred unless the course scope changes.
+   - `Done`: first-phase Artifact realtime collaboration is implemented for `CODE` and `MARKDOWN` drafts: REST room state, `/api/doc-collab` WebSocket sync, presence / cursor metadata, persisted room snapshots, and approval-gated publish to Artifact Revision.
+   - `Next`: add production member-management UI, richer presence details, a fuller Conflict Panel workflow for compare / force / cancel decisions, and browser smoke coverage for two-session collaboration.
+   - `Boundary`: the current collaboration room uses AgentHub's server-authoritative versioned document protocol. Full Yjs / Automerge CRDT updates and Redis / NATS / Kafka multi-node fanout remain a v2 track.
 
 1. **Monitor real Adapter output quality convergence**
    - Focus on `OPENAI_COMPATIBLE -> REAL_FIRST -> REAL_ADAPTER Artifact`.
@@ -327,7 +329,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace Access Panel now supports PRIVATE / ORG / PUBLIC visibility, org tag, and OWNER / EDITOR / REVIEWER / VIEWER member management.
    - `Done`: Workspace conversation creation explicitly separates single-Agent chat and multi-Agent group collaboration, and passes `SINGLE` / `GROUP` to the backend.
    - `Done`: Conversation list displays the current mode as single Agent conversation or multi-Agent group chat.
-   - `Boundary`: this is still optimistic-concurrency collaboration, not CRDT / OT realtime co-editing.
+   - `Boundary`: Artifact-level realtime co-editing now exists for `CODE` / `MARKDOWN` drafts, while formal Artifact mutation still uses optimistic concurrency and approval. Full CRDT / OT remains deferred.
    - `Boundary`: member management uses existing demo-token users and role strings; it is not enterprise IAM / SSO.
 
 ## Not Now
@@ -337,6 +339,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 - No desktop distribution package or default desktop runtime requirement.
 - No real Vercel / Netlify / Docker / Kubernetes deployment.
 - No multi-node event bus.
+- No full Yjs / Automerge CRDT collaboration protocol.
 - No full multi-provider token streaming or token-level persistence.
 - No simultaneous deep OpenCode platform integration.
 - No Claude Code workspace-write mode.

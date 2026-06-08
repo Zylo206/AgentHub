@@ -1,4 +1,5 @@
 import type { SyntheticEvent } from "react";
+import { ArtifactCollaborationPanel } from "./ArtifactCollaborationPanel";
 import { DiffSummaryPanel } from "./DiffSummaryPanel";
 import type { Artifact } from "./artifactTypes";
 
@@ -40,6 +41,16 @@ interface ArtifactRevisionWorkspaceProps {
   onCreateRevision: () => void;
   onApplyDiff: (artifact: Artifact) => void;
   onForceApplyDiff: (artifact: Artifact) => void;
+  onSelectArtifact: (artifactId: string) => void;
+  onCreateApprovalRequest: (request: {
+    actionType: string;
+    targetType: string;
+    targetId: string;
+    riskLevel: string;
+    summary: string;
+    affectedItems: string[];
+  }) => Promise<string | null>;
+  onApproveApprovalRequest: (approvalId: string) => Promise<void>;
 }
 
 function formatArtifactSize(content: string | null | undefined): string {
@@ -74,10 +85,20 @@ export function ArtifactRevisionWorkspace({
   onRevisionInstructionChange,
   onCreateRevision,
   onApplyDiff,
-  onForceApplyDiff
+  onForceApplyDiff,
+  onSelectArtifact,
+  onCreateApprovalRequest,
+  onApproveApprovalRequest
 }: ArtifactRevisionWorkspaceProps) {
   return (
     <>
+      <ArtifactCollaborationPanel
+        artifact={artifact}
+        onSelectArtifact={onSelectArtifact}
+        onCreateApprovalRequest={onCreateApprovalRequest}
+        onApproveApprovalRequest={onApproveApprovalRequest}
+      />
+
       <section className="artifact-content-editor" data-testid="artifact-content-editor-panel">
         <div className="artifact-content-editor__header">
           <div>

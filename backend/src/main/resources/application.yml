@@ -16,6 +16,9 @@ agenthub:
     heartbeat-seconds: ${AGENTHUB_REALTIME_HEARTBEAT_SECONDS:25}
     event-retention-per-conversation: ${AGENTHUB_REALTIME_EVENT_RETENTION_PER_CONVERSATION:200}
     run-state-ttl-minutes: ${AGENTHUB_REALTIME_RUN_STATE_TTL_MINUTES:30}
+  collaboration:
+    storage-dir: ${AGENTHUB_COLLAB_STORAGE_DIR:${user.home}/.agenthub/agenthub/collab}
+    max-document-chars: ${AGENTHUB_COLLAB_MAX_DOCUMENT_CHARS:200000}
   persistence:
     mode: ${AGENTHUB_PERSISTENCE_MODE:memory}
     jdbc:

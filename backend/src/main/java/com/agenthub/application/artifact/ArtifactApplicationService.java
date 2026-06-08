@@ -234,6 +234,48 @@ public class ArtifactApplicationService {
         return artifactSnapshotRepository.save(snapshot);
     }
 
+    public Artifact createCollaborationRevision(
+            String artifactId,
+            String draftContent,
+            int collaborationVersion,
+            String summary) {
+        Artifact baseArtifact = getArtifact(artifactId);
+        conversationAccessService.requireWritable(baseArtifact.getConversationId().value());
+        if (baseArtifact.getType() != com.agenthub.domain.artifact.ArtifactType.CODE
+                && baseArtifact.getType() != com.agenthub.domain.artifact.ArtifactType.MARKDOWN) {
+            throw new IllegalArgumentException("Collaboration publish only supports CODE and MARKDOWN artifacts.");
+        }
+        createSnapshot(baseArtifact, "COLLAB_PUBLISH_BEFORE");
+        Instant now = timeProvider.now();
+        String revisionInstruction = "Collaborative draft publish"
+                + (summary == null || summary.isBlank() ? "" : ": " + summary.trim())
+                + " (room version " + collaborationVersion + ")";
+        Artifact revisionArtifact = new Artifact(
+                new ArtifactId(idGenerator.nextId("art")),
+                baseArtifact.getConversationId(),
+                baseArtifact.getTaskRunId(),
+                baseArtifact.getId().value(),
+                revisionInstruction,
+                baseArtifact.getTitle(),
+                baseArtifact.getType(),
+                ArtifactStatus.ACCEPTED,
+                baseArtifact.getLanguage(),
+                draftContent == null ? "" : draftContent,
+                baseArtifact.getVersion() + 1,
+                now,
+                now);
+        artifactRepository.save(revisionArtifact);
+        publishArtifactEvent(revisionArtifact, RealtimeEventType.ARTIFACT_CREATED);
+        actionAuditService.record(
+                baseArtifact.getConversationId(),
+                "COLLAB_REVISION_CREATED",
+                "ARTIFACT",
+                revisionArtifact.getId().value(),
+                "COMPLETED",
+                "Created Artifact Revision from collaborative draft room version " + collaborationVersion + ".");
+        return revisionArtifact;
+    }
+
     public void validateExpectedArtifactState(
             Artifact artifact,
             Integer baseVersion,

@@ -9646,3 +9646,50 @@
 ### 边界
 
 - 第一次在后端刚启动后立刻执行 smoke 时出现一次短暂 `fetch failed`；后端健康后重跑即通过，未复现为逻辑错误。
+
+## 2026-06-08：Artifact 级多人实时协同编辑第一阶段
+
+### 改动
+
+- 新增后端 `ArtifactCollaborationService`：
+  - 只允许 `CODE` 和 `MARKDOWN` Artifact 进入协同房间。
+  - 房间使用服务器权威版本号、`baseVersion`、内容 hash、presence、cursor、editing 状态和最近 200 条 op log。
+  - 协同草稿默认持久化到 `AGENTHUB_COLLAB_STORAGE_DIR`，不依赖默认 memory profile 之外的数据库。
+- 新增 REST API：
+  - `GET /api/artifacts/{artifactId}/collab-room`
+  - `POST /api/artifacts/{artifactId}/collab-room/document`
+  - `POST /api/artifacts/{artifactId}/collab-room/presence`
+  - `POST /api/artifacts/{artifactId}/collab-room/publish`
+- 新增 WebSocket 通道：
+  - `/api/doc-collab`
+  - 支持 `JOIN`、`UPDATE_DOCUMENT`、`CURSOR`、`PING`、`LEAVE`。
+  - WebSocket 使用 `access_token` / `token` 查询参数解析现有 bearer token，并复用 Conversation 权限。
+- 新增 `PUBLISH_COLLAB_DRAFT` 高风险发布链路：
+  - 协同草稿发布前必须先创建并批准 ApprovalRequest。
+  - 发布只生成 `USER_REVISION` Artifact，不直接覆盖 base Artifact。
+  - 后续正式应用仍走现有 Apply Diff / Force Apply / Snapshot / Audit 链路。
+- 新增前端 `ArtifactCollaborationPanel`：
+  - 放入 Artifact Diff / Revision 工作台。
+  - 支持协同草稿编辑、WebSocket 房间同步、REST 兜底同步、参与者状态展示和发布为 Revision。
+- 新增规格文档：
+  - `docs/spec/artifact-realtime-collaboration-spec.md`
+
+### 验证
+
+- `cd backend && mvn test` 通过：13/13。
+- `cd backend && mvn -q -DskipTests compile` 通过。
+- `cd frontend && npm.cmd run lint` 通过。
+- `cd frontend && npm.cmd run build` 通过。
+
+### 边界
+
+- 当前实现是 `AGENTHUB_ARTIFACT_COLLAB_V1`：服务器权威、版本化文档更新、持久化 room snapshot、单节点 WebSocket fanout。
+- 这不是完整 Yjs / Automerge 二进制 CRDT 协议；后续可以在同一 room / 权限 / publish 边界上替换为 Yjs update frame。
+- 当前没有 Redis / NATS / Kafka 多节点事件总线；后端重启可通过持久化 room state 恢复草稿，但跨节点 session 分发仍未实现。
+- 还未新增两浏览器会话的自动化 smoke；当前验证覆盖编译、单元测试和前端构建。
+
+### 下一步
+
+- 新增 `scripts/collab-smoke-test.mjs`，验证双客户端 room join、文档更新、presence、发布审批拒绝和发布为 Revision。
+- 增加 Redis / NATS fanout 方案设计，再进入真正多节点部署。
+- 增加 Yjs provider adapter，将 `REPLACE_DOCUMENT` 协议升级为 CRDT update frames。

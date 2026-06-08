@@ -588,6 +588,9 @@ export function ArtifactPanel({
                   onCreateRevision={() => {
                     void handleCreateRevision();
                   }}
+                  onSelectArtifact={onSelectArtifact}
+                  onCreateApprovalRequest={onCreateApprovalRequest}
+                  onApproveApprovalRequest={onApproveApprovalRequest}
                   onApplyDiff={(artifact) => {
                     void handleApplyDiffArtifact(artifact);
                   }}

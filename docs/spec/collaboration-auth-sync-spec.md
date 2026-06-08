@@ -57,7 +57,7 @@ Presence can drive UI hints such as online users, active device, typing, and cur
 
 ## Artifact Conflict Handling
 
-AgentHub does not implement CRDT or OT in this phase. Production-aligned MVP conflict handling uses optimistic concurrency:
+AgentHub now has a separate Artifact realtime collaboration room for `CODE` and `MARKDOWN` drafts; see `docs/spec/artifact-realtime-collaboration-spec.md`. The existing formal Artifact mutation path still uses optimistic concurrency:
 
 1. Client captures `baseVersion` and `baseContentHash` before editing or deploying.
 2. Apply / Restore / Deploy may submit these values.
@@ -73,7 +73,7 @@ If clients omit optimistic fields, the backend keeps the existing compatibility 
 - Login is enabled by default, but the frontend and smoke scripts use the demo account automatically for local verification.
 - MOCK / STATIC / FALLBACK outputs remain explicitly labeled and must not be described as real provider success.
 - Preview remains Local Preview / Static Snapshot / Not Cloud Deploy.
-- Multi-user collaboration is production-aligned for auth, permission, realtime sync, and conflict handling; it is not multi-node event bus or CRDT editing.
+- Multi-user collaboration is production-aligned for auth, permission, realtime sync, conflict handling, and first-phase Artifact draft co-editing; it is not a multi-node event bus or full Yjs / Automerge CRDT editing yet.
 
 ## Phase Mapping
 
@@ -82,6 +82,7 @@ If clients omit optimistic fields, the backend keeps the existing compatibility 
 - Phase 238: realtime authorization, reconnect-safe SSE, and presence API.
 - Phase 239: Artifact optimistic conflict handling for Apply / Restore / Deploy.
 - Phase 240: smoke and E2E scripts updated to authenticate by default.
+- Phase 281: Artifact-level realtime collaboration room for `CODE` / `MARKDOWN` drafts, WebSocket room sync, persisted room state, presence/cursor metadata, and approval-gated publish to Artifact Revision.
 
 ## Acceptance
 

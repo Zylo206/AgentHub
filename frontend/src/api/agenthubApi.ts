@@ -6,6 +6,7 @@ import type {
 } from "../features/agents/agentTypes";
 import type { AgentCreationDraft } from "../features/agents/conversationalAgentDraft";
 import type { Artifact } from "../features/artifacts/artifactTypes";
+import type { ArtifactCollabRoom } from "../features/artifacts/artifactCollaborationTypes";
 import type { ArtifactSnapshot } from "../features/artifacts/artifactSnapshotTypes";
 import type { ActionAuditLog } from "../features/audit/auditTypes";
 import type { ApprovalRequest } from "../features/approval/approvalTypes";
@@ -133,6 +134,11 @@ function withAuthQuery(url: string): string {
 
 export function getConversationEventsUrl(conversationId: string): string {
   return withAuthQuery(`${API_BASE}/api/conversations/${conversationId}/events`);
+}
+
+export function getArtifactCollabWebSocketUrl(): string {
+  const websocketBase = API_BASE.replace(/^http/i, "ws");
+  return withAuthQuery(`${websocketBase}/api/doc-collab`);
 }
 
 async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized = true): Promise<T> {
@@ -633,6 +639,52 @@ export function getArtifactsByTaskRun(taskRunId: string): Promise<Artifact[]> {
 
 export function getArtifact(artifactId: string): Promise<Artifact> {
   return request<Artifact>(`/api/artifacts/${artifactId}`);
+}
+
+export function getArtifactCollabRoom(artifactId: string): Promise<ArtifactCollabRoom> {
+  return request<ArtifactCollabRoom>(`/api/artifacts/${artifactId}/collab-room`);
+}
+
+export function updateArtifactCollabDocument(
+  artifactId: string,
+  body: {
+    baseVersion?: number | null;
+    content: string;
+    deviceId?: string | null;
+    summary?: string | null;
+  }
+): Promise<ArtifactCollabRoom> {
+  return request<ArtifactCollabRoom>(`/api/artifacts/${artifactId}/collab-room/document`, {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export function updateArtifactCollabPresence(
+  artifactId: string,
+  body: {
+    deviceId?: string | null;
+    status?: string | null;
+    cursorStart?: number | null;
+    cursorEnd?: number | null;
+    editing?: boolean;
+  }
+): Promise<ArtifactCollabRoom> {
+  return request<ArtifactCollabRoom>(`/api/artifacts/${artifactId}/collab-room/presence`, {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export function publishArtifactCollabDraft(
+  artifactId: string,
+  approvalId: string,
+  summary: string
+): Promise<Artifact> {
+  return request<Artifact>(`/api/artifacts/${artifactId}/collab-room/publish`, {
+    method: "POST",
+    body: JSON.stringify({ approvalId, summary })
+  });
 }
 
 export function getArtifactBundleDownloadUrl(
