@@ -2,6 +2,7 @@ import type { Artifact } from "../artifacts/artifactTypes";
 import type { TaskRun, TaskSpec, TaskStep } from "./chatTypes";
 import { displayStatus } from "../../utils/displayLabels";
 import { formatId } from "../../utils/id";
+import { displayAdapterName, sanitizeProductionText } from "../../utils/productionLabels";
 import {
   countFallbackSteps,
   displayRoutingKey,
@@ -39,7 +40,7 @@ function TaskGraphDAGPanel({
       <div className="task-graph-dag-panel__header">
         <div>
           <strong>TaskGraph DAG</strong>
-          <p>{taskRun.taskGraph?.summary || "批次、依赖、运行时和 fallback 拓扑。"}</p>
+          <p>{sanitizeProductionText(taskRun.taskGraph?.summary) || "展示批次、依赖、执行模式和失败策略。"}</p>
         </div>
         <span>{batches.length} 个 batch</span>
       </div>
@@ -53,7 +54,7 @@ function TaskGraphDAGPanel({
             </div>
             <div className="task-graph-batch-card__meta">
               <span>{batch.executionMode}</span>
-              <span>{batch.failurePolicy || "STEP_FALLBACK_TO_MOCK"}</span>
+              <span>{sanitizeProductionText(batch.failurePolicy) || "按步骤切换备用路径"}</span>
               {typeof batch.durationMs === "number" ? <span>{batch.durationMs}ms</span> : null}
             </div>
             <div className="task-graph-batch-card__deps">
@@ -74,7 +75,7 @@ function TaskGraphDAGPanel({
                   <span
                     className={`task-graph-step-chip ${qualityGateAction ? "task-graph-step-chip--blocked" : ""}`}
                     key={stepOrder}
-                    title={step.routingReason || step.taskDescription}
+                    title={sanitizeProductionText(step.routingReason || step.taskDescription)}
                   >
                     Step {step.stepOrder} - {getStepAgentName(step, agentNameMap)} - {displayStatus(step.status)}
                   </span>
@@ -107,12 +108,12 @@ function ReviewerGateRetryPanel({ taskRun }: { taskRun: TaskRun }) {
       <div className="reviewer-gate-retry-panel__header">
         <div>
           <strong>Reviewer Gate / 重试策略</strong>
-          <p>{"失败原因 -> 修订产物 -> 重新 build/lint/test -> 重新 Reviewer。"}</p>
+          <p>{["失败原因", "修订产物", "重新 build/lint/test", "重新 Reviewer"].join(" -> ")}</p>
         </div>
         <span>{displayStatus(taskRun.status)}</span>
       </div>
       {decisionLog?.fallbackDecision ? (
-        <div className="reviewer-gate-retry-panel__decision">{decisionLog.fallbackDecision}</div>
+        <div className="reviewer-gate-retry-panel__decision">{sanitizeProductionText(decisionLog.fallbackDecision)}</div>
       ) : null}
       <div className="reviewer-gate-retry-panel__steps">
         {["检查阻断项", "修订产物", "重跑 build/lint/test", "重跑 Reviewer"].map((label, index) => (
@@ -126,8 +127,8 @@ function ReviewerGateRetryPanel({ taskRun }: { taskRun: TaskRun }) {
           {blockedSteps.map(({ step, action }) => (
             <article key={formatId(step.id)}>
               <strong>Step {step.stepOrder}: {action.title}</strong>
-              <p>{action.reason}</p>
-              <small>{action.nextStep}</small>
+              <p>{sanitizeProductionText(action.reason)}</p>
+              <small>{sanitizeProductionText(action.nextStep)}</small>
             </article>
           ))}
         </div>
@@ -146,7 +147,7 @@ export function OrchestratorExplainDetails({
   producedArtifacts,
   agentNameMap
 }: OrchestratorExplainDetailsProps) {
-  const fallbackCount = countFallbackSteps(taskRun);
+  const backupPathCount = countFallbackSteps(taskRun);
   const expectedArtifacts = taskSpec?.expectedArtifacts ?? [];
   const requiredSkills = taskSpec?.requiredSkills ?? [];
   const parallelExecutionGroups = getParallelExecutionGroups(taskRun);
@@ -157,32 +158,32 @@ export function OrchestratorExplainDetails({
   const approvalAuditSummary =
     taskRun.status === "BLOCKED"
       ? "当前任务被质量门禁阻断，后续修复应走 Revision / Approval / Audit 链路。"
-      : "高风险操作继续由 ApprovalRequest 和 ActionAuditLog 记录，TaskRun 只展示执行事实。";
+      : "高风险操作继续由 ApprovalRequest 和 ActionAuditLog 记录。";
   const decisionHighlights = [
     {
       label: "Planner",
-      value: decisionLog?.decisionMode || plannerDisplay.label,
-      detail: decisionLog?.plannerDecision || plannerDisplay.plannerReasoning || taskRun.taskPlan?.goal || "规则化计划已生成。"
+      value: sanitizeProductionText(decisionLog?.decisionMode || plannerDisplay.label),
+      detail: sanitizeProductionText(decisionLog?.plannerDecision || plannerDisplay.plannerReasoning || taskRun.taskPlan?.goal || "规则化计划已生成。")
     },
     {
       label: "Router",
       value: `${taskRun.steps.length} steps`,
-      detail: decisionLog?.routingDecision || "按 selectedAgent、mentionedAgents、tool capability 与 adapter health 路由。"
+      detail: sanitizeProductionText(decisionLog?.routingDecision || "按 selectedAgent、mentionedAgents、tool capability 与 adapter health 路由。")
     },
     {
       label: "Executor",
-      value: hasParallelExecution ? "并行 batch" : "顺序执行",
-      detail: decisionLog?.executionDecision || "执行层记录 adapter、fallback、build validation 与 step runtime。"
+      value: hasParallelExecution ? "并发 batch" : "顺序执行",
+      detail: sanitizeProductionText(decisionLog?.executionDecision || "执行层记录 Adapter、备用路径、构建校验与 step runtime。")
     },
     {
       label: "Aggregator",
       value: `${producedArtifacts.length} artifacts`,
-      detail: decisionLog?.aggregationDecision || taskRun.resultSummary || "聚合产物、协作消息与最终摘要。"
+      detail: sanitizeProductionText(decisionLog?.aggregationDecision || taskRun.resultSummary || "聚合产物、协作消息与最终摘要。")
     },
     {
-      label: "Fallback",
-      value: `${fallbackCount} fallback`,
-      detail: decisionLog?.fallbackDecision || `${acceptedRealOutputs} 个真实 Adapter 输出被采纳，其余保持静态 / MOCK 兜底。`
+      label: "备用路径",
+      value: `${backupPathCount} 次`,
+      detail: sanitizeProductionText(decisionLog?.fallbackDecision || `${acceptedRealOutputs} 个 REAL_ADAPTER 输出被采纳，其余保持本地静态备用路径。`)
     },
     {
       label: "Approval / Audit",
@@ -196,14 +197,14 @@ export function OrchestratorExplainDetails({
       <div className="orchestrator-explain-panel__header">
         <div>
           <strong>Orchestrator 决策链</strong>
-          <p>{decisionLog?.summary || plannerDisplay.description}</p>
+          <p>{sanitizeProductionText(decisionLog?.summary || plannerDisplay.description)}</p>
         </div>
         <span className="orchestrator-mode-pill">
-          {decisionLog?.decisionMode || plannerDisplay.label}
+          {sanitizeProductionText(decisionLog?.decisionMode || plannerDisplay.label)}
         </span>
       </div>
 
-      <div className="orchestrator-decision-rail" aria-label="Planner Router Executor Aggregator Fallback Approval Audit">
+      <div className="orchestrator-decision-rail" aria-label="Planner Router Executor Aggregator Backup Approval Audit">
         {decisionHighlights.map((item, index) => (
           <article className="orchestrator-decision-rail__item" key={item.label}>
             <span>{String(index + 1).padStart(2, "0")} / {item.label}</span>
@@ -220,14 +221,9 @@ export function OrchestratorExplainDetails({
         <article className="orchestrator-stage-card">
           <span className="orchestrator-stage-card__label">Planner</span>
           <strong>拆解任务</strong>
-          <p>{decisionLog?.plannerDecision || taskRun.taskPlan?.goal || taskSpec?.userGoal || "基于用户消息生成 Task 计划。"}</p>
-          {!decisionLog && plannerDisplay.plannerReasoning ? (
-            <p className="orchestrator-stage-card__note">{plannerDisplay.plannerReasoning}</p>
-          ) : null}
-          {!decisionLog && plannerDisplay.fallbackReason ? (
-            <p className="orchestrator-stage-card__note orchestrator-stage-card__note--warning">
-              fallback 原因：{plannerDisplay.fallbackReason}
-            </p>
+          <p>{sanitizeProductionText(decisionLog?.plannerDecision || taskRun.taskPlan?.goal || taskSpec?.userGoal || "基于用户消息生成 Task 计划。")}</p>
+          {plannerDisplay.plannerReasoning ? (
+            <p className="orchestrator-stage-card__note">{sanitizeProductionText(plannerDisplay.plannerReasoning)}</p>
           ) : null}
           <div className="orchestrator-stage-card__meta">
             <span>{taskRun.steps.length} 个 TaskStep</span>
@@ -246,7 +242,7 @@ export function OrchestratorExplainDetails({
           <span className="orchestrator-stage-card__label">Router</span>
           <strong>路由 Agent</strong>
           {decisionLog?.routingDecision ? (
-            <p className="orchestrator-stage-card__note">{decisionLog.routingDecision}</p>
+            <p className="orchestrator-stage-card__note">{sanitizeProductionText(decisionLog.routingDecision)}</p>
           ) : null}
           <div className="orchestrator-route-list">
             {taskRun.steps.map((step) => {
@@ -255,23 +251,20 @@ export function OrchestratorExplainDetails({
                 <div className="orchestrator-route-item" key={formatId(step.id)}>
                   <span>Step {step.stepOrder}</span>
                   <strong>{getStepAgentName(step, agentNameMap)}</strong>
-                  <em>{adapterDisplay.preferred || "MOCK"}</em>
+                  <em>{displayAdapterName(adapterDisplay.preferred)}</em>
                   {step.parallelGroupKey ? <small>{step.parallelGroupKey}</small> : null}
-                  {step.dependsOnStepOrders?.length ? (
-                    <small>dependsOn: {step.dependsOnStepOrders.join(", ")}</small>
-                  ) : (
-                    <small>dependsOn: none</small>
-                  )}
+                  <small>
+                    dependsOn: {step.dependsOnStepOrders?.length ? step.dependsOnStepOrders.join(", ") : "none"}
+                  </small>
                   {parseRoutingEvidence(step.routingReason).length > 0 ? (
                     <div className="orchestrator-route-evidence" data-testid="orchestrator-route-evidence">
                       {parseRoutingEvidence(step.routingReason).map(([key, value]) => (
                         <span key={`${step.stepOrder}-${key}`}>
-                          {displayRoutingKey(key)}：<strong>{value}</strong>
+                          {displayRoutingKey(key)}：<strong>{sanitizeProductionText(value)}</strong>
                         </span>
                       ))}
                     </div>
                   ) : null}
-                  {step.routingReason ? <small>{step.routingReason}</small> : null}
                 </div>
               );
             })}
@@ -280,27 +273,13 @@ export function OrchestratorExplainDetails({
 
         <article className="orchestrator-stage-card">
           <span className="orchestrator-stage-card__label">Executor</span>
-          <strong>执行与 fallback</strong>
-          <p>{decisionLog?.executionDecision || "记录每个 Step 的 preferred / actual Adapter、执行状态和错误信息。"}</p>
-          {decisionLog?.fallbackDecision ? (
-            <p className="orchestrator-stage-card__note orchestrator-stage-card__note--warning">
-              {decisionLog.fallbackDecision}
-            </p>
-          ) : null}
+          <strong>执行与备用路径</strong>
+          <p>{sanitizeProductionText(decisionLog?.executionDecision || "记录每个 Step 的 Adapter、执行状态和错误信息。")}</p>
           <div className="orchestrator-stage-card__meta">
             <span>{taskRun.steps.length} 个 Step 已执行</span>
-            <span>{fallbackCount} 个 fallback</span>
-            <span>{hasParallelExecution ? "后端 CompletableFuture 并发执行" : "按依赖顺序执行"}</span>
+            <span>{backupPathCount} 个备用路径</span>
+            <span>{hasParallelExecution ? "并发执行" : "按依赖顺序执行"}</span>
           </div>
-          {hasParallelExecution ? (
-            <div className="parallel-group-list">
-              {parallelExecutionGroups.map(([groupKey, steps]) => (
-                <span className="parallel-group-pill" key={groupKey}>
-                  {groupKey}: Step {steps.map((step) => step.stepOrder).join(" / ")}
-                </span>
-              ))}
-            </div>
-          ) : null}
           <div className="orchestrator-chip-row">
             {taskRun.steps.map((step) => {
               const adapterDisplay = getAdapterDisplay(step);
@@ -309,7 +288,7 @@ export function OrchestratorExplainDetails({
                   className={`orchestrator-chip ${adapterDisplay.fallbackUsed ? "orchestrator-chip--warning" : ""}`}
                   key={formatId(step.id)}
                 >
-                  Step {step.stepOrder}: {adapterDisplay.actual || "未记录"}
+                  Step {step.stepOrder}: {displayAdapterName(adapterDisplay.actual)}
                   {step.parallelGroupKey ? ` / ${step.parallelGroupKey}` : ""}
                 </span>
               );
@@ -320,10 +299,7 @@ export function OrchestratorExplainDetails({
         <article className="orchestrator-stage-card">
           <span className="orchestrator-stage-card__label">Aggregator</span>
           <strong>聚合结果</strong>
-          <p>{decisionLog?.aggregationDecision || taskRun.resultSummary}</p>
-          {decisionLog?.aggregationDecision ? (
-            <p className="orchestrator-stage-card__note">{taskRun.resultSummary}</p>
-          ) : null}
+          <p>{sanitizeProductionText(decisionLog?.aggregationDecision || taskRun.resultSummary)}</p>
           <div className="orchestrator-stage-card__meta">
             <span>{producedArtifacts.length} 个产物</span>
             <span>{displayStatus(taskRun.status)}</span>

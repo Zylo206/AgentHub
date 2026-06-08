@@ -9283,3 +9283,230 @@
 
 - 当前会话未暴露独立 Browser MCP 导航工具；E2E 已使用仓库 Playwright 路径完成浏览器级三尺寸 gate。
 - `workspace/legacy.css` 仍是大体量兼容层，本轮只修可见文案和 owner CSS，不做一次性删除以避免视觉回归。
+
+## Phase 257-261：Workspace / Artifact / Agents / 协作体验最终收口
+
+### 修复内容
+
+- Workspace 首屏密度继续收敛：
+  - `WorkspaceHeader` 默认只保留会话标题、参与 Agent 数量、运行状态和简短任务说明。
+  - `WorkspacePresenceBar` 改为轻量在线协作条，展示在线用户、typing、active Artifact 和当前设备，不再堆叠权限 / SessionSummary / Adapter 诊断。
+  - 权限说明保留在高级访问面板中，补充角色说明，避免把主聊天路径变成管理后台。
+- Artifact Inspector 细节产品化：
+  - `ArtifactHeroCard` 明确区分真实 Adapter 产物与本地 / fallback 产物。
+  - `ArtifactPreviewDock` 固定表达 `Local Preview / Static Snapshot / Not Cloud Deploy`，不把本地预览描述成云部署。
+  - Diff 冲突面板改为产品化 409 冲突提示，展示当前版本、操作基线和安全处理路径。
+- Agents 页面纵向压力降低：
+  - 保持 `Agent Directory / Create Agent / Local CLI Health / Adapter Test` 四区结构。
+  - `Local CLI Health` 和 `Adapter Test` 默认折叠为高级诊断，主路径聚焦业务 Agent 创建和联系人管理。
+  - Claude Code / Codex 继续表达为本地 headless Artifact-only CLI 接入，不声明完整平台深集成。
+- 多人协作 / 权限 / 冲突前端表达补齐：
+  - Presence UI 增加 typing 与 active Artifact 可视化。
+  - 访问面板展示角色语义，和后端 RBAC / member role 接口保持一致。
+  - Artifact stale 操作继续通过 conflict panel 表达，不静默覆盖。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Agent 创建、Artifact Diff / Apply / Restore / Deploy / Preview、Message Action Bar 和三尺寸 layout gate。
+- `node scripts/smoke-test.mjs` 通过，包含 approvalId 缺失拒绝、Diff conflict、Force Apply 缺失 approvalId 拒绝、Deploy、Bundle、Restore、Audit 和 Context Retrieval。
+- `node scripts/sse-smoke-test.mjs` 通过，包含 SSE 事件、Last-Event-ID replay、active realtime state 和终态 TaskRun cancel 拒绝。
+- `cd desktop && npm.cmd run build -- --no-bundle` 通过，生成 `desktop/src-tauri/target/release/agenthub-desktop.exe`。
+- `cd desktop/src-tauri && cargo check` 通过。
+- `cd desktop && npm.cmd run info` 输出 WebView2 / MSVC / Rust / Node 环境信息，但命令在 120s 超时未自然退出。
+
+### 边界
+
+- 当前会话没有暴露可直接点击 Windows 桌面窗口的 Computer Use 控制工具，因此没有声称完成 Tauri 窗口内文件预览、通知点击跳转、backend process 启停的实机点击验收。
+- 本轮没有实现 CRDT / OT、多节点事件总线、企业 SSO 或完整成员邀请系统。
+- Preview 仍是本地 / 静态 / fallback 预览，不是 Vercel / Netlify / Docker / K8s 真实发布。
+
+## Phase 260：Tauri Desktop Console 实机点击验收
+
+### 验收内容
+
+- 使用 Computer Use 启动 `desktop/src-tauri/target/release/agenthub-desktop.exe`，Tauri WebView 成功渲染 AgentHub。
+- 进入 `Desktop Console`，页面显示 `Tauri 已连接`。
+- 本地文件：
+  - 点击 `读取目录` 后成功读取 `E:\CodeProject2\AgentHub\docs`。
+  - 文件列表显示 `AGENTS.md`、`competition-plan.md`、`demo-scenario.md`、`product-design.md` 等。
+  - 点击 `product-design.md` 后，文件预览成功显示文本内容，并标记大文件预览为截断。
+- 通知：
+  - 切换到 `通知中心` 并点击 `测试通知`。
+  - 页面记录出现 `AgentHub 桌面通知`，说明 Tauri 通知桥已连通。
+- Agent CLI：
+  - 切换到 `Agent CLI`，点击 `Claude Code` 和 `Codex` 探测。
+  - UI 识别到 `claude` 与 `codex` 路径，但当前结果仍是 `0/2 可用`，能力状态停留在 `NOT_CHECKED_NON_INVASIVE`，没有在 Desktop Console 内形成版本 / auth / schema / stream 的完整可用判定。
+- Backend 管理：
+  - 切换到 `Backend 管理`，默认相对 jar 路径 `backend/target/agenthub-backend-0.1.0-SNAPSHOT.jar` 在 Tauri 运行目录下解析失败。
+  - 手动改为绝对路径 `E:\CodeProject2\AgentHub\backend\target\agenthub-backend-0.1.0-SNAPSHOT.jar` 后，Tauri 成功启动托管 backend 进程并显示 PID、日志路径和 stdout 摘要。
+  - 因当前 `127.0.0.1:8080` 已有 backend 占用，托管进程 stdout 明确显示 `Web server failed to start. Port 8080 was already in use.`。
+  - 点击 `停止` 后托管进程状态变为 `stopped`，验证 Tauri 只管理自己启动的 backend，不接管系统已有进程。
+
+### 结论
+
+- `PASS`：Tauri 窗口启动、WebView 渲染、Desktop Console 打开、本地目录读取、文本文件预览、通知桥记录、backend managed process 启动 / 停止边界。
+- `PARTIAL`：Context / Memory 候选。`标记为上下文候选` 控件存在，但点击后右侧候选仍为空，尚未形成完整 Context / Memory 产品闭环。
+- `PARTIAL`：CLI 探测。UI 能识别本机 `claude` / `codex` 路径，但 Desktop Console 没有展示完整版本、auth、schema、stream、sandbox 可用结论。
+- `KNOWN ISSUE`：Backend 默认 jar 路径应改为相对 Tauri cwd 可用的路径或自动解析仓库根目录，否则首次点击启动会报 `Backend jar path does not exist.`。
+
+## 2026-06-07：浅色生产 UI 收敛与 Agents 创建路径清理
+
+### 改动
+
+- `/agents` 删除生产主路径中无效的阶段导航、左侧说明栏、Workspace 快速创建提示和 Adapter 手动测试面板；保留脚本和后端 smoke 能力，不再作为默认产品 UI 暴露。
+- `Create Agent` 改为单一路径：自然语言草案、名称、首选 Adapter、能力标签、工具能力选择和自定义工具能力输入；高级 System Prompt、头像 URL、Adapter policy 继续折叠。
+- Workspace 实时刷新改为 silent refresh，避免 SSE 刷新消息、TaskRun、Artifact 时反复触发 loading 闪烁。
+- Workspace 中栏删除 `IM-FIRST MULTI-AGENT WORKSPACE` 视觉标签，CommandDeck 改为浅色扁平结构，并修复 Toolbar / Flow Guide / Advanced 同行重叠导致按钮被截断的问题。
+- Artifact Inspector 改为浅色产物工作台：产物列表可滚动、选中卡片不再使用深色背景，HeroCard 和 Preview/Operation 区域统一白底浅边框。
+- Diagnostics / Audit / Preview 残留深色面板改为浅色规则，避免底部高级面板和 Preview 内容出现深色 UI。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Artifact Apply / Restore / Deploy、Preview、Action Audit 和 1366x768 / 1536x864 / 1600x900 layout gate。
+- 使用 Playwright 额外截图检查 `/agents` 和 `/workspace` 1366x768：无组件遮挡，Agents 创建表单工具能力可见，Workspace 顶部按钮不再重叠。
+
+## 2026-06-07：Desktop 顶栏浅色化与会话右键删除入口
+
+### 改动
+
+- 重写 `AppLayout` 顶栏：删除运行计时、Agent 状态头像组、右上角假窗口控制按钮等验收演示元素，只保留品牌、新建入口和 Workspace / Agents / Desktop 三个主导航。
+- 全局顶栏样式改为白底、浅边框、扁平化导航，解决 Desktop 页面顶部仍显示深色 UI 的问题。
+- `ConversationList` 加入右键菜单：支持置顶 / 取消置顶、删除会话、恢复会话。当前“删除会话”复用后端归档语义，删除后会进入归档视图，可恢复；未引入硬删除 API。
+- 优化会话列表刷新体验：有旧会话数据时不再用整块 loading empty state 替换列表，只显示“正在同步”，降低 Workspace / Desktop WebView 中刷新导致的画面抖动。
+- 修复会话右键菜单被中栏遮挡的问题，菜单定位限制在左侧会话栏内。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含会话搜索、置顶、归档、恢复、IM 主链路、Artifact、Preview 和三尺寸 layout gate。
+- Playwright 截图检查 `/desktop` 1366x768：顶栏已为浅色，右上角无用假窗口控件消失。
+- Playwright 截图检查 `/workspace` 1366x768：右键菜单完整显示在会话栏内。
+
+## 2026-06-07：Diagnostics 与全局备用链路生产化文案
+
+### 改动
+
+- 中栏底部 `TaskRun / Context / Adapter / Audit / Local` 高级面板统一改为生产级表达：用户可见层不再直接暴露 `MOCK`、`fallback`、`STATIC_TEMPLATE` 等内部演示枚举。
+- 新增统一展示工具，将后端备用链路状态映射为“本地备用引擎 / 备用路径 / 本地静态结果”，保留 `REAL_ADAPTER` 作为必要真实接入枚举。
+- 清理 Workspace、Agents、Artifact Inspector、Preview、Desktop 通知和消息气泡中的裸露 mock/fallback 文案，避免把本地兜底链路误读成真实平台能力或真实云部署。
+- 保留后端和类型层面的枚举、fallback 统计和 E2E 覆盖点，不改变 AdapterRegistry、Approval、Audit、Conflict 的安全语义。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含底部高级面板、Adapter 质量面板、Artifact Apply / Restore / Deploy、Preview 和 1366x768 / 1536x864 / 1600x900 layout gate。
+- 使用 Playwright 逐个点击 `TaskRun / Context / Adapter / Audit / Local`，扫描可见文本无 `MOCK / mock / FALLBACK / fallback / STATIC_TEMPLATE / MOCK_FALLBACK` 命中。
+
+## 2026-06-07：Phase 262-266 全局浅色 UI 与 Mock 暴露清理
+
+### 改动
+
+- `/agents` 的 Preferred Adapter、草案卡、创建成功摘要和 Adapter failure note 改为产品化显示名与安全文案，不再直接渲染 `MOCK`、`fallback` 或 `Set agenthub...`。
+- `productionLabels` 重写为干净的统一映射层：内部枚举仍保留给工程和测试，用户 UI 显示为“内置本地引擎 / 本地安全路径 / 本地静态结果”等产品文案。
+- Workspace 消息气泡、消息类型 ribbon、Agent role、TaskStep、附件类型和附件 meta 全部改为浅色 token，删除可见深色胶囊。
+- Preview content toolbar 和 legacy 中的 Preview / message protocol 深色兜底改为白底浅边框，保持 `Local Preview / Static Snapshot / Not Cloud Deploy` 边界。
+- CommandDeck 压缩为默认 94px 高度：保留标题、Presence、确认协作按钮、调试入口和可见 flow guide；高级信息保持为绝对定位抽屉，不再挤占首屏高度。
+- `global.css` 中旧 app shell/header/nav command token 从深色值改为浅色值，降低后续深色 UI 回归风险。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Agent 创建、TaskRun、Artifact Apply / Restore / Deploy、Preview 和三尺寸 layout gate。
+- Browser 插件三尺寸 gate 通过：
+  - `/workspace`、`/agents`、`/desktop`、`/preview/:artifactId` 在 1366x768 / 1536x864 / 1600x900 下均无横向滚动、无 framework overlay、无 console error / warning。
+  - 用户可见文本扫描无 `MOCK`、`fallback`、`Set agenthub`。
+  - 可见深色元素计数均为 0。
+  - Workspace CommandDeck 高度为 94px；MessageStream 高度分别为 491px / 580px / 616px。
+
+## 2026-06-07：生产级协作补齐：权限、Presence、Conflict、会话模式与 Desktop 闭环
+
+### 改动
+
+- Workspace 顶部继续收口为任务指挥区：`WorkspaceHeader` 显式展示单聊 / 群聊模式、Agent 数量和实时状态，`WorkspaceCollaborationToolbar` 改为稳定中文产品文案。
+- `WorkspacePresenceBar` 重写为可读的 Presence UI：展示在线端、typing、正在查看产物、当前用户和设备信息，作为多人协作的前端可见证据。
+- `WorkspaceAccessPanel` 重写为成员与权限管理面板：支持 PRIVATE / ORG / PUBLIC 可见性、组织标签、成员角色 OWNER / EDITOR / REVIEWER / VIEWER 的添加、更新和移除。
+- 左侧会话创建显式区分“单聊 / 群聊”，新建会话时将 `SINGLE` / `GROUP` 传入后端；会话列表显示单 Agent 对话或多 Agent 群聊，降低用户理解成本。
+- `DiffSummaryPanel` 重写为 Conflict Panel：409 冲突时展示当前版本、操作基线、安全路径和 Force Apply 审批入口，保留后端 approval / audit / snapshot 语义。
+- Desktop Console 从 Workspace 入口带入 `conversationId`；独立页面可将本地文件上传为当前会话附件，并进一步固定到 Context 或保存为 Memory。
+- Artifact Preview Dock 增加 PPT / 文档轻量查看语义；`ArtifactRevisionWorkspace` 统一为轻量编辑、局部修改、Draft Revision、Diff 审批工作流，不声明完整 IDE 或 PPT 在线编辑器。
+- 补充浅色 CSS：单聊/群聊切换、会话模式 badge、PPT preview shell、Desktop 预览和进程日志不再使用深色块。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，覆盖新建会话、Agent 创建、@Agent 路由、TaskRun、Context、Artifact Diff / Apply / Restore / Deploy、Preview 和三尺寸 layout gate。
+- `node scripts/smoke-test.mjs` 通过，覆盖权限主链路、Context/Memory、approval enforcement、diff conflict、force apply、deploy、restore 和 bundle。
+- `node scripts/sse-smoke-test.mjs` 通过，覆盖 SSE 事件、Last-Event-ID replay、active realtime state 和 terminal run cancel rejection。
+- Browser 插件检查 `/workspace`、`/agents`、`/desktop`、`/preview/:artifactId`：无横向滚动，Workspace CommandDeck 94px，MessageStream 在 1366/1536/1600 下保持可读高度；文本扫描无 `MOCK`、`fallback`、`Set agenthub`、常见乱码片段。
+- Browser console 中存在本轮编辑期间 Vite HMR 的历史 reload error 记录；最终 `build` 和 `e2e-browser` 已通过，未发现运行时阻断。
+
+## 2026-06-07：生产文案清理与 Tauri 原生窗口实机复验
+
+### 改动
+
+- 清理用户可见 Demo 口径：新建会话标题改为“单 Agent 任务 / 多 Agent 协作”，Workspace 调试入口改为“高级工具”，上下文和消息操作文案改为生产中文。
+- 新增 `productionLabels` 统一映射层，用户 UI 不直接展示 `MOCK`、`fallback` 或 `Set agenthub...` 配置文案；内部枚举仍保留给工程、测试和日志。
+- `AgentCreateDialog`、`LocalCliStatusCards`、`ArtifactRevisionWorkspace`、`DiffSummaryPanel` 统一为中文生产文案，并保留必要的真实能力边界。
+- Conflict Panel 增加一屏闭环：刷新最新版本、查看差异、取消当前操作、Force Apply 审批入口；普通 Apply 在冲突存在时禁用。
+- Tauri backend 管理增加可配置端口，Rust 启动命令会传入 `--server.port`；相对 jar path 可从桌面可执行文件向上发现项目根目录。
+- 修复 Windows 下 CLI shim 与 Java 进程启动差异：`claude` / `codex` 仍通过 `cmd /C` 兼容 `.cmd` / AppX shim，`java` 直接启动，避免停止时只杀到包装进程。
+- 修复 Desktop 托管进程卡片：为进程卡绑定 owner class，PID / 状态 / 停止按钮固定在卡片头部，stdout / stderr 作为下方日志，不再遮挡操作按钮。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `cd desktop/src-tauri && cargo check` 通过。
+- `node scripts/e2e-browser.mjs` 通过。
+- `node scripts/smoke-test.mjs` 通过；脚本仍提示当前默认 demo 路径未覆盖 REJECTION 消息，这是既有测试覆盖边界。
+- `node scripts/sse-smoke-test.mjs` 通过。
+- Tauri 原生窗口实机点击通过：
+  - Desktop Console 可打开，独立入口明确提示未关联会话时不能写入 Workspace Context / Memory。
+  - 本地目录读取和 `AGENTS.md` 文本预览可用；从 Workspace 打开 Desktop Console 时可携带当前会话并上传 `AGENTS.md` 为附件候选。
+  - 系统通知可弹出，并在通知中心记录“已发送”。
+  - Claude Code CLI 探测到本机版本 `2.1.143`，Codex CLI 探测到本机可用路径和 descriptor 能力。
+  - backend managed process 使用端口 `18082` 启动，Tauri 显示 PID、running、stdout 中 Tomcat started 和 AgentHubApplication started。
+  - 点击停止后托管列表清空；只剩 `TIME_WAIT`，无 `LISTEN`，PID 已不存在。
+
+### 边界
+
+- Tauri 独立 Desktop 入口没有 `conversationId` 时只能做文件预览和上下文候选；写入 Context / Memory 需要从 Workspace 带当前会话打开。
+- Tauri 原生窗口系统标题栏仍由 OS / WebView window chrome 控制，当前不是 Web CSS 可完全覆盖的白色标题栏。
+- Tauri 原生点击已验证本地文件上传为会话附件候选；候选卡已补充“已固定 / 已保存”状态反馈，但本轮原生点击未稳定观察到 pin/save 成功状态，需要下一轮继续做按钮命中和后端写入确认。
+
+## 2026-06-08：Workspace 顶部布局与 Artifact 卡片生产化修复
+
+### 改动
+
+- 修复 Workspace CommandDeck 顶部控件混在一起的问题：改为稳定的两列浅色网格，主命令区和“高级工具”入口分离，去掉旧绝对定位导致的挤压和重叠。
+- 清理 Workspace 顶部用户可见乱码：协作工具条、流程条、运行工具按钮统一为中文生产文案。
+- 优化 Artifact Inspector 产物列表卡片：标题、版本、来源、质量、构建状态和二次修改备注改为浅色短标签，去掉难读的小字和乱码。
+- 清理 Artifact 列表空态与加载态文案，保留“确认协作后真实产物出现”的产品边界。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，含 Workspace、Artifact、Preview 和三尺寸 layout gate。
+- Browser 插件实测 `/workspace`：CommandDeck 高度 149px，无顶部控件重叠，无横向滚动，无深色块；触达区域无常见乱码命中。
+
+## 2026-06-08：Agents / Local CLI / Workspace 可见性最终修复
+
+### 改动
+
+- `/agents` 拆分为两个独立视图：默认只显示“创建业务 Agent”，`/agents?view=cli` 只显示“检查本地 CLI”，避免业务创建和本机 CLI 调试混在同一页面。
+- 重写本地 CLI 状态卡文案：只展示 Path、Version、Help、Auth、Schema、Stream、Sandbox、Session 等短字段；不再向用户显示 `disabled`、`UNKNOWN`、`NOT_PROBED` 或配置命令。
+- 修复 `WorkspacePresenceBar` 的乱码和 demo 用户口径，Presence 摘要统一为“实时协作 / 在线 / 输入中 / 看产物 / 当前用户”。
+- 修复 Workspace 附件元信息、Agents hero 状态卡、Adapter 路由和质量看板的浅色可见性问题，去掉低对比白字浅底。
+- 压缩 Workspace CommandDeck，保留会话标题、Presence、协作启动和高级工具入口；折叠 diagnostics 时只显示 tab 栏，隐藏 TaskRun / Context / Adapter / Audit / Local 内容。
+
+### 验证
+
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/e2e-browser.mjs` 通过，包含 Workspace 主链路、Agent 创建、TaskRun、Artifact Apply / Restore / Deploy、Preview 和三尺寸 layout gate。
+- Browser 插件实测：
+  - `/workspace`：CommandDeck 高度 122px，MessageStream 463px，无横向滚动、无深色块、无低对比元素；diagnostics 折叠区 computed style 为 `display: none`，没有可见内容泄漏。
+  - `/agents`：只显示创建业务 Agent 主路径，无横向滚动、无低对比元素。
+  - `/agents?view=cli`：只显示本地 CLI 健康检查，无横向滚动、无深色块、无 `MOCK` / `fallback` / `Set agenthub` / `disabled` / `UNKNOWN` / `NOT_PROBED` 可见文案。
+  - `/desktop?conversationId=conv_4d5`：无横向滚动、无深色块、无低对比元素。
+- Browser console 仍保留本轮编辑期间的 Vite HMR 历史 reload error；最终 `build` 和 `e2e-browser` 已通过，不是当前代码编译或运行阻断。

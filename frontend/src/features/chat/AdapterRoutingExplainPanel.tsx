@@ -1,5 +1,6 @@
 import type { TaskRun } from "./chatTypes";
 import { displayStatus } from "../../utils/displayLabels";
+import { displayAdapterName } from "../../utils/productionLabels";
 import { parseAdapterCandidateScores } from "./taskRunPanelHelpers";
 
 export function AdapterRoutingExplainPanel({ taskRun }: { taskRun: TaskRun }) {
@@ -29,7 +30,7 @@ export function AdapterRoutingExplainPanel({ taskRun }: { taskRun: TaskRun }) {
           <span>总分</span>
           <span>健康</span>
           <span>成功率</span>
-          <span>Fallback 惩罚</span>
+          <span>备用惩罚</span>
           <span>首选加分</span>
         </div>
         {rows.map((row) => (
@@ -38,7 +39,7 @@ export function AdapterRoutingExplainPanel({ taskRun }: { taskRun: TaskRun }) {
             key={`${row.stepOrder}-${row.adapterType}`}
           >
             <span>#{row.stepOrder}</span>
-            <strong>{row.adapterType}</strong>
+            <strong>{displayAdapterName(row.adapterType)}</strong>
             <span>{displayStatus(row.status)}</span>
             <span>{row.totalScore.toFixed(1)}</span>
             <span>{row.healthScore.toFixed(1)}</span>

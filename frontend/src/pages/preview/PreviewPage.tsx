@@ -4,6 +4,7 @@ import { getArtifact, getArtifactsByConversation } from "../../api/agenthubApi";
 import { buildArtifactVersions } from "../../features/artifacts/artifactLineage";
 import type { Artifact } from "../../features/artifacts/artifactTypes";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayAdapterName, sanitizeProductionText } from "../../utils/productionLabels";
 import { formatId, getIdValue } from "../../utils/id";
 import "../../styles/workspace.css";
 import "../../styles/production-alignment.css";
@@ -95,7 +96,7 @@ function getPreviewTrustLabel(artifact: Artifact): string {
     return "门禁失败预览";
   }
   if (tone === "warning") {
-    return "Fallback / 静态预览";
+    return "本地静态预览";
   }
 
   return "本地预览";
@@ -119,7 +120,7 @@ function getPreviewNextAction(artifact: Artifact): string {
   if (artifact.sourceKind === "REAL_ADAPTER") {
     return "可作为真实 Adapter 产物候选继续审批、生成本地预览或加入交付记录。";
   }
-  return "当前是静态 / fallback 预览，适合演示兜底；如需交付，请优先生成真实 Adapter 版本。";
+  return "当前是本地静态预览，适合演示兜底；如需交付，请优先生成真实 Adapter 版本。";
 }
 
 function formatPreviewSize(content: string | null | undefined): string {
@@ -281,15 +282,15 @@ export function PreviewPage() {
             </span>
             <span>
               <strong>Adapter</strong>
-              {artifact.sourceAdapterType || "N/A"}
+              {artifact.sourceAdapterType ? displayAdapterName(artifact.sourceAdapterType) : "N/A"}
             </span>
             <span>
               <strong>Quality</strong>
-              {artifact.qualityStatus || artifact.realAdapterOutcome || "NOT_EVALUATED"}
+              {sanitizeProductionText(artifact.qualityStatus || artifact.realAdapterOutcome || "NOT_EVALUATED")}
             </span>
             <span>
               <strong>Mode</strong>
-              {artifact.generationMode || previewMode}
+              {sanitizeProductionText(artifact.generationMode || previewMode)}
             </span>
           </div>
 
@@ -300,13 +301,13 @@ export function PreviewPage() {
                 <strong>{getPreviewTrustLabel(artifact)}</strong>
                 <p>{getPreviewTrustDescription(artifact)}</p>
               </div>
-              <span>{artifact.realAdapterOutcome || "FALLBACK"}</span>
+              <span>{sanitizeProductionText(artifact.realAdapterOutcome || "本地备用路径")}</span>
             </div>
             <div className="preview-page__studio-grid">
               <article>
                 <span>来源</span>
                 <strong>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</strong>
-                <small>{artifact.sourceAdapterType || "无外部 Adapter"}</small>
+                <small>{artifact.sourceAdapterType ? displayAdapterName(artifact.sourceAdapterType) : "无外部 Adapter"}</small>
               </article>
               <article>
                 <span>版本链</span>

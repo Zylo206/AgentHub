@@ -210,11 +210,14 @@ export function useWorkspaceDataLoaders({
   );
 
   const loadConversationData = useCallback(
-    async (conversationId: string) => {
+    async (conversationId: string, options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
       setErrorMessage(null);
-      setLoadingMessages(true);
-      setLoadingTaskRuns(true);
-      setLoadingArtifacts(true);
+      if (!silent) {
+        setLoadingMessages(true);
+        setLoadingTaskRuns(true);
+        setLoadingArtifacts(true);
+      }
 
       try {
         const [
@@ -268,9 +271,11 @@ export function useWorkspaceDataLoaders({
       } catch (error) {
         setErrorMessage(getErrorMessage(error));
       } finally {
-        setLoadingMessages(false);
-        setLoadingTaskRuns(false);
-        setLoadingArtifacts(false);
+        if (!silent) {
+          setLoadingMessages(false);
+          setLoadingTaskRuns(false);
+          setLoadingArtifacts(false);
+        }
       }
     },
     [

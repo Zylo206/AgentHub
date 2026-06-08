@@ -1,32 +1,33 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { createAgent, draftAgentFromNaturalLanguage, executeAdapter, getAdapters } from "../../api/agenthubApi";
+import { Link, useLocation } from "react-router-dom";
+import { createAgent, draftAgentFromNaturalLanguage, getAdapters } from "../../api/agenthubApi";
 import {
   TOOL_CAPABILITY_OPTIONS,
   type AdapterDescriptor,
-  type AdapterExecutionResponse,
   type Agent,
   type ToolCapabilityKey
 } from "../../features/agents/agentTypes";
 import { refineAgentCreationDraft, type AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
-import { AdapterTestSection } from "./AdapterTestSection";
-import { AgentDirectorySection } from "./AgentDirectorySection";
 import { CreateAgentSection } from "./CreateAgentSection";
 import { LocalCliHealthSection } from "./LocalCliHealthSection";
-import {
-  MAINSTREAM_DEEP_ADAPTERS,
-  evaluateAdapterTestQuality,
-  getAdapterDepthProfile,
-  getErrorMessage,
-  getFallbackAdapterOptions,
-  mergeTags,
-  parseAdapterArtifacts,
-  parseTags
-} from "./agentBuilderUtils";
+import { getErrorMessage, getFallbackAdapterOptions, mergeTags, parseTags } from "./agentBuilderUtils";
 import "../../styles/workspace.css";
 import "../../styles/production-alignment.css";
 import "../../styles/pages/agents.css";
 
+type AgentBuilderView = "create" | "cli";
+
+function getViewFromLocation(search: string, hash: string): AgentBuilderView {
+  const params = new URLSearchParams(search);
+  if (params.get("view") === "cli" || hash === "#local-cli") {
+    return "cli";
+  }
+  return "create";
+}
+
 export function AgentBuilderPage() {
+  const location = useLocation();
+  const view = getViewFromLocation(location.search, location.hash);
   const [adapterDescriptors, setAdapterDescriptors] = useState<AdapterDescriptor[]>([]);
   const [loadingAdapters, setLoadingAdapters] = useState(false);
   const [name, setName] = useState("");
@@ -40,13 +41,6 @@ export function AgentBuilderPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [createdAgent, setCreatedAgent] = useState<Agent | null>(null);
-  const [adapterTestType, setAdapterTestType] = useState("OPENAI_COMPATIBLE");
-  const [adapterTestPrompt, setAdapterTestPrompt] = useState(
-    "请生成一个 LoginPage.tsx Artifact，并按 AgentHub artifact JSON contract 返回。"
-  );
-  const [testingAdapter, setTestingAdapter] = useState(false);
-  const [adapterTestError, setAdapterTestError] = useState<string | null>(null);
-  const [adapterTestResult, setAdapterTestResult] = useState<AdapterExecutionResponse | null>(null);
   const [naturalAgentPrompt, setNaturalAgentPrompt] = useState("");
   const [draftRefinementPrompt, setDraftRefinementPrompt] = useState("");
   const [conversationalDraft, setConversationalDraft] = useState<AgentCreationDraft | null>(null);
@@ -79,39 +73,11 @@ export function AgentBuilderPage() {
     };
   }, []);
 
-  useEffect(() => {
-    function scrollToHashTarget() {
-      const targetId = window.location.hash.replace("#", "");
-      if (!targetId) {
-        return;
-      }
-
-      window.setTimeout(() => {
-        document.getElementById(targetId)?.scrollIntoView({ block: "start", behavior: "smooth" });
-      }, 50);
-    }
-
-    scrollToHashTarget();
-    window.addEventListener("hashchange", scrollToHashTarget);
-    return () => window.removeEventListener("hashchange", scrollToHashTarget);
-  }, []);
-
   const adapterOptions = useMemo(() => {
     return adapterDescriptors.length > 0 ? adapterDescriptors : getFallbackAdapterOptions();
   }, [adapterDescriptors]);
   const selectedAdapterDescriptor =
     adapterOptions.find((descriptor) => descriptor.adapterType === preferredAdapterType) ?? null;
-  const selectedTestAdapterDescriptor =
-    adapterOptions.find((descriptor) => descriptor.adapterType === adapterTestType) ?? null;
-  const selectedTestAdapterDepthProfile = getAdapterDepthProfile(adapterTestType);
-  const parsedAdapterArtifacts = useMemo(
-    () => parseAdapterArtifacts(adapterTestResult?.content),
-    [adapterTestResult]
-  );
-  const adapterTestQualityReport = useMemo(
-    () => evaluateAdapterTestQuality(adapterTestResult?.content),
-    [adapterTestResult]
-  );
   const selectedCapabilityOptions = useMemo(() => {
     return TOOL_CAPABILITY_OPTIONS.filter((option) => selectedToolCapabilities.includes(option.key));
   }, [selectedToolCapabilities]);
@@ -121,12 +87,6 @@ export function AgentBuilderPage() {
   const resolvedCapabilityNames = useMemo(() => {
     return mergeTags(...selectedCapabilityOptions.map((option) => option.resolvedCapabilities));
   }, [selectedCapabilityOptions]);
-  const deepAdapterCount = useMemo(() => {
-    return adapterOptions.filter((adapter) => MAINSTREAM_DEEP_ADAPTERS.has(adapter.adapterType)).length;
-  }, [adapterOptions]);
-  const availableAdapterCount = useMemo(() => {
-    return adapterOptions.filter((adapter) => adapter.status === "AVAILABLE").length;
-  }, [adapterOptions]);
 
   function toggleToolCapability(key: ToolCapabilityKey) {
     setSelectedToolCapabilities((current) =>
@@ -158,7 +118,7 @@ export function AgentBuilderPage() {
     setSelectedToolCapabilities(conversationalDraft.toolTags as ToolCapabilityKey[]);
     setToolTags("");
     setPreferredAdapterType(conversationalDraft.preferredAdapterType);
-    setSuccessMessage("已把对话式草案填入下方表单；你可以继续微调后创建。");
+    setSuccessMessage("已将 Agent 草案填入表单，你可以继续调整后创建。");
   }
 
   function handleRefineConversationalDraft() {
@@ -166,10 +126,9 @@ export function AgentBuilderPage() {
       return;
     }
 
-    const refinedDraft = refineAgentCreationDraft(conversationalDraft, draftRefinementPrompt);
-    setConversationalDraft(refinedDraft);
+    setConversationalDraft(refineAgentCreationDraft(conversationalDraft, draftRefinementPrompt));
     setDraftRefinementPrompt("");
-    setSuccessMessage("已根据追问更新 Agent 草案；你可以继续追问、填入表单或确认创建。");
+    setSuccessMessage("已根据补充说明更新 Agent 草案。");
   }
 
   async function handleCreateConversationalDraftAgent() {
@@ -191,7 +150,7 @@ export function AgentBuilderPage() {
         preferredAdapterType: conversationalDraft.preferredAdapterType
       });
       setCreatedAgent(agent);
-      setSuccessMessage("已根据对话式草案创建 Agent。回到 Workspace 后可直接 @ 它参与协作。");
+      setSuccessMessage("已创建 Agent。返回 Workspace 后可以直接 @ 它参与协作。");
       setConversationalDraft(null);
       setNaturalAgentPrompt("");
       setDraftRefinementPrompt("");
@@ -218,7 +177,7 @@ export function AgentBuilderPage() {
         preferredAdapterType
       });
       setCreatedAgent(agent);
-      setSuccessMessage("Agent 创建成功。回到 Workspace 后可以在 Agent 列表中看到它。");
+      setSuccessMessage("Agent 创建成功。返回 Workspace 后可以在 Agent 列表中看到它。");
       setName("");
       setAvatarUrl("");
       setSystemPrompt("");
@@ -233,162 +192,89 @@ export function AgentBuilderPage() {
     }
   }
 
-  async function handleAdapterTest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setTestingAdapter(true);
-    setAdapterTestError(null);
-    setAdapterTestResult(null);
-
-    try {
-      const result = await executeAdapter(adapterTestType, {
-        conversationId: "adapter-test-conversation",
-        taskRunId: "adapter-test-run",
-        taskStepId: "adapter-test-step",
-        agentId: "adapter_test_agent",
-        agentName: "Adapter Test Agent",
-        userInput: adapterTestPrompt,
-        systemPrompt: "You are an AgentHub adapter test agent. Return structured artifacts when possible.",
-        taskDescription: "Validate adapter availability and artifact JSON output contract.",
-        contextItems: [
-          "This is a manual adapter test from Agent Builder.",
-          "If the preferred adapter is unavailable, the registry should fallback to MOCK."
-        ],
-        artifactSummaries: ["Expected artifact contract: assistantMessage + artifacts[]"],
-        metadata: {
-          source: "AgentBuilderPage",
-          manualAdapterTest: true
-        }
-      });
-      setAdapterTestResult(result);
-    } catch (error) {
-      setAdapterTestError(getErrorMessage(error));
-    } finally {
-      setTestingAdapter(false);
-    }
-  }
-
   return (
-    <section className="simple-page agent-builder-page">
+    <section className={`simple-page agent-builder-page agent-builder-page--${view}`}>
       <div className="simple-page__card agent-builder-shell">
-        <div className="agent-builder-hero">
+        <header className="agent-builder-hero">
           <div>
-            <p className="eyebrow">Agent 管理台</p>
-            <h1>Agent 构建器</h1>
-            <p>创建业务 Agent、管理能力标签、检查本地 CLI，并验证 Adapter 输出边界。</p>
+            <p className="eyebrow">{view === "cli" ? "LOCAL CLI HEALTH" : "AGENT 管理台"}</p>
+            <h1>{view === "cli" ? "本地 CLI 健康检查" : "创建业务 Agent"}</h1>
+            <p>
+              {view === "cli"
+                ? "只检查 Claude Code 与 Codex 的本机路径、版本、授权、Schema、Stream 和沙箱能力。"
+                : "用自然语言生成业务 Agent 草案，确认名称、能力标签、工具能力和首选 Adapter 后进入 Workspace 协作。"}
+            </p>
           </div>
           <div className="agent-builder-hero__status">
             <span>{adapterOptions.length} 个 Adapter</span>
             <strong>{loadingAdapters ? "同步中" : "已就绪"}</strong>
           </div>
+        </header>
+
+        <div className="agent-builder-view-switch" aria-label="Agent builder view switch">
+          <Link className={view === "create" ? "agent-builder-view-switch__item--active" : ""} to="/agents">
+            创建业务 Agent
+          </Link>
+          <Link className={view === "cli" ? "agent-builder-view-switch__item--active" : ""} to="/agents?view=cli">
+            检查本地 CLI
+          </Link>
         </div>
 
-        <nav className="agent-builder-section-map" aria-label="Agent builder sections">
-          <a href="#agent-directory">
-            <strong>Agent Directory</strong>
-            <span>管理联系人、能力标签和路由预览</span>
-          </a>
-          <a href="#create-agent">
-            <strong>Create Agent</strong>
-            <span>自然语言创建，表单只做确认和微调</span>
-          </a>
-          <a href="#local-cli">
-            <strong>Local CLI Health</strong>
-            <span>Claude Code / Codex path、version、auth、sandbox</span>
-          </a>
-          <a href="#adapter-test">
-            <strong>Adapter Test</strong>
-            <span>验证 contract、fallback 和失败分类</span>
-          </a>
-        </nav>
-
-        <div className="agent-builder-content">
-          <AgentDirectorySection
-            adapterOptions={adapterOptions}
-            availableAdapterCount={availableAdapterCount}
-            selectedToolCapabilities={selectedToolCapabilities}
-          />
-
+        <main className="agent-builder-content agent-builder-content--single">
           <div className="agent-builder-main-stack">
-            <div className="agent-builder-flow" aria-label="Agent creation flow">
-              <span>1. 自然语言草案</span>
-              <span>2. 关键字段确认</span>
-              <span>3. 高级配置折叠</span>
-              <span>4. Preferred Adapter</span>
-              <span>5. Workspace @Agent</span>
-            </div>
-
-            <CreateAgentSection
-              adapterOptions={adapterOptions}
-              name={name}
-              avatarUrl={avatarUrl}
-              systemPrompt={systemPrompt}
-              capabilityTags={capabilityTags}
-              selectedToolCapabilities={selectedToolCapabilities}
-              toolTags={toolTags}
-              preferredAdapterType={preferredAdapterType}
-              submitting={submitting}
-              createdAgent={createdAgent}
-              naturalAgentPrompt={naturalAgentPrompt}
-              draftRefinementPrompt={draftRefinementPrompt}
-              conversationalDraft={conversationalDraft}
-              creatingDraftAgent={creatingDraftAgent}
-              generatingAgentDraft={generatingAgentDraft}
-              effectiveToolTags={effectiveToolTags}
-              resolvedCapabilityNames={resolvedCapabilityNames}
-              selectedAdapterDescriptor={selectedAdapterDescriptor}
-              onNameChange={setName}
-              onAvatarUrlChange={setAvatarUrl}
-              onSystemPromptChange={setSystemPrompt}
-              onCapabilityTagsChange={setCapabilityTags}
-              onToolTagsChange={setToolTags}
-              onPreferredAdapterChange={setPreferredAdapterType}
-              onNaturalAgentPromptChange={setNaturalAgentPrompt}
-              onDraftRefinementPromptChange={setDraftRefinementPrompt}
-              onToggleToolCapability={toggleToolCapability}
-              onGenerateConversationalDraft={() => {
-                void handleGenerateConversationalDraft();
-              }}
-              onApplyConversationalDraft={handleApplyConversationalDraft}
-              onRefineConversationalDraft={handleRefineConversationalDraft}
-              onCreateConversationalDraftAgent={() => {
-                void handleCreateConversationalDraftAgent();
-              }}
-              onSubmit={(event) => {
-                void handleSubmit(event);
-              }}
-            />
-
-            <LocalCliHealthSection
-              adapterOptions={adapterOptions}
-              preferredAdapterType={preferredAdapterType}
-              onSelectAdapter={setPreferredAdapterType}
-            />
-
-            <AdapterTestSection
-              adapterOptions={adapterOptions}
-              adapterTestType={adapterTestType}
-              adapterTestPrompt={adapterTestPrompt}
-              testingAdapter={testingAdapter}
-              adapterTestError={adapterTestError}
-              adapterTestResult={adapterTestResult}
-              selectedTestAdapterDescriptor={selectedTestAdapterDescriptor}
-              selectedTestAdapterDepthProfile={selectedTestAdapterDepthProfile}
-              adapterTestQualityReport={adapterTestQualityReport}
-              parsedAdapterArtifacts={parsedAdapterArtifacts}
-              onAdapterTestTypeChange={setAdapterTestType}
-              onAdapterTestPromptChange={setAdapterTestPrompt}
-              onSubmit={(event) => {
-                void handleAdapterTest(event);
-              }}
-            />
+            {view === "cli" ? (
+              <LocalCliHealthSection
+                adapterOptions={adapterOptions}
+                preferredAdapterType={preferredAdapterType}
+                onSelectAdapter={setPreferredAdapterType}
+              />
+            ) : (
+              <CreateAgentSection
+                adapterOptions={adapterOptions}
+                name={name}
+                avatarUrl={avatarUrl}
+                systemPrompt={systemPrompt}
+                capabilityTags={capabilityTags}
+                selectedToolCapabilities={selectedToolCapabilities}
+                toolTags={toolTags}
+                preferredAdapterType={preferredAdapterType}
+                submitting={submitting}
+                createdAgent={createdAgent}
+                naturalAgentPrompt={naturalAgentPrompt}
+                draftRefinementPrompt={draftRefinementPrompt}
+                conversationalDraft={conversationalDraft}
+                creatingDraftAgent={creatingDraftAgent}
+                generatingAgentDraft={generatingAgentDraft}
+                effectiveToolTags={effectiveToolTags}
+                resolvedCapabilityNames={resolvedCapabilityNames}
+                selectedAdapterDescriptor={selectedAdapterDescriptor}
+                onNameChange={setName}
+                onAvatarUrlChange={setAvatarUrl}
+                onSystemPromptChange={setSystemPrompt}
+                onCapabilityTagsChange={setCapabilityTags}
+                onToolTagsChange={setToolTags}
+                onPreferredAdapterChange={setPreferredAdapterType}
+                onNaturalAgentPromptChange={setNaturalAgentPrompt}
+                onDraftRefinementPromptChange={setDraftRefinementPrompt}
+                onToggleToolCapability={toggleToolCapability}
+                onGenerateConversationalDraft={() => {
+                  void handleGenerateConversationalDraft();
+                }}
+                onApplyConversationalDraft={handleApplyConversationalDraft}
+                onRefineConversationalDraft={handleRefineConversationalDraft}
+                onCreateConversationalDraftAgent={() => {
+                  void handleCreateConversationalDraftAgent();
+                }}
+                onSubmit={(event) => {
+                  void handleSubmit(event);
+                }}
+              />
+            )}
 
             {errorMessage ? <div className="builder-feedback builder-feedback--error">{errorMessage}</div> : null}
             {successMessage ? <div className="builder-feedback builder-feedback--success">{successMessage}</div> : null}
-            <div className="agent-builder-muted">
-              当前深接 Adapter：{deepAdapterCount}。STATIC / MOCK / FALLBACK 仅作为边界明确的兜底能力展示。
-            </div>
           </div>
-        </div>
+        </main>
       </div>
     </section>
   );

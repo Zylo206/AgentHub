@@ -22,6 +22,7 @@ import type { DeploymentRecord } from "../deployments/deploymentTypes";
 import { getVersionHistoryEntries } from "./artifactLineage";
 import { useArtifactOperationController, type ArtifactInspectorTab } from "./useArtifactOperationController";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus } from "../../utils/displayLabels";
+import { displayAdapterName, sanitizeProductionText } from "../../utils/productionLabels";
 
 interface ArtifactPanelProps {
   artifacts: Artifact[];
@@ -120,7 +121,7 @@ function getArtifactFallbackReason(artifact: Artifact): string | null {
   }
 
   if (artifact.generationMode === "REAL_FIRST_STATIC_FALLBACK" || artifact.status === "ARCHIVED") {
-    return "REAL_FIRST 已采纳有效真实输出，同时保留静态 fallback 归档用于回滚。";
+    return "REAL_FIRST 已采纳有效真实输出，同时保留本地静态归档用于回滚。";
   }
 
   if (artifact.qualityReason) {
@@ -128,11 +129,11 @@ function getArtifactFallbackReason(artifact: Artifact): string | null {
   }
 
   if (artifact.sourceKind === "STATIC_TEMPLATE") {
-    return "当前使用 STATIC_TEMPLATE 静态 fallback，保证演示链路稳定。";
+    return "当前使用本地静态结果，保证本地预览链路稳定。";
   }
 
   if (artifact.sourceKind === "MOCK_FALLBACK") {
-    return "主 Adapter 未返回可用真实产物，当前展示 MOCK_FALLBACK 兜底产物。";
+    return "主 Adapter 未返回可用真实产物，当前展示本地备用产物。";
   }
 
   return null;
@@ -162,7 +163,7 @@ function getArtifactGateAction(
   const failedGates = [
     qualityRejected ? "质量评审：" + artifact.qualityStatus : null,
     buildFailed ? "构建校验：" + artifact.buildValidationStatus : null,
-    fallbackKept ? "当前展示 fallback 产物" : null
+    fallbackKept ? "当前展示本地备用产物" : null
   ].filter(Boolean);
 
   return {
@@ -204,7 +205,7 @@ function getArtifactCockpitLabel(artifact: Artifact, fallbackReason: string | nu
     return "交付前必须修复";
   }
   if (tone === "warning") {
-    return artifact.sourceKind === "REAL_ADAPTER" ? "真实产物待复核" : "当前为 fallback 产物";
+    return artifact.sourceKind === "REAL_ADAPTER" ? "真实产物待复核" : "当前为本地备用产物";
   }
 
   return "产物状态待确认";
@@ -212,7 +213,7 @@ function getArtifactCockpitLabel(artifact: Artifact, fallbackReason: string | nu
 
 function getArtifactCockpitDescription(artifact: Artifact, fallbackReason: string | null): string {
   if (fallbackReason) {
-    return "该产物来自静态或 MOCK fallback。对外展示为交付物前，请先确认原因并创建 Revision。";
+    return "该产物来自本地静态或备用路径。对外展示为交付物前，请先确认原因并创建 Revision。";
   }
   if (isBlockingValidationStatus(artifact.qualityStatus)) {
     return "质量门禁未通过。请按失败原因修复后重新评审。";
@@ -235,9 +236,9 @@ function getArtifactSourceDescription(artifact: Artifact): string {
     return "用户通过 Revision 或 Apply Diff 生成的修订版本。";
   }
   if (artifact.sourceKind === "MOCK_FALLBACK") {
-    return "MOCK_FALLBACK 产物，用于保持演示和回滚路径稳定。";
+    return "本地备用产物，用于保持演示和回滚路径稳定。";
   }
-  return "未获得真实输出时使用的 STATIC_TEMPLATE 静态 fallback。";
+  return "未获得真实输出时使用的本地静态结果。";
 }
 
 function getArtifactQualityDescription(artifact: Artifact): string {
@@ -256,7 +257,7 @@ function getArtifactQualityDescription(artifact: Artifact): string {
     return "质量门禁未通过，请按原因创建 Revision 或重新评审。";
   }
   if (status.includes("FALLBACK")) {
-    return "Fallback 路径已启用，不应标记为真实产物成功。";
+    return "备用路径已启用，不应标记为真实产物成功。";
   }
   return "暂无完整质量评估结果。";
 }
@@ -287,7 +288,7 @@ function buildArtifactDiagnostics(
   const sourceValue = displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE");
   const qualityValue = artifact.qualityStatus || artifact.realAdapterOutcome || "NOT_EVALUATED";
   const buildValue = formatBuildValidationValue(artifact);
-  const fallbackValue = fallbackReason ? "FALLBACK_VISIBLE" : "NONE";
+  const fallbackValue = fallbackReason ? "备用路径可见" : "无";
 
   return [
     {
@@ -295,14 +296,14 @@ function buildArtifactDiagnostics(
       value: sourceValue,
       tone: artifact.sourceKind === "REAL_ADAPTER" ? "success" : artifact.sourceKind ? "warning" : "neutral",
       summary: getArtifactSourceDescription(artifact),
-      detail: "Adapter: " + (artifact.sourceAdapterType || "none") + " / Mode: " + (artifact.generationMode || "STATIC") + " / Step: " + (artifact.sourceTaskStepId || "none")
+      detail: "Adapter: " + (artifact.sourceAdapterType ? displayAdapterName(artifact.sourceAdapterType) : "none") + " / Mode: " + sanitizeProductionText(artifact.generationMode || "本地静态") + " / Step: " + (artifact.sourceTaskStepId || "none")
     },
     {
       label: "质量",
       value: qualityValue,
       tone: getArtifactBadgeTone(qualityValue),
       summary: getArtifactQualityDescription(artifact),
-      detail: artifact.qualityReason || "质量分：" + formatQualityScore(artifact.qualityScore)
+      detail: sanitizeProductionText(artifact.qualityReason || "质量分：" + formatQualityScore(artifact.qualityScore))
     },
     {
       label: "构建",
@@ -314,11 +315,11 @@ function buildArtifactDiagnostics(
       detail: artifact.buildValidationReason || "无构建失败原因。"
     },
     {
-      label: "Fallback",
+      label: "备用路径",
       value: fallbackValue,
       tone: fallbackReason ? "warning" : "success",
-      summary: fallbackReason ? "该产物具有 fallback 或归档语义。" : "当前没有明确 fallback 原因。",
-      detail: fallbackReason || "该产物可继续进入交付流程。"
+      summary: fallbackReason ? "该产物具有备用路径或归档语义。" : "当前没有明确备用路径原因。",
+      detail: sanitizeProductionText(fallbackReason || "该产物可继续进入交付流程。")
     }
   ];
 }
@@ -378,11 +379,11 @@ export function ArtifactPanel({
         {
           label: "来源",
           value: displayArtifactSourceKind(selectedArtifact.sourceKind || "STATIC_TEMPLATE"),
-          detail: selectedArtifact.sourceAdapterType || selectedArtifact.generationMode || "fallback-ready"
+          detail: selectedArtifact.sourceAdapterType ? displayAdapterName(selectedArtifact.sourceAdapterType) : sanitizeProductionText(selectedArtifact.generationMode || "备用路径就绪")
         },
         {
           label: "质量",
-          value: selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome || "NOT_EVALUATED",
+          value: sanitizeProductionText(selectedArtifact.qualityStatus || selectedArtifact.realAdapterOutcome || "NOT_EVALUATED"),
           detail: "score " + formatQualityScore(selectedArtifact.qualityScore)
         },
         {
@@ -393,7 +394,7 @@ export function ArtifactPanel({
         {
           label: "运行",
           value: displayStatus(selectedArtifact.status),
-          detail: selectedArtifact.realAdapterOutcome || selectedArtifact.generationMode || "本地静态边界"
+          detail: sanitizeProductionText(selectedArtifact.realAdapterOutcome || selectedArtifact.generationMode || "本地静态边界")
         }
       ]
     : [];

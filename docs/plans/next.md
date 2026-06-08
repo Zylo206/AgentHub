@@ -19,7 +19,16 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace now has a lightweight Presence bar for online devices, typing state, active Artifact, and current user context.
    - `Done`: Workspace now has a Conversation access panel for visibility, org tag, member role upsert, and member removal through backend-authorized APIs.
    - `Done`: Artifact Apply / Restore / Deploy UI now sends baseVersion and surfaces 409 stale-operation conflicts as a product conflict notice.
+   - `Done`: Workspace first screen now keeps the main path focused on conversation title, online collaboration, collaboration confirmation, message stream, and composer; session, access, Adapter, Context, and Audit evidence stay in advanced surfaces.
+   - `Done`: Artifact Inspector now distinguishes real Adapter output from local / fallback output and consistently labels preview as `Local Preview / Static Snapshot / Not Cloud Deploy`.
+   - `Done`: Agents page keeps Agent Directory / Create Agent as the primary path, while Local CLI Health and Adapter Test default to advanced diagnostics.
+   - `Done`: Desktop shell build verification passes with `tauri build --no-bundle`, and Rust code verification passes with `cargo check`.
+   - `Done`: Tauri runtime click-through was performed with Computer Use: Desktop Console opens in the real Tauri window, local directory read and text preview work, notification bridge records a test notification, and backend managed process start/stop ownership is visible.
+   - `Partial`: Desktop Console Context / Memory candidate flow is not closed yet; clicking the context candidate action did not populate the candidate panel during the Tauri run.
+   - `Partial`: Desktop Console CLI probes identify local `claude` / `codex` paths, but the product UI still reports `0/2 available` and does not expose full version / auth / schema / stream / sandbox conclusions there.
+   - `Known issue`: backend managed process default jar path is relative to the Tauri runtime directory and fails until the user enters the absolute backend jar path.
    - `Next`: harden real user management, persistent account storage, invite/member directory flows, and broader permission coverage for less-used maintenance endpoints.
+   - `Next`: add production member-management UI, richer presence details such as selection ranges, and a fuller Conflict Panel workflow for compare / force / cancel decisions. CRDT / OT and multi-node event bus remain deferred unless the course scope changes.
 
 1. **Monitor real Adapter output quality convergence**
    - Focus on `OPENAI_COMPATIBLE -> REAL_FIRST -> REAL_ADAPTER Artifact`.
@@ -253,6 +262,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: ArtifactPanel now uses `useArtifactOperationController` to own revision instruction, draft diff, approval gate, apply / force apply, restore, deploy, operation message, and conflict state.
    - `Done`: ArtifactPanel now extracts `ArtifactRevisionWorkspace`, so content editing, Draft Revision, revision instruction, and Diff Summary UI no longer live in the parent panel.
    - `Done`: ArtifactPanel now supports a content edit mode with textarea draft editing, selected line/snippet capture, local modification notes, draft diff preview, and Draft Revision generation that still requires Diff Summary plus Approval Gate before apply.
+   - `Done`: Artifact preview now distinguishes Web iframe, document snapshot, code snapshot, and PPT metadata/view shell; PPT remains view/download/context-oriented, not a full online slide editor.
+   - `Done`: Diff Summary now surfaces a productized Conflict Panel with current version, operation baseline, safe path, and Force Apply approval entry.
    - `Done`: Browser E2E now exercises the Artifact content editor path before creating a revision and applying diff.
    - `Done`: Artifact code selection can now be sent into ChatInput as an Artifact-local modification reference; sending the chat request writes the user message and creates a Draft Revision from the selected line range / snippet context.
    - `Done`: Browser E2E now verifies the end-to-end path: select Artifact snippet -> show ChatInput reference -> send modification request -> create Revision -> Apply Diff through Approval Gate.
@@ -302,9 +313,22 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Desktop notification rules are configurable and persisted through the Tauri desktop config; notification history items can route back to known AgentHub resources such as TaskRun targets.
    - `Done`: Desktop runtime management now includes periodic managed-process refresh, backend port diagnostics for `127.0.0.1:8080`, and persisted runtime settings for recent directories, CLI commands, backend jar path, and working directory.
    - `Done`: Desktop Console visible copy is normalized to production Chinese and grouped into product tabs for files, notifications, Agent CLI health, and backend process management.
+   - `Done`: Desktop Console can be opened from Workspace with a `conversationId`; selected local files can upload into the current conversation and then be pinned to Context or saved as Memory.
+   - `Done`: Tauri native-window validation confirmed local directory read, text preview, system notification, Claude Code / Codex CLI probes, and backend managed-process start / stop on a non-default port.
+   - `Partial`: Tauri native-window validation confirmed Workspace-linked local file upload creates a Context / Memory candidate; pin / memory action buttons now expose success states, but native click verification still needs one more pass to prove the final state transition reliably appears.
+   - `Done`: backend process management now launches `java` directly while keeping Windows CLI shims under `cmd /C`, so stopping a Tauri-managed backend terminates the real Java process instead of only a wrapper.
    - `Boundary`: desktop support is optional; normal Web build, smoke, and Browser E2E must not require Tauri, native packaging, or desktop permissions.
    - `Boundary`: desktop process management only controls processes started through the Tauri shell and does not replace OS service management.
+   - `Boundary`: the native Windows title bar is still OS / WebView chrome; making it fully white requires a separate Tauri window-decoration pass.
    - `Boundary`: full installer bundling still needs WiX download access or a preinstalled WiX toolset.
+
+15. **Make production collaboration visible in the main Web experience**
+   - `Done`: Workspace Presence UI now exposes online devices, typing state, active Artifact viewing, current user, and device identity.
+   - `Done`: Workspace Access Panel now supports PRIVATE / ORG / PUBLIC visibility, org tag, and OWNER / EDITOR / REVIEWER / VIEWER member management.
+   - `Done`: Workspace conversation creation explicitly separates single-Agent chat and multi-Agent group collaboration, and passes `SINGLE` / `GROUP` to the backend.
+   - `Done`: Conversation list displays the current mode as single Agent conversation or multi-Agent group chat.
+   - `Boundary`: this is still optimistic-concurrency collaboration, not CRDT / OT realtime co-editing.
+   - `Boundary`: member management uses existing demo-token users and role strings; it is not enterprise IAM / SSO.
 
 ## Not Now
 

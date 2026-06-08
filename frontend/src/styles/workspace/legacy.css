@@ -8237,9 +8237,9 @@
 .agent-builder-page .agent-builder-adapter-card,
 .agent-builder-page .agent-builder-adapter-note,
 .agent-builder-page .adapter-test-result {
-  border-color: rgba(137, 167, 204, 0.18);
-  background: rgba(5, 12, 24, 0.42);
-  color: #dceafe;
+  border-color: rgba(148, 163, 184, 0.22);
+  background: #ffffff;
+  color: #334155;
 }
 
 .agent-builder-page .agent-builder-adapter-status strong,
@@ -11876,9 +11876,9 @@ body {
 .preview-page__studio-eyebrow {
   padding: 3px 7px;
   border-radius: 999px;
-  border: 1px solid rgba(96, 165, 250, 0.22);
-  background: rgba(25, 118, 255, 0.12);
-  color: #8fc2ff;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: #f8fafc;
+  color: #475569;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -11904,10 +11904,9 @@ body {
 .message-protocol-pill--error,
 .message-protocol-card--rejection,
 .message-protocol-card--error {
-  border-color: rgba(239, 68, 68, 0.50);
-  background:
-    radial-gradient(circle at left, rgba(239, 68, 68, 0.16), transparent 44%),
-    rgba(69, 15, 25, 0.52);
+  border-color: rgba(220, 38, 38, 0.22);
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .message-type-ribbon {
@@ -11941,7 +11940,8 @@ body {
   margin: 8px 0;
   padding: 10px 12px;
   border-radius: var(--ah-radius-card);
-  background: rgba(5, 15, 28, 0.62);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #ffffff;
 }
 
 .message-protocol-card strong {
@@ -12048,8 +12048,9 @@ body {
 
 .message-artifact-card__meta span,
 .message-attachment-card__meta span {
-  border: 1px solid rgba(118, 154, 205, 0.16);
-  background: rgba(15, 32, 52, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #f8fafc;
+  color: #475569;
 }
 
 .message-stream-status-bar {
@@ -12218,7 +12219,8 @@ body {
 .preview-page__content-toolbar {
   border-color: var(--ah-border-soft);
   border-radius: var(--ah-radius-card);
-  background: rgba(5, 15, 28, 0.62);
+  background: #ffffff;
+  color: #111827;
 }
 
 .preview-page__iframe,
@@ -15064,9 +15066,9 @@ body {
 .artifact-preview__meta,
 .artifact-preview__line,
 .artifact-card__tag {
-  border-color: rgba(118, 154, 205, 0.18) !important;
-  background: rgba(8, 20, 34, 0.92) !important;
-  color: var(--im-text) !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
   box-shadow: none !important;
 }
 

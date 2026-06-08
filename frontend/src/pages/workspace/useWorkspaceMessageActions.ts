@@ -403,7 +403,7 @@ export function useWorkspaceMessageActions({
 
       const sourceMessageId = getIdValue(message.id);
       if (!sourceMessageId) {
-        setErrorMessage("无法识别消息 ID，不能重新运行 Demo Task。");
+        setErrorMessage("无法识别消息 ID，不能重新运行协作任务。");
         return;
       }
 
@@ -431,7 +431,7 @@ export function useWorkspaceMessageActions({
         setSelectedTaskRunId(createdTaskRunId);
         setSelectedTaskStepId(null);
         setShowAllArtifacts(true);
-        setOperationMessage("已基于选中消息重新运行 Demo Task。");
+        setOperationMessage("已基于选中消息重新运行协作任务。");
       } catch (error) {
         setErrorMessage(getErrorMessage(error));
       } finally {
@@ -456,7 +456,7 @@ export function useWorkspaceMessageActions({
 
   const handleRunDemoTask = useCallback(async () => {
     if (!currentConversationId || !latestUserMessage) {
-      setErrorMessage("请先发送一条用户消息，再运行 Demo Task。");
+      setErrorMessage("请先发送一条用户消息，再运行协作任务。");
       return;
     }
 

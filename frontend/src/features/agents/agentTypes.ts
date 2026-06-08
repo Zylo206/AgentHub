@@ -1,6 +1,14 @@
 import type { IdValue } from "../../utils/id";
 
-export type ToolCapabilityKey = "code" | "preview" | "review" | "deploy" | "api" | "schema" | "task_planner" | "task_router";
+export type ToolCapabilityKey =
+  | "code"
+  | "preview"
+  | "review"
+  | "deploy"
+  | "api"
+  | "schema"
+  | "task_planner"
+  | "task_router";
 
 export interface ToolCapabilityOption {
   key: ToolCapabilityKey;

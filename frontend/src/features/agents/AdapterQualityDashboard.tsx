@@ -1,6 +1,8 @@
 import type { AdapterQualityMetrics } from "../../api/agenthubApi";
 import type { TaskRun, TaskStep } from "../chat/chatTypes";
 import type { AdapterDescriptor } from "./agentTypes";
+import { displayStatus } from "../../utils/displayLabels";
+import { displayAdapterName, sanitizeProductionText } from "../../utils/productionLabels";
 
 interface AdapterQualityDashboardProps {
   adapterDescriptors: AdapterDescriptor[];
@@ -11,46 +13,40 @@ interface AdapterQualityDashboardProps {
 interface AdapterQualityRow {
   adapterType: string;
   status: string;
-  healthLabel?: string | null;
   routeAttempts: number;
   successRate: number | null;
-  fallbackRate: number | null;
-  realAcceptanceRate: number | null;
-  totalFailureRate: number | null;
-  observedSteps: number;
+  backupRate: number | null;
+  acceptedOutputs: number;
   parseFailures: number;
   qualityFailures: number;
   buildFailures: number;
-  realOutputAccepted: number;
-  acceptedOutcomes: number;
-  fallbackOutcomes: number;
-  failureOutcomes: number;
-  outcomeSummary?: string | null;
-  lastParseStatus?: string | null;
-  lastBuildValidationStatus?: string | null;
+  lastOutcome?: string | null;
   lastQualityStatus?: string | null;
   lastQualityReason?: string | null;
-  lastOutcome?: string | null;
-  supportedModes: string[];
-  safetyPolicies: string[];
-  capabilityDetails: Record<string, unknown>;
-}
-
-interface AdapterQualitySummary {
-  adapterCount: number;
-  totalAttempts: number;
-  observedSteps: number;
-  realOutputAccepted: number;
-  parseFailures: number;
-  qualityFailures: number;
-  buildFailures: number;
-  averageSuccessRate: number | null;
-  averageFallbackRate: number | null;
-  highestRiskAdapter: AdapterQualityRow | null;
 }
 
 function getStepAdapterType(step: TaskStep): string {
   return step.actualAdapterType || step.preferredAdapterType || step.adapterType || "UNKNOWN";
+}
+
+function formatRate(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) {
+    return "暂无";
+  }
+
+  return `${Math.round(value * 100)}%`;
+}
+
+function averageRate(rows: AdapterQualityRow[], selector: (row: AdapterQualityRow) => number | null): number | null {
+  const values = rows
+    .map(selector)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  if (values.length === 0) {
+    return null;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function isParseFailure(status?: string | null): boolean {
@@ -69,87 +65,6 @@ function isBuildFailure(status?: string | null): boolean {
   return status === "FAILED";
 }
 
-function formatRate(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) {
-    return "N/A";
-  }
-
-  return `${Math.round(value * 100)}%`;
-}
-
-function formatCount(value: number): string {
-  return Number.isFinite(value) ? String(value) : "0";
-}
-
-function toPercent(value: number | null): number {
-  if (value === null || !Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.min(100, Math.round(value * 100)));
-}
-
-function averageRate(rows: AdapterQualityRow[], selector: (row: AdapterQualityRow) => number | null): number | null {
-  const values = rows
-    .map(selector)
-    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-
-  if (values.length === 0) {
-    return null;
-  }
-
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function buildSummary(rows: AdapterQualityRow[]): AdapterQualitySummary {
-  const highestRiskAdapter =
-    [...rows].sort((left, right) => {
-      const leftFailures = left.parseFailures + left.qualityFailures + left.buildFailures;
-      const rightFailures = right.parseFailures + right.qualityFailures + right.buildFailures;
-      if (rightFailures !== leftFailures) {
-        return rightFailures - leftFailures;
-      }
-      return (right.totalFailureRate ?? 0) - (left.totalFailureRate ?? 0);
-    })[0] ?? null;
-
-  return {
-    adapterCount: rows.length,
-    totalAttempts: rows.reduce((sum, row) => sum + row.routeAttempts, 0),
-    observedSteps: rows.reduce((sum, row) => sum + row.observedSteps, 0),
-    realOutputAccepted: rows.reduce((sum, row) => sum + row.realOutputAccepted, 0),
-    parseFailures: rows.reduce((sum, row) => sum + row.parseFailures, 0),
-    qualityFailures: rows.reduce((sum, row) => sum + row.qualityFailures, 0),
-    buildFailures: rows.reduce((sum, row) => sum + row.buildFailures, 0),
-    averageSuccessRate: averageRate(rows, (row) => row.successRate),
-    averageFallbackRate: averageRate(rows, (row) => row.fallbackRate),
-    highestRiskAdapter
-  };
-}
-
-function getHealthTone(value: number | null, invert = false): "good" | "warn" | "danger" | "neutral" {
-  if (value === null || !Number.isFinite(value)) {
-    return "neutral";
-  }
-
-  if (invert) {
-    if (value >= 0.45) {
-      return "danger";
-    }
-    if (value >= 0.2) {
-      return "warn";
-    }
-    return "good";
-  }
-
-  if (value >= 0.75) {
-    return "good";
-  }
-  if (value >= 0.45) {
-    return "warn";
-  }
-  return "danger";
-}
-
 function buildRows(
   adapterDescriptors: AdapterDescriptor[],
   taskRuns: TaskRun[],
@@ -161,29 +76,16 @@ function buildRows(
     byAdapter.set(descriptor.adapterType, {
       adapterType: descriptor.adapterType,
       status: descriptor.status,
-      healthLabel: null,
       routeAttempts: descriptor.routeAttempts ?? 0,
       successRate: typeof descriptor.successRate === "number" ? descriptor.successRate : null,
-      fallbackRate: typeof descriptor.fallbackRate === "number" ? descriptor.fallbackRate : null,
-      realAcceptanceRate: null,
-      totalFailureRate: null,
-      observedSteps: 0,
+      backupRate: typeof descriptor.fallbackRate === "number" ? descriptor.fallbackRate : null,
+      acceptedOutputs: 0,
       parseFailures: 0,
       qualityFailures: 0,
       buildFailures: 0,
-      realOutputAccepted: 0,
-      acceptedOutcomes: 0,
-      fallbackOutcomes: 0,
-      failureOutcomes: 0,
-      outcomeSummary: null,
-      lastParseStatus: null,
-      lastBuildValidationStatus: null,
-      lastQualityStatus: null,
-      lastQualityReason: null,
       lastOutcome: null,
-      supportedModes: descriptor.supportedModes ?? [],
-      safetyPolicies: descriptor.safetyPolicies ?? [],
-      capabilityDetails: descriptor.capabilityDetails ?? {}
+      lastQualityStatus: null,
+      lastQualityReason: null
     });
   });
 
@@ -193,50 +95,28 @@ function buildRows(
       {
         adapterType: metrics.adapterType,
         status: "OBSERVED",
-        healthLabel: null,
         routeAttempts: 0,
         successRate: null,
-        fallbackRate: null,
-        realAcceptanceRate: null,
-        totalFailureRate: null,
-        observedSteps: 0,
+        backupRate: null,
+        acceptedOutputs: 0,
         parseFailures: 0,
         qualityFailures: 0,
         buildFailures: 0,
-        realOutputAccepted: 0,
-        acceptedOutcomes: 0,
-        fallbackOutcomes: 0,
-        failureOutcomes: 0,
-        outcomeSummary: null,
-        lastParseStatus: null,
-        lastBuildValidationStatus: null,
-        lastQualityStatus: null,
-        lastQualityReason: null,
         lastOutcome: null,
-        supportedModes: [],
-        safetyPolicies: [],
-        capabilityDetails: {}
+        lastQualityStatus: null,
+        lastQualityReason: null
       };
 
-    row.observedSteps = Math.max(row.observedSteps, metrics.attempts);
-    row.parseFailures = Math.max(row.parseFailures, metrics.parseFailures);
-    row.qualityFailures = Math.max(row.qualityFailures, metrics.qualityFailures);
-    row.buildFailures = Math.max(row.buildFailures, metrics.buildFailures);
-    row.realOutputAccepted = metrics.realOutputAccepted;
-    row.acceptedOutcomes = metrics.acceptedOutcomes ?? metrics.realOutputAccepted;
-    row.fallbackOutcomes = metrics.fallbackOutcomes ?? metrics.fallbacks;
-    row.failureOutcomes = metrics.failureOutcomes ?? (metrics.parseFailures + metrics.qualityFailures + metrics.buildFailures);
+    row.routeAttempts = Math.max(row.routeAttempts, metrics.attempts);
     row.successRate = metrics.successRate;
-    row.fallbackRate = metrics.fallbackRate;
-    row.realAcceptanceRate = metrics.realAcceptanceRate ?? null;
-    row.totalFailureRate = metrics.totalFailureRate ?? null;
-    row.healthLabel = metrics.healthLabel ?? null;
-    row.outcomeSummary = metrics.outcomeSummary ?? null;
-    row.lastParseStatus = metrics.lastParseStatus ?? null;
-    row.lastBuildValidationStatus = metrics.lastBuildValidationStatus ?? null;
-    row.lastQualityStatus = metrics.lastQualityStatus;
-    row.lastQualityReason = metrics.lastQualityReason;
+    row.backupRate = metrics.fallbackRate;
+    row.acceptedOutputs = metrics.realOutputAccepted;
+    row.parseFailures = metrics.parseFailures;
+    row.qualityFailures = metrics.qualityFailures;
+    row.buildFailures = metrics.buildFailures;
     row.lastOutcome = metrics.lastOutcome ?? metrics.outcomeSummary ?? null;
+    row.lastQualityStatus = metrics.lastQualityStatus ?? null;
+    row.lastQualityReason = metrics.lastQualityReason ?? null;
     byAdapter.set(metrics.adapterType, row);
   });
 
@@ -246,53 +126,35 @@ function buildRows(
     if (metricAdapterTypes.has(adapterType)) {
       return;
     }
+
     const row =
       byAdapter.get(adapterType) ??
       {
         adapterType,
         status: "OBSERVED",
-        healthLabel: null,
         routeAttempts: 0,
         successRate: null,
-        fallbackRate: null,
-        realAcceptanceRate: null,
-        totalFailureRate: null,
-        observedSteps: 0,
+        backupRate: null,
+        acceptedOutputs: 0,
         parseFailures: 0,
         qualityFailures: 0,
         buildFailures: 0,
-        realOutputAccepted: 0,
-        acceptedOutcomes: 0,
-        fallbackOutcomes: 0,
-        failureOutcomes: 0,
-        outcomeSummary: null,
-        lastParseStatus: null,
-        lastBuildValidationStatus: null,
-        lastQualityStatus: null,
-        lastQualityReason: null,
         lastOutcome: null,
-        supportedModes: [],
-        safetyPolicies: [],
-        capabilityDetails: {}
+        lastQualityStatus: null,
+        lastQualityReason: null
       };
 
-    row.observedSteps += 1;
+    row.routeAttempts += 1;
     row.parseFailures += isParseFailure(step.artifactParseStatus) ? 1 : 0;
     row.qualityFailures += isQualityFailure(step.artifactQualityStatus) ? 1 : 0;
     row.buildFailures += isBuildFailure(step.artifactBuildValidationStatus) ? 1 : 0;
+    row.lastOutcome = step.realAdapterOutcome ?? row.lastOutcome;
+    row.lastQualityStatus = step.artifactQualityStatus ?? row.lastQualityStatus;
+    row.lastQualityReason = step.artifactQualityReason ?? row.lastQualityReason;
     byAdapter.set(adapterType, row);
   });
 
-  return Array.from(byAdapter.values()).sort((left, right) => {
-    const failureDelta =
-      right.parseFailures + right.qualityFailures + right.buildFailures -
-      (left.parseFailures + left.qualityFailures + left.buildFailures);
-    if (failureDelta !== 0) {
-      return failureDelta;
-    }
-
-    return right.routeAttempts - left.routeAttempts;
-  });
+  return Array.from(byAdapter.values()).sort((left, right) => right.routeAttempts - left.routeAttempts);
 }
 
 export function AdapterQualityDashboard({
@@ -301,14 +163,18 @@ export function AdapterQualityDashboard({
   qualityMetrics
 }: AdapterQualityDashboardProps) {
   const rows = buildRows(adapterDescriptors, taskRuns, qualityMetrics);
-  const summary = buildSummary(rows);
+  const totalAttempts = rows.reduce((sum, row) => sum + row.routeAttempts, 0);
+  const acceptedOutputs = rows.reduce((sum, row) => sum + row.acceptedOutputs, 0);
+  const totalFailures = rows.reduce((sum, row) => sum + row.parseFailures + row.qualityFailures + row.buildFailures, 0);
+  const averageSuccessRate = averageRate(rows, (row) => row.successRate);
+  const averageBackupRate = averageRate(rows, (row) => row.backupRate);
 
   if (rows.length === 0) {
     return (
       <section className="adapter-quality-dashboard">
         <div className="adapter-quality-dashboard__header">
           <strong>Adapter 质量看板</strong>
-          <span>暂无 Adapter 观测数据</span>
+          <span>暂无观测数据</span>
         </div>
       </section>
     );
@@ -319,113 +185,63 @@ export function AdapterQualityDashboard({
       <div className="adapter-quality-dashboard__header">
         <div>
           <strong>Adapter 质量看板</strong>
-          <p>展示后端聚合指标与路由历史；启用指标持久化后可跨重启保留。</p>
+          <p>展示健康度、真实输出采纳、失败分类和备用路径比例。</p>
         </div>
         <span>{rows.length} 个 Adapter</span>
-      </div>
-
-      <div className="adapter-quality-command-strip" aria-label="Adapter quality command strip">
-        <div>
-          <span>Quality Command</span>
-          <strong>真实产物采纳 / fallback / failure taxonomy</strong>
-          <p>
-            这里不是简单状态表，而是 Adapter 进入 REAL_FIRST 主产物前的质量门禁：contract、quality、build、
-            fallback reason 都必须可解释。
-          </p>
-        </div>
-        <div className="adapter-quality-command-strip__metrics">
-          <span>Success {formatRate(summary.averageSuccessRate)}</span>
-          <span>Fallback {formatRate(summary.averageFallbackRate)}</span>
-          <span>Risk {summary.highestRiskAdapter?.adapterType || "N/A"}</span>
-        </div>
       </div>
 
       <div className="adapter-quality-kpis" aria-label="Adapter quality summary">
         <article className="adapter-quality-kpi adapter-quality-kpi--neutral">
           <span>观测范围</span>
-          <strong>{summary.adapterCount}</strong>
-          <small>{formatCount(summary.totalAttempts)} 次路由 / {formatCount(summary.observedSteps)} 个 Step</small>
-        </article>
-        <article className={`adapter-quality-kpi adapter-quality-kpi--${getHealthTone(summary.averageSuccessRate)}`}>
-          <span>平均成功率</span>
-          <strong>{formatRate(summary.averageSuccessRate)}</strong>
-          <small>来自后端聚合指标与当前 TaskStep</small>
-        </article>
-        <article className={`adapter-quality-kpi adapter-quality-kpi--${getHealthTone(summary.averageFallbackRate, true)}`}>
-          <span>平均 fallback</span>
-          <strong>{formatRate(summary.averageFallbackRate)}</strong>
-          <small>越低越稳定；fallback 不等于真实成功</small>
+          <strong>{totalAttempts}</strong>
+          <small>累计路由尝试</small>
         </article>
         <article className="adapter-quality-kpi adapter-quality-kpi--good">
-          <span>真实产物采纳</span>
-          <strong>{summary.realOutputAccepted}</strong>
-          <small>通过 contract / quality / build gate</small>
+          <span>平均成功率</span>
+          <strong>{formatRate(averageSuccessRate)}</strong>
+          <small>来自后端聚合指标</small>
+        </article>
+        <article className="adapter-quality-kpi adapter-quality-kpi--warn">
+          <span>备用路径比例</span>
+          <strong>{formatRate(averageBackupRate)}</strong>
+          <small>越低代表真实接入越稳定</small>
+        </article>
+        <article className="adapter-quality-kpi adapter-quality-kpi--good">
+          <span>真实输出采纳</span>
+          <strong>{acceptedOutputs}</strong>
+          <small>通过合约、质量和构建门禁</small>
         </article>
         <article className="adapter-quality-kpi adapter-quality-kpi--danger">
           <span>失败分类</span>
-          <strong>{summary.parseFailures + summary.qualityFailures + summary.buildFailures}</strong>
-          <small>解析 {summary.parseFailures} / 质量 {summary.qualityFailures} / 构建 {summary.buildFailures}</small>
-        </article>
-        <article className="adapter-quality-kpi adapter-quality-kpi--warn">
-          <span>最高风险 Adapter</span>
-          <strong>{summary.highestRiskAdapter?.adapterType || "N/A"}</strong>
-          <small>{summary.highestRiskAdapter?.lastQualityStatus || "暂无质量失败"}</small>
+          <strong>{totalFailures}</strong>
+          <small>解析 / 质量 / 构建</small>
         </article>
       </div>
 
       <div className="adapter-quality-table">
         <div className="adapter-quality-table__row adapter-quality-table__row--head">
           <span>Adapter</span>
-          <span>健康</span>
+          <span>状态</span>
           <span>尝试</span>
           <span>成功</span>
-          <span>Fallback</span>
-          <span>真实采纳</span>
-          <span>失败率</span>
-          <span>失败明细</span>
-          <span>Outcome</span>
-          <span>模式</span>
-          <span>策略</span>
-          <span>最近原因</span>
+          <span>备用</span>
+          <span>真实输出</span>
+          <span>失败分类</span>
+          <span>最近结果</span>
         </div>
         {rows.map((row) => (
           <div className="adapter-quality-table__row" key={row.adapterType}>
-            <strong>{row.adapterType}</strong>
-            <span title={`Adapter 状态：${row.status}`}>{row.healthLabel || row.status}</span>
-            <span title={`${row.routeAttempts} 次路由尝试 / ${row.observedSteps} 次质量观测`}>
-              {row.routeAttempts} / {row.observedSteps}
-            </span>
+            <strong>{displayAdapterName(row.adapterType)}</strong>
+            <span>{displayStatus(row.status)}</span>
+            <span>{row.routeAttempts}</span>
             <span>{formatRate(row.successRate)}</span>
-            <span>{formatRate(row.fallbackRate)}</span>
-            <span title={`${row.realOutputAccepted} 个真实 Adapter 输出被采纳`}>
-              {row.realOutputAccepted} ({formatRate(row.realAcceptanceRate)})
-            </span>
-            <span>{formatRate(row.totalFailureRate)}</span>
-            <span title="解析 / 质量 / 构建失败">
+            <span>{formatRate(row.backupRate)}</span>
+            <span>{row.acceptedOutputs}</span>
+            <span>
               {row.parseFailures} / {row.qualityFailures} / {row.buildFailures}
             </span>
-            <span
-              title={[
-                `accepted=${row.acceptedOutcomes}`,
-                `fallback=${row.fallbackOutcomes}`,
-                `failed=${row.failureOutcomes}`,
-                `parse=${row.lastParseStatus || "N/A"}`,
-                `build=${row.lastBuildValidationStatus || "N/A"}`
-              ].join(" | ")}
-            >
-              {row.lastOutcome || row.outcomeSummary || "N/A"}
-            </span>
-            <span title={row.supportedModes.join(", ") || "暂无能力模式元数据"}>
-              {row.supportedModes.slice(0, 2).join(", ") || "N/A"}
-            </span>
-            <span title={row.safetyPolicies.join(" | ") || "暂无安全策略元数据"}>
-              {row.safetyPolicies.some((policy) => policy.includes("workspace-write-disabled")) ? "禁止写工作区" : "N/A"}
-            </span>
-            <span title={row.lastQualityReason || ""}>
-              <i className="adapter-quality-table__meter" aria-hidden="true">
-                <b style={{ width: `${toPercent(row.successRate)}%` }} />
-              </i>
-              {row.lastQualityStatus || "N/A"}
+            <span title={sanitizeProductionText(row.lastQualityReason || "")}>
+              {sanitizeProductionText(row.lastOutcome || row.lastQualityStatus || "暂无")}
             </span>
           </div>
         ))}

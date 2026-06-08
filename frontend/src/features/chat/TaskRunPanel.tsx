@@ -12,6 +12,7 @@ import {
 } from "./taskRunPanelHelpers";
 import { formatId, getIdValue } from "../../utils/id";
 import { displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { sanitizeProductionText } from "../../utils/productionLabels";
 
 interface TaskRunPanelProps {
   agents: Agent[];
@@ -42,7 +43,7 @@ function TaskRunControlRow({
   return (
     <div className="task-run-control-row">
       <span className="task-run-control-row__hint">
-        Stop 会跳过后续步骤；Cancel 会丢弃迟到的 Adapter 输出。终态任务会拒绝控制命令。
+        Stop 会停止继续写入后续结果；Cancel 会丢弃迟到输出。已完成任务不可再次控制。
       </span>
       <button
         type="button"
@@ -53,7 +54,7 @@ function TaskRunControlRow({
           void onStopTaskRun?.(taskRunId);
         }}
       >
-        停止后续步骤
+        停止
       </button>
       <button
         type="button"
@@ -64,9 +65,8 @@ function TaskRunControlRow({
           void onCancelTaskRun?.(taskRunId);
         }}
       >
-        取消运行
+        取消
       </button>
-      {!canControlRun ? <span className="task-run-control-row__hint">终态任务不可再停止或取消。</span> : null}
     </div>
   );
 }
@@ -86,7 +86,7 @@ function TaskRunExplainDisclosure({
     <details className="agenthub-disclosure task-run-explain-details" data-testid="task-run-explain-details">
       <summary>
         <span>Explain / 高级证据</span>
-        <small>Router、Executor、Aggregator、fallback policy、TaskGraph 和 Adapter 评分</small>
+        <small>Planner、Router、Executor、Aggregator、备用路径、TaskGraph 和 Adapter 评分</small>
       </summary>
       <OrchestratorExplainDetails
         taskRun={taskRun}
@@ -114,8 +114,8 @@ export function TaskRunPanel({
 }: TaskRunPanelProps) {
   const agentNameMap = new Map(agents.map((agent) => [getIdValue(agent.id), agent.name]));
 
-  if (loading) {
-    return <div className="task-panel__empty">正在加载 TaskRun...</div>;
+  if (loading && taskRuns.length === 0) {
+    return <div className="task-panel__empty">正在加载任务运行记录...</div>;
   }
 
   if (taskRuns.length === 0) {
@@ -133,6 +133,7 @@ export function TaskRunPanel({
           <h3>任务运行</h3>
           <p>
             {taskSpecs.length} 个 TaskSpec / {taskRuns.length} 个 TaskRun
+            {loading ? " / 正在同步" : ""}
           </p>
         </div>
       </div>
@@ -164,7 +165,7 @@ export function TaskRunPanel({
               <div className="task-run-card__header">
                 <div>
                   <strong>{formatId(taskRun.id)}</strong>
-                  <p>{taskRun.resultSummary}</p>
+                  <p>{sanitizeProductionText(taskRun.resultSummary)}</p>
                 </div>
                 <span className={`status-pill status-pill--${normalizeStatusClass(taskRun.status)}`}>
                   {displayStatus(taskRun.status)}
@@ -178,7 +179,7 @@ export function TaskRunPanel({
               />
 
               <div className="task-run-card__goal">
-                {taskRun.taskPlan?.goal || "暂无任务计划目标。"}
+                {sanitizeProductionText(taskRun.taskPlan?.goal) || "暂无任务计划目标。"}
               </div>
 
               <TaskRunSummaryStrip taskRun={taskRun} producedArtifacts={producedArtifacts} />
@@ -200,7 +201,7 @@ export function TaskRunPanel({
                       : "上一版产物"}
                   </span>
                   {revisionOrigin.artifact.revisionInstruction ? (
-                    <p>修改指令：{revisionOrigin.artifact.revisionInstruction}</p>
+                    <p>修改指令：{sanitizeProductionText(revisionOrigin.artifact.revisionInstruction)}</p>
                   ) : null}
                 </div>
               ) : null}

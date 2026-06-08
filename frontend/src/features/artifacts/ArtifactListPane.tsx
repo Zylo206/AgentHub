@@ -43,10 +43,10 @@ export function ArtifactListPane({
       ) : artifacts.length === 0 ? (
         <div className="artifact-scaffold-list" aria-label="Artifact scaffold examples">
           <article className="artifact-scaffold-card artifact-scaffold-card--active">
-            <span className="artifact-scaffold-card__icon">⚛</span>
+            <span className="artifact-scaffold-card__icon">A</span>
             <div>
               <strong>LoginPage.tsx</strong>
-              <small>React 组件 · 示例</small>
+              <small>React 组件示例</small>
             </div>
             <em>v1.2.0</em>
           </article>
@@ -54,7 +54,7 @@ export function ArtifactListPane({
             <span className="artifact-scaffold-card__icon artifact-scaffold-card__icon--api">API</span>
             <div>
               <strong>auth.api.yaml</strong>
-              <small>OpenAPI 合约 · 示例</small>
+              <small>OpenAPI 合约示例</small>
             </div>
             <em>合约</em>
           </article>
@@ -62,11 +62,11 @@ export function ArtifactListPane({
             <span className="artifact-scaffold-card__icon artifact-scaffold-card__icon--review">R</span>
             <div>
               <strong>安全审计报告</strong>
-              <small>Review Report · 示例</small>
+              <small>Review Report 示例</small>
             </div>
             <em>通过</em>
           </article>
-          <p>示例不会写入后端；确认协作后真实产物会出现在这里。</p>
+          <p>确认协作后，Agent 生成的真实产物会出现在这里。</p>
         </div>
       ) : (
         <div className="artifact-card-list" data-testid="artifact-card-list">

@@ -94,12 +94,13 @@ struct ManagedProcessInfo {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 struct DesktopConfig {
     recent_directories: Vec<String>,
     java_command: String,
     backend_jar_path: String,
     backend_working_directory: String,
+    backend_port: u16,
     claude_command: String,
     codex_command: String,
     opencode_command: String,
@@ -116,6 +117,7 @@ impl Default for DesktopConfig {
             java_command: "java".to_string(),
             backend_jar_path: "backend/target/agenthub-backend-0.1.0-SNAPSHOT.jar".to_string(),
             backend_working_directory: ".".to_string(),
+            backend_port: 8080,
             claude_command: "claude".to_string(),
             codex_command: "codex".to_string(),
             opencode_command: "opencode".to_string(),
@@ -220,13 +222,29 @@ fn sanitize_command(command: &str) -> Result<String, String> {
 
 fn command_for(command: &str) -> Command {
     let normalized = command.replace('\\', "/").to_lowercase();
-    if cfg!(windows) && (normalized.ends_with(".cmd") || normalized.ends_with(".bat")) {
+    let file_name = Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(command)
+        .to_lowercase();
+    if cfg!(windows) && !normalized.ends_with(".exe") && file_name != "java" {
         let mut shell = Command::new("cmd");
         shell.arg("/C").arg(command);
         shell
     } else {
         Command::new(command)
     }
+}
+
+fn discover_project_root() -> Option<PathBuf> {
+    let current_exe = std::env::current_exe().ok()?;
+    current_exe.ancestors().find_map(|ancestor| {
+        if ancestor.join("backend").is_dir() && ancestor.join("frontend").is_dir() {
+            Some(ancestor.to_path_buf())
+        } else {
+            None
+        }
+    })
 }
 
 fn resolve_command_path(command: &str) -> Option<String> {
@@ -510,31 +528,44 @@ fn start_agenthub_backend(
     java_command: String,
     jar_path: String,
     working_directory: String,
+    backend_port: Option<u16>,
 ) -> Result<ManagedProcessInfo, String> {
     let java = sanitize_command(&java_command)?;
-    let cwd = PathBuf::from(working_directory);
+    let mut cwd = PathBuf::from(working_directory);
     if !cwd.is_dir() {
         return Err("Working directory does not exist.".to_string());
     }
     let configured_jar = PathBuf::from(jar_path);
-    let jar = if configured_jar.is_absolute() {
+    let mut jar = if configured_jar.is_absolute() {
         configured_jar
     } else {
         cwd.join(configured_jar)
     };
+    if !jar.is_file() && !jar.is_absolute() {
+        if let Some(project_root) = discover_project_root() {
+            let candidate = project_root.join(&jar);
+            if candidate.is_file() {
+                cwd = project_root;
+                jar = candidate;
+            }
+        }
+    }
     if !jar.is_file() {
         return Err("Backend jar path does not exist.".to_string());
     }
 
     let recent_output = Arc::new(Mutex::new(VecDeque::with_capacity(40)));
     let log_path = std::env::temp_dir().join(format!("agenthub-backend-{}.log", now_label()));
-    let mut child = command_for(&java)
+    let mut command = command_for(&java);
+    command
         .arg("-jar")
         .arg(jar)
+        .arg(format!("--server.port={}", backend_port.unwrap_or(8080)))
         .current_dir(cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command
         .spawn()
         .map_err(|error| format!("Failed to start backend: {error}"))?;
 

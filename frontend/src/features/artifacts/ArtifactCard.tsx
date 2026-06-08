@@ -1,21 +1,37 @@
 import type { Artifact } from "./artifactTypes";
 import { formatId, getIdValue } from "../../utils/id";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus } from "../../utils/displayLabels";
+import { sanitizeProductionText } from "../../utils/productionLabels";
 
 function formatQualityScore(score: number | null | undefined): string {
   if (typeof score !== "number" || !Number.isFinite(score)) {
-    return "N/A";
+    return "未评分";
   }
 
   return score.toFixed(2);
 }
 
-function getDisplayBuildValidationValue(artifact: Artifact): string {
-  return artifact.buildValidationStatus || "NOT_EVALUATED";
+function formatBuildValidation(status: string | null | undefined): string {
+  if (!status || status === "NOT_EVALUATED") {
+    return "未构建";
+  }
+  if (status === "PASS" || status === "PASSED") {
+    return "构建通过";
+  }
+  if (status === "FAILED" || status === "FAIL") {
+    return "构建失败";
+  }
+  return sanitizeProductionText(status);
 }
 
-function getDisplayQualityStatus(status?: string | null): string {
-  return status || "NOT_EVALUATED";
+function formatQualityStatus(status: string | null | undefined): string {
+  if (!status || status === "NOT_EVALUATED") {
+    return "未评估";
+  }
+  if (status === "ACCEPTED" || status === "PASS" || status === "PASSED") {
+    return "质量通过";
+  }
+  return sanitizeProductionText(status);
 }
 
 interface ArtifactCardProps {
@@ -30,6 +46,9 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
   const isRevision = Boolean(artifact.parentArtifactId || artifact.revisionInstruction);
   const isRealAdapterArtifact = artifact.sourceKind === "REAL_ADAPTER";
   const qualityScore = formatQualityScore(artifact.qualityScore);
+  const sourceLabel = displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE");
+  const buildLabel = formatBuildValidation(artifact.buildValidationStatus);
+  const qualityLabel = formatQualityStatus(artifact.qualityStatus);
 
   return (
     <button
@@ -41,59 +60,33 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
       onClick={() => onSelect(artifactId)}
     >
       <div className="artifact-card__row">
-        <strong>{artifact.title}</strong>
+        <div className="artifact-card__title">
+          <strong>{artifact.title}</strong>
+          <span>
+            {displayArtifactType(artifact.type)} / {displayStatus(artifact.status)}
+          </span>
+        </div>
         <span className="artifact-card__version version-badge">v{artifact.version}</span>
       </div>
+
       <div className="artifact-card__meta">
-        <span>{displayArtifactType(artifact.type)}</span>
-        <span>{displayStatus(artifact.status)}</span>
+        <span>{isRealAdapterArtifact ? "真实输出" : "本地预览"}</span>
+        <span>{sourceLabel}</span>
+        <span>{formatId(artifact.id)}</span>
       </div>
-      {artifact.sourceKind ? (
-        <div className="artifact-card__tags">
-          <span className={`artifact-card__tag artifact-source-badge artifact-source-badge--${artifact.sourceKind.toLowerCase().replace(/_/g, "-")}`}>
-            {displayArtifactSourceKind(artifact.sourceKind)}
-          </span>
-          <span
-            className={`artifact-card__tag artifact-source-badge ${isRealAdapterArtifact ? "artifact-source-badge--real-adapter" : "artifact-source-badge--static-template"}`}
-          >
-            {isRealAdapterArtifact ? "Real Adapter output artifact" : "Static / fallback output artifact"}
-          </span>
-          <span className="artifact-card__tag artifact-source-badge">
-            Status: {getDisplayQualityStatus(artifact.qualityStatus)}
-          </span>
-          {isRealAdapterArtifact ? (
-            <span className="artifact-card__tag artifact-source-badge">
-              Build validation: {getDisplayBuildValidationValue(artifact)}
-            </span>
-          ) : (
-            <span className="artifact-card__tag artifact-source-badge">Build validation: N/A</span>
-          )}
-          {artifact.qualityScore !== null && artifact.qualityScore !== undefined ? (
-            <span className="artifact-card__tag artifact-source-badge">Code quality score: {qualityScore}</span>
-          ) : (
-            <span className="artifact-card__tag artifact-source-badge">Code quality score: N/A</span>
-          )}
-          {artifact.qualityReason ? (
-            <span className="artifact-card__tag artifact-source-badge">Quality reason: {artifact.qualityReason}</span>
-          ) : null}
-          {artifact.buildValidationReason ? (
-            <span className="artifact-card__tag artifact-source-badge">
-              Build reason: {artifact.buildValidationReason}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
+
+      <div className="artifact-card__tags">
+        <span className="artifact-card__tag artifact-card__tag--quality">{qualityLabel}</span>
+        <span className="artifact-card__tag artifact-card__tag--build">{buildLabel}</span>
+        <span className="artifact-card__tag">质量分 {qualityScore}</span>
+      </div>
+
       {isRevision ? (
-        <div className="artifact-card__tags">
-          <span className="artifact-card__tag revision-badge">二次修改</span>
-          {artifact.parentArtifactId ? (
-            <span className="artifact-card__tag artifact-card__tag--lineage">
-              基于上一版产物
-            </span>
-          ) : null}
+        <div className="artifact-card__revision-note">
+          <span>二次修改</span>
+          {artifact.parentArtifactId ? <em>基于上一版产物生成</em> : <em>基于会话历史生成</em>}
         </div>
       ) : null}
-      <div className="artifact-card__id">{formatId(artifact.id)}</div>
     </button>
   );
 }

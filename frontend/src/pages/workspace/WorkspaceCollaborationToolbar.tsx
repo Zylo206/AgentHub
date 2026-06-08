@@ -36,7 +36,7 @@ export function WorkspaceCollaborationToolbar({
       <div className="workspace-main__toolbar workspace-main__toolbar--collaboration">
         <div className="section-header">
           <h3>协作消息流</h3>
-          <span>发送任务后确认启动，多 Agent 会在同一会话中依次回复。</span>
+          <span>发送任务后确认启动，Agent 会在同一会话中按步骤回复。</span>
         </div>
         <div className="workspace-main__collaboration-actions" data-testid="workspace-collaboration-actions">
           <button
@@ -54,9 +54,9 @@ export function WorkspaceCollaborationToolbar({
             data-testid="debug-actions-toggle"
             onClick={onToggleDebugActions}
             aria-expanded={showDebugActions}
-            title="调试入口仅用于 smoke test 或本地排查，产品主路径从聊天消息开始。"
+            title="高级运行工具用于本地排查；主路径仍从发送任务消息后确认协作开始。"
           >
-            {showDebugActions ? "隐藏调试" : "调试 / 高级"}
+            {showDebugActions ? "隐藏运行" : "高级运行"}
           </button>
         </div>
       </div>
@@ -64,8 +64,8 @@ export function WorkspaceCollaborationToolbar({
       {showDebugActions ? (
         <div className="workspace-debug-panel" data-testid="debug-actions-panel">
           <div className="workspace-debug-panel__header">
-            <strong>手动调试 fallback</strong>
-            <p>仅用于 smoke test 或本地调试。默认体验应从“发送任务消息 → 确认协作”开始。</p>
+            <strong>高级运行工具</strong>
+            <p>用于本地排查和验收复现。默认工作流仍是发送任务消息后确认协作。</p>
           </div>
           <button
             type="button"
@@ -74,7 +74,7 @@ export function WorkspaceCollaborationToolbar({
             disabled={!currentConversationId || !latestUserMessage || runningDemoTask}
             onClick={onRunManualDebug}
           >
-            {runningDemoTask ? "运行中..." : "手动调试运行"}
+            {runningDemoTask ? "运行中..." : "基于最近消息运行"}
           </button>
         </div>
       ) : null}
@@ -85,7 +85,7 @@ export function WorkspaceCollaborationToolbar({
         <em>-&gt;</em>
         <strong>确认协作</strong>
         <em>-&gt;</em>
-        <strong>多 Agent 回复</strong>
+        <strong>Agent 回复</strong>
         <em>-&gt;</em>
         <strong>Artifact / Diff / Deploy</strong>
       </div>

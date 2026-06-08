@@ -202,7 +202,7 @@ function markStreamingPreviewsForTaskRun(
 
 interface UseWorkspaceRealtimeParams {
   currentConversationId: string | null;
-  loadConversationData: (conversationId: string) => Promise<void>;
+  loadConversationData: (conversationId: string, options?: { silent?: boolean }) => Promise<void>;
   loadConversationIndex: () => Promise<unknown>;
   setStreamingPreviewsByStepId: Dispatch<SetStateAction<Record<string, StreamingPreviewState>>>;
 }
@@ -238,7 +238,7 @@ export function useWorkspaceRealtime({
       }
       realtimeRefreshTimerRef.current = window.setTimeout(() => {
         realtimeRefreshTimerRef.current = null;
-        void loadConversationData(currentConversationId);
+        void loadConversationData(currentConversationId, { silent: true });
         void loadConversationIndex();
         void getActiveRealtimeState(currentConversationId)
           .then((state) => {

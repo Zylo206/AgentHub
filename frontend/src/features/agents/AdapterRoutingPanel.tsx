@@ -1,4 +1,6 @@
 import type { AdapterDescriptor, Agent } from "./agentTypes";
+import { displayStatus } from "../../utils/displayLabels";
+import { displayAdapterName } from "../../utils/productionLabels";
 
 interface AdapterRoutingPanelProps {
   adapterDescriptors: AdapterDescriptor[];
@@ -11,7 +13,7 @@ interface AdapterCandidateView {
   totalScore: number;
   healthScore: number;
   successRateScore: number;
-  fallbackPenaltyScore: number;
+  backupPenaltyScore: number;
   preferredBonusScore: number;
   routeAttempts: number;
 }
@@ -40,11 +42,11 @@ function buildCandidate(adapter: AdapterDescriptor, preferredAdapterType: string
   const routeAttempts = adapter.routeAttempts ?? 0;
   const health = healthScore(adapter);
   const successRateScore = routeAttempts === 0 ? 50 : (adapter.successRate ?? 0) * 100;
-  const fallbackPenaltyScore = routeAttempts === 0 ? 0 : (adapter.fallbackRate ?? 0) * 100;
+  const backupPenaltyScore = routeAttempts === 0 ? 0 : (adapter.fallbackRate ?? 0) * 100;
   const preferredBonusScore = adapter.adapterType === preferredAdapterType ? 100 : 0;
   const totalScore = Math.max(
     0,
-    health * 0.4 + successRateScore * 0.25 - fallbackPenaltyScore * 0.2 + preferredBonusScore * 0.15
+    health * 0.4 + successRateScore * 0.25 - backupPenaltyScore * 0.2 + preferredBonusScore * 0.15
   );
 
   return {
@@ -53,7 +55,7 @@ function buildCandidate(adapter: AdapterDescriptor, preferredAdapterType: string
     totalScore,
     healthScore: health,
     successRateScore,
-    fallbackPenaltyScore,
+    backupPenaltyScore,
     preferredBonusScore,
     routeAttempts
   };
@@ -70,23 +72,23 @@ export function AdapterRoutingPanel({ adapterDescriptors, selectedAgent }: Adapt
     return (
       <section className="adapter-routing-panel">
         <div className="adapter-routing-panel__header">
-          <strong>Adapter 路由解释</strong>
-          <span>暂无候选池</span>
+          <strong>Adapter 路由说明</strong>
+          <span>暂无候选通道</span>
         </div>
-        <p>后端暂未返回 Adapter 状态，路由会继续依赖 MOCK fallback。</p>
+        <p>后端暂未返回 Adapter 状态，路由会使用本地备用能力保证链路可用。</p>
       </section>
     );
   }
 
   return (
-    <section className="adapter-routing-panel" aria-label="Adapter 路由解释">
+    <section className="adapter-routing-panel" aria-label="Adapter 路由说明">
       <div className="adapter-routing-panel__header">
         <div>
-          <strong>Adapter 路由解释</strong>
-          <p>候选池按健康度 40% / 成功率 25% / fallback 惩罚 20% / 首选加权 15% 评分。</p>
+          <strong>Adapter 路由说明</strong>
+          <p>按健康度、成功率、备用路径比例和首选权重综合评分。</p>
         </div>
         <span className="adapter-routing-panel__selected">
-          当前选择 {selectedCandidate?.adapterType || "MOCK"}
+          当前选择 {displayAdapterName(selectedCandidate?.adapterType)}
         </span>
       </div>
 
@@ -99,14 +101,14 @@ export function AdapterRoutingPanel({ adapterDescriptors, selectedAgent }: Adapt
             key={candidate.adapterType}
           >
             <div className="adapter-routing-card__topline">
-              <strong>{candidate.adapterType}</strong>
-              <span>{candidate.status}</span>
+              <strong>{displayAdapterName(candidate.adapterType)}</strong>
+              <span>{displayStatus(candidate.status)}</span>
             </div>
             <div className="adapter-routing-card__score">{candidate.totalScore.toFixed(1)}</div>
             <div className="adapter-routing-card__metrics">
               <span>健康 {candidate.healthScore.toFixed(0)}</span>
               <span>成功 {candidate.successRateScore.toFixed(0)}</span>
-              <span>fallback 惩罚 {candidate.fallbackPenaltyScore.toFixed(0)}</span>
+              <span>备用扣分 {candidate.backupPenaltyScore.toFixed(0)}</span>
               <span>首选加权 {candidate.preferredBonusScore.toFixed(0)}</span>
               <span>尝试 {candidate.routeAttempts}</span>
             </div>

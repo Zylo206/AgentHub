@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createAgent, draftAgentFromNaturalLanguage, getAdapters } from "../../api/agenthubApi";
 import type { Agent, AdapterDescriptor, ToolCapabilityKey } from "./agentTypes";
 import { getAdapterLabel, LocalCliStatusCards } from "./LocalCliStatusCards";
+import { sanitizeProductionText } from "../../utils/productionLabels";
 
 export type AgentCreateMode = "custom" | "local";
 
@@ -19,47 +20,25 @@ interface ToolCapabilityChoice {
 }
 
 const LOCAL_CLI_VERIFY_COMMAND = "claude --version\ncodex --version";
+const PRODUCT_ADAPTER_ORDER = ["OPENAI_COMPATIBLE", "CLAUDE_CODE", "CODEX", "OPEN_CODE", "MOCK"] as const;
 
 const TOOL_CHOICES: ToolCapabilityChoice[] = [
-  { key: "code", label: "代码", description: "生成或修改代码 Artifact" },
-  { key: "review", label: "评审", description: "质量门禁、安全审查、修改建议" },
-  { key: "api", label: "API", description: "接口契约、后端能力、集成约定" },
-  { key: "preview", label: "预览", description: "网页预览、产物展示、交付检查" },
-  { key: "deploy", label: "部署", description: "本地预览发布、部署状态卡" }
+  { key: "code", label: "代码生成", description: "生成或修改代码 Artifact" },
+  { key: "review", label: "质量评审", description: "安全检查、质量门禁和修改建议" },
+  { key: "api", label: "API 设计", description: "接口契约、后端能力和集成约束" },
+  { key: "preview", label: "预览呈现", description: "网页预览、产物展示和交付检查" },
+  { key: "deploy", label: "部署预览", description: "本地预览、部署状态和交付说明" }
 ];
+
+const FALLBACK_ADAPTERS: AdapterDescriptor[] = PRODUCT_ADAPTER_ORDER.map((adapterType) => ({
+  adapterType,
+  status: "UNKNOWN",
+  enabled: adapterType === "OPENAI_COMPATIBLE",
+  placeholder: adapterType !== "OPENAI_COMPATIBLE",
+  description: `${adapterType} adapter`
+}));
 
 const TOOL_KEYS = new Set<ToolCapabilityKey>(TOOL_CHOICES.map((choice) => choice.key));
-
-const FALLBACK_ADAPTERS: AdapterDescriptor[] = [
-  {
-    adapterType: "OPENAI_COMPATIBLE",
-    status: "UNKNOWN",
-    enabled: true,
-    placeholder: false,
-    description: "OpenAI-compatible provider"
-  },
-  {
-    adapterType: "CLAUDE_CODE",
-    status: "UNKNOWN",
-    enabled: true,
-    placeholder: false,
-    description: "Claude Code headless CLI"
-  },
-  {
-    adapterType: "CODEX",
-    status: "UNKNOWN",
-    enabled: true,
-    placeholder: false,
-    description: "Codex headless CLI"
-  },
-  {
-    adapterType: "MOCK",
-    status: "AVAILABLE",
-    enabled: true,
-    placeholder: false,
-    description: "Stable mock fallback"
-  }
-];
 
 function parseTags(value: string): string[] {
   return value
@@ -76,13 +55,11 @@ function normalizeToolTags(toolTags: string[] | undefined): ToolCapabilityKey[] 
 function getAdapterOptions(adapters: AdapterDescriptor[]): AdapterDescriptor[] {
   const byType = new Map<string, AdapterDescriptor>();
   [...adapters, ...FALLBACK_ADAPTERS].forEach((adapter) => {
-    if (!byType.has(adapter.adapterType)) {
+    if (PRODUCT_ADAPTER_ORDER.includes(adapter.adapterType as (typeof PRODUCT_ADAPTER_ORDER)[number]) && !byType.has(adapter.adapterType)) {
       byType.set(adapter.adapterType, adapter);
     }
   });
-  return ["OPENAI_COMPATIBLE", "CLAUDE_CODE", "CODEX", "MOCK"]
-    .map((adapterType) => byType.get(adapterType))
-    .filter((adapter): adapter is AdapterDescriptor => Boolean(adapter));
+  return PRODUCT_ADAPTER_ORDER.map((adapterType) => byType.get(adapterType)).filter((adapter): adapter is AdapterDescriptor => Boolean(adapter));
 }
 
 export function AgentCreateDialog({
@@ -93,13 +70,13 @@ export function AgentCreateDialog({
 }: AgentCreateDialogProps) {
   const [mode, setMode] = useState<"choose" | AgentCreateMode>(initialMode);
   const [naturalPrompt, setNaturalPrompt] = useState(
-    "创建一个安全评审 Agent，负责 review、安全、质量门禁，优先 Claude Code。"
+    "创建一个安全评审 Agent，负责 review、安全和质量门禁，优先使用 Claude Code。"
   );
   const [name, setName] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [capabilityTags, setCapabilityTags] = useState("");
   const [selectedTools, setSelectedTools] = useState<ToolCapabilityKey[]>(["code", "review"]);
-  const [preferredAdapter, setPreferredAdapter] = useState("MOCK");
+  const [preferredAdapter, setPreferredAdapter] = useState("OPENAI_COMPATIBLE");
   const [draftReady, setDraftReady] = useState(false);
   const [adapters, setAdapters] = useState<AdapterDescriptor[]>([]);
   const [generatingDraft, setGeneratingDraft] = useState(false);
@@ -141,7 +118,11 @@ export function AgentCreateDialog({
       setSystemPrompt(draft.systemPrompt || "");
       setCapabilityTags((draft.capabilityTags ?? []).join(", "));
       setSelectedTools(normalizeToolTags(draft.toolTags));
-      setPreferredAdapter(draft.preferredAdapterType || "MOCK");
+      setPreferredAdapter(
+        PRODUCT_ADAPTER_ORDER.includes(draft.preferredAdapterType as (typeof PRODUCT_ADAPTER_ORDER)[number])
+          ? draft.preferredAdapterType
+          : "OPENAI_COMPATIBLE"
+      );
       setDraftReady(true);
     } catch (error) {
       const fallbackName = trimmedPrompt.includes("安全") || trimmedPrompt.toLowerCase().includes("review")
@@ -153,9 +134,9 @@ export function AgentCreateDialog({
       );
       setCapabilityTags("自定义 Agent, 质量评审, 协作成员");
       setSelectedTools(["code", "review"]);
-      setPreferredAdapter("MOCK");
+      setPreferredAdapter("OPENAI_COMPATIBLE");
       setDraftReady(true);
-      setErrorMessage(error instanceof Error ? `已使用规则化草案：${error.message}` : "已使用规则化草案。");
+      setErrorMessage(error instanceof Error ? `已生成本地规则草案：${sanitizeProductionText(error.message)}` : "已生成本地规则草案。");
     } finally {
       setGeneratingDraft(false);
     }
@@ -181,7 +162,7 @@ export function AgentCreateDialog({
       onCreated?.(agent);
       onClose();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "创建 Agent 失败。");
+      setErrorMessage(error instanceof Error ? sanitizeProductionText(error.message) : "创建 Agent 失败。");
     } finally {
       setCreatingAgent(false);
     }
@@ -214,12 +195,7 @@ export function AgentCreateDialog({
         aria-modal="true"
         aria-labelledby="agent-create-dialog-title"
       >
-        <button
-          type="button"
-          className="app-create-modal__close"
-          aria-label="关闭新建 Agent 弹窗"
-          onClick={onClose}
-        >
+        <button type="button" className="app-create-modal__close" aria-label="关闭新建 Agent 弹窗" onClick={onClose}>
           ×
         </button>
 
@@ -227,29 +203,19 @@ export function AgentCreateDialog({
           <>
             <h2 id="agent-create-dialog-title">新建 Agent</h2>
             <div className="agent-create-choice">
-              <button
-                type="button"
-                className="agent-create-choice__item"
-                data-testid="agent-create-custom-option"
-                onClick={() => setMode("custom")}
-              >
-                <span className="agent-create-choice__icon" aria-hidden="true">✦</span>
+              <button type="button" className="agent-create-choice__item" data-testid="agent-create-custom-option" onClick={() => setMode("custom")}>
+                <span className="agent-create-choice__icon" aria-hidden="true">A</span>
                 <span>
-                  <strong>创建自定义 Agent</strong>
+                  <strong>创建业务 Agent</strong>
                   <small>用自然语言描述职责，生成草案后确认创建。</small>
                 </span>
                 <em aria-hidden="true">+</em>
               </button>
-              <button
-                type="button"
-                className="agent-create-choice__item"
-                data-testid="agent-create-local-option"
-                onClick={() => setMode("local")}
-              >
-                <span className="agent-create-choice__icon" aria-hidden="true">⌘</span>
+              <button type="button" className="agent-create-choice__item" data-testid="agent-create-local-option" onClick={() => setMode("local")}>
+                <span className="agent-create-choice__icon" aria-hidden="true">CLI</span>
                 <span>
                   <strong>检查本地 CLI</strong>
-                  <small>检查 Claude Code / Codex 本机 CLI 状态，不使用桥接命令伪装成功。</small>
+                  <small>检查 Claude Code / Codex 本机 CLI 状态，不把本地备用路径标成真实成功。</small>
                 </span>
                 <em aria-hidden="true">+</em>
               </button>
@@ -262,8 +228,8 @@ export function AgentCreateDialog({
             <div className="agent-create-dialog__header">
               <button type="button" onClick={() => setMode("choose")}>返回</button>
               <div>
-                <h2 id="agent-create-dialog-title">创建自定义 Agent</h2>
-                <p>描述职责，生成草案，确认能力和 Adapter 后即可在 Workspace 中 @ 使用。</p>
+                <h2 id="agent-create-dialog-title">创建业务 Agent</h2>
+                <p>描述职责，生成草案，确认能力和执行通道后即可在 Workspace 中 @ 使用。</p>
               </div>
             </div>
 
@@ -273,7 +239,7 @@ export function AgentCreateDialog({
                 data-testid="agent-create-prompt"
                 value={naturalPrompt}
                 onChange={(event) => setNaturalPrompt(event.target.value)}
-                placeholder="例如：创建一个安全评审 Agent，负责 review、安全、质量门禁，优先 Claude Code。"
+                placeholder="例如：创建一个安全评审 Agent，优先使用 Claude Code，负责 review、安全和质量门禁。"
               />
             </label>
             <button
@@ -291,14 +257,10 @@ export function AgentCreateDialog({
                 <div className="agent-create-draft__grid">
                   <label className="agent-create-field">
                     <span>Agent 名称</span>
-                    <input
-                      data-testid="agent-create-name"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                    />
+                    <input data-testid="agent-create-name" value={name} onChange={(event) => setName(event.target.value)} />
                   </label>
                   <label className="agent-create-field">
-                    <span>Preferred Adapter</span>
+                    <span>首选执行通道</span>
                     <select
                       data-testid="agent-create-preferred-adapter"
                       value={preferredAdapter}
@@ -306,21 +268,38 @@ export function AgentCreateDialog({
                     >
                       {adapterOptions.map((adapter) => (
                         <option key={adapter.adapterType} value={adapter.adapterType}>
-                          {getAdapterLabel(adapter.adapterType)} · {adapter.status}
+                          {getAdapterLabel(adapter.adapterType)} / {sanitizeProductionText(adapter.status)}
                         </option>
                       ))}
                     </select>
                   </label>
                 </div>
 
-                <label className="agent-create-field">
-                  <span>System Prompt</span>
-                  <textarea
-                    data-testid="agent-create-system-prompt"
-                    value={systemPrompt}
-                    onChange={(event) => setSystemPrompt(event.target.value)}
-                  />
-                </label>
+                <details className="agent-create-advanced" open>
+                  <summary>高级配置</summary>
+                  <label className="agent-create-field">
+                    <span>System Prompt</span>
+                    <textarea
+                      data-testid="agent-create-system-prompt"
+                      value={systemPrompt}
+                      onChange={(event) => setSystemPrompt(event.target.value)}
+                    />
+                  </label>
+                  <fieldset className="agent-create-tools">
+                    <legend>工具能力</legend>
+                    {TOOL_CHOICES.map((tool) => (
+                      <label
+                        key={tool.key}
+                        className={`agent-create-tool${selectedTools.includes(tool.key) ? " agent-create-tool--selected" : ""}`}
+                        data-testid={`agent-create-tool-${tool.key}`}
+                      >
+                        <input type="checkbox" checked={selectedTools.includes(tool.key)} onChange={() => toggleTool(tool.key)} />
+                        <strong>{tool.label}</strong>
+                        <small>{tool.description}</small>
+                      </label>
+                    ))}
+                  </fieldset>
+                </details>
 
                 <label className="agent-create-field">
                   <span>能力标签</span>
@@ -331,25 +310,6 @@ export function AgentCreateDialog({
                     placeholder="review, security, quality"
                   />
                 </label>
-
-                <fieldset className="agent-create-tools">
-                  <legend>Tool Capability</legend>
-                  {TOOL_CHOICES.map((tool) => (
-                    <label
-                      key={tool.key}
-                      className={`agent-create-tool${selectedTools.includes(tool.key) ? " agent-create-tool--selected" : ""}`}
-                      data-testid={`agent-create-tool-${tool.key}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedTools.includes(tool.key)}
-                        onChange={() => toggleTool(tool.key)}
-                      />
-                      <strong>{tool.label}</strong>
-                      <small>{tool.description}</small>
-                    </label>
-                  ))}
-                </fieldset>
 
                 <button
                   type="button"
@@ -370,38 +330,16 @@ export function AgentCreateDialog({
             <div className="agent-create-dialog__header">
               <button type="button" onClick={() => setMode("choose")}>返回</button>
               <div>
-                <h2 id="agent-create-dialog-title">接入本地 CLI Agent</h2>
-                <p>这里接入的是本机已安装并已登录的 Claude Code CLI / Codex CLI；AgentHub 负责探测、路由、执行、质量门禁和 fallback，不再伪装成一个 npm bridge。</p>
+                <h2 id="agent-create-dialog-title">检查本地 CLI</h2>
+                <p>这里检查本机已安装并已登录的 Claude Code CLI / Codex CLI。AgentHub 只声明 headless Artifact-only 接入能力。</p>
               </div>
             </div>
 
-            <div className="app-create-modal__steps agent-create-local-steps" aria-label="本地 CLI 接入步骤">
-              <span className="is-active">
-                <strong>1</strong>
-                <em>探测 CLI</em>
-                <small>path / version / auth</small>
-              </span>
-              <span className="is-active">
-                <strong>2</strong>
-                <em>选择 Adapter</em>
-                <small>Claude Code 或 Codex</small>
-              </span>
-              <span>
-                <strong>3</strong>
-                <em>真实执行</em>
-                <small>失败必须分类并 fallback</small>
-              </span>
-            </div>
-
-            <LocalCliStatusCards
-              adapters={adapterOptions}
-              selectedAdapterType={preferredAdapter}
-              onSelectAdapter={setPreferredAdapter}
-            />
+            <LocalCliStatusCards adapters={adapterOptions} selectedAdapterType={preferredAdapter} onSelectAdapter={setPreferredAdapter} />
 
             <div className="app-create-modal__command-head">
               <span>手动验证命令</span>
-              <small>用于本机终端确认真实 CLI，不作为 AgentHub 伪成功。</small>
+              <small>用于本机终端确认真实 CLI 状态，不作为 AgentHub 自动成功依据。</small>
             </div>
             <pre className="app-create-modal__command agent-create-cli-command">
               <code>{LOCAL_CLI_VERIFY_COMMAND}</code>
@@ -411,8 +349,7 @@ export function AgentCreateDialog({
             </button>
 
             <div className="app-create-modal__tips agent-create-local-boundary">
-              <p>生产级接入建议：优先使用后端 AdapterRegistry 的 Claude Code / Codex 真实 CLI adapter；Desktop Console 只负责本机 path、version、auth、sandbox 探测和进程可视化。</p>
-              <p>若 CLI 未安装、未认证、超时、解析失败、质量不达标或构建失败，必须显示失败分类并回退到 MOCK，不能把 fallback 标成真实成功。</p>
+              <p>真实执行失败必须分类展示；本地备用路径不能标记为真实成功。</p>
             </div>
           </>
         ) : null}

@@ -15,11 +15,7 @@ export function AppLayout() {
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
       const target = event.target as Node;
-      if (
-        createMenuOpen &&
-        !createMenuRef.current?.contains(target) &&
-        !createButtonRef.current?.contains(target)
-      ) {
+      if (createMenuOpen && !createMenuRef.current?.contains(target) && !createButtonRef.current?.contains(target)) {
         setCreateMenuOpen(false);
       }
     }
@@ -55,7 +51,7 @@ export function AppLayout() {
 
   function handleOpenCliStatus() {
     setCreateMenuOpen(false);
-    navigate("/agents#local-cli");
+    navigate("/agents?view=cli");
   }
 
   function handleAgentCreated(agent: Agent) {
@@ -66,14 +62,13 @@ export function AppLayout() {
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header__brand">
+      <header className="app-header app-header--light">
+        <div className="app-header__brand" aria-label="AgentHub">
           <span className="app-header__mark" aria-hidden="true">
             AH
           </span>
           <span className="app-header__copy">
             <span className="app-header__title">AgentHub</span>
-            <span className="app-header__subtitle">IM 式多 Agent 协作</span>
           </span>
         </div>
 
@@ -110,9 +105,9 @@ export function AppLayout() {
             </span>
             <span>
               <strong>新建会话</strong>
-              <small>回到 Workspace，创建一条 IM-first 协作会话。</small>
+              <small>回到 Workspace 创建一条 IM 协作会话。</small>
             </span>
-            <em aria-hidden="true">↵</em>
+            <em aria-hidden="true">→</em>
           </button>
           <button
             type="button"
@@ -122,10 +117,10 @@ export function AppLayout() {
             onClick={() => openAgentDialog("custom")}
           >
             <span className="app-create-menu__icon" aria-hidden="true">
-              ✦
+              A
             </span>
             <span>
-              <strong>创建自定义 Agent</strong>
+              <strong>创建业务 Agent</strong>
               <small>描述职责，生成草案后确认创建。</small>
             </span>
             <em aria-hidden="true">+</em>
@@ -138,29 +133,14 @@ export function AppLayout() {
             onClick={handleOpenCliStatus}
           >
             <span className="app-create-menu__icon" aria-hidden="true">
-              ⌘
+              CLI
             </span>
             <span>
               <strong>检查本地 CLI</strong>
-              <small>查看 Claude Code / Codex 的 path、version、auth 和 sandbox 状态。</small>
+              <small>只查看 Claude Code / Codex 本机能力。</small>
             </span>
             <em aria-hidden="true">→</em>
           </button>
-        </div>
-
-        <div className="app-header__mission" aria-label="当前协作空间">
-          <span className="app-header__mission-title">多 Agent 协作：React 组件开发</span>
-          <span className="app-header__live-dot">运行中</span>
-          <span className="app-header__timer">00:06:24</span>
-        </div>
-
-        <div className="app-header__status" aria-label="AgentHub 当前能力">
-          <span>O</span>
-          <span>F</span>
-          <span>B</span>
-          <span>R</span>
-          <span>CC</span>
-          <span>+2</span>
         </div>
 
         <nav className="app-header__nav" aria-label="主导航">
@@ -174,21 +154,15 @@ export function AppLayout() {
             to="/agents"
             className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}
           >
-            Agent 管理台
+            Agent 管理
           </NavLink>
           <NavLink
             to="/desktop"
             className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}
           >
-            Desktop Console
+            Desktop
           </NavLink>
         </nav>
-
-        <div className="app-header__window-controls" aria-label="窗口控制">
-          <span aria-hidden="true">-</span>
-          <span aria-hidden="true">□</span>
-          <span aria-hidden="true">×</span>
-        </div>
       </header>
 
       <main className="app-main">

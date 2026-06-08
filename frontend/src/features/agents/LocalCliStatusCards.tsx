@@ -1,4 +1,6 @@
 import type { AdapterDescriptor } from "./agentTypes";
+import { displayStatus } from "../../utils/displayLabels";
+import { sanitizeProductionText } from "../../utils/productionLabels";
 
 const CLI_ADAPTER_TYPES = ["CLAUDE_CODE", "CODEX"] as const;
 
@@ -10,8 +12,10 @@ export function getAdapterLabel(adapterType: string): string {
       return "Claude Code CLI";
     case "CODEX":
       return "Codex CLI";
+    case "OPEN_CODE":
+      return "OpenCode CLI";
     case "MOCK":
-      return "MOCK fallback";
+      return "本地备用引擎";
     default:
       return adapterType;
   }
@@ -24,32 +28,48 @@ export function getCliAdapters(adapters: AdapterDescriptor[]): AdapterDescriptor
       byType.get(adapterType) ?? {
         adapterType,
         status: "UNKNOWN",
-        enabled: true,
+        enabled: false,
         placeholder: false,
         description: `${getAdapterLabel(adapterType)} local CLI`
       }
   );
 }
 
-function getCapabilityText(details: Record<string, unknown> | undefined, key: string, fallback = "-"): string {
-  const value = details?.[key];
-  if (typeof value === "string" && value.trim()) {
-    return value;
-  }
+function displayProbeText(value: unknown, fallback = "待检测"): string {
   if (typeof value === "boolean") {
     return value ? "支持" : "不支持";
-  }
-  if (Array.isArray(value) && value.length > 0) {
-    return value.join(", ");
   }
   if (typeof value === "number") {
     return String(value);
   }
+  if (Array.isArray(value) && value.length > 0) {
+    return value.map((item) => sanitizeProductionText(String(item))).join(", ");
+  }
+  if (typeof value === "string" && value.trim()) {
+    const normalized = sanitizeProductionText(value);
+    if (normalized === "UNKNOWN" || normalized === "NOT_PROBED" || normalized === "N/A") {
+      return fallback;
+    }
+    return normalized;
+  }
   return fallback;
 }
 
-function hasCapability(details: Record<string, unknown> | undefined, key: string): boolean {
-  return details?.[key] === true;
+function getCapabilityText(details: Record<string, unknown> | undefined, key: string, fallback = "待检测"): string {
+  return displayProbeText(details?.[key], fallback);
+}
+
+function getCliStatus(adapter: AdapterDescriptor): string {
+  if (!adapter.enabled || adapter.status === "DISABLED") {
+    return "未启用";
+  }
+  if (adapter.status === "AVAILABLE") {
+    return "可用";
+  }
+  if (adapter.status === "MISCONFIGURED") {
+    return "需配置";
+  }
+  return displayStatus(adapter.status);
 }
 
 interface LocalCliStatusCardsProps {
@@ -72,12 +92,12 @@ export function LocalCliStatusCards({
         const isSelected = selectedAdapterType === adapter.adapterType;
         const schemaText =
           adapter.adapterType === "CODEX"
-            ? getCapabilityText(details, "supportsOutputSchema", "等待探测")
-            : getCapabilityText(details, "schemaMode", "prompt-contract-only");
+            ? getCapabilityText(details, "supportsOutputSchema")
+            : getCapabilityText(details, "schemaMode", "Prompt 合约");
         const streamText =
           adapter.adapterType === "CODEX"
-            ? getCapabilityText(details, "supportsJsonEvents", "等待探测")
-            : getCapabilityText(details, "supportsStreamJson", "等待探测");
+            ? getCapabilityText(details, "supportsJsonEvents")
+            : getCapabilityText(details, "supportsStreamJson");
 
         return (
           <article
@@ -87,29 +107,29 @@ export function LocalCliStatusCards({
             <div className="local-cli-status-card__header">
               <div>
                 <strong>{getAdapterLabel(adapter.adapterType)}</strong>
-                <small>{adapter.description || "Headless Artifact-only local CLI adapter"}</small>
+                <small>本地 headless Artifact-only 通道</small>
               </div>
               <span className={`adapter-health-pill adapter-health-pill--${adapter.status.toLowerCase()}`}>
-                {adapter.status}
+                {getCliStatus(adapter)}
               </span>
             </div>
 
             <dl className="local-cli-status-card__facts">
               <div>
                 <dt>Path</dt>
-                <dd>{getCapabilityText(details, "cliPath", "未探测")}</dd>
+                <dd>{getCapabilityText(details, "cliPath", "未检测")}</dd>
               </div>
               <div>
                 <dt>Version</dt>
-                <dd>{getCapabilityText(details, "version", "UNKNOWN")}</dd>
+                <dd>{getCapabilityText(details, "version", "未检测")}</dd>
               </div>
               <div>
                 <dt>Help</dt>
-                <dd>{getCapabilityText(details, "helpProbeStatus", "NOT_PROBED")}</dd>
+                <dd>{getCapabilityText(details, "helpProbeStatus")}</dd>
               </div>
               <div>
                 <dt>Auth</dt>
-                <dd>{getCapabilityText(details, "authProbeStatus", "执行 smoke 时验证")}</dd>
+                <dd>{getCapabilityText(details, "authProbeStatus")}</dd>
               </div>
               <div>
                 <dt>Schema</dt>
@@ -121,31 +141,23 @@ export function LocalCliStatusCards({
               </div>
               <div>
                 <dt>Sandbox</dt>
-                <dd>
-                  {hasCapability(details, "supportsSandbox")
-                    ? "read-only sandbox"
-                    : getCapabilityText(details, "workspaceWriteAllowed", "无工作区写入")}
-                </dd>
+                <dd>{getCapabilityText(details, "supportsSandbox", "无工作区写入")}</dd>
               </div>
               <div>
                 <dt>Session</dt>
-                <dd>{getCapabilityText(details, "externalCliSessionMode", "AgentHub Context Bridge")}</dd>
+                <dd>{getCapabilityText(details, "externalCliSessionMode", "Context Bridge")}</dd>
               </div>
             </dl>
 
             {adapter.failureReason ? (
-              <p className="local-cli-status-card__warning">{adapter.failureReason}</p>
+              <p className="local-cli-status-card__warning">{sanitizeProductionText(adapter.failureReason)}</p>
             ) : null}
 
             <div className="local-cli-status-card__footer">
-              <span>真实执行失败必须分类，不把 MOCK fallback 标为真实成功。</span>
+              <span>只作为本机 CLI 能力检查，不把未启用通道标记为真实成功。</span>
               {onSelectAdapter ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => onSelectAdapter(adapter.adapterType)}
-                >
-                  设为 preferredAdapter
+                <button type="button" className="secondary-button" onClick={() => onSelectAdapter(adapter.adapterType)}>
+                  设为首选通道
                 </button>
               ) : null}
             </div>

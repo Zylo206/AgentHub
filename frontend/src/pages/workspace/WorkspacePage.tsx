@@ -38,6 +38,7 @@ import type { DeploymentRecord } from "../../features/deployments/deploymentType
 import type { MemoryItem } from "../../features/memory/memoryTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayAdapterName } from "../../utils/productionLabels";
 import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
 import { WorkspaceArtifactInspectorShell } from "./WorkspaceArtifactInspectorShell";
 import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
@@ -46,7 +47,7 @@ import { WorkspaceCommandDeck } from "./WorkspaceCommandDeck";
 import { WorkspaceDiagnosticsDrawer } from "./WorkspaceDiagnosticsDrawer";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspacePresenceBar } from "./WorkspacePresenceBar";
-import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import { WorkspaceSidebar, type WorkspaceConversationCreateMode } from "./WorkspaceSidebar";
 import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import { useArtifactInspectorLayout } from "./useArtifactInspectorLayout";
 import { useWorkspaceApprovalActions } from "./useWorkspaceApprovalActions";
@@ -132,6 +133,7 @@ export function WorkspacePage() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [conversationQuery, setConversationQuery] = useState("");
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
+  const [conversationCreateMode, setConversationCreateMode] = useState<WorkspaceConversationCreateMode>("GROUP");
   const [selectedTaskRunId, setSelectedTaskRunId] = useState<string | null>(null);
   const [selectedTaskStepId, setSelectedTaskStepId] = useState<string | null>(null);
   const [showAllArtifacts, setShowAllArtifacts] = useState(true);
@@ -711,7 +713,7 @@ export function WorkspacePage() {
           Workspace 默认只保留 IM 协作主链路。本地文件预览、系统通知、Claude Code / Codex CLI 探测和 backend managed
           process 请在 Desktop Console 中操作。
         </p>
-        <Link className="secondary-button" to="/desktop">
+        <Link className="secondary-button" to={currentConversationId ? `/desktop?conversationId=${encodeURIComponent(currentConversationId)}` : "/desktop"}>
           打开 Desktop Console
         </Link>
       </section>
@@ -744,7 +746,7 @@ export function WorkspacePage() {
       <div>
         <div className="selected-agent-name">当前 Agent：{selectedAgent.name}</div>
         <div className="selected-agent-adapter">
-          首选 Adapter：{selectedAgent.preferredAdapterType || "MOCK"} / 角色：{displayAgentRole(selectedAgent.role)}
+          首选执行通道：{displayAdapterName(selectedAgent.preferredAdapterType || "MOCK")} / 角色：{displayAgentRole(selectedAgent.role)}
         </div>
         {selectedAgentAdapterDescriptor ? (
           <div className="selected-agent-health">
@@ -752,7 +754,7 @@ export function WorkspacePage() {
               Adapter 状态：{displayStatus(selectedAgentAdapterDescriptor.status)}
             </span>
             {selectedAgentAdapterDescriptor.status !== "AVAILABLE" ? (
-              <span className="selected-agent-health__hint">不可用时会回退到 MOCK。</span>
+              <span className="selected-agent-health__hint">不可用时会切换本地备用路径。</span>
             ) : null}
           </div>
         ) : null}
@@ -796,6 +798,7 @@ export function WorkspacePage() {
         agents={agents}
         adapterDescriptors={adapterDescriptors}
         conversations={conversations}
+        conversationCreateMode={conversationCreateMode}
         conversationFilter={conversationFilter}
         conversationQuery={conversationQuery}
         creatingConversation={creatingConversation}
@@ -804,6 +807,7 @@ export function WorkspacePage() {
         loadingConversations={loadingConversations}
         selectedAgent={selectedAgent}
         onArchiveConversation={handleArchiveConversation}
+        onConversationCreateModeChange={setConversationCreateMode}
         onConversationFilterChange={handleConversationFilterChange}
         onConversationQueryChange={handleConversationQueryChange}
         onCreateConversation={handleCreateDemoConversation}

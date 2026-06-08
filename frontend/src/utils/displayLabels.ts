@@ -19,7 +19,7 @@ export function displayStatus(value?: string | null): string {
     ACTIVE: "启用",
     DISABLED: "禁用",
     AVAILABLE: "可用",
-    PLACEHOLDER: "占位",
+    PLACEHOLDER: "待接入",
     MISCONFIGURED: "未配置",
     ERROR: "异常",
     CREATED: "已创建",
@@ -33,9 +33,9 @@ export function displayStatus(value?: string | null): string {
     STOPPED: "已停止",
     APPROVED: "已批准",
     CANCELLED: "已取消",
-    CONSUMED: "已消费",
+    CONSUMED: "已使用",
     EXPIRED: "已过期",
-    FALLBACK_USED: "已 fallback"
+    FALLBACK_USED: "已切换备用路径"
   };
 
   return value ? labels[value] || value : "-";
@@ -66,11 +66,11 @@ export function displayArtifactType(value?: string | null): string {
 
 export function displayArtifactSourceKind(value?: string | null): string {
   const labels: Record<string, string> = {
-    STATIC_TEMPLATE: "静态模板",
-    REAL_ADAPTER: "真实 Adapter 输出",
-    MOCK_FALLBACK: "Mock fallback",
+    STATIC_TEMPLATE: "本地静态结果",
+    REAL_ADAPTER: "REAL_ADAPTER",
+    MOCK_FALLBACK: "本地备用结果",
     USER_REVISION: "用户修改",
-    DEPLOY_PREVIEW: "部署预览"
+    DEPLOY_PREVIEW: "预览结果"
   };
 
   return value ? labels[value] || value : "-";

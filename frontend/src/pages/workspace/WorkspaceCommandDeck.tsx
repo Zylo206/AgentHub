@@ -27,7 +27,7 @@ export function WorkspaceCommandDeck({
         {selectedAgentBanner}
       </div>
       <details className="workspace-command-deck__advanced" data-testid="workspace-command-deck-advanced">
-        <summary>Explain / Advanced：权限、会话和运行证据</summary>
+        <summary>高级工具</summary>
         <div className="workspace-command-deck__advanced-body">{advanced}</div>
       </details>
     </section>

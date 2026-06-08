@@ -57,6 +57,7 @@ export interface DesktopConfig {
   javaCommand: string;
   backendJarPath: string;
   backendWorkingDirectory: string;
+  backendPort: number;
   claudeCommand: string;
   codexCommand: string;
   opencodeCommand: string;
@@ -142,12 +143,14 @@ export function sendDesktopNotification(title: string, body: string): Promise<vo
 export function startDesktopBackend(
   javaCommand: string,
   jarPath: string,
-  workingDirectory: string
+  workingDirectory: string,
+  backendPort: number
 ): Promise<DesktopManagedProcess> {
   return invokeDesktop<DesktopManagedProcess>("start_agenthub_backend", {
     javaCommand,
     jarPath,
-    workingDirectory
+    workingDirectory,
+    backendPort
   });
 }
 
@@ -237,8 +240,8 @@ function buildRealtimeNotification(
     if (status === "COMPLETED") {
       return {
         type: "TASK_RUN_COMPLETED",
-        title: "AgentHub task completed",
-        body: summary || "Multi-agent collaboration completed.",
+        title: "AgentHub 任务已完成",
+        body: summary || "多 Agent 协作已经完成。",
         targetType: "TASK_RUN",
         targetId: taskRunId ?? undefined
       };
@@ -246,8 +249,8 @@ function buildRealtimeNotification(
     if (status === "BLOCKED") {
       return {
         type: "TASK_RUN_BLOCKED",
-        title: "AgentHub task blocked",
-        body: summary || "Reviewer found blockers. Revise and review again.",
+        title: "AgentHub 任务被阻断",
+        body: summary || "评审发现阻断项，请修订后重新评审。",
         targetType: "TASK_RUN",
         targetId: taskRunId ?? undefined
       };
@@ -255,8 +258,8 @@ function buildRealtimeNotification(
     if (status === "FAILED") {
       return {
         type: "TASK_RUN_FAILED",
-        title: "AgentHub task failed",
-        body: summary || "Task run failed. Check TaskRun and audit logs.",
+        title: "AgentHub 任务失败",
+        body: summary || "任务运行失败，请查看 TaskRun 和审计记录。",
         targetType: "TASK_RUN",
         targetId: taskRunId ?? undefined
       };
@@ -266,8 +269,8 @@ function buildRealtimeNotification(
   if (eventType === "APPROVAL_UPDATED" && (!status || status === "PENDING")) {
     return {
       type: "APPROVAL_PENDING",
-      title: "AgentHub approval pending",
-      body: summary || "A high-risk operation is waiting for approval.",
+      title: "AgentHub 等待审批",
+      body: summary || "有一项高风险操作需要确认。",
       targetType: "APPROVAL",
       targetId: approvalId ?? undefined
     };
@@ -276,8 +279,8 @@ function buildRealtimeNotification(
   if (eventType === "DEPLOYMENT_CREATED") {
     return {
       type: "DEPLOY_COMPLETED",
-      title: "AgentHub preview generated",
-      body: summary || "Local static preview URL is ready.",
+      title: "AgentHub 本地预览已生成",
+      body: summary || "本地静态预览链接已就绪。",
       targetType: "DEPLOYMENT",
       targetId: deploymentId ?? undefined
     };
@@ -288,8 +291,8 @@ function buildRealtimeNotification(
     if (fallbackReason || status === "FALLBACK") {
       return {
         type: "ADAPTER_FALLBACK",
-        title: "AgentHub adapter fallback",
-        body: `${adapter || "Adapter"} output was not accepted: ${fallbackReason || "fallback to Mock / Static."}`,
+        title: "AgentHub 备用路径提醒",
+        body: `${adapter || "Adapter"} 输出未被采纳：${fallbackReason || "已切换到本地备用路径。"}`,
         targetType: "TASK_RUN",
         targetId: taskRunId ?? undefined
       };

@@ -723,10 +723,8 @@ a:focus-visible {
   height: 68px;
   padding: 10px 18px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  background:
-    linear-gradient(90deg, rgba(8, 16, 31, 0.96), rgba(15, 23, 42, 0.93)),
-    rgba(15, 23, 42, 0.94);
-  box-shadow: 0 18px 46px rgba(2, 8, 23, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .app-header__brand {
@@ -761,12 +759,12 @@ a:focus-visible {
 }
 
 .app-header__title {
-  color: #ffffff;
+  color: #0f172a;
   font-size: 18px;
 }
 
 .app-header__subtitle {
-  color: rgba(203, 213, 225, 0.86);
+  color: #64748b;
   letter-spacing: 0.01em;
 }
 
@@ -781,8 +779,8 @@ a:focus-visible {
 .app-header__status span {
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(226, 232, 240, 0.9);
+  background: #f8fafc;
+  color: #475569;
   font-size: 11px;
   font-weight: 850;
   padding: 6px 9px;
@@ -791,12 +789,12 @@ a:focus-visible {
 
 .app-header__nav {
   border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: #f8fafc;
+  box-shadow: none;
 }
 
 .app-nav-link {
-  color: rgba(226, 232, 240, 0.86);
+  color: #475569;
   transition:
     background var(--agenthub-motion-normal),
     color var(--agenthub-motion-normal),
@@ -804,8 +802,8 @@ a:focus-visible {
 }
 
 .app-nav-link:hover {
-  background: rgba(255, 255, 255, 0.10);
-  color: #ffffff;
+  background: #eef2ff;
+  color: #1d4ed8;
   transform: translateY(-1px);
 }
 
@@ -844,14 +842,14 @@ a:focus-visible {
 
 /* Build Web Apps redesign: premium IM command-center shell. */
 :root {
-  --agenthub-command-bg: #07111f;
-  --agenthub-command-bg-2: #0b1728;
-  --agenthub-command-panel: rgba(12, 24, 42, 0.86);
-  --agenthub-command-panel-soft: rgba(15, 30, 52, 0.68);
-  --agenthub-command-line: rgba(137, 167, 204, 0.22);
-  --agenthub-command-line-strong: rgba(96, 165, 250, 0.46);
-  --agenthub-command-text: #f7fbff;
-  --agenthub-command-muted: #9fb2cc;
+  --agenthub-command-bg: #f8fafc;
+  --agenthub-command-bg-2: #eef2f7;
+  --agenthub-command-panel: #ffffff;
+  --agenthub-command-panel-soft: #f8fafc;
+  --agenthub-command-line: rgba(148, 163, 184, 0.22);
+  --agenthub-command-line-strong: rgba(37, 99, 235, 0.28);
+  --agenthub-command-text: #0f172a;
+  --agenthub-command-muted: #64748b;
   --agenthub-command-accent: #2f7dff;
   --agenthub-command-cyan: #22d3ee;
   --agenthub-command-green: #22c55e;
@@ -881,17 +879,15 @@ body {
     linear-gradient(90deg, rgba(148, 163, 184, 0.028) 1px, transparent 1px),
     radial-gradient(circle at 18% 0%, rgba(47, 125, 255, 0.25), transparent 32%),
     radial-gradient(circle at 88% 10%, rgba(34, 211, 238, 0.14), transparent 28%),
-    linear-gradient(180deg, #07111f 0%, #0b1422 100%);
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
   background-size: 38px 38px, 38px 38px, auto, auto, auto;
 }
 
 .app-header {
   height: 64px;
-  border-bottom: 1px solid var(--agenthub-command-line);
-  background:
-    linear-gradient(90deg, rgba(5, 12, 24, 0.98), rgba(8, 17, 31, 0.94)),
-    rgba(7, 17, 31, 0.96);
-  box-shadow: 0 18px 48px rgba(0, 8, 22, 0.38);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .app-header__mark {
@@ -904,28 +900,28 @@ body {
 }
 
 .app-header__title {
-  color: #ffffff;
+  color: #0f172a;
   letter-spacing: -0.03em;
 }
 
 .app-header__subtitle {
-  color: var(--agenthub-command-muted);
+  color: #64748b;
 }
 
 .app-header__status span {
-  border-color: rgba(96, 165, 250, 0.22);
-  background: rgba(15, 30, 52, 0.72);
-  color: #dceafe;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-color: rgba(148, 163, 184, 0.22);
+  background: #f8fafc;
+  color: #475569;
+  box-shadow: none;
 }
 
 .app-header__nav {
-  border-color: rgba(137, 167, 204, 0.20);
-  background: rgba(12, 24, 42, 0.82);
+  border-color: rgba(148, 163, 184, 0.2);
+  background: #f8fafc;
 }
 
 .app-nav-link {
-  color: #c7d4e8;
+  color: #475569;
 }
 
 .app-nav-link--active {
@@ -1009,19 +1005,23 @@ body {
 }
 
 .app-header__status span:nth-child(1) {
-  background: linear-gradient(135deg, #60a5fa, #1d4ed8);
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .app-header__status span:nth-child(2) {
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  background: #f5f3ff;
+  color: #6d28d9;
 }
 
 .app-header__status span:nth-child(3) {
-  background: linear-gradient(135deg, #34d399, #047857);
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .app-header__status span:nth-child(4) {
-  background: linear-gradient(135deg, #f59e0b, #92400e);
+  background: #fffbeb;
+  color: #92400e;
 }
 
 .app-header__actions {
@@ -1032,10 +1032,10 @@ body {
 
 .app-header__actions button {
   height: 34px;
-  border: 1px solid rgba(137, 167, 204, 0.22);
+  border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 10px;
-  background: rgba(15, 30, 52, 0.78);
-  color: #dceafe;
+  background: #ffffff;
+  color: #0f172a;
   font-size: 13px;
   font-weight: 800;
   padding: 0 14px;
@@ -1045,7 +1045,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #8fa4c2;
+  color: #64748b;
   font-size: 18px;
   line-height: 1;
   padding-left: 8px;
@@ -1060,8 +1060,8 @@ body {
 }
 
 .app-header__window-controls span:hover {
-  background: rgba(255, 255, 255, 0.10);
-  color: #ffffff;
+  background: #eef2ff;
+  color: #1d4ed8;
 }
 
 @media (max-width: 1180px) {
@@ -1086,5 +1086,112 @@ body {
   .app-header__mission,
   .app-header__nav {
     width: 100%;
+  }
+}
+
+/* Production light app chrome: remove demo status clutter and fake window controls. */
+body {
+  background: #f6f8fb !important;
+  color: #0f172a !important;
+}
+
+.app-header.app-header--light,
+.app-header {
+  display: grid !important;
+  grid-template-columns: 220px minmax(280px, 440px) auto !important;
+  align-items: center !important;
+  gap: 18px !important;
+  height: 64px !important;
+  padding: 10px 18px !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #0f172a !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06) !important;
+  backdrop-filter: blur(14px) !important;
+}
+
+.app-header__brand {
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.app-header__mark {
+  width: 34px !important;
+  height: 34px !important;
+  border: 1px solid rgba(37, 99, 235, 0.2) !important;
+  border-radius: 12px !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  box-shadow: none !important;
+}
+
+.app-header__title {
+  color: #0f172a !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.app-header__subtitle,
+.app-header__mission,
+.app-header__status,
+.app-header__window-controls {
+  display: none !important;
+}
+
+.app-header .app-rail-create-button {
+  justify-self: stretch !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  border: 1px solid rgba(37, 99, 235, 0.18) !important;
+  border-radius: 14px !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.app-header__nav {
+  justify-self: end !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 4px !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 16px !important;
+  background: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.app-nav-link {
+  min-height: 34px !important;
+  border-radius: 12px !important;
+  color: #475569 !important;
+  font-weight: 850 !important;
+}
+
+.app-nav-link:hover {
+  background: #eef2ff !important;
+  color: #1d4ed8 !important;
+  transform: none !important;
+}
+
+.app-nav-link--active {
+  background: #ffffff !important;
+  color: #1d4ed8 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08) !important;
+}
+
+@media (max-width: 900px) {
+  .app-header.app-header--light,
+  .app-header {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+  }
+
+  .app-header__nav,
+  .app-header .app-rail-create-button {
+    justify-self: stretch !important;
   }
 }

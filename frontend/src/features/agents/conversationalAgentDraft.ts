@@ -83,7 +83,7 @@ export function inferAgentCreationDraft(content: string): AgentCreationDraft | n
   return {
     name,
     avatarUrl: "",
-    systemPrompt: `你是 AgentHub 中的${name}。请基于用户消息、对话上下文、Artifact 历史和质量门禁完成任务；输出要遵守 AgentHub Artifact JSON contract，并在失败时说明 fallback / quality reason。`,
+    systemPrompt: `你是 AgentHub 中的${name}。请基于用户消息、对话上下文、Artifact 历史和质量门禁完成任务；输出要遵守 AgentHub Artifact JSON contract，并在失败时说明备用路径原因和质量原因。`,
     capabilityTags: uniqueCapabilityTags,
     toolTags: uniqueToolTags,
     preferredAdapterType,

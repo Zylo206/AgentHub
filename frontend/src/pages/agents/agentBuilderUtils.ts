@@ -44,7 +44,7 @@ export function getAdapterDepthProfile(adapterType?: string | null): { label: st
   if (adapterType && MAINSTREAM_DEEP_ADAPTERS.has(adapterType)) {
     return {
       label: "深接 v1",
-      description: "Artifact-only、REAL_FIRST、Contract / Quality / Build gate、fallback reason 可观测。",
+      description: "Artifact-only、REAL_FIRST、Contract / Quality / Build gate、备用路径原因可观测。",
       className: "agent-builder-depth-badge--deep"
     };
   }
@@ -52,14 +52,14 @@ export function getAdapterDepthProfile(adapterType?: string | null): { label: st
   if (adapterType === "OPEN_CODE") {
     return {
       label: "Probe",
-      description: "当前只做 CLI 探测和 fallback，不作为本轮主流平台深接目标。",
+      description: "当前只做 CLI 探测和备用路径，不作为本轮主流平台深接目标。",
       className: "agent-builder-depth-badge--probe"
     };
   }
 
   return {
-    label: "Fallback",
-    description: "稳定演示安全网，不能包装成真实主流 Agent 平台成功。",
+    label: "备用路径",
+    description: "本地稳定兜底能力，不能包装成真实主流 Agent 平台成功。",
     className: "agent-builder-depth-badge--fallback"
   };
 }

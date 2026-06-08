@@ -4,6 +4,7 @@ import type { AgentCreationDraft } from "../agents/conversationalAgentDraft";
 import type { DeployIntentDraft, LightweightAttachment, Message, OrchestratorTriggerSuggestion } from "./chatTypes";
 import { getAttachmentDownloadUrl } from "../../api/agenthubApi";
 import { formatId, getIdValue } from "../../utils/id";
+import { sanitizeProductionText } from "../../utils/productionLabels";
 import { createPortal } from "react-dom";
 
 interface MessageBubbleProps {
@@ -96,7 +97,7 @@ function getProtocolDescription(messageType: string): string {
     REVIEW: "Reviewer 正在检查质量、风险和可交付性。",
     APPROVAL: "协作链路通过当前评审，可继续进入产物操作。",
     REJECTION: "评审发现阻塞问题，需要先修复后再继续。",
-    ERROR: "协作链路遇到错误，请查看失败原因和 fallback 状态。"
+    ERROR: "协作链路遇到错误，请查看失败原因和备用路径状态。"
   };
 
   return descriptions[messageType as ProtocolTone] || "Agent 协作状态更新。";
@@ -520,12 +521,12 @@ export function MessageBubble({
       >
         <div className="message-bubble__header">
           <span className="message-bubble__sender">
-            <span>{senderLabel}</span>
+            <span>{sanitizeProductionText(senderLabel)}</span>
             {message.senderType === "AGENT" && senderRoleLabel ? (
               <span className="message-agent-role">{senderRoleLabel}</span>
             ) : null}
             {message.senderType === "AGENT" && agentStepLabel ? (
-              <span className="message-agent-step">{agentStepLabel}</span>
+              <span className="message-agent-step">{sanitizeProductionText(agentStepLabel)}</span>
             ) : null}
             {protocolLabel ? (
               <span className={`message-protocol-pill message-protocol-pill--${protocolLabel.toLowerCase()}`}>
@@ -648,7 +649,7 @@ export function MessageBubble({
             <strong className="message-evidence-label">前端协作草案</strong>
             <span>{(message.mentionedAgentIds?.length ?? 0) > 1 ? "协作对象草案：" : "指定协作对象："}</span>
             <span className="message-target-agent-name">
-              @{targetAgentLabel || "已指定 Agent"}
+              @{targetAgentLabel ? sanitizeProductionText(targetAgentLabel) : "已指定 Agent"}
             </span>
             <small>
               这是发送时解析出的协作意图，真实执行以 TaskRun / TaskGraph 记录为准。
@@ -679,13 +680,13 @@ export function MessageBubble({
             <div className="message-auto-trigger__plan-grid">
               <div className="message-auto-trigger__plan-cell">
                 <span>任务摘要</span>
-                <p>{getTaskSummary(message)}</p>
+                <p>{sanitizeProductionText(getTaskSummary(message))}</p>
               </div>
               <div className="message-auto-trigger__plan-cell">
                 <span>协作对象草案</span>
                 <div className="message-auto-trigger__plan-chips">
                   {plannedAgents.map((agent) => (
-                    <strong key={agent}>{agent}</strong>
+                    <strong key={agent}>{sanitizeProductionText(agent)}</strong>
                   ))}
                 </div>
               </div>
@@ -777,7 +778,7 @@ export function MessageBubble({
             </div>
             <p className="message-agent-creation__prompt">{agentCreationDraft.systemPrompt}</p>
             {agentCreationDraft.fallbackReason ? (
-              <p className="message-agent-creation__prompt">Fallback 原因：{agentCreationDraft.fallbackReason}</p>
+              <p className="message-agent-creation__prompt">生成说明：{sanitizeProductionText(agentCreationDraft.fallbackReason)}</p>
             ) : null}
             <div className="message-agent-creation__reasons">
               {agentCreationDraft.reasoning.map((reason) => (
@@ -891,7 +892,7 @@ export function MessageBubble({
                 定位原消息
               </button>
             </div>
-            {message.quotedMessageContent ? <p>{message.quotedMessageContent}</p> : null}
+            {message.quotedMessageContent ? <p>{sanitizeProductionText(message.quotedMessageContent)}</p> : null}
           </div>
         ) : null}
 
@@ -899,12 +900,12 @@ export function MessageBubble({
           className="message-bubble__body"
           id={protocolLabel === "REJECTION" ? blockerAnchorId : undefined}
         >
-          {message.content}
+          {sanitizeProductionText(message.content)}
         </div>
         {protocolLabel === "REJECTION" ? (
           <div className="message-rejection-blockers" data-testid="message-rejection-blockers">
             <span>阻塞项</span>
-            <p>{message.content}</p>
+            <p>{sanitizeProductionText(message.content)}</p>
           </div>
         ) : null}
 

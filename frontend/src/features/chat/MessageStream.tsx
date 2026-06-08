@@ -251,7 +251,7 @@ export function MessageStream({
             </div>
             <div className="message-empty-suggestion-card__actions">
               <button type="button" disabled>等待任务消息</button>
-              <button type="button" disabled>调试入口已折叠</button>
+              <button type="button" disabled>高级工具已收起</button>
             </div>
           </div>
         </section>

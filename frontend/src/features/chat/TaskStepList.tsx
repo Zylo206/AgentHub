@@ -1,6 +1,7 @@
 import type { Artifact } from "../artifacts/artifactTypes";
 import type { StreamingPreviewState, TaskRun, TaskStep } from "./chatTypes";
 import { displayArtifactSourceKind, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayAdapterName, displayExecutionOutcome, sanitizeProductionText } from "../../utils/productionLabels";
 import { formatId, getIdValue } from "../../utils/id";
 import {
   formatBuildValidationValue,
@@ -20,6 +21,10 @@ interface TaskStepListProps {
   onSelectStep: (taskRunId: string, step: TaskStep) => void;
 }
 
+function formatBuildStatus(value?: string | null): string {
+  return sanitizeProductionText(formatBuildValidationValue(value));
+}
+
 export function TaskStepList({
   taskRun,
   artifacts,
@@ -35,15 +40,15 @@ export function TaskStepList({
         const isSelectedStep = selectedTaskStepId === stepId;
         const adapterDisplay = getAdapterDisplay(step);
         const assignedAgentId = getIdValue(step.assignedAgentId);
-        const assignedAgentName = agentNameMap.get(assignedAgentId) || step.assignedAgentName || assignedAgentId;
+        const assignedAgentName = sanitizeProductionText(agentNameMap.get(assignedAgentId) || step.assignedAgentName || assignedAgentId);
         const stepProducedArtifactIds = new Set(step.producedArtifactIds.map((artifactId) => getIdValue(artifactId)));
         const stepProducedArtifacts = artifacts.filter((artifact) => stepProducedArtifactIds.has(getIdValue(artifact.id)));
         const realAdapterArtifactCount = stepProducedArtifacts.filter(
           (artifact) => artifact.sourceKind === "REAL_ADAPTER"
         ).length;
         const qualityScore = formatQualityScore(step.artifactQualityScore);
-        const buildValidationStatus = formatBuildValidationValue(step.artifactBuildValidationStatus);
-        const reviewRetryReviseState = getReviewRetryReviseLabel(step);
+        const buildValidationStatus = formatBuildStatus(step.artifactBuildValidationStatus);
+        const reviewRetryReviseState = sanitizeProductionText(getReviewRetryReviseLabel(step));
         const streamingPreview = streamingPreviewsByStepId[stepId] || null;
         const qualityGateAction = getStepQualityGateAction(step);
 
@@ -61,7 +66,7 @@ export function TaskStepList({
                 {displayStatus(step.status)}
               </span>
             </div>
-            <div className="task-step-item__description">{step.taskDescription}</div>
+            <div className="task-step-item__description">{sanitizeProductionText(step.taskDescription)}</div>
             <div className="task-step-item__meta step-agent-meta">
               <span>执行 Agent：{assignedAgentName}</span>
               <span>{step.producedArtifactIds.length} 个产物</span>
@@ -69,22 +74,23 @@ export function TaskStepList({
             <div className="step-adapter-meta">
               {adapterDisplay.fallbackUsed ? (
                 <div className="step-adapter-fallback">
-                  <span className="step-adapter-preferred">首选：{adapterDisplay.preferred}</span>
-                  <span className="step-adapter-actual">实际：{adapterDisplay.actual}</span>
+                  <span className="step-adapter-preferred">首选：{displayAdapterName(adapterDisplay.preferred)}</span>
+                  <span className="step-adapter-actual">实际：{displayAdapterName(adapterDisplay.actual)}</span>
                   <span className="step-adapter-status step-adapter-status--fallback">
                     状态：{displayStatus(adapterDisplay.status || "FALLBACK_USED")}
                   </span>
-                  <span className="step-adapter-fallback-note">首选 Adapter 不可用，已使用 fallback。</span>
+                  <span className="step-adapter-fallback-note">首选 Adapter 不可用，已切换备用路径。</span>
                 </div>
               ) : (
                 <span className="step-adapter-status">
-                  Adapter：{adapterDisplay.actual || "未记录"}
+                  Adapter：{displayAdapterName(adapterDisplay.actual)}
                   {adapterDisplay.status ? ` / ${displayStatus(adapterDisplay.status)}` : ""}
                 </span>
               )}
               {step.adapterResponseSummary ? (
                 <div className="step-adapter-response">
-                  <strong>Adapter 响应：</strong> {summarizeAdapterResponse(step.adapterResponseSummary)}
+                  <strong>Adapter 响应：</strong>{" "}
+                  {sanitizeProductionText(summarizeAdapterResponse(step.adapterResponseSummary))}
                 </div>
               ) : null}
               {streamingPreview ? (
@@ -98,12 +104,12 @@ export function TaskStepList({
                           : "部分输出"}
                     </strong>
                     <span>
-                      {streamingPreview.adapterType || "Adapter"} / {streamingPreview.chunkCount} 个片段
+                      {displayAdapterName(streamingPreview.adapterType)} / {streamingPreview.chunkCount} 个片段
                     </span>
                   </div>
-                  <div>{summarizeAdapterResponse(streamingPreview.content)}</div>
+                  <div>{sanitizeProductionText(summarizeAdapterResponse(streamingPreview.content))}</div>
                   {streamingPreview.finishReason ? (
-                    <small>{streamingPreview.finishReason}</small>
+                    <small>{sanitizeProductionText(streamingPreview.finishReason)}</small>
                   ) : (
                     <small>仅用于实时预览；最终输出通过 Artifact 校验后才会持久化。</small>
                   )}
@@ -112,11 +118,11 @@ export function TaskStepList({
               <div className="step-generated-artifacts">
                 {realAdapterArtifactCount > 0 ? (
                   <span className="artifact-source-badge artifact-source-badge--real-adapter">
-                    真实输出已采用 / {realAdapterArtifactCount}
+                    REAL_ADAPTER 已采纳 / {realAdapterArtifactCount}
                   </span>
                 ) : (
                   <span className="artifact-source-badge artifact-source-badge--static-template">
-                    静态模板 fallback
+                    本地静态结果
                   </span>
                 )}
                 {stepProducedArtifacts.slice(0, 3).map((artifact) => (
@@ -134,34 +140,34 @@ export function TaskStepList({
                     step.realOutputUsed ? "artifact-source-badge--real-adapter" : "artifact-source-badge--static-template"
                   }`}
                 >
-                  真实输出：{step.realOutputUsed ? "已采用" : "未采用"}
+                  真实输出：{step.realOutputUsed ? "已采纳" : "未采纳"}
                 </span>
                 <span className="artifact-source-badge">评审修复链路：{reviewRetryReviseState}</span>
-                <span className="artifact-source-badge">解析：{step.artifactParseStatus || "NOT_ATTEMPTED"}</span>
-                <span className="artifact-source-badge">结果：{step.realAdapterOutcome || "FALLBACK"}</span>
-                <span className="artifact-source-badge">质量：{step.artifactQualityStatus || "NOT_EVALUATED"}</span>
+                <span className="artifact-source-badge">解析：{sanitizeProductionText(step.artifactParseStatus || "NOT_ATTEMPTED")}</span>
+                <span className="artifact-source-badge">结果：{displayExecutionOutcome(step.realAdapterOutcome)}</span>
+                <span className="artifact-source-badge">质量：{sanitizeProductionText(step.artifactQualityStatus || "NOT_EVALUATED")}</span>
                 <span className="artifact-source-badge">构建校验：{buildValidationStatus}</span>
                 <span className="artifact-source-badge">质量分：{qualityScore}</span>
               </div>
               {step.artifactBuildValidationReason ? (
                 <div className="step-adapter-response">
-                  <strong>构建校验：</strong> {step.artifactBuildValidationReason}
+                  <strong>构建校验：</strong> {sanitizeProductionText(step.artifactBuildValidationReason)}
                 </div>
               ) : null}
               {step.artifactQualityReason ? (
                 <div className="step-adapter-response">
-                  <strong>产物质量：</strong> {step.artifactQualityReason}
+                  <strong>产物质量：</strong> {sanitizeProductionText(step.artifactQualityReason)}
                 </div>
               ) : null}
               {qualityGateAction ? (
                 <div className="quality-gate-action">
                   <strong>{qualityGateAction.title}</strong>
-                  <p>失败原因：{qualityGateAction.reason}</p>
-                  <p>修复路径：{qualityGateAction.nextStep}</p>
+                  <p>失败原因：{sanitizeProductionText(qualityGateAction.reason)}</p>
+                  <p>修复路径：{sanitizeProductionText(qualityGateAction.nextStep)}</p>
                 </div>
               ) : null}
               {step.adapterErrorMessage ? (
-                <div className="step-adapter-error">{step.adapterErrorMessage}</div>
+                <div className="step-adapter-error">{sanitizeProductionText(step.adapterErrorMessage)}</div>
               ) : null}
             </div>
           </button>

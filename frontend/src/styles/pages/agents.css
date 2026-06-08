@@ -1,36 +1,3 @@
-.agent-builder-section-map {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  width: 100%;
-  margin: 0;
-}
-
-.agent-builder-section-map a {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #111827;
-  text-decoration: none;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
-}
-
-.agent-builder-section-map strong {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.agent-builder-section-map span {
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .agent-builder-page [id] {
   scroll-margin-top: 86px;
 }
@@ -49,17 +16,32 @@
   margin-bottom: 14px;
 }
 
-@media (max-width: 1200px) {
-  .agent-builder-section-map {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.agent-builder-debug-section {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  background: rgba(248, 250, 252, 0.92);
+  overflow: hidden;
 }
 
-@media (max-width: 760px) {
-  .agent-builder-section-map {
-    grid-template-columns: 1fr;
-    width: calc(100% - 28px);
-  }
+.agent-builder-debug-section > summary {
+  min-height: 54px;
+  padding: 12px 16px;
+}
+
+.agent-builder-debug-section > summary span {
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.agent-builder-debug-section > summary small {
+  color: #64748b;
+}
+
+.agent-builder-debug-section .agent-builder-local-cli-panel,
+.agent-builder-debug-section .adapter-test-panel {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 /* Agents page owner layer: override legacy workspace grid patches. */
@@ -113,12 +95,7 @@
   color: #475569 !important;
 }
 
-.agent-builder-page .agent-builder-section-map {
-  grid-column: auto !important;
-}
-
 .agent-builder-page .agent-builder-hero,
-.agent-builder-page .agent-builder-section-map,
 .agent-builder-page .agent-builder-content {
   flex: 0 0 auto !important;
   width: 100% !important;
@@ -376,7 +353,6 @@
     max-height: none !important;
   }
 
-  .agent-builder-page .agent-builder-section-map,
   .agent-builder-page .agent-builder-flow {
     grid-template-columns: 1fr !important;
   }
@@ -387,4 +363,336 @@
   .agent-builder-page .agent-builder-hero {
     flex-direction: column !important;
   }
+}
+
+/* Production pass: remove demo/navigation rails and keep one clear creation path. */
+.agent-builder-page .agent-builder-content--single,
+.agent-builder-page .agent-builder-content {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 18px !important;
+}
+
+.agent-builder-page .agent-builder-flow,
+.agent-builder-page .agent-builder-left-rail,
+.agent-builder-page .adapter-test-panel {
+  display: none !important;
+}
+
+.agent-builder-page .agent-builder-shell,
+.agent-builder-page .agent-builder-hero,
+.agent-builder-page .conversational-agent-panel,
+.agent-builder-page .agent-builder-form,
+.agent-builder-page .agent-builder-preview,
+.agent-builder-page .agent-builder-local-cli-panel {
+  box-shadow: none !important;
+}
+
+.agent-builder-page .conversational-agent-panel {
+  max-width: 1120px !important;
+  margin: 0 auto !important;
+}
+
+.agent-builder-page .agent-builder-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px) !important;
+}
+
+.agent-builder-page .agent-builder-capability-fieldset {
+  display: grid !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.agent-builder-page .agent-builder-capability-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.agent-builder-page .agent-builder-capability-option {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  gap: 8px !important;
+  align-items: center !important;
+  min-height: 42px !important;
+  padding: 9px 10px !important;
+  border: 1px solid rgba(148, 163, 184, 0.24) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  cursor: pointer !important;
+}
+
+.agent-builder-page .agent-builder-capability-option:has(input:checked) {
+  border-color: rgba(37, 99, 235, 0.32) !important;
+  background: #eff6ff !important;
+}
+
+.agent-builder-page .agent-builder-capability-option input {
+  width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
+}
+
+.agent-builder-page .agent-builder-capability-option span {
+  color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 850 !important;
+}
+
+.agent-builder-page .agent-builder-debug-section {
+  max-width: 1120px !important;
+  margin: 0 auto !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Phase 268: split Create Agent and Local CLI into two clear product views. */
+.agent-builder-page .agent-builder-view-switch {
+  display: inline-flex;
+  width: fit-content;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  background: #f8fafc;
+}
+
+.agent-builder-page .agent-builder-view-switch a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.agent-builder-page .agent-builder-view-switch__item--active {
+  background: #ffffff;
+  color: #1d4ed8 !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.agent-builder-page--cli .agent-builder-shell {
+  max-width: 1180px !important;
+}
+
+.agent-builder-page--cli .agent-builder-local-cli-panel {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.agent-builder-page .conversational-agent-panel {
+  padding: 20px !important;
+}
+
+.agent-builder-page .agent-builder-form {
+  display: grid;
+  gap: 16px;
+}
+
+.agent-builder-page .agent-builder-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.agent-builder-page .tool-capability-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.agent-builder-page .tool-capability-card {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "check title"
+    "desc desc";
+  gap: 8px 10px;
+  min-height: 94px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 18px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.agent-builder-page .tool-capability-card--selected {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: #eff6ff;
+}
+
+.agent-builder-page .tool-capability-card input {
+  grid-area: check;
+  width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
+  margin: 2px 0 0;
+}
+
+.agent-builder-page .tool-capability-card span {
+  grid-area: title;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-builder-page .tool-capability-card strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.agent-builder-page .tool-capability-card small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.agent-builder-page .tool-capability-card em {
+  grid-area: desc;
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.agent-builder-page .agent-builder-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-builder-page .agent-builder-preview__avatar {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #2563eb, #38bdf8);
+  color: #ffffff;
+  font-weight: 950;
+}
+
+.agent-builder-page .local-cli-status-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(280px, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.agent-builder-page .local-cli-status-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 22px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: none;
+}
+
+.agent-builder-page .local-cli-status-card--selected {
+  border-color: rgba(37, 99, 235, 0.36);
+  background: #eff6ff;
+}
+
+.agent-builder-page .local-cli-status-card__header,
+.agent-builder-page .local-cli-status-card__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-builder-page .local-cli-status-card__header strong {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.agent-builder-page .local-cli-status-card__header small,
+.agent-builder-page .local-cli-status-card__footer span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agent-builder-page .local-cli-status-card__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px;
+}
+
+.agent-builder-page .local-cli-status-card__facts div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.agent-builder-page .local-cli-status-card__facts dt {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.agent-builder-page .local-cli-status-card__facts dd {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-builder-page .local-cli-status-card__warning {
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 14px;
+  background: #fffbeb;
+  color: #92400e !important;
+  font-size: 12px;
+}
+
+@media (max-width: 920px) {
+  .agent-builder-page .agent-builder-form-grid,
+  .agent-builder-page .agent-builder-layout,
+  .agent-builder-page .local-cli-status-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Phase 269: readable agent shell status and cleaner split-view navigation. */
+.agent-builder-page .agent-builder-hero__status {
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.agent-builder-page .agent-builder-hero__status strong,
+.agent-builder-page .agent-builder-hero__status span {
+  color: #0f172a !important;
+}
+
+.agent-builder-page .agent-builder-hero__status small,
+.agent-builder-page .agent-builder-hero__status em {
+  color: #475569 !important;
+}
+
+.agent-builder-view-switch {
+  width: fit-content !important;
+  padding: 4px !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06) !important;
 }

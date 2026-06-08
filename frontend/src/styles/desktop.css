@@ -200,9 +200,196 @@
   overflow: auto;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 14px;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
   padding: 12px;
+}
+
+.desktop-console-page .desktop-console__file-list,
+.desktop-console-page .desktop-console__candidate-list,
+.desktop-console-page .desktop-console__probe-list,
+.desktop-console-page .desktop-console__processes,
+.desktop-console-page .desktop-console__notification-log {
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-console-page .desktop-console__file-row,
+.desktop-console-page .desktop-console__candidate,
+.desktop-console-page .desktop-console__probe,
+.desktop-console-page .desktop-console__process,
+.desktop-console-page .desktop-console__notification-log article {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.045);
+}
+
+.desktop-console-page .desktop-console__file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.desktop-console-page .desktop-console__file-row:hover,
+.desktop-console-page .desktop-console__file-row:focus-visible {
+  border-color: rgba(37, 99, 235, 0.32);
+  background: #eff6ff;
+  outline: none;
+}
+
+.desktop-console-page .desktop-console__file-row strong,
+.desktop-console-page .desktop-console__candidate strong,
+.desktop-console-page .desktop-console__probe strong,
+.desktop-console-page .desktop-console__process strong,
+.desktop-console-page .desktop-console__notification-log strong {
+  color: #0f172a;
+}
+
+.desktop-console-page .desktop-console__file-row span,
+.desktop-console-page .desktop-console__candidate span,
+.desktop-console-page .desktop-console__probe span,
+.desktop-console-page .desktop-console__process span,
+.desktop-console-page .desktop-console__notification-log span,
+.desktop-console-page .desktop-console__preview-meta {
+  color: #64748b;
+}
+
+.desktop-console-page .desktop-console__candidate,
+.desktop-console-page .desktop-console__probe,
+.desktop-console-page .desktop-console__process,
+.desktop-console-page .desktop-console__notification-log article {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.desktop-console-page .desktop-console__process-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.desktop-console-page .desktop-console__process-header > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.desktop-console-page .desktop-console__process-header .ghost-button {
+  flex: 0 0 auto;
+}
+
+.desktop-console-page .desktop-console__candidate-actions,
+.desktop-console-page .desktop-console__process-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.desktop-console-page .desktop-console__candidate-status {
+  width: fit-content;
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.desktop-console-page .desktop-console__probe-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.desktop-console-page .desktop-console__probe-grid div,
+.desktop-console-page .desktop-console__preview-meta {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.desktop-console-page .desktop-console__preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.desktop-console-page .desktop-console__preview-meta > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-console-page .desktop-console__preview-meta .secondary-button {
+  flex: 0 0 auto;
+}
+
+.desktop-console-page .desktop-console__boundary--success,
+.desktop-console-page .desktop-console__status--active,
+.desktop-console-page .desktop-console__status--sent,
+.desktop-console-page .desktop-console__status--available {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.desktop-console-page .desktop-console__status--error,
+.desktop-console-page .desktop-console__status--unavailable,
+.desktop-console-page .desktop-console__error {
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: 12px;
+  background: #fff7f7;
+  color: #b91c1c;
+  padding: 8px 10px;
+}
+
+.desktop-console-page .desktop-console__tag,
+.desktop-console-page .desktop-console__status,
+.desktop-console-page .desktop-console__file-size,
+.desktop-console-page .desktop-console__file-type {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+
+.desktop-console-page .desktop-console__empty {
+  border: 1px dashed rgba(148, 163, 184, 0.32);
+  border-radius: 16px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 14px;
+}
+
+.desktop-console-page .desktop-console-page__header small {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 @media (max-width: 900px) {
@@ -221,4 +408,80 @@
     align-items: stretch;
     flex-direction: column;
   }
+}
+
+/* Phase 268: final light readability pass for Tauri/Desktop console. */
+.desktop-console-page .desktop-console,
+.desktop-console-page .desktop-console * {
+  color: #0f172a;
+}
+
+.desktop-console-page .desktop-console__file-row,
+.desktop-console-page .desktop-console__candidate,
+.desktop-console-page .desktop-console__probe,
+.desktop-console-page .desktop-console__process,
+.desktop-console-page .desktop-console__notification-log article {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.desktop-console-page .desktop-console__file-row span,
+.desktop-console-page .desktop-console__candidate span,
+.desktop-console-page .desktop-console__probe span,
+.desktop-console-page .desktop-console__process span,
+.desktop-console-page .desktop-console__notification-log span,
+.desktop-console-page .desktop-console__preview-meta,
+.desktop-console-page .desktop-console__card-header p {
+  color: #64748b !important;
+}
+
+.desktop-console-page .desktop-console__file-type,
+.desktop-console-page .desktop-console__file-size,
+.desktop-console-page .desktop-console__tag,
+.desktop-console-page .desktop-console__status {
+  border-color: rgba(37, 99, 235, 0.18) !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+.desktop-console-page .desktop-console__candidate {
+  gap: 10px !important;
+  padding: 14px !important;
+}
+
+.desktop-console-page .desktop-console__candidate-status {
+  border-color: rgba(34, 197, 94, 0.24) !important;
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+}
+
+.desktop-console-page .desktop-console__candidate-actions .secondary-button,
+.desktop-console-page .desktop-console__actions .secondary-button,
+.desktop-console-page .desktop-console__preview-meta .secondary-button {
+  border: 1px solid rgba(148, 163, 184, 0.24) !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+}
+
+.desktop-console-page .desktop-console__candidate-actions .secondary-button:hover,
+.desktop-console-page .desktop-console__actions .secondary-button:hover,
+.desktop-console-page .desktop-console__preview-meta .secondary-button:hover {
+  border-color: rgba(37, 99, 235, 0.28) !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+.desktop-console-page .desktop-console__preview,
+.desktop-console-page .desktop-console__process-log {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.desktop-console-page .desktop-console__preview code,
+.desktop-console-page .desktop-console__process-log code,
+.desktop-console-page .desktop-console__preview pre,
+.desktop-console-page .desktop-console__process-log pre {
+  color: #0f172a !important;
 }

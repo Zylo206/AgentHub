@@ -12,6 +12,8 @@ import type { ConversationFilter } from "../../features/conversations/Conversati
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import { getIdValue } from "../../utils/id";
 
+type ConversationCreateMode = "SINGLE" | "GROUP";
+
 interface UseWorkspaceConversationActionsParams {
   conversationQuery: string;
   conversationFilter: ConversationFilter;
@@ -44,12 +46,13 @@ export function useWorkspaceConversationActions({
   setArtifactSelectionReference,
   setErrorMessage
 }: UseWorkspaceConversationActionsParams) {
-  const handleCreateDemoConversation = useCallback(async () => {
+  const handleCreateDemoConversation = useCallback(async (mode: ConversationCreateMode = "GROUP") => {
     setCreatingConversation(true);
     setErrorMessage(null);
 
     try {
-      const conversation = await createConversation("登录页 Demo", "GROUP");
+      const title = mode === "SINGLE" ? "单 Agent 任务" : "多 Agent 协作";
+      const conversation = await createConversation(title, mode);
       const createdId = getIdValue(conversation.id);
 
       setConversations((previous) => {

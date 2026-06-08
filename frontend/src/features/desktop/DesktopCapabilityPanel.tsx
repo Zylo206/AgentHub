@@ -25,6 +25,7 @@ import {
 import type { LightweightAttachment } from "../chat/chatTypes";
 
 const DEFAULT_BACKEND_JAR = "backend/target/agenthub-backend-0.1.0-SNAPSHOT.jar";
+const DEFAULT_BACKEND_PORT = 8080;
 
 type DesktopTab = "files" | "notifications" | "agents" | "backend";
 
@@ -35,6 +36,8 @@ interface LocalContextCandidate {
   createdAt: string;
   attachmentId?: string;
   status: "LOCAL_ONLY" | "UPLOADED_ATTACHMENT";
+  contextStatus?: "PINNED";
+  memoryStatus?: "SAVED";
 }
 
 interface NotificationLogItem {
@@ -74,6 +77,7 @@ const DEFAULT_DESKTOP_CONFIG: DesktopConfig = {
   javaCommand: "java",
   backendJarPath: DEFAULT_BACKEND_JAR,
   backendWorkingDirectory: ".",
+  backendPort: DEFAULT_BACKEND_PORT,
   claudeCommand: "claude",
   codexCommand: "codex",
   opencodeCommand: "opencode",
@@ -141,20 +145,32 @@ function canReadTextPreview(kind: string): boolean {
 
 function createMetadataPreview(entry: DesktopFileEntry): DesktopFilePreview {
   const kind = getFileKind(entry);
-  const boundary =
+  const contentPreview =
     kind === "image"
-      ? "图片文件当前作为本地 metadata / preview shell 展示；本轮不做图片编辑、OCR 或完整渲染。"
+      ? "图片文件当前显示本地 metadata / preview shell；本轮不提供图片编辑、OCR 或完整渲染。"
       : kind === "ppt"
-        ? "PPT/PPTX 当前作为本地 metadata / download 候选展示；本轮不做在线幻灯片渲染。"
-        : "该文件类型当前不做文本读取，仅展示 metadata。";
+        ? "PPT/PPTX 当前支持查看文件信息、下载和加入上下文；不提供完整在线幻灯片编辑器。"
+        : "该文件类型当前仅展示 metadata，不做文本读取。";
 
   return {
     fileName: entry.name,
     path: entry.path,
     sizeBytes: entry.sizeBytes ?? 0,
-    contentPreview: boundary,
+    contentPreview,
     truncated: false
   };
+}
+
+function normalizePort(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1024 || parsed > 65535) {
+    return DEFAULT_BACKEND_PORT;
+  }
+  return parsed;
+}
+
+function statusLabel(status: NotificationLogItem["status"]): string {
+  return status === "SENT" ? "已发送" : "发送失败";
 }
 
 export function DesktopCapabilityPanel({
@@ -173,6 +189,7 @@ export function DesktopCapabilityPanel({
   const [javaCommand, setJavaCommand] = useState("java");
   const [backendJarPath, setBackendJarPath] = useState(DEFAULT_BACKEND_JAR);
   const [backendWorkingDirectory, setBackendWorkingDirectory] = useState(".");
+  const [backendPort, setBackendPort] = useState(DEFAULT_BACKEND_PORT);
   const [claudeCommand, setClaudeCommand] = useState("claude");
   const [codexCommand, setCodexCommand] = useState("codex");
   const [opencodeCommand, setOpencodeCommand] = useState("opencode");
@@ -189,7 +206,7 @@ export function DesktopCapabilityPanel({
 
   const cliSummary = useMemo(() => {
     if (cliProbes.length === 0) {
-      return "未探测";
+      return "未检测";
     }
     const available = cliProbes.filter((probe) => probe.available).length;
     return `${available}/${cliProbes.length} 可用`;
@@ -212,6 +229,7 @@ export function DesktopCapabilityPanel({
         setJavaCommand(nextConfig.javaCommand);
         setBackendJarPath(nextConfig.backendJarPath);
         setBackendWorkingDirectory(nextConfig.backendWorkingDirectory);
+        setBackendPort(nextConfig.backendPort || DEFAULT_BACKEND_PORT);
         setClaudeCommand(nextConfig.claudeCommand);
         setCodexCommand(nextConfig.codexCommand);
         setOpencodeCommand(nextConfig.opencodeCommand);
@@ -229,10 +247,10 @@ export function DesktopCapabilityPanel({
     }
     const timer = window.setInterval(() => {
       void listDesktopManagedProcesses().then(setManagedProcesses).catch(() => undefined);
-      void checkDesktopPort("127.0.0.1", 8080).then(setPortStatus).catch(() => undefined);
+      void checkDesktopPort("127.0.0.1", backendPort).then(setPortStatus).catch(() => undefined);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [desktopAvailable]);
+  }, [backendPort, desktopAvailable]);
 
   useEffect(() => {
     const handleDesktopNotification = (event: CustomEvent<DesktopRealtimeNotification>) => {
@@ -290,6 +308,7 @@ export function DesktopCapabilityPanel({
       javaCommand,
       backendJarPath,
       backendWorkingDirectory,
+      backendPort,
       claudeCommand,
       codexCommand,
       opencodeCommand
@@ -306,6 +325,7 @@ export function DesktopCapabilityPanel({
         javaCommand,
         backendJarPath,
         backendWorkingDirectory,
+        backendPort,
         claudeCommand,
         codexCommand,
         opencodeCommand
@@ -373,6 +393,34 @@ export function DesktopCapabilityPanel({
     });
   }
 
+  async function handlePinCandidateAsContext(item: LocalContextCandidate) {
+    if (!item.attachmentId || !onPinAttachmentAsContext) {
+      return;
+    }
+    await runAction(`pin-context-${item.attachmentId}`, async () => {
+      await onPinAttachmentAsContext(item.attachmentId!);
+      setContextCandidates((current) =>
+        current.map((candidate) =>
+          candidate.path === item.path ? { ...candidate, contextStatus: "PINNED" as const } : candidate
+        )
+      );
+    });
+  }
+
+  async function handleSaveCandidateAsMemory(item: LocalContextCandidate) {
+    if (!item.attachmentId || !onSaveAttachmentAsMemory) {
+      return;
+    }
+    await runAction(`save-memory-${item.attachmentId}`, async () => {
+      await onSaveAttachmentAsMemory(item.attachmentId!);
+      setContextCandidates((current) =>
+        current.map((candidate) =>
+          candidate.path === item.path ? { ...candidate, memoryStatus: "SAVED" as const } : candidate
+        )
+      );
+    });
+  }
+
   async function handleProbeCli(command: string) {
     await runAction(`probe-${command}`, async () => {
       const probe = await probeDesktopAgentCli(command);
@@ -404,9 +452,10 @@ export function DesktopCapabilityPanel({
 
   async function handleStartBackend() {
     await runAction("start-backend", async () => {
-      const process = await startDesktopBackend(javaCommand, backendJarPath, backendWorkingDirectory);
+      const process = await startDesktopBackend(javaCommand, backendJarPath, backendWorkingDirectory, backendPort);
       setManagedProcesses((previous) => [process, ...previous.filter((item) => item.pid !== process.pid)]);
       setActiveTab("backend");
+      setPortStatus(await checkDesktopPort("127.0.0.1", backendPort, 1500));
     });
   }
 
@@ -414,12 +463,13 @@ export function DesktopCapabilityPanel({
     await runAction(`stop-${pid}`, async () => {
       await stopDesktopManagedProcess(pid);
       setManagedProcesses(await listDesktopManagedProcesses());
+      setPortStatus(await checkDesktopPort("127.0.0.1", backendPort, 700));
     });
   }
 
   async function handleCheckBackendPort() {
     await runAction("check-backend-port", async () => {
-      setPortStatus(await checkDesktopPort("127.0.0.1", 8080));
+      setPortStatus(await checkDesktopPort("127.0.0.1", backendPort));
     });
   }
 
@@ -430,7 +480,7 @@ export function DesktopCapabilityPanel({
     return (
       <div className="desktop-console__boundary">
         <strong>当前是 Web 模式</strong>
-        <p>本地文件、系统通知和进程管理需要通过 Tauri 壳启动。Web 主路径仍可完整验收 IM 协作链路。</p>
+        <p>本地文件、系统通知和进程管理需要通过 Tauri 原生壳启动；Web 主路径仍可完成 IM 协作验收。</p>
       </div>
     );
   }
@@ -440,8 +490,8 @@ export function DesktopCapabilityPanel({
       <div className="desktop-console__header">
         <div>
           <span className="desktop-console__eyebrow">Desktop Console</span>
-          <strong>本地能力中心</strong>
-          <p>本地文件访问、系统通知、Agent CLI 和 backend 进程管理。</p>
+          <strong>本地能力控制台</strong>
+          <p>集中处理本地文件、系统通知、本机 Agent CLI 和 backend 托管进程。</p>
         </div>
         <span className={desktopAvailable ? "desktop-console__status desktop-console__status--active" : "desktop-console__status"}>
           {desktopAvailable ? "Tauri 已连接" : "Web 模式"}
@@ -458,7 +508,7 @@ export function DesktopCapabilityPanel({
           <strong>{cliSummary}</strong>
         </article>
         <article>
-          <span>进程</span>
+          <span>托管进程</span>
           <strong>{runningProcessCount}</strong>
         </article>
         <article>
@@ -505,7 +555,7 @@ export function DesktopCapabilityPanel({
             </div>
             {directoryEntries.length > 0 ? (
               <div className="desktop-console__file-list">
-                {directoryEntries.slice(0, 8).map((entry) => (
+                {directoryEntries.slice(0, 10).map((entry) => (
                   <button type="button" key={entry.path} onClick={() => handleSelectFileEntry(entry)}>
                     <span>{entry.isDirectory ? "DIR" : getFileKind(entry).toUpperCase()}</span>
                     <strong>{entry.name}</strong>
@@ -534,19 +584,21 @@ export function DesktopCapabilityPanel({
             {filePreview ? (
               <>
                 <div className="desktop-console__preview-meta">
-                  <span>{getFileKind(filePreview)}</span>
-                  <strong>{filePreview.fileName}</strong>
-                  <em>{formatSize(filePreview.sizeBytes)}{filePreview.truncated ? " · 已截断" : ""}</em>
+                  <div>
+                    <span>{getFileKind(filePreview)}</span>
+                    <strong>{filePreview.fileName}</strong>
+                    <em>{formatSize(filePreview.sizeBytes)}{filePreview.truncated ? " / 已截断" : ""}</em>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={loadingAction === "upload-local-context"}
+                    onClick={handleAddPreviewToContext}
+                  >
+                    {conversationId ? "加入当前消息附件" : "标记为上下文候选"}
+                  </button>
                 </div>
                 <pre className="desktop-console__preview">{filePreview.contentPreview}</pre>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={loadingAction === "upload-local-context"}
-                  onClick={handleAddPreviewToContext}
-                >
-                  {conversationId ? "加入当前消息附件" : "标记为上下文候选"}
-                </button>
               </>
             ) : null}
           </article>
@@ -564,16 +616,28 @@ export function DesktopCapabilityPanel({
                   <div key={item.path}>
                     <strong>{item.name}</strong>
                     <span>
-                      {formatSize(item.sizeBytes)} · {formatTime(item.createdAt)} ·{" "}
+                      {formatSize(item.sizeBytes)} / {formatTime(item.createdAt)} /{" "}
                       {item.status === "UPLOADED_ATTACHMENT" ? `已上传 ${item.attachmentId || ""}` : "本地候选"}
                     </span>
+                    {item.contextStatus ? <span className="desktop-console__candidate-status">已固定到 Context</span> : null}
+                    {item.memoryStatus ? <span className="desktop-console__candidate-status">已保存为 Memory</span> : null}
                     {item.attachmentId ? (
                       <div className="desktop-console__actions">
-                        <button type="button" className="ghost-button" onClick={() => void onPinAttachmentAsContext?.(item.attachmentId!)}>
-                          固定到 Context
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={loadingAction === `pin-context-${item.attachmentId}` || Boolean(item.contextStatus)}
+                          onClick={() => void handlePinCandidateAsContext(item)}
+                        >
+                          {item.contextStatus ? "已固定" : "固定到 Context"}
                         </button>
-                        <button type="button" className="ghost-button" onClick={() => void onSaveAttachmentAsMemory?.(item.attachmentId!)}>
-                          保存为 Memory
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={loadingAction === `save-memory-${item.attachmentId}` || Boolean(item.memoryStatus)}
+                          onClick={() => void handleSaveCandidateAsMemory(item)}
+                        >
+                          {item.memoryStatus ? "已保存" : "保存为 Memory"}
                         </button>
                       </div>
                     ) : null}
@@ -593,7 +657,7 @@ export function DesktopCapabilityPanel({
             <div className="desktop-console__card-header">
               <div>
                 <strong>系统通知</strong>
-                <p>用于任务完成、审批待确认、预览生成和 Agent fallback 提醒。</p>
+                <p>用于任务完成、审批待确认、预览生成和 Agent 本地备用路径提醒。</p>
               </div>
               <button type="button" className="secondary-button" disabled={!desktopAvailable || loadingAction === "notification"} onClick={handleNotify}>
                 测试通知
@@ -604,7 +668,7 @@ export function DesktopCapabilityPanel({
                 ["notifyTaskRun", "任务状态"],
                 ["notifyApproval", "审批待确认"],
                 ["notifyDeploy", "预览完成"],
-                ["notifyAdapterFallback", "Agent fallback"]
+                ["notifyAdapterFallback", "Agent 本地备用路径"]
               ].map(([key, label]) => (
                 <button
                   key={key}
@@ -645,7 +709,7 @@ export function DesktopCapabilityPanel({
               <div className="desktop-console__notification-log">
                 {notificationLog.map((item) => (
                   <div key={item.id}>
-                    <span className={item.status === "SENT" ? "status-pill status-pill--accepted" : "status-pill status-pill--pending"}>{item.status}</span>
+                    <span className={item.status === "SENT" ? "status-pill status-pill--accepted" : "status-pill status-pill--pending"}>{statusLabel(item.status)}</span>
                     <strong>{item.title}</strong>
                     <p>{item.body}</p>
                     <em>{formatTime(item.createdAt)}</em>
@@ -665,7 +729,7 @@ export function DesktopCapabilityPanel({
             <div className="desktop-console__card-header">
               <div>
                 <strong>Agent CLI 状态</strong>
-                <p>探测本机 Claude Code、Codex 和 OpenCode 命令，只做 descriptor 级检查。</p>
+                <p>探测本机 Claude Code、Codex 和 OpenCode 命令，仅验证 headless Artifact-only 能力。</p>
               </div>
               <div className="desktop-console__actions">
                 <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli(claudeCommand)}>Claude Code</button>
@@ -695,7 +759,7 @@ export function DesktopCapabilityPanel({
                       </div>
                     </div>
                     <span className={probe.available ? "status-pill status-pill--accepted" : "status-pill status-pill--pending"}>
-                      {probe.available ? "available" : "unavailable"}
+                      {probe.available ? "可用" : "不可用"}
                     </span>
                   </article>
                 ))}
@@ -713,12 +777,21 @@ export function DesktopCapabilityPanel({
             <div className="desktop-console__card-header">
               <div>
                 <strong>Backend 进程管理</strong>
-                <p>只管理由当前 Tauri shell 启动的本地 backend 进程。</p>
+                <p>只管理由当前 Tauri shell 启动的本地 backend 进程，不接管系统已有服务。</p>
               </div>
             </div>
             <div className="desktop-console__row">
               <input value={javaCommand} onChange={(event) => setJavaCommand(event.target.value)} placeholder="java 命令" disabled={!desktopAvailable} />
               <input value={backendWorkingDirectory} onChange={(event) => setBackendWorkingDirectory(event.target.value)} placeholder="工作目录" disabled={!desktopAvailable} />
+              <input
+                type="number"
+                min={1024}
+                max={65535}
+                value={backendPort}
+                onChange={(event) => setBackendPort(normalizePort(event.target.value))}
+                placeholder="服务端口"
+                disabled={!desktopAvailable}
+              />
             </div>
             <div className="desktop-console__row">
               <input value={backendJarPath} onChange={(event) => setBackendJarPath(event.target.value)} placeholder="backend jar path" disabled={!desktopAvailable} />
@@ -729,7 +802,7 @@ export function DesktopCapabilityPanel({
                 保存配置
               </button>
               <button type="button" className="secondary-button" disabled={!desktopAvailable || loadingAction === "check-backend-port"} onClick={() => void handleCheckBackendPort()}>
-                诊断 8080
+                诊断端口
               </button>
             </div>
             {portStatus ? (
@@ -750,15 +823,17 @@ export function DesktopCapabilityPanel({
             {managedProcesses.length > 0 ? (
               <div className="desktop-console__processes">
                 {managedProcesses.map((process) => (
-                  <article key={process.pid}>
-                    <div>
-                      <strong>{process.label}</strong>
-                      <span>PID {process.pid} · {formatTime(process.startedAt)} · {process.running ? "running" : "stopped"}</span>
-                      {process.logPath ? <span>Log: {process.logPath}</span> : null}
+                  <article key={process.pid} className="desktop-console__process">
+                    <div className="desktop-console__process-header">
+                      <div>
+                        <strong>{process.label}</strong>
+                        <span>PID {process.pid} / {formatTime(process.startedAt)} / {process.running ? "running" : "stopped"}</span>
+                        {process.logPath ? <span>Log: {process.logPath}</span> : null}
+                      </div>
+                      <button type="button" className="ghost-button" disabled={!process.running} onClick={() => void handleStopProcess(process.pid)}>
+                        停止
+                      </button>
                     </div>
-                    <button type="button" className="ghost-button" disabled={!process.running} onClick={() => void handleStopProcess(process.pid)}>
-                      停止
-                    </button>
                     {process.recentOutput?.length ? (
                       <pre className="desktop-console__process-log">{process.recentOutput.slice(-6).join("\n")}</pre>
                     ) : null}

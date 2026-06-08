@@ -74,7 +74,7 @@ function resolveInjectionStepLabel(
       .join(", ");
   }
 
-  return taskRunId ? `TaskRun ${formatId(snapshot.taskRunId)} / no exact TaskStep inputContext match` : "No TaskRun fallback available";
+  return taskRunId ? `TaskRun ${formatId(snapshot.taskRunId)} / 未精确匹配 TaskStep inputContext` : "暂无可关联 TaskRun";
 }
 
 function resolveInjectionMode(
@@ -90,7 +90,7 @@ function resolveInjectionMode(
   const taskRun = taskRuns.find((run) => getIdValue(run.id) === taskRunId);
   const matchedSteps = taskRun?.steps.filter((step) => stepContainsRetrievedItem(step, item)) ?? [];
 
-  return matchedSteps.length > 0 ? "inputContext fallback" : "unmatched";
+  return matchedSteps.length > 0 ? "inputContext 近似匹配" : "未匹配";
 }
 
 type ContextSearchStage = "LIST_GREP_READ" | "LIST_READ_FALLBACK" | "UNKNOWN";
@@ -139,7 +139,7 @@ function getContextSearchStageLabel(stage: ContextSearchStage): string {
   }
 
   if (stage === "LIST_READ_FALLBACK") {
-    return "List -> Read fallback";
+    return "List -> Read 备用读取";
   }
 
   return "Search stage unknown";
@@ -288,7 +288,7 @@ export function ContextPanel({
           <span>{pinnedContexts.length} 条</span>
         </div>
         {pinnedContexts.length === 0 ? (
-          <p className="context-card__summary">还没有固定消息。可以在消息气泡中点击“固定到 Context”，让下一次 Demo Task 使用这些长期上下文。</p>
+          <p className="context-card__summary">还没有固定消息。可以在消息气泡中点击“固定到 Context”，让下一次协作任务使用这些长期上下文。</p>
         ) : (
           <div className="pinned-context-list">
             {pinnedContexts.map((pinnedContext) => (

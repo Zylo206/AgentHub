@@ -234,7 +234,7 @@ function buildQualityRevisionInstruction(artifact: Artifact): string | null {
       ? `Fix build validation status: ${artifact.buildValidationStatus}${artifact.buildValidationReason ? ` (${artifact.buildValidationReason})` : ""}`
       : null,
     artifact.sourceKind && artifact.sourceKind !== "REAL_ADAPTER"
-      ? `Replace fallback output (${displayArtifactSourceKind(artifact.sourceKind)}) with a validated revision.`
+      ? `Replace local backup output (${displayArtifactSourceKind(artifact.sourceKind)}) with a validated revision.`
       : null
   ].filter(Boolean);
 

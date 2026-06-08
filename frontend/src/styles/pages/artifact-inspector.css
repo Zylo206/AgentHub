@@ -124,6 +124,19 @@
   font-weight: 800;
 }
 
+.workspace-page .artifact-preview-dock__boundary {
+  margin: 0;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 251, 235, 0.9);
+  color: #92400e;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .workspace-page .artifact-preview-dock__frame {
   min-height: 180px;
   overflow: hidden;
@@ -158,4 +171,271 @@
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 800;
+}
+
+/* Light, flat Artifact Inspector. No dark hero or clipped artifact list. */
+.workspace-page .artifact-hero-card {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.workspace-page .artifact-hero-card__avatar {
+  display: grid !important;
+  width: 42px !important;
+  height: 42px !important;
+  place-items: center !important;
+  border-radius: 14px !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  font-weight: 950 !important;
+}
+
+.workspace-page .artifact-hero-card__eyebrow {
+  display: block !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+}
+
+.workspace-page .artifact-hero-card strong {
+  display: block !important;
+  overflow: hidden !important;
+  color: #0f172a !important;
+  font-size: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-page .artifact-hero-card p,
+.workspace-page .artifact-hero-card small {
+  color: #64748b !important;
+}
+
+.workspace-page .artifact-hero-card__badges span,
+.workspace-page .artifact-hero-card__meta span {
+  background: #f8fafc !important;
+  color: #334155 !important;
+}
+
+.workspace-page .artifact-hero-card__boundary,
+.workspace-page .artifact-hero-card__gate,
+.workspace-page .artifact-hero-card__lineage {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+}
+
+.workspace-page .artifact-hero-card__gate {
+  border-color: rgba(245, 158, 11, 0.26) !important;
+  background: #fffbeb !important;
+}
+
+.workspace-page .artifact-hero-card__boundary strong,
+.workspace-page .artifact-hero-card__gate strong,
+.workspace-page .artifact-hero-card__lineage strong {
+  color: #0f172a !important;
+}
+
+.workspace-page .artifact-preview-dock,
+.workspace-page .artifact-operation-bar,
+.workspace-page .artifact-inspector-tabs-body {
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Phase 268: all Artifact workbench surfaces are light, compact and readable. */
+.workspace-page .artifact-cockpit,
+.workspace-page .artifact-delivery-workbench,
+.workspace-page .artifact-diagnostic-panel,
+.workspace-page .artifact-risk-card,
+.workspace-page .artifact-explain-badge {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.workspace-page .artifact-cockpit *,
+.workspace-page .artifact-delivery-workbench *,
+.workspace-page .artifact-diagnostic-panel *,
+.workspace-page .artifact-risk-card *,
+.workspace-page .artifact-explain-badge * {
+  color: inherit;
+}
+
+.workspace-page .artifact-cockpit {
+  display: grid !important;
+  gap: 12px !important;
+  padding: 14px !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 20px !important;
+}
+
+.workspace-page .artifact-cockpit__hero {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.workspace-page .artifact-cockpit__eyebrow,
+.workspace-page .artifact-cockpit__grid span,
+.workspace-page .artifact-explain-badge span,
+.workspace-page .artifact-diagnostic-panel summary span,
+.workspace-page .artifact-risk-card span {
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.04em !important;
+}
+
+.workspace-page .artifact-cockpit__hero strong,
+.workspace-page .artifact-cockpit__grid strong,
+.workspace-page .artifact-explain-badge strong,
+.workspace-page .artifact-diagnostic-panel summary strong,
+.workspace-page .artifact-risk-card strong {
+  color: #0f172a !important;
+}
+
+.workspace-page .artifact-cockpit__hero p,
+.workspace-page .artifact-cockpit__grid small,
+.workspace-page .artifact-explain-badge small,
+.workspace-page .artifact-risk-card p {
+  color: #64748b !important;
+  line-height: 1.45 !important;
+}
+
+.workspace-page .artifact-cockpit__status {
+  border: 1px solid rgba(37, 99, 235, 0.18) !important;
+  border-radius: 999px !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  padding: 6px 9px !important;
+  font-size: 11px !important;
+}
+
+.workspace-page .artifact-cockpit__grid,
+.workspace-page .artifact-badge-system,
+.workspace-page .artifact-operation-deck {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.workspace-page .artifact-cockpit__grid article,
+.workspace-page .artifact-explain-badge,
+.workspace-page .artifact-risk-card {
+  display: grid !important;
+  gap: 5px !important;
+  min-width: 0 !important;
+  padding: 11px !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  border-radius: 15px !important;
+  background: #f8fafc !important;
+}
+
+.workspace-page .artifact-cockpit__grid strong,
+.workspace-page .artifact-explain-badge strong,
+.workspace-page .artifact-risk-card strong {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-page .artifact-delivery-workbench {
+  display: grid !important;
+  gap: 12px !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.workspace-page .artifact-diagnostic-panel {
+  padding: 12px !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  border-radius: 18px !important;
+}
+
+.workspace-page .artifact-diagnostic-panel summary {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  cursor: pointer !important;
+}
+
+.workspace-page .artifact-diagnostic-panel__grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  margin-top: 10px !important;
+}
+
+.workspace-page .artifact-diagnostic-item {
+  padding: 10px !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  border-radius: 14px !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.workspace-page .artifact-diagnostic-item span,
+.workspace-page .artifact-diagnostic-item p,
+.workspace-page .artifact-diagnostic-item small {
+  color: #64748b !important;
+}
+
+@media (max-width: 1180px) {
+  .workspace-page .artifact-cockpit__grid,
+  .workspace-page .artifact-badge-system,
+  .workspace-page .artifact-operation-deck,
+  .workspace-page .artifact-diagnostic-panel__grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Phase 268b: scaffold preview shell must not look like a dark console. */
+.workspace-page .artifact-scaffold-inspector,
+.workspace-page .artifact-scaffold-inspector__hero,
+.workspace-page .artifact-scaffold-diagnostics,
+.workspace-page .artifact-scaffold-preview {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.workspace-page .artifact-scaffold-inspector__hero {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  gap: 12px !important;
+  align-items: center !important;
+}
+
+.workspace-page .artifact-scaffold-inspector__hero strong,
+.workspace-page .artifact-scaffold-diagnostics strong,
+.workspace-page .artifact-scaffold-preview strong {
+  color: #0f172a !important;
+}
+
+.workspace-page .artifact-scaffold-inspector__hero small,
+.workspace-page .artifact-scaffold-diagnostics span,
+.workspace-page .artifact-scaffold-preview span,
+.workspace-page .artifact-scaffold-diagnostics li,
+.workspace-page .artifact-scaffold-preview p {
+  color: #64748b !important;
+}
+
+.workspace-page .artifact-scaffold-inspector__hero .artifact-scaffold-card__icon {
+  background: #eff6ff !important;
+  color: #2563eb !important;
+}
+
+.workspace-page .artifact-scaffold-diagnostics,
+.workspace-page .artifact-scaffold-preview {
+  padding: 12px !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  border-radius: 16px !important;
 }

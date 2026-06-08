@@ -6,7 +6,8 @@ import {
   type ToolCapabilityKey
 } from "../../features/agents/agentTypes";
 import type { AgentCreationDraft } from "../../features/agents/conversationalAgentDraft";
-import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayAdapterName, sanitizeProductionText } from "../../utils/productionLabels";
 import { getAdapterDepthProfile, parseTags } from "./agentBuilderUtils";
 
 interface CreateAgentSectionProps {
@@ -88,12 +89,10 @@ export function CreateAgentSection({
           <div>
             <p className="eyebrow">创建业务 Agent</p>
             <h2>用一句话生成协作成员草案</h2>
-            <p>Workspace 适合快速创建；Agents 管理台用于确认关键字段、CLI 健康和 Adapter 测试。</p>
+            <p>先描述职责，系统生成草案；再确认名称、能力标签、工具能力和首选 Adapter。</p>
           </div>
-          <span className="agent-builder-depth-badge agent-builder-depth-badge--deep">
-            Claude / Codex / OpenAI-compatible 深接 v1
-          </span>
         </div>
+
         <label className="agent-builder-field">
           <span>描述你想创建的 Agent</span>
           <textarea
@@ -103,6 +102,7 @@ export function CreateAgentSection({
             placeholder="例如：创建一个安全评审 Agent，优先使用 Claude Code，负责 review、安全和质量门禁。"
           />
         </label>
+
         <div className="conversational-agent-panel__actions">
           <button
             type="button"
@@ -121,7 +121,7 @@ export function CreateAgentSection({
                 data-testid="conversational-agent-apply"
                 onClick={onApplyConversationalDraft}
               >
-                填入下方表单
+                填入表单
               </button>
               <button
                 type="button"
@@ -147,14 +147,13 @@ export function CreateAgentSection({
             </div>
             <div className="conversational-agent-draft__grid">
               <div>
-                <span>Preferred Adapter</span>
-                <strong>{conversationalDraft.preferredAdapterType}</strong>
+                <span>首选 Adapter</span>
+                <strong>{displayAdapterName(conversationalDraft.preferredAdapterType)}</strong>
                 <em>{getAdapterDepthProfile(conversationalDraft.preferredAdapterType).label}</em>
               </div>
               <div>
                 <span>草案来源</span>
-                <strong>{conversationalDraft.draftSource || "UNKNOWN"}</strong>
-                {conversationalDraft.fallbackReason ? <em>{conversationalDraft.fallbackReason}</em> : null}
+                <strong>{sanitizeProductionText(conversationalDraft.draftSource || "系统生成")}</strong>
               </div>
               <div>
                 <span>能力标签</span>
@@ -167,7 +166,7 @@ export function CreateAgentSection({
             </div>
             <div className="conversational-agent-draft__reasons">
               {conversationalDraft.reasoning.map((reason) => (
-                <span key={reason}>{reason}</span>
+                <span key={reason}>{sanitizeProductionText(reason)}</span>
               ))}
             </div>
             <div className="conversational-agent-refine">
@@ -177,7 +176,7 @@ export function CreateAgentSection({
                   data-testid="conversational-agent-refinement"
                   value={draftRefinementPrompt}
                   onChange={(event) => onDraftRefinementPromptChange(event.target.value)}
-                  placeholder="例如：再加 deploy 能力，改用 Codex，并补充安全审计职责。"
+                  placeholder="例如：增加 deploy 能力，改用 Codex，并补充安全审计职责。"
                 />
               </label>
               <button
@@ -196,30 +195,96 @@ export function CreateAgentSection({
 
       <div className="agent-builder-layout">
         <form className="agent-builder-form" onSubmit={onSubmit}>
+          <div className="agent-builder-form-grid">
+            <label className="agent-builder-field">
+              <span>Agent 名称</span>
+              <input
+                data-testid="agent-builder-name-input"
+                value={name}
+                onChange={(event) => onNameChange(event.target.value)}
+                placeholder="我的前端 Agent"
+              />
+            </label>
+
+            <label className="agent-builder-field">
+              <span>首选 Adapter</span>
+              <select
+                data-testid="agent-builder-preferred-adapter"
+                value={preferredAdapterType}
+                onChange={(event) => onPreferredAdapterChange(event.target.value)}
+              >
+                {adapterOptions.map((option) => (
+                  <option key={option.adapterType} value={option.adapterType}>
+                    {displayAdapterName(option.adapterType)} - {displayStatus(option.status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <label className="agent-builder-field">
-            <span>Agent 名称</span>
+            <span>能力标签</span>
             <input
-              data-testid="agent-builder-name-input"
-              value={name}
-              onChange={(event) => onNameChange(event.target.value)}
-              placeholder="我的前端 Agent"
+              data-testid="agent-builder-capability-tags"
+              value={capabilityTags}
+              onChange={(event) => onCapabilityTagsChange(event.target.value)}
+              placeholder="React, UI, CSS"
             />
           </label>
 
+          <fieldset className="agent-builder-capability-fieldset">
+            <legend>工具能力</legend>
+            <p>这些能力会写入 toolTags，并参与后端 Router 的能力匹配。</p>
+            <div className="tool-capability-grid">
+              {TOOL_CAPABILITY_OPTIONS.map((option) => {
+                const checked = selectedToolCapabilities.includes(option.key);
+                return (
+                  <label
+                    className={`tool-capability-card${checked ? " tool-capability-card--selected" : ""}`}
+                    data-testid={`tool-capability-${option.key}`}
+                    key={option.key}
+                  >
+                    <input type="checkbox" checked={checked} onChange={() => onToggleToolCapability(option.key)} />
+                    <span>
+                      <strong>{option.label}</strong>
+                      <small>{option.key}</small>
+                    </span>
+                    <em>{option.description}</em>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
           <label className="agent-builder-field">
-            <span>头像 URL</span>
+            <span>自定义工具能力</span>
             <input
-              data-testid="agent-builder-avatar-url"
-              value={avatarUrl}
-              onChange={(event) => onAvatarUrlChange(event.target.value)}
-              placeholder="https://example.com/avatar.png"
+              data-testid="agent-builder-tool-tags"
+              value={toolTags}
+              onChange={(event) => onToolTagsChange(event.target.value)}
+              placeholder="例如：security, ppt_review, data_quality；会与上方勾选能力合并"
             />
           </label>
+
+          <div className="tool-capability-resolved">
+            <span>路由能力映射</span>
+            <div className="tag-row">
+              {resolvedCapabilityNames.length > 0 ? (
+                resolvedCapabilityNames.map((capability) => (
+                  <span className="agent-tag agent-tag--tool" key={`resolved-${capability}`}>
+                    {capability}
+                  </span>
+                ))
+              ) : (
+                <span className="agent-builder-muted">未选择时，后端会按通用 Agent 处理。</span>
+              )}
+            </div>
+          </div>
 
           <details className="agenthub-disclosure agent-builder-advanced-config" data-testid="agent-builder-advanced-config">
             <summary>
               <span>高级配置</span>
-              <small>System Prompt / Tool Capability / Adapter policy</small>
+              <small>System Prompt / 头像 URL / Adapter policy</small>
             </summary>
 
             <label className="agent-builder-field">
@@ -233,85 +298,18 @@ export function CreateAgentSection({
             </label>
 
             <label className="agent-builder-field">
-              <span>能力标签</span>
+              <span>头像 URL</span>
               <input
-                data-testid="agent-builder-capability-tags"
-                value={capabilityTags}
-                onChange={(event) => onCapabilityTagsChange(event.target.value)}
-                placeholder="React, UI, CSS"
+                data-testid="agent-builder-avatar-url"
+                value={avatarUrl}
+                onChange={(event) => onAvatarUrlChange(event.target.value)}
+                placeholder="https://example.com/avatar.png"
               />
-            </label>
-
-            <fieldset className="agent-builder-capability-fieldset">
-              <legend>Tool Capability</legend>
-              <p>这些标签会写入 toolTags，并参与后端 Router 的能力匹配。</p>
-              <div className="tool-capability-grid">
-                {TOOL_CAPABILITY_OPTIONS.map((option) => {
-                  const checked = selectedToolCapabilities.includes(option.key);
-                  return (
-                    <label
-                      className={`tool-capability-card${checked ? " tool-capability-card--selected" : ""}`}
-                      data-testid={`tool-capability-${option.key}`}
-                      key={option.key}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => onToggleToolCapability(option.key)}
-                      />
-                      <span>
-                        <strong>{option.label}</strong>
-                        <small>{option.key}</small>
-                      </span>
-                      <em>{option.description}</em>
-                    </label>
-                  );
-                })}
-              </div>
-              <div className="tool-capability-resolved">
-                <span>路由能力映射</span>
-                <div className="tag-row">
-                  {resolvedCapabilityNames.length > 0 ? (
-                    resolvedCapabilityNames.map((capability) => (
-                      <span className="agent-tag agent-tag--tool" key={`resolved-${capability}`}>
-                        {capability}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="agent-builder-muted">未选择时，后端会按通用 Agent 处理。</span>
-                  )}
-                </div>
-              </div>
-            </fieldset>
-
-            <label className="agent-builder-field">
-              <span>兼容工具标签（可选）</span>
-              <input
-                data-testid="agent-builder-tool-tags"
-                value={toolTags}
-                onChange={(event) => onToolTagsChange(event.target.value)}
-                placeholder="例如 schema, task_planner；会与上方选择合并写入 toolTags"
-              />
-            </label>
-
-            <label className="agent-builder-field">
-              <span>首选 Adapter</span>
-              <select
-                data-testid="agent-builder-preferred-adapter"
-                value={preferredAdapterType}
-                onChange={(event) => onPreferredAdapterChange(event.target.value)}
-              >
-                {adapterOptions.map((option) => (
-                  <option key={option.adapterType} value={option.adapterType}>
-                    {option.adapterType} - {displayStatus(option.status)}
-                  </option>
-                ))}
-              </select>
             </label>
 
             <div className="agent-builder-adapter-card">
               <div className="agent-builder-adapter-status">
-                <strong>{selectedAdapterDescriptor?.adapterType || preferredAdapterType}</strong>
+                <strong>{displayAdapterName(selectedAdapterDescriptor?.adapterType || preferredAdapterType)}</strong>
                 <span
                   className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(
                     selectedAdapterDescriptor?.status || "unknown"
@@ -326,7 +324,7 @@ export function CreateAgentSection({
               </div>
               {selectedAdapterDescriptor?.failureReason ? (
                 <div className="agent-builder-adapter-note agent-builder-adapter-note--warning">
-                  {selectedAdapterDescriptor.failureReason}
+                  {sanitizeProductionText(selectedAdapterDescriptor.failureReason)}
                 </div>
               ) : null}
             </div>
@@ -346,27 +344,21 @@ export function CreateAgentSection({
           <p>{systemPrompt.trim() || "填写 System Prompt 后，这里展示 Agent 的职责、行为边界和协作方式。"}</p>
           <div className="tag-row">
             {parseTags(capabilityTags).map((tag) => (
-              <span className="agent-tag" key={`preview-cap-${tag}`}>{tag}</span>
+              <span className="agent-tag" key={`preview-cap-${tag}`}>
+                {tag}
+              </span>
             ))}
           </div>
           <div className="tag-row">
             {effectiveToolTags.map((tag) => (
-              <span className="agent-tag agent-tag--tool" key={`preview-tool-${tag}`}>{tag}</span>
+              <span className="agent-tag agent-tag--tool" key={`preview-tool-${tag}`}>
+                {tag}
+              </span>
             ))}
           </div>
+          {createdAgent ? <p className="agent-builder-muted">最近创建：{createdAgent.name}</p> : null}
         </aside>
       </div>
-
-      {createdAgent ? (
-        <div className="builder-summary">
-          <h2>已创建 Agent 摘要</h2>
-          <p><strong>名称：</strong> {createdAgent.name}</p>
-          <p><strong>角色：</strong> {displayAgentRole(createdAgent.role)}</p>
-          <p><strong>首选 Adapter：</strong> {createdAgent.preferredAdapterType || "MOCK"}</p>
-          <p><strong>能力标签：</strong> {createdAgent.capabilityTags.join(", ") || "无"}</p>
-          <p><strong>工具标签：</strong> {createdAgent.toolTags.join(", ") || "无"}</p>
-        </div>
-      ) : null}
     </section>
   );
 }

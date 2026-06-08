@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { AdapterDescriptor, Agent } from "./agentTypes";
 import { formatId } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayAdapterName, sanitizeProductionText } from "../../utils/productionLabels";
 
 interface AgentListProps {
   agents: Agent[];
@@ -52,7 +53,7 @@ function getAgentAvailabilityLabel(agent: Agent, descriptor: AdapterDescriptor |
     return "在线可路由";
   }
   if (agent.status === "ACTIVE") {
-    return "可用，必要时 fallback";
+    return "可用，必要时切换备用路径";
   }
   return "待配置";
 }
@@ -75,8 +76,8 @@ function getAdapterIntegrationProfile(adapterType?: string | null): { label: str
   }
 
   return {
-    label: "Fallback",
-    description: "稳定演示安全网",
+    label: "备用路径",
+    description: "本地稳定兜底能力",
     className: "agent-integration-pill--fallback"
   };
 }
@@ -144,7 +145,7 @@ export function AgentList({
         <div className="im-list-tools__chips" aria-label="Agent capabilities">
           <span>@Agent</span>
           <span>工具能力</span>
-          <span>Adapter fallback</span>
+          <span>备用路径</span>
         </div>
       </div>
 
@@ -175,7 +176,7 @@ export function AgentList({
                   <div className="agent-avatar-placeholder">{getInitial(agent.name)}</div>
                 )}
                 <div className="agent-item__identity-text">
-                  <strong>{agent.name}</strong>
+                  <strong>{sanitizeProductionText(agent.name)}</strong>
                   <div className="agent-item__meta">{displayAgentRole(agent.role)}</div>
                 </div>
               </div>
@@ -183,10 +184,10 @@ export function AgentList({
                 {displayStatus(agent.status)}
               </span>
             </div>
-            <div className="agent-item__description">{agent.description}</div>
+            <div className="agent-item__description">{sanitizeProductionText(agent.description)}</div>
             <div className="agent-im-strip">
               <strong>{getAgentAvailabilityLabel(agent, adapterDescriptor)}</strong>
-              <span>{agent.preferredAdapterType || "MOCK"}</span>
+              <span>{displayAdapterName(agent.preferredAdapterType || "MOCK")}</span>
             </div>
             <div className={`agent-integration-pill ${integrationProfile.className}`}>
               <strong>{integrationProfile.label}</strong>
@@ -204,10 +205,10 @@ export function AgentList({
                   {displayStatus(adapterDescriptor.status)}
                 </span>
                 <span className="agent-adapter-health__hint">
-                  路由画像：{adapterDescriptor.routeAttempts ?? 0} 次 / 成功 {formatRate(adapterDescriptor.successRate)} / fallback {formatRate(adapterDescriptor.fallbackRate)}
+                  路由画像：{adapterDescriptor.routeAttempts ?? 0} 次 / 成功 {formatRate(adapterDescriptor.successRate)} / 备用路径 {formatRate(adapterDescriptor.fallbackRate)}
                 </span>
                 {adapterDescriptor.status !== "AVAILABLE" ? (
-                  <span className="agent-adapter-health__hint">不可用时会回退到 MOCK。</span>
+                  <span className="agent-adapter-health__hint">不可用时会切换本地备用路径。</span>
                 ) : null}
               </div>
             ) : null}

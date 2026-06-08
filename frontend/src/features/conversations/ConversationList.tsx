@@ -1,6 +1,8 @@
+import { useEffect, useState, type MouseEvent } from "react";
 import type { Conversation } from "./conversationTypes";
 import { formatId, getIdValue } from "../../utils/id";
 import { displayConversationType } from "../../utils/displayLabels";
+import { sanitizeProductionText } from "../../utils/productionLabels";
 
 export type ConversationFilter = "ALL" | "UNREAD" | "PINNED" | "ARCHIVED";
 
@@ -18,16 +20,28 @@ interface ConversationListProps {
   onRestore: (conversation: Conversation) => void;
 }
 
+interface ContextMenuState {
+  conversation: Conversation;
+  x: number;
+  y: number;
+}
+
 function formatDateTime(value?: string | null): string {
   if (!value) {
     return "-";
   }
-
   return new Date(value).toLocaleString();
 }
 
 function getActivityTime(conversation: Conversation): string {
   return conversation.lastMessageAt || conversation.updatedAt || conversation.createdAt;
+}
+
+function getConversationModeLabel(conversation: Conversation): string {
+  if (conversation.type === "GROUP") {
+    return "多 Agent 群聊";
+  }
+  return "单 Agent 对话";
 }
 
 export function ConversationList({
@@ -43,9 +57,28 @@ export function ConversationList({
   onArchive,
   onRestore
 }: ConversationListProps) {
-  if (loading) {
-    return <div className="panel-empty">正在加载会话...</div>;
-  }
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  useEffect(() => {
+    function closeContextMenu() {
+      setContextMenu(null);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeContextMenu();
+      }
+    }
+
+    document.addEventListener("click", closeContextMenu);
+    document.addEventListener("scroll", closeContextMenu, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", closeContextMenu);
+      document.removeEventListener("scroll", closeContextMenu, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const activeConversations = conversations.filter((conversation) => !conversation.archived);
   const archivedConversations = conversations.filter((conversation) => conversation.archived);
@@ -69,6 +102,38 @@ export function ConversationList({
     { key: "PINNED", label: "置顶", count: pinnedConversations.length },
     { key: "ARCHIVED", label: "归档", count: archivedConversations.length }
   ];
+
+  function openContextMenu(event: MouseEvent, conversation: Conversation) {
+    event.preventDefault();
+    const sidebarRect = event.currentTarget.closest(".workspace-sidebar")?.getBoundingClientRect();
+    const menuWidth = 176;
+    const menuHeight = 150;
+    const leftBoundary = (sidebarRect?.left ?? 0) + 8;
+    const rightBoundary = (sidebarRect?.right ?? window.innerWidth) - menuWidth - 8;
+    const topBoundary = (sidebarRect?.top ?? 0) + 8;
+    const bottomBoundary = window.innerHeight - menuHeight - 8;
+    setContextMenu({
+      conversation,
+      x: Math.max(leftBoundary, Math.min(event.clientX, rightBoundary)),
+      y: Math.max(topBoundary, Math.min(event.clientY, bottomBoundary))
+    });
+  }
+
+  function handleContextAction(action: "pin" | "delete" | "restore") {
+    if (!contextMenu) {
+      return;
+    }
+
+    const { conversation } = contextMenu;
+    setContextMenu(null);
+    if (action === "pin") {
+      onTogglePinned(conversation);
+    } else if (action === "restore") {
+      onRestore(conversation);
+    } else {
+      onArchive(conversation);
+    }
+  }
 
   return (
     <div className="conversation-list conversation-list--im" data-testid="conversation-list">
@@ -110,27 +175,23 @@ export function ConversationList({
             </button>
           ))}
         </div>
-        <div className="im-list-tools__chips" aria-label="Conversation capabilities">
-          <span>最近活跃</span>
-          <span>置顶优先</span>
-          <span>未读追踪</span>
-        </div>
         <div className="conversation-list-status" data-testid="conversation-list-status">
           <span>{visibleConversations.length} 条可见</span>
-          <span>{query ? "服务端搜索中" : "最近活跃排序"}</span>
-          <span>{filter === "ARCHIVED" ? "归档视图" : "默认隐藏归档"}</span>
+          <span>{loading ? "正在同步" : query ? "搜索结果" : "最近活跃排序"}</span>
         </div>
       </div>
 
-      {visibleConversations.length === 0 ? (
+      {loading && conversations.length === 0 ? <div className="panel-empty">正在加载会话...</div> : null}
+
+      {visibleConversations.length === 0 && !loading ? (
         <div className="conversation-empty-im" aria-label="Conversation empty examples">
           <div className="conversation-empty-im__eyebrow">{query || filter !== "ALL" ? "未找到匹配会话" : "暂无会话"}</div>
-          <strong>{query || filter !== "ALL" ? "换个关键词或切回全部会话。" : "点击“新建对话”开始一次协作。"}</strong>
-          <p>发送任务后，这里只展示真实会话；未读、置顶、归档状态来自后端数据，不再用假会话占位。</p>
+          <strong>{query || filter !== "ALL" ? "换个关键词或切回全部会话。" : "点击“新建会话”开始一次协作。"}</strong>
+          <p>发送任务后，这里只展示真实会话；未读、置顶、归档状态来自后端数据。</p>
           <div className="conversation-empty-im__hints">
             <span>搜索 Agent / 消息</span>
             <span>置顶关键协作</span>
-            <span>归档后可恢复</span>
+            <span>右键删除会话</span>
           </div>
         </div>
       ) : null}
@@ -157,14 +218,15 @@ export function ConversationList({
               .join(" ")}
             data-testid="conversation-item"
             data-conversation-id={conversationId}
+            onContextMenu={(event) => openContextMenu(event, conversation)}
           >
             <button type="button" className="conversation-item__main" onClick={() => onSelect(conversationId)}>
               <div className="conversation-item__row">
                 <div className="conversation-item__identity">
                   <span className="conversation-avatar">{conversation.type === "GROUP" ? "群" : "单"}</span>
                   <div>
-                    <strong>{conversation.title}</strong>
-                    <small>{participantCount > 1 ? "多 Agent 群聊" : "单聊 / 指定 Agent"}</small>
+                    <strong>{sanitizeProductionText(conversation.title)}</strong>
+                    <small>{getConversationModeLabel(conversation)}</small>
                   </div>
                 </div>
                 <span className="conversation-item__type">{displayConversationType(conversation.type)}</span>
@@ -216,6 +278,34 @@ export function ConversationList({
           </article>
         );
       })}
+
+      {contextMenu ? (
+        <div
+          className="conversation-context-menu"
+          role="menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button type="button" role="menuitem" onClick={() => handleContextAction("pin")}>
+            {contextMenu.conversation.pinned ? "取消置顶" : "置顶会话"}
+          </button>
+          {contextMenu.conversation.archived ? (
+            <button type="button" role="menuitem" onClick={() => handleContextAction("restore")}>
+              恢复会话
+            </button>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              className="conversation-context-menu__danger"
+              onClick={() => handleContextAction("delete")}
+            >
+              删除会话
+            </button>
+          )}
+          <small>当前删除会移动到归档，可在“归档”中恢复。</small>
+        </div>
+      ) : null}
     </div>
   );
 }

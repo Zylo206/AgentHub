@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ActionAuditLog } from "./auditTypes";
+import { sanitizeProductionText } from "../../utils/productionLabels";
 
 interface ActionAuditTimelinePanelProps {
   audits: ActionAuditLog[];
@@ -21,16 +22,16 @@ function getAuditLabel(actionType: string): string {
   const labels: Record<string, string> = {
     APPROVE_APPLY_DIFF: "确认应用 Diff",
     APPROVE_FORCE_APPLY_DIFF: "确认强制应用 Diff",
-    APPROVE_DEMO_DEPLOY: "确认部署",
+    APPROVE_DEMO_DEPLOY: "确认生成预览",
     APPROVE_RESTORE_SNAPSHOT: "确认恢复快照",
     APPLY_DIFF: "应用 Diff",
-    DEMO_DEPLOY: "静态部署",
+    DEMO_DEPLOY: "生成本地预览",
     RESTORE_SNAPSHOT: "恢复快照",
     DEMO_REVISION: "产物修改",
-    SMOKE_APPROVAL_GATE: "Smoke 审批验证"
+    SMOKE_APPROVAL_GATE: "审批链路验证"
   };
 
-  return labels[actionType] || actionType;
+  return labels[actionType] || sanitizeProductionText(actionType);
 }
 
 export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelProps) {
@@ -45,8 +46,8 @@ export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelPro
     <section className="action-audit-panel" data-testid="action-audit-panel">
       <div className="section-header">
         <div>
-          <h3>Action Audit</h3>
-          <p>确认、取消、Apply Diff、Deploy、Restore 的操作审计时间线。</p>
+          <h3>操作审计</h3>
+          <p>记录审批、应用 Diff、生成预览和恢复快照等高风险操作。</p>
         </div>
         <button
           type="button"
@@ -59,7 +60,7 @@ export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelPro
       </div>
 
       {audits.length === 0 ? (
-        <div className="context-panel__empty">暂无 Action Audit。执行 Apply Diff、Deploy 或 Restore 后会出现审计记录。</div>
+        <div className="context-panel__empty">暂无操作审计。执行 Apply Diff、生成预览或 Restore 后会出现审计记录。</div>
       ) : (
         <>
           {!expanded && latestAudit ? (
@@ -69,12 +70,12 @@ export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelPro
                 <div className="action-audit-card__header">
                   <strong>{getAuditLabel(latestAudit.actionType)}</strong>
                   <span className={`action-audit-status action-audit-status--${normalizeAuditStatus(latestAudit.status)}`}>
-                    {latestAudit.status}
+                    {sanitizeProductionText(latestAudit.status)}
                   </span>
                 </div>
-                <p>{latestAudit.summary}</p>
+                <p>{sanitizeProductionText(latestAudit.summary)}</p>
                 <div className="action-audit-card__meta">
-                  <span>{latestAudit.targetType}: {latestAudit.targetId}</span>
+                  <span>{sanitizeProductionText(latestAudit.targetType)}: {latestAudit.targetId}</span>
                   <span>{formatDateTime(latestAudit.createdAt)}</span>
                 </div>
               </div>
@@ -90,12 +91,12 @@ export function ActionAuditTimelinePanel({ audits }: ActionAuditTimelinePanelPro
                     <div className="action-audit-card__header">
                       <strong>{getAuditLabel(audit.actionType)}</strong>
                       <span className={`action-audit-status action-audit-status--${normalizeAuditStatus(audit.status)}`}>
-                        {audit.status}
+                        {sanitizeProductionText(audit.status)}
                       </span>
                     </div>
-                    <p>{audit.summary}</p>
+                    <p>{sanitizeProductionText(audit.summary)}</p>
                     <div className="action-audit-card__meta">
-                      <span>{audit.targetType}: {audit.targetId}</span>
+                      <span>{sanitizeProductionText(audit.targetType)}: {audit.targetId}</span>
                       <span>{formatDateTime(audit.createdAt)}</span>
                       <span>ID: {audit.auditId}</span>
                     </div>

@@ -2,6 +2,7 @@ import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes"
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import type { Message, TaskRun } from "../../features/chat/chatTypes";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import { displayAdapterName } from "../../utils/productionLabels";
 import { getIdValue } from "../../utils/id";
 
 interface WorkspaceSessionParticipant {
@@ -139,7 +140,7 @@ export function WorkspaceSessionSummary({
                 ? `${lastUserTargetCount} 个 @Agent`
                 : "Orchestrator"}
           </strong>
-          <small>{selectedAgent ? selectedAgent.preferredAdapterType || "MOCK fallback" : "自动分派 / 多 Agent"}</small>
+          <small>{selectedAgent ? displayAdapterName(selectedAgent.preferredAdapterType || "MOCK") : "自动分派 / 多 Agent"}</small>
         </article>
         <article>
           <span>上下文连续</span>

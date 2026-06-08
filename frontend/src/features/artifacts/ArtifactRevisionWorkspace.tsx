@@ -81,10 +81,8 @@ export function ArtifactRevisionWorkspace({
       <section className="artifact-content-editor" data-testid="artifact-content-editor-panel">
         <div className="artifact-content-editor__header">
           <div>
-            <strong>内容编辑 / 局部修改</strong>
-            <p>
-              编辑不会直接覆盖当前 Artifact。系统会先生成 Draft Revision，再通过 Diff Preview 和 Approval Gate 应用。
-            </p>
+            <strong>轻量编辑 / 局部修改</strong>
+            <p>编辑不会直接覆盖当前 Artifact。系统会先生成 Draft Revision，再通过 Diff 与审批链路应用。</p>
           </div>
           <button
             type="button"
@@ -108,7 +106,7 @@ export function ArtifactRevisionWorkspace({
               <span className="artifact-content-editor__chip">
                 {draftSelection
                   ? `已选中第 ${draftSelection.startLine}-${draftSelection.endLine} 行`
-                  : "可直接选择 textarea 中的片段"}
+                  : "可直接选择文本片段"}
               </span>
               <span className="artifact-content-editor__chip">
                 {draftDiffPreview?.hasChanges
@@ -116,9 +114,7 @@ export function ArtifactRevisionWorkspace({
                   : "尚未修改内容"}
               </span>
               {draftDiffPreview?.firstChangedLine ? (
-                <span className="artifact-content-editor__chip">
-                  首个变化行：{draftDiffPreview.firstChangedLine}
-                </span>
+                <span className="artifact-content-editor__chip">首个变化行：{draftDiffPreview.firstChangedLine}</span>
               ) : null}
             </div>
             <textarea
@@ -139,7 +135,7 @@ export function ArtifactRevisionWorkspace({
                 data-testid="artifact-local-revision-note"
                 value={draftNote}
                 disabled={revisingArtifact}
-                placeholder="例如：只把选中片段改成带错误态的表单校验，并保持现有 API 不变。"
+                placeholder="例如：只调整选中片段的表单校验文案，并保持现有 API 不变。"
                 onChange={(event) => onDraftNoteChange(event.target.value)}
               />
             </div>
@@ -148,10 +144,7 @@ export function ArtifactRevisionWorkspace({
                 <span>Draft Diff Preview</span>
                 <strong>{draftDiffPreview?.hasChanges ? "已检测到本地草稿变更" : "等待编辑或选区说明"}</strong>
               </div>
-              <p>
-                生成 Draft Revision 后，请在下方 Diff Summary 审查真实行级 diff；Apply / Force Apply
-                仍必须经过后端 Approval Gate。
-              </p>
+              <p>生成 Draft Revision 后，请在下方 Diff 摘要审查真实行级差异；Apply / Force Apply 仍必须经过后端审批。</p>
             </div>
             <button
               type="button"
@@ -169,26 +162,28 @@ export function ArtifactRevisionWorkspace({
               disabled={!canSendSelectionToChat || !draftContent.trim()}
               onClick={onSendSelectionToChat}
             >
-              带选区到聊天框修改
+              带选区发送到聊天修改
             </button>
           </>
         ) : (
           <div className="artifact-content-editor__idle">
-            <span>支持完整内容编辑，也支持选中片段 / 行号范围后带说明发起局部 Revision。</span>
+            <span>支持完整内容编辑，也支持选中文本片段后发起局部 Revision。</span>
             <span>当前 Artifact：{formatArtifactSize(artifact.content)}</span>
           </div>
         )}
       </section>
+
       <div className="artifact-revision-box">
         <div className="artifact-revision-box__header">
-          <strong>产物二次修改</strong>
-          <span>本地静态迭代，不代表真实云部署</span>
+          <strong>对话式二次修改</strong>
+          <span>生成本地 Draft Revision，不代表真实云部署或外部发布。</span>
         </div>
         <textarea
           className="artifact-revision-box__input"
           value={revisionInstruction}
           disabled={revisingArtifact}
           onChange={(event) => onRevisionInstructionChange(event.target.value)}
+          placeholder="描述你希望 Agent 如何修改当前产物。"
         />
         <button
           type="button"
@@ -199,6 +194,7 @@ export function ArtifactRevisionWorkspace({
           {revisingArtifact ? "修改中..." : "修改选中产物"}
         </button>
       </div>
+
       <DiffSummaryPanel
         artifacts={allArtifacts}
         artifact={artifact}

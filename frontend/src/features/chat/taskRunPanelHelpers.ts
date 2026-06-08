@@ -260,8 +260,8 @@ export function getPlannerDisplay(taskRun: TaskRun, hasParallelExecution: boolea
         : "LLM Planner"
       : isRuleFallback
         ? hasParallelExecution
-          ? "规则 fallback / 并发执行组"
-          : "规则 fallback"
+          ? "规则备用规划 / 并发执行组"
+          : "规则备用规划"
         : hasParallelExecution
           ? "规则 Planner / 并发执行组"
           : "规则 Planner",
