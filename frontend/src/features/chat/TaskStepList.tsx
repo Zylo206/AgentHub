@@ -71,6 +71,19 @@ export function TaskStepList({
               <span>执行 Agent：{assignedAgentName}</span>
               <span>{step.producedArtifactIds.length} 个产物</span>
             </div>
+            <div className="task-step-item__meta">
+              <span>节点：{step.nodeType || "TASK_STEP"}</span>
+              <span>终态：{step.terminalStatus || step.nodeStatus || step.status}</span>
+              <span>重试：{step.retryAttempt ?? 0}</span>
+              <span>超时：{typeof step.timeoutSeconds === "number" ? `${step.timeoutSeconds}s` : "default"}</span>
+            </div>
+            {step.dependsOnStepOrders && step.dependsOnStepOrders.length > 0 ? (
+              <div className="task-step-item__meta">
+                <span>依赖 Step：{step.dependsOnStepOrders.join(", ")}</span>
+                <span>幂等键：{step.idempotencyKey || "auto"}</span>
+                <span>Lease：v{step.leaseVersion ?? 1}</span>
+              </div>
+            ) : null}
             <div className="step-adapter-meta">
               {adapterDisplay.fallbackUsed ? (
                 <div className="step-adapter-fallback">
@@ -165,6 +178,19 @@ export function TaskStepList({
                   <p>失败原因：{sanitizeProductionText(qualityGateAction.reason)}</p>
                   <p>修复路径：{sanitizeProductionText(qualityGateAction.nextStep)}</p>
                 </div>
+              ) : null}
+              {step.failureType ? (
+                <div className="step-adapter-response">
+                  <strong>失败分类：</strong> {sanitizeProductionText(step.failureType)}
+                </div>
+              ) : null}
+              {step.finalDecision ? (
+                <div className="step-adapter-response">
+                  <strong>最终决策：</strong> {sanitizeProductionText(step.finalDecision)}
+                </div>
+              ) : null}
+              {step.discardedReason ? (
+                <div className="step-adapter-error">{sanitizeProductionText(step.discardedReason)}</div>
               ) : null}
               {step.adapterErrorMessage ? (
                 <div className="step-adapter-error">{sanitizeProductionText(step.adapterErrorMessage)}</div>

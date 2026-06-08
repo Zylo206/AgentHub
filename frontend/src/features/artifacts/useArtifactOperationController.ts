@@ -4,7 +4,7 @@ import type { ArtifactSnapshot } from "./artifactSnapshotTypes";
 import { buildDiffSummary } from "./artifactLineage";
 import { getIdValue } from "../../utils/id";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus } from "../../utils/displayLabels";
-import { ApiError } from "../../api/agenthubApi";
+import { ApiError, compareArtifactDiff, type ArtifactCompareDiffResponse } from "../../api/agenthubApi";
 
 type ApprovalRisk = "LOW" | "MEDIUM" | "HIGH";
 
@@ -292,6 +292,7 @@ export function useArtifactOperationController({
   const [appliedDiffArtifactId, setAppliedDiffArtifactId] = useState<string | null>(null);
   const [diffConflictArtifactId, setDiffConflictArtifactId] = useState<string | null>(null);
   const [diffConflictMessage, setDiffConflictMessage] = useState<string | null>(null);
+  const [diffCompareResult, setDiffCompareResult] = useState<ArtifactCompareDiffResponse | null>(null);
   const [pendingApproval, setPendingApproval] = useState<ArtifactPanelApprovalRequest | null>(null);
   const [editingArtifactId, setEditingArtifactId] = useState<string | null>(null);
   const [draftContent, setDraftContent] = useState("");
@@ -370,6 +371,7 @@ export function useArtifactOperationController({
     setArtifactOperationMessage(null);
     setPendingApproval(null);
     setEditingArtifactId(null);
+    setDiffCompareResult(null);
     setDraftContent(selectedArtifact?.content || "");
     setDraftNote("");
     setDraftSelection(null);
@@ -622,6 +624,7 @@ export function useArtifactOperationController({
       setAppliedDiffArtifactId(getIdValue(appliedArtifact.id));
       setDiffConflictArtifactId(null);
       setDiffConflictMessage(null);
+      setDiffCompareResult(null);
       onSelectArtifact(getIdValue(appliedArtifact.id));
       setArtifactOperationMessage(
         `已通过后端 patch apply 生成 ${appliedArtifact.title} v${appliedArtifact.version}，可继续部署或打开 Preview。`
@@ -634,6 +637,17 @@ export function useArtifactOperationController({
 
   async function handleApplyDiffArtifact(artifact: Artifact) {
     const artifactId = getIdValue(artifact.id);
+    const parentArtifact = findParentArtifact(artifact);
+    const compareResult = await compareArtifactDiff(artifactId, {
+      baseVersion: parentArtifact?.version ?? null
+    });
+    setDiffCompareResult(compareResult);
+    if (compareResult.conflictType && compareResult.conflictType !== "NONE") {
+      setDiffConflictArtifactId(artifactId);
+      setDiffConflictMessage(compareResult.conflictReason);
+      setArtifactOperationMessage("检测到结构化冲突，已切换到冲突处置面板。");
+      return;
+    }
     await requestApproval({
       actionType: "APPLY_DIFF",
       targetType: "ARTIFACT",
@@ -658,6 +672,7 @@ export function useArtifactOperationController({
       setAppliedDiffArtifactId(getIdValue(appliedArtifact.id));
       setDiffConflictArtifactId(null);
       setDiffConflictMessage(null);
+      setDiffCompareResult(null);
       onSelectArtifact(getIdValue(appliedArtifact.id));
       setArtifactOperationMessage(
         `已强制应用 Diff，生成 ${appliedArtifact.title} v${appliedArtifact.version}。`
@@ -682,10 +697,25 @@ export function useArtifactOperationController({
     });
   }
 
+  async function handleCreateConflictResolutionRevision(mergedContent: string) {
+    if (!selectedArtifact || !selectedArtifactId || !mergedContent.trim()) {
+      return;
+    }
+    const instruction = [
+      `基于冲突处置面板，为 Artifact "${selectedArtifact.title}" v${selectedArtifact.version} 生成新的人工合并 Revision。`,
+      "以人工合并结果为准，生成新的 revision，不要直接覆盖当前 accepted artifact。",
+      `人工合并内容：\n${mergedContent}`
+    ].join("\n\n");
+    setRevisionInstruction(instruction);
+    await onCreateRevision(selectedArtifactId, instruction);
+    setArtifactOperationMessage("已基于人工合并内容创建新的 Revision。");
+  }
+
   return {
     activeInspectorTab,
     appliedDiffArtifactId,
     artifactOperationMessage,
+    diffCompareResult,
     diffConflictArtifactId,
     diffConflictMessage,
     draftContent,
@@ -705,6 +735,7 @@ export function useArtifactOperationController({
     handleConfirmApproval,
     handleCopyArtifactContent,
     handleCopyPreviewUrl,
+    handleCreateConflictResolutionRevision,
     handleCreateDeployment,
     handleCreateDraftRevision,
     handleCreateRevision,

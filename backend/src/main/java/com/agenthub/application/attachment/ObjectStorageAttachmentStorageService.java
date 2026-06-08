@@ -1,10 +1,8 @@
 package com.agenthub.application.attachment;
 
+import com.agenthub.application.storage.ObjectStorageClient;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -13,13 +11,13 @@ public class ObjectStorageAttachmentStorageService implements AttachmentStorageS
 
     public static final String PROVIDER_KEY = "OBJECT_STORAGE";
 
-    private final Path rootDir;
+    private final ObjectStorageClient objectStorageClient;
     private final String bucket;
 
     public ObjectStorageAttachmentStorageService(
-            @Value("${agenthub.attachments.object-storage.root-dir:${user.home}/.agenthub/agenthub/object-storage}") String rootDir,
+            ObjectStorageClient objectStorageClient,
             @Value("${agenthub.attachments.object-storage.bucket:attachments}") String bucket) {
-        this.rootDir = Path.of(rootDir).toAbsolutePath().normalize();
+        this.objectStorageClient = objectStorageClient;
         this.bucket = bucket == null || bucket.isBlank() ? "attachments" : bucket.trim();
     }
 
@@ -30,32 +28,17 @@ public class ObjectStorageAttachmentStorageService implements AttachmentStorageS
 
     @Override
     public StoredAttachment store(String attachmentId, String originalFileName, InputStream inputStream) throws IOException {
-        Files.createDirectories(bucketDir());
         String extension = extensionOf(originalFileName);
         String key = "attachments/" + attachmentId + extension;
-        Path target = bucketDir().resolve(key.replace('/', java.io.File.separatorChar)).normalize();
-        if (!target.startsWith(bucketDir())) {
-            throw new IOException("Resolved object-storage attachment path escapes object storage root");
-        }
-        Path parent = target.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
-        Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
-        return new StoredAttachment(target.toString(), key, providerKey());
+        byte[] bytes = inputStream.readAllBytes();
+        objectStorageClient.store(bucket, key, bytes, "application/octet-stream");
+        return new StoredAttachment("object-storage://" + bucket + "/" + key, key, providerKey());
     }
 
     @Override
-    public Path resolve(String storagePath) {
-        Path resolved = Path.of(storagePath).toAbsolutePath().normalize();
-        if (!resolved.startsWith(bucketDir())) {
-            throw new IllegalArgumentException("Object-storage attachment path escapes configured bucket directory");
-        }
-        return resolved;
-    }
-
-    private Path bucketDir() {
-        return rootDir.resolve(bucket).normalize();
+    public AttachmentContent open(String storagePath, String storageKey) throws IOException {
+        ObjectStorageClient.ObjectContent content = objectStorageClient.open(bucket, normalizeKey(storageKey, storagePath));
+        return new AttachmentContent(content.inputStream(), content.sizeBytes(), content.contentType());
     }
 
     private String extensionOf(String fileName) {
@@ -71,5 +54,22 @@ public class ObjectStorageAttachmentStorageService implements AttachmentStorageS
         }
         String extension = leaf.substring(dot);
         return extension.length() > 16 ? "" : extension.replaceAll("[^A-Za-z0-9.\\-_]", "");
+    }
+
+    private String normalizeKey(String storageKey, String storagePath) {
+        String preferred = storageKey == null || storageKey.isBlank() ? storagePath : storageKey;
+        if (preferred == null || preferred.isBlank()) {
+            throw new IllegalArgumentException("Object-storage attachment key must not be blank");
+        }
+        String normalized = preferred.replace('\\', '/').trim();
+        int schemeIndex = normalized.indexOf("://");
+        if (schemeIndex >= 0) {
+            int bucketSeparator = normalized.indexOf('/', schemeIndex + 3);
+            normalized = bucketSeparator >= 0 ? normalized.substring(bucketSeparator + 1) : "";
+        }
+        while (normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        return normalized;
     }
 }

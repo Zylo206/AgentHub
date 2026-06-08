@@ -35,6 +35,18 @@ public class ResultAggregator {
                 .filter(artifact -> artifact.getQualityStatus() == null
                         || "ACCEPTED".equals(artifact.getQualityStatus()))
                 .count();
+        long codeArtifacts = artifacts.stream().filter(artifact -> artifact.getType().name().equals("CODE")).count();
+        long docArtifacts = artifacts.stream().filter(artifact -> artifact.getType().name().equals("MARKDOWN")).count();
+        long reviewArtifacts = artifacts.stream().filter(artifact -> artifact.getType().name().equals("REVIEW_REPORT")).count();
+        String nodeDecisionSummary = steps.stream()
+                .map(step -> "step" + step.getStepOrder()
+                        + "=" + (step.getTerminalStatus() == null ? step.getStatus().name() : step.getTerminalStatus())
+                        + "@"
+                        + (step.getActualAdapterType() == null ? "MOCK" : step.getActualAdapterType())
+                        + (step.getDiscardedReason() == null || step.getDiscardedReason().isBlank()
+                                ? ""
+                                : "(discarded=" + step.getDiscardedReason() + ")"))
+                .collect(java.util.stream.Collectors.joining("; "));
         String adapterQualitySummary = " RealArtifactAccepted=" + acceptedRealArtifactCount
                 + ", StaticFallback=" + staticFallbackArtifactCount + ".";
         String adapterOutputSummary = adapterOutputArtifactCount == 0
@@ -58,6 +70,8 @@ public class ResultAggregator {
                 + selectedAgentSummary + " "
                 + fallbackSummary
                 + adapterOutputSummary
+                + " typeSummary={code=" + codeArtifacts + ", doc=" + docArtifacts + ", review=" + reviewArtifacts + "} "
+                + " nodeDecisions=[" + nodeDecisionSummary + "] "
                 + adapterQualitySummary;
     }
 

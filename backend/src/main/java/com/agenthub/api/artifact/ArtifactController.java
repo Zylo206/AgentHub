@@ -57,6 +57,14 @@ public class ArtifactController {
         return ApiResponse.success(artifactApplicationService.getArtifact(artifactId));
     }
 
+    @GetMapping("/api/artifacts/{artifactId}/compare-diff")
+    public ApiResponse<?> compareDiff(
+            @PathVariable("artifactId") String artifactId,
+            @RequestParam(value = "baseVersion", required = false) Integer baseVersion,
+            @RequestParam(value = "baseContentHash", required = false) String baseContentHash) {
+        return ApiResponse.success(artifactApplicationService.compareDiff(artifactId, baseVersion, baseContentHash));
+    }
+
     @GetMapping("/api/conversations/{conversationId}/artifact-bundle/download")
     public ResponseEntity<byte[]> downloadArtifactBundle(
             @PathVariable("conversationId") String conversationId,
@@ -143,7 +151,9 @@ public class ArtifactController {
                         result.conflictReason(),
                         result.latestAppliedArtifactId(),
                         result.snapshotId(),
-                        result.conflictBypassed()),
+                        result.conflictBypassed(),
+                        result.conflictType(),
+                        result.recommendedAction()),
                 "Artifact diff applied");
     }
 
@@ -185,7 +195,9 @@ record ApplyDiffResponse(
         String conflictReason,
         String latestAppliedArtifactId,
         String snapshotId,
-        boolean conflictBypassed) {}
+        boolean conflictBypassed,
+        String conflictType,
+        String recommendedAction) {}
 
 record ApplyDiffRequest(Boolean force, String approvalId, Integer baseVersion, String baseContentHash) {}
 

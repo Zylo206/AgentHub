@@ -1,11 +1,11 @@
 package com.agenthub.api.attachment;
 
 import com.agenthub.application.attachment.AttachmentApplicationService;
+import com.agenthub.application.attachment.AttachmentStorageService;
 import com.agenthub.application.auth.ConversationAccessService;
 import com.agenthub.common.ApiResponse;
 import com.agenthub.domain.attachment.AttachmentRecord;
-import java.nio.file.Path;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -58,15 +58,18 @@ public class AttachmentController {
     public ResponseEntity<Resource> downloadAttachment(@PathVariable("attachmentId") String attachmentId) {
         AttachmentRecord attachment = attachmentApplicationService.getAttachment(attachmentId);
         conversationAccessService.requireReadable(attachment.getConversationId().value());
-        Path storagePath = attachmentApplicationService.resolveStoragePath(attachmentId);
-        Resource resource = new FileSystemResource(storagePath);
+        AttachmentStorageService.AttachmentContent content = attachmentApplicationService.openAttachmentContent(attachmentId);
+        Resource resource = new InputStreamResource(content.inputStream());
         MediaType mediaType = MediaType.parseMediaType(
                 attachment.getContentType() == null ? "application/octet-stream" : attachment.getContentType());
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
                 .contentType(mediaType)
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + attachment.getFileName().replace("\"", "'") + "\"")
-                .body(resource);
+                        "attachment; filename=\"" + attachment.getFileName().replace("\"", "'") + "\"");
+        if (content.sizeBytes() >= 0) {
+            builder.contentLength(content.sizeBytes());
+        }
+        return builder.body(resource);
     }
 }

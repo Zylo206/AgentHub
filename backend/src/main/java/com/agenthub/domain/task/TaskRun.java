@@ -2,6 +2,7 @@ package com.agenthub.domain.task;
 
 import com.agenthub.domain.conversation.ConversationId;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 public class TaskRun {
@@ -136,6 +137,54 @@ public class TaskRun {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public List<TaskRunTimelineEntry> getTimeline() {
+        List<TaskRunTimelineEntry> entries = new ArrayList<>();
+        entries.add(new TaskRunTimelineEntry(
+                id.value() + ":run-created",
+                "RUN",
+                id.value(),
+                null,
+                null,
+                "TaskRun created",
+                taskPlan == null ? "TaskRun created." : taskPlan.getGoal(),
+                status.name(),
+                null,
+                createdAt));
+        steps.forEach(step -> entries.add(new TaskRunTimelineEntry(
+                id.value() + ":" + step.getNodeId(),
+                "NODE",
+                id.value(),
+                step.getId().value(),
+                step.getNodeId(),
+                "Node " + step.getStepOrder() + " - " + step.getNodeType(),
+                step.getFinalDecision() == null || step.getFinalDecision().isBlank()
+                        ? step.getTaskDescription()
+                        : step.getFinalDecision(),
+                step.getTerminalStatus(),
+                step.getFailureType(),
+                step.getCompletedAt() == null ? step.getUpdatedAt() : step.getCompletedAt())));
+        entries.add(new TaskRunTimelineEntry(
+                id.value() + ":run-finished",
+                "RUN",
+                id.value(),
+                null,
+                null,
+                "TaskRun finished",
+                resultSummary,
+                status.name(),
+                null,
+                updatedAt));
+        return List.copyOf(entries);
+    }
+
+    public int getRetryCount() {
+        return steps.stream()
+                .map(TaskStep::getRetryAttempt)
+                .filter(value -> value != null && value > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
     }
 
     public TaskRun withStatus(TaskRunStatus nextStatus, String nextResultSummary, Instant now) {

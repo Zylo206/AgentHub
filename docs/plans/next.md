@@ -30,6 +30,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Next`: harden real user management, persistent account storage, invite/member directory flows, and broader permission coverage for less-used maintenance endpoints.
    - `Done`: first-phase Artifact realtime collaboration is implemented for `CODE` and `MARKDOWN` drafts: REST room state, `/api/doc-collab` WebSocket sync, presence / cursor metadata, persisted room snapshots, and approval-gated publish to Artifact Revision.
    - `Done`: `doc-collab/` now implements `AGENTHUB_ARTIFACT_COLLAB_V2_YJS` as an independent Node / TypeScript service with Yjs binary updates, Y.Text content, file-backed snapshot/update recovery, optional Redis Streams + Pub/Sub fanout, and Spring permission/publish delegation.
+   - `Done`: V2 snapshot persistence now has a backend-owned manifest path: `agenthub_collab_snapshot_manifests`, backend object-storage snapshot upload/download endpoints, backend-managed object buckets, and restore order `Redis -> backend object snapshot -> local file snapshot -> update log`.
+   - `Done`: shared backend object storage is now first-class and supports both `filesystem` and real `s3` provider modes for attachment `OBJECT_STORAGE` and doc-collab snapshot persistence.
    - `Next`: add production member-management UI, richer presence details, a fuller Conflict Panel workflow for compare / force / cancel decisions, and live Redis-backed multi-node validation.
    - `Boundary`: V1 remains the local fallback protocol. V2 uses Yjs, not Automerge. Redis fanout exists behind `REDIS_URL`, but production acceptance still needs a real three-node / 20-client run.
 
@@ -53,6 +55,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace Advanced now includes an IM API provider panel for `OPENAI_COMPATIBLE`: users can configure provider name, Base URL, API key, and model at backend runtime, then select or create an API Q&A Agent for IM routing. This is remote HTTP API support, not local CLI setup.
    - `Done`: `OPENAI_COMPATIBLE` runtime config now persists through the repository boundary instead of a process-local singleton: memory mode keeps a per-user in-memory scope, and JDBC mode stores per-user config in `agenthub_adapter_runtime_configs`.
    - `Done`: JDBC runtime-config persistence now encrypts stored API keys when `AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY` is configured; the backend never returns plaintext API keys to the frontend.
+   - `Done`: `OPENAI_COMPATIBLE` runtime config now resolves `USER -> ORG -> GLOBAL`, allows admin-managed shared scopes, and records config mutations through the audit path without returning plaintext API keys.
    - Real provider validation must be opt-in and must not commit keys.
 
 2. **Maintain REAL_FIRST primary Artifact rules**
@@ -335,10 +338,19 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace Access Panel now supports PRIVATE / ORG / PUBLIC visibility, org tag, and OWNER / EDITOR / REVIEWER / VIEWER member management.
    - `Done`: Workspace conversation creation explicitly separates single-Agent chat and multi-Agent group collaboration, and passes `SINGLE` / `GROUP` to the backend.
    - `Done`: Conversation list displays the current mode as single Agent conversation or multi-Agent group chat.
-   - `Done`: doc-collab snapshot persistence can now mirror into an object-storage-style bucket layout through `DOC_COLLAB_SNAPSHOT_STORAGE_TYPE=object-storage`, while keeping local file snapshots and Redis recovery as compatible fallbacks.
+   - `Done`: local dependency helper scripts now cover `init-local-mysql`, `check-redis`, `check-object-storage`, and `init-object-storage-bucket`.
    - `Boundary`: Artifact-level realtime co-editing now exists for `CODE` / `MARKDOWN` drafts through V1 fallback and V2 Yjs. Formal Artifact mutation still uses optimistic concurrency and approval.
-   - `Boundary`: the current doc-collab object-storage path is filesystem-backed and validates the persistence boundary plus restart recovery chain; it is not yet a cloud object-storage SDK integration.
+   - `Boundary`: the shared backend object-storage layer now supports real MinIO/S3-compatible access, but it remains opt-in and is not part of the default local `memory + MOCK` runtime.
    - `Boundary`: member management uses existing demo-token users and role strings; it is not enterprise IAM / SSO.
+
+16. **Close the lightweight production loop for Task DAG and conflict handling**
+   - `Done`: `TaskGraph` now exposes explicit `nodes[]` with `nodeId / nodeType / dependsOn / retryPolicy / timeoutSeconds / idempotencyKey / fallbackStrategy / terminalStatus / retryAttempt / executionToken / leaseVersion / failureType / discardedReason / finalDecision`.
+   - `Done`: `TaskRun` now exposes a timeline view and retry count for UI and smoke replay.
+   - `Done`: compare/apply now exposes `conflictType / recommendedAction`, and stale Artifact state conflicts are written into ActionAudit with structured `conflictType=...` summaries.
+   - `Done`: Workspace TaskRun diagnostics now surface retry, fallback, conflict, discarded-result, and approval-bypass counts through `/api/conversations/{conversationId}/task-run-observability`.
+   - `Done`: Artifact Diff Summary now includes the first-phase three-column Conflict Panel and manual merge -> new revision path.
+   - `Done`: new smokes cover task DAG, run-control fields, conflict apply, aggregator explainability, observability, and a focused browser conflict flow.
+   - `Boundary`: this is still a lightweight production closure, not a general workflow DSL, semantic rebase engine, or IDE-grade merge editor.
 
 ## Not Now
 

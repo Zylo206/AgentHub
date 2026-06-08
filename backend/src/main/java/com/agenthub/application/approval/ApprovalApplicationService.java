@@ -118,6 +118,13 @@ public class ApprovalApplicationService {
             String targetType,
             String targetId) {
         if (approvalId == null || approvalId.isBlank()) {
+            actionAuditService.record(
+                    conversationId,
+                    "APPROVAL_BYPASS_ATTEMPT",
+                    targetType,
+                    targetId,
+                    "REJECTED",
+                    "approvalId is required for high-risk operation " + normalize(actionType) + ".");
             throw new IllegalArgumentException("approvalId is required for this high-risk operation.");
         }
         ApprovalRequest approvalRequest = requireApproval(approvalId);
@@ -133,15 +140,36 @@ public class ApprovalApplicationService {
                     expired.getStatus().name(),
                     "Approval request expired before execution: " + expired.getApprovalId());
             publishApprovalUpdated(expired);
+            actionAuditService.record(
+                    conversationId,
+                    "APPROVAL_BYPASS_ATTEMPT",
+                    targetType,
+                    targetId,
+                    "REJECTED",
+                    "Approval request expired before execution: " + approvalId);
             throw new IllegalStateException("Approval request is expired: " + approvalId);
         }
         if (approvalRequest.getStatus() != ApprovalStatus.APPROVED) {
+            actionAuditService.record(
+                    conversationId,
+                    "APPROVAL_BYPASS_ATTEMPT",
+                    targetType,
+                    targetId,
+                    "REJECTED",
+                    "Approval request must be APPROVED before execution: " + approvalId);
             throw new IllegalStateException("Approval request must be APPROVED before execution: " + approvalId);
         }
         if (!approvalRequest.getConversationId().equals(conversationId)
                 || !approvalRequest.getActionType().equals(normalize(actionType))
                 || !approvalRequest.getTargetType().equals(normalize(targetType))
                 || !approvalRequest.getTargetId().equals(targetId)) {
+            actionAuditService.record(
+                    conversationId,
+                    "APPROVAL_BYPASS_ATTEMPT",
+                    targetType,
+                    targetId,
+                    "REJECTED",
+                    "Approval request does not match the requested operation target: " + approvalId);
             throw new IllegalArgumentException("Approval request does not match the requested operation target.");
         }
         return approvalRequest;

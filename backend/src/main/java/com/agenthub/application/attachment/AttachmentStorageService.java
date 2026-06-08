@@ -2,7 +2,6 @@ package com.agenthub.application.attachment;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Path;
 
 public interface AttachmentStorageService {
 
@@ -10,7 +9,7 @@ public interface AttachmentStorageService {
 
     StoredAttachment store(String attachmentId, String originalFileName, InputStream inputStream) throws IOException;
 
-    Path resolve(String storagePath);
+    AttachmentContent open(String storagePath, String storageKey) throws IOException;
 
     record StoredAttachment(String storagePath, String storageKey, String storageProvider) {
 
@@ -21,5 +20,11 @@ public interface AttachmentStorageService {
         public StoredAttachment(String storagePath) {
             this(storagePath, storagePath, "LOCAL");
         }
+    }
+
+    record AttachmentContent(
+            InputStream inputStream,
+            long sizeBytes,
+            String contentType) {
     }
 }

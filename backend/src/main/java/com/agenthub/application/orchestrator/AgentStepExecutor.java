@@ -2,6 +2,7 @@ package com.agenthub.application.orchestrator;
 
 import com.agenthub.application.agent.AgentExecutorService;
 import com.agenthub.application.agent.AdapterQualityMetricsService;
+import com.agenthub.application.audit.ActionAuditService;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.application.realtime.RunCancellationRegistry;
@@ -38,10 +39,13 @@ public class AgentStepExecutor {
     private final AdapterArtifactExtractor adapterArtifactExtractor;
     private final AdapterArtifactQualityEvaluator adapterArtifactQualityEvaluator;
     private final AdapterQualityMetricsService adapterQualityMetricsService;
+    private final ActionAuditService actionAuditService;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final RunCancellationRegistry runCancellationRegistry;
+    private final TaskStepExecutionRegistry taskStepExecutionRegistry;
     private final String artifactGenerationMode;
     private final long stepDelayMillis;
+    private final int defaultStepTimeoutSeconds;
 
     public AgentStepExecutor(
             AgentExecutorService agentExecutorService,
@@ -50,30 +54,53 @@ public class AgentStepExecutor {
             AdapterArtifactExtractor adapterArtifactExtractor,
             AdapterArtifactQualityEvaluator adapterArtifactQualityEvaluator,
             AdapterQualityMetricsService adapterQualityMetricsService,
+            ActionAuditService actionAuditService,
             RealtimeEventPublisher realtimeEventPublisher,
             RunCancellationRegistry runCancellationRegistry,
+            TaskStepExecutionRegistry taskStepExecutionRegistry,
             @Value("${agenthub.orchestrator.artifact-generation-mode:HYBRID_REAL}") String artifactGenerationMode,
-            @Value("${agenthub.orchestrator.step-delay-millis:0}") long stepDelayMillis) {
+            @Value("${agenthub.orchestrator.step-delay-millis:0}") long stepDelayMillis,
+            @Value("${agenthub.orchestrator.step-timeout-seconds:90}") int defaultStepTimeoutSeconds) {
         this.agentExecutorService = agentExecutorService;
         this.idGenerator = idGenerator;
         this.artifactRepository = artifactRepository;
         this.adapterArtifactExtractor = adapterArtifactExtractor;
         this.adapterArtifactQualityEvaluator = adapterArtifactQualityEvaluator;
         this.adapterQualityMetricsService = adapterQualityMetricsService;
+        this.actionAuditService = actionAuditService;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.runCancellationRegistry = runCancellationRegistry;
+        this.taskStepExecutionRegistry = taskStepExecutionRegistry;
         this.artifactGenerationMode = normalizeArtifactGenerationMode(artifactGenerationMode);
         this.stepDelayMillis = Math.max(0, stepDelayMillis);
+        this.defaultStepTimeoutSeconds = Math.max(0, defaultStepTimeoutSeconds);
     }
 
     public TaskStep execute(StepExecutionCommand command) {
         TaskStepId stepId = new TaskStepId(idGenerator.nextId("step"));
+        String idempotencyKey = command.idempotencyKey() == null || command.idempotencyKey().isBlank()
+                ? command.taskRunId().value() + ":" + command.stepOrder()
+                : command.idempotencyKey();
+        int timeoutSeconds = command.timeoutSeconds() == null || command.timeoutSeconds() <= 0
+                ? defaultStepTimeoutSeconds
+                : command.timeoutSeconds();
+        TaskStepExecutionRegistry.LeaseTicket leaseTicket = taskStepExecutionRegistry.begin(
+                command.taskRunId().value(),
+                idempotencyKey,
+                timeoutSeconds);
+        if (!leaseTicket.accepted()) {
+            return duplicateRejectedStep(command, stepId, idempotencyKey, leaseTicket);
+        }
+        publishNodeEvent(command, stepId, "RUNNING", null, leaseTicket, null);
         if (isCancellationRequested(command)) {
-            return cancelledStep(command, stepId, controlReason(command, "Step skipped before adapter execution."));
+            return cancelledStep(command, stepId, idempotencyKey, leaseTicket, controlReason(command, "Step skipped before adapter execution."));
         }
         applyOptionalStepDelay(command, stepId);
         if (isCancellationRequested(command)) {
-            return cancelledStep(command, stepId, controlReason(command, "Step skipped after configured delay."));
+            return cancelledStep(command, stepId, idempotencyKey, leaseTicket, controlReason(command, "Step skipped after configured delay."));
+        }
+        if (!taskStepExecutionRegistry.isActive(command.taskRunId().value(), idempotencyKey, leaseTicket.executionToken())) {
+            return leaseExpiredStep(command, stepId, idempotencyKey, leaseTicket, "Step lease expired before adapter execution.");
         }
         AgentResponse adapterResponse = agentExecutorService.execute(
                 command.preferredAdapterType(),
@@ -91,7 +118,10 @@ public class AgentStepExecutor {
                         command.artifactSummaries(),
                         buildAdapterMetadata(command)));
         if (isCancellationRequested(command)) {
-            return cancelledStep(command, stepId, controlReason(command, "Step result discarded after adapter execution."));
+            return cancelledStep(command, stepId, idempotencyKey, leaseTicket, controlReason(command, "Step result discarded after adapter execution."));
+        }
+        if (!taskStepExecutionRegistry.isActive(command.taskRunId().value(), idempotencyKey, leaseTicket.executionToken())) {
+            return leaseExpiredStep(command, stepId, idempotencyKey, leaseTicket, "Step result discarded because execution lease expired.");
         }
 
         String adapterSummary = summarizeAdapterResponse(adapterResponse.content());
@@ -126,8 +156,7 @@ public class AgentStepExecutor {
                 + (adapterArtifactResult.qualityScore() == null ? "N/A" : adapterArtifactResult.qualityScore())
                 + ", qualityReason="
                 + nullSafe(adapterArtifactResult.qualityReason(), "No quality evaluation recorded.");
-
-        return new TaskStep(
+        TaskStep taskStep = new TaskStep(
                 stepId,
                 command.taskRunId(),
                 command.stepOrder(),
@@ -144,6 +173,22 @@ public class AgentStepExecutor {
                 command.parallelGroupKey(),
                 command.dependsOnStepOrders(),
                 command.routingReason(),
+                stepId.value(),
+                command.nodeType(),
+                command.retryPolicy(),
+                timeoutSeconds,
+                idempotencyKey,
+                command.fallbackStrategy(),
+                realAdapterArtifactCount > 0 ? "SUCCEEDED" : "FALLBACK",
+                realAdapterArtifactCount > 0 ? "SUCCEEDED" : "FALLBACK",
+                command.retryAttempt(),
+                leaseTicket.executionToken(),
+                leaseTicket.leaseVersion(),
+                leaseTicket.startedAt(),
+                adapterResponse.completedAt() == null ? command.now() : adapterResponse.completedAt(),
+                realAdapterArtifactCount > 0 ? null : adapterArtifactResult.parseStatus(),
+                null,
+                buildFinalDecision(command, adapterResponse, adapterArtifactResult, realAdapterArtifactCount),
                 realAdapterArtifactCount > 0,
                 nullSafe(adapterArtifactResult.parseStatus(), "NOT_ATTEMPTED"),
                 nullSafe(adapterArtifactResult.buildValidationStatus(), "NOT_EVALUATED"),
@@ -154,6 +199,9 @@ public class AgentStepExecutor {
                 producedArtifactIds,
                 command.now(),
                 command.now());
+        taskStepExecutionRegistry.complete(command.taskRunId().value(), idempotencyKey, leaseTicket.executionToken());
+        publishNodeEvent(command, stepId, taskStep.getTerminalStatus(), taskStep.getFailureType(), leaseTicket, taskStep.getFinalDecision());
+        return taskStep;
     }
 
     private void applyOptionalStepDelay(StepExecutionCommand command, TaskStepId stepId) {
@@ -202,11 +250,16 @@ public class AgentStepExecutor {
                 .orElse(prefix + " CANCEL_RUN requested.");
     }
 
-    private TaskStep cancelledStep(StepExecutionCommand command, TaskStepId stepId, String reason) {
+    private TaskStep cancelledStep(
+            StepExecutionCommand command,
+            TaskStepId stepId,
+            String idempotencyKey,
+            TaskStepExecutionRegistry.LeaseTicket leaseTicket,
+            String reason) {
         String adapterStatus = runCancellationRegistry.find(command.taskRunId().value())
                 .map(token -> "STOP_RUN".equals(token.getAction()) ? "STOPPED" : "CANCELLED")
                 .orElse("CANCELLED");
-        return new TaskStep(
+        TaskStep taskStep = new TaskStep(
                 stepId,
                 command.taskRunId(),
                 command.stepOrder(),
@@ -223,6 +276,22 @@ public class AgentStepExecutor {
                 command.parallelGroupKey(),
                 command.dependsOnStepOrders(),
                 command.routingReason(),
+                stepId.value(),
+                command.nodeType(),
+                command.retryPolicy(),
+                leaseTicket.timeoutSeconds(),
+                idempotencyKey,
+                command.fallbackStrategy(),
+                "CANCELLED",
+                "STOPPED".equals(adapterStatus) ? "STOPPED" : "CANCELLED",
+                command.retryAttempt(),
+                leaseTicket.executionToken(),
+                leaseTicket.leaseVersion(),
+                leaseTicket.startedAt(),
+                command.now(),
+                "STOPPED".equals(adapterStatus) ? "CONTROL_STOPPED" : "CONTROL_CANCELLED",
+                reason,
+                reason,
                 false,
                 "SKIPPED",
                 "SKIPPED",
@@ -233,6 +302,119 @@ public class AgentStepExecutor {
                 List.of(),
                 command.now(),
                 command.now());
+        taskStepExecutionRegistry.complete(command.taskRunId().value(), idempotencyKey, leaseTicket.executionToken());
+        recordExecutionAudit(command, "TASK_STEP_RESULT_DISCARDED", taskStep.getFailureType(), reason);
+        publishNodeEvent(command, stepId, taskStep.getTerminalStatus(), taskStep.getFailureType(), leaseTicket, reason);
+        return taskStep;
+    }
+
+    private TaskStep leaseExpiredStep(
+            StepExecutionCommand command,
+            TaskStepId stepId,
+            String idempotencyKey,
+            TaskStepExecutionRegistry.LeaseTicket leaseTicket,
+            String reason) {
+        TaskStep taskStep = new TaskStep(
+                stepId,
+                command.taskRunId(),
+                command.stepOrder(),
+                new AgentId(command.agentId()),
+                command.taskDescription(),
+                TaskStepStatus.SKIPPED,
+                command.inputContext(),
+                command.baseOutputContent() + "\n\nLease expired:\n" + reason,
+                command.preferredAdapterType().name(),
+                null,
+                "FAILED",
+                null,
+                reason,
+                command.parallelGroupKey(),
+                command.dependsOnStepOrders(),
+                command.routingReason(),
+                stepId.value(),
+                command.nodeType(),
+                command.retryPolicy(),
+                leaseTicket.timeoutSeconds(),
+                idempotencyKey,
+                command.fallbackStrategy(),
+                "FAILED",
+                "FAILED",
+                command.retryAttempt(),
+                leaseTicket.executionToken(),
+                leaseTicket.leaseVersion(),
+                leaseTicket.startedAt(),
+                command.now(),
+                "LEASE_EXPIRED",
+                reason,
+                reason,
+                false,
+                "NOT_ATTEMPTED",
+                "NOT_EVALUATED",
+                reason,
+                "REJECTED",
+                null,
+                reason,
+                List.of(),
+                command.now(),
+                command.now());
+        taskStepExecutionRegistry.complete(command.taskRunId().value(), idempotencyKey, leaseTicket.executionToken());
+        recordExecutionAudit(command, "TASK_STEP_RESULT_DISCARDED", "LEASE_EXPIRED", reason);
+        publishNodeEvent(command, stepId, taskStep.getTerminalStatus(), taskStep.getFailureType(), leaseTicket, reason);
+        return taskStep;
+    }
+
+    private TaskStep duplicateRejectedStep(
+            StepExecutionCommand command,
+            TaskStepId stepId,
+            String idempotencyKey,
+            TaskStepExecutionRegistry.LeaseTicket leaseTicket) {
+        String reason = "Duplicate step submission rejected for idempotencyKey=" + idempotencyKey + ".";
+        TaskStep taskStep = new TaskStep(
+                stepId,
+                command.taskRunId(),
+                command.stepOrder(),
+                new AgentId(command.agentId()),
+                command.taskDescription(),
+                TaskStepStatus.SKIPPED,
+                command.inputContext(),
+                command.baseOutputContent() + "\n\nDuplicate submission:\n" + reason,
+                command.preferredAdapterType().name(),
+                null,
+                "FAILED",
+                null,
+                reason,
+                command.parallelGroupKey(),
+                command.dependsOnStepOrders(),
+                command.routingReason(),
+                stepId.value(),
+                command.nodeType(),
+                command.retryPolicy(),
+                leaseTicket.timeoutSeconds(),
+                idempotencyKey,
+                command.fallbackStrategy(),
+                "FAILED",
+                "FAILED",
+                command.retryAttempt(),
+                leaseTicket.executionToken(),
+                leaseTicket.leaseVersion(),
+                leaseTicket.startedAt(),
+                command.now(),
+                "DUPLICATE_SUBMISSION_REJECTED",
+                reason,
+                reason,
+                false,
+                "NOT_ATTEMPTED",
+                "NOT_EVALUATED",
+                reason,
+                "REJECTED",
+                null,
+                reason,
+                List.of(),
+                command.now(),
+                command.now());
+        recordExecutionAudit(command, "TASK_STEP_DUPLICATE_REJECTED", "DUPLICATE_SUBMISSION_REJECTED", reason);
+        publishNodeEvent(command, stepId, taskStep.getTerminalStatus(), taskStep.getFailureType(), leaseTicket, reason);
+        return taskStep;
     }
 
     private void recordAdapterQualityObservation(
@@ -546,6 +728,60 @@ public class AgentStepExecutor {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    private String buildFinalDecision(
+            StepExecutionCommand command,
+            AgentResponse adapterResponse,
+            AdapterArtifactAppendResult adapterArtifactResult,
+            int realAdapterArtifactCount) {
+        return "nodeType=" + command.nodeType()
+                + ", preferredAdapter=" + command.preferredAdapterType().name()
+                + ", actualAdapter=" + (adapterResponse.actualAdapterType() == null ? "UNKNOWN" : adapterResponse.actualAdapterType().name())
+                + ", terminalStatus=" + (realAdapterArtifactCount > 0 ? "SUCCEEDED" : "FALLBACK")
+                + ", parseStatus=" + nullSafe(adapterArtifactResult.parseStatus(), "NOT_ATTEMPTED")
+                + ", buildValidationStatus=" + nullSafe(adapterArtifactResult.buildValidationStatus(), "NOT_EVALUATED")
+                + ", qualityStatus=" + nullSafe(adapterArtifactResult.qualityStatus(), "NOT_EVALUATED");
+    }
+
+    private void publishNodeEvent(
+            StepExecutionCommand command,
+            TaskStepId stepId,
+            String terminalStatus,
+            String failureType,
+            TaskStepExecutionRegistry.LeaseTicket leaseTicket,
+            String finalDecision) {
+        realtimeEventPublisher.publish(
+                command.conversationId(),
+                RealtimeEventType.TASK_STEP_UPDATED,
+                "TASK_STEP",
+                stepId.value(),
+                Map.ofEntries(
+                        Map.entry("taskRunId", command.taskRunId().value()),
+                        Map.entry("stepOrder", command.stepOrder()),
+                        Map.entry("nodeId", stepId.value()),
+                        Map.entry("nodeType", command.nodeType()),
+                        Map.entry("terminalStatus", terminalStatus == null ? "PENDING" : terminalStatus),
+                        Map.entry("retryAttempt", command.retryAttempt()),
+                        Map.entry("executionToken", leaseTicket.executionToken()),
+                        Map.entry("leaseVersion", leaseTicket.leaseVersion()),
+                        Map.entry("timeoutSeconds", leaseTicket.timeoutSeconds() == null ? 0 : leaseTicket.timeoutSeconds()),
+                        Map.entry("failureType", failureType == null ? "" : failureType),
+                        Map.entry("finalDecision", finalDecision == null ? "" : finalDecision)));
+    }
+
+    private void recordExecutionAudit(
+            StepExecutionCommand command,
+            String actionType,
+            String status,
+            String summary) {
+        actionAuditService.record(
+                new ConversationId(command.conversationId()),
+                actionType,
+                "TASK_STEP",
+                command.taskRunId().value() + ":" + command.stepOrder(),
+                status,
+                summary);
+    }
+
     private record AdapterArtifactAppendResult(
             List<ArtifactId> producedArtifactIds,
             List<ArtifactId> adapterArtifactIds,
@@ -581,6 +817,12 @@ public class AgentStepExecutor {
             String parallelGroupKey,
             List<Integer> dependsOnStepOrders,
             String routingReason,
+            String nodeType,
+            String retryPolicy,
+            Integer timeoutSeconds,
+            String idempotencyKey,
+            String fallbackStrategy,
+            Integer retryAttempt,
             Instant now) {
 
         public StepExecutionCommand(
@@ -619,6 +861,12 @@ public class AgentStepExecutor {
                     "GROUP_" + stepOrder,
                     List.of(),
                     "Rule-based routing",
+                    "TASK_STEP",
+                    "NO_RETRY",
+                    null,
+                    null,
+                    "STEP_FALLBACK_TO_MOCK",
+                    0,
                     now);
         }
 
@@ -627,6 +875,10 @@ public class AgentStepExecutor {
             artifactSummaries = List.copyOf(artifactSummaries);
             producedArtifactIds = List.copyOf(producedArtifactIds);
             dependsOnStepOrders = dependsOnStepOrders == null ? List.of() : List.copyOf(dependsOnStepOrders);
+            nodeType = nodeType == null || nodeType.isBlank() ? "TASK_STEP" : nodeType;
+            retryPolicy = retryPolicy == null || retryPolicy.isBlank() ? "NO_RETRY" : retryPolicy;
+            fallbackStrategy = fallbackStrategy == null || fallbackStrategy.isBlank() ? "STEP_FALLBACK_TO_MOCK" : fallbackStrategy;
+            retryAttempt = retryAttempt == null ? 0 : retryAttempt;
         }
     }
 }

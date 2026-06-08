@@ -16,6 +16,7 @@ import {
   getOrchestratorTriggerSuggestion,
   getPinnedContextsByConversation,
   getTaskRunsByConversation,
+  getTaskRunObservabilityByConversation,
   getTaskSpecsByConversation
 } from "../../api/agenthubApi";
 import type { AdapterQualityMetrics } from "../../api/agenthubApi";
@@ -28,6 +29,7 @@ import type {
   Message,
   OrchestratorTriggerSuggestion,
   StreamingPreviewState,
+  TaskRunObservabilitySummary,
   TaskRun,
   TaskSpec
 } from "../../features/chat/chatTypes";
@@ -58,6 +60,7 @@ interface UseWorkspaceDataLoadersParams {
   setMessages: Dispatch<SetStateAction<Message[]>>;
   setTaskSpecs: Dispatch<SetStateAction<TaskSpec[]>>;
   setTaskRuns: Dispatch<SetStateAction<TaskRun[]>>;
+  setTaskRunObservability: Dispatch<SetStateAction<TaskRunObservabilitySummary | null>>;
   setArtifacts: Dispatch<SetStateAction<Artifact[]>>;
   setDeployments: Dispatch<SetStateAction<DeploymentRecord[]>>;
   setArtifactSnapshots: Dispatch<SetStateAction<ArtifactSnapshot[]>>;
@@ -100,6 +103,7 @@ export function useWorkspaceDataLoaders({
   setMessages,
   setTaskSpecs,
   setTaskRuns,
+  setTaskRunObservability,
   setArtifacts,
   setDeployments,
   setArtifactSnapshots,
@@ -224,6 +228,7 @@ export function useWorkspaceDataLoaders({
           messageData,
           taskSpecData,
           taskRunData,
+          taskRunObservability,
           artifactData,
           deploymentData,
           artifactSnapshotData,
@@ -236,6 +241,7 @@ export function useWorkspaceDataLoaders({
           getMessages(conversationId),
           getTaskSpecsByConversation(conversationId),
           getTaskRunsByConversation(conversationId),
+          getTaskRunObservabilityByConversation(conversationId).catch(() => null),
           getArtifactsByConversation(conversationId),
           getDeploymentsByConversation(conversationId),
           getArtifactSnapshotsByConversation(conversationId),
@@ -249,6 +255,7 @@ export function useWorkspaceDataLoaders({
         setMessages(messageData);
         setTaskSpecs(taskSpecData);
         setTaskRuns(taskRunData);
+        setTaskRunObservability(taskRunObservability);
         setArtifacts(artifactData);
         setDeployments(deploymentData);
         setArtifactSnapshots(artifactSnapshotData);
@@ -298,7 +305,8 @@ export function useWorkspaceDataLoaders({
       setShowAllArtifacts,
       setStreamingPreviewsByStepId,
       setTaskRuns,
-      setTaskSpecs
+      setTaskSpecs,
+      setTaskRunObservability
     ]
   );
 

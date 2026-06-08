@@ -153,7 +153,7 @@ public class ArtifactApplicationService {
                     "ARTIFACT",
                     revisionArtifact.getId().value(),
                     "CONFLICT",
-                    conflictReason);
+                    "conflictType=TEXT_CONFLICT; " + conflictReason);
             return ApplyDiffResult.conflict(
                     parentArtifact.getId().value(),
                     revisionArtifact.getId().value(),
@@ -162,6 +162,8 @@ public class ArtifactApplicationService {
                     patchResult.removed(),
                     patchResult.unchanged(),
                     patchResult.changed(),
+                    "TEXT_CONFLICT",
+                    "REQUEST_APPROVAL_AND_FORCE_APPLY",
                     conflictReason);
         }
 
@@ -176,6 +178,15 @@ public class ArtifactApplicationService {
                         + revisionArtifact.getId().value()
                         + " (v" + revisionArtifact.getVersion() + ")."
                 : null;
+        if (conflictBypassed) {
+            actionAuditService.record(
+                    revisionArtifact.getConversationId(),
+                    "APPLY_DIFF",
+                    "ARTIFACT",
+                    revisionArtifact.getId().value(),
+                    "CONFLICT",
+                    "conflictType=TEXT_CONFLICT; " + conflictReason);
+        }
         Artifact appliedArtifact = new Artifact(
                 new ArtifactId(idGenerator.nextId("art")),
                 revisionArtifact.getConversationId(),
@@ -214,7 +225,68 @@ public class ArtifactApplicationService {
                 conflictReason,
                 conflictBypassed ? conflictingArtifact.getId().value() : null,
                 snapshot.getSnapshotId(),
-                conflictBypassed);
+                conflictBypassed,
+                conflictBypassed ? "TEXT_CONFLICT" : "NONE",
+                conflictBypassed ? "REQUEST_APPROVAL_AND_FORCE_APPLY" : "REQUEST_APPROVAL_AND_APPLY");
+    }
+
+    public ArtifactCompareResult compareDiff(String artifactId, Integer baseVersion, String baseContentHash) {
+        Artifact candidateArtifact = getArtifact(artifactId);
+        conversationAccessService.requireReadable(candidateArtifact.getConversationId().value());
+        if (candidateArtifact.getParentArtifactId() == null || candidateArtifact.getParentArtifactId().isBlank()) {
+            return new ArtifactCompareResult(
+                    null,
+                    artifactId,
+                    null,
+                    null,
+                    candidateArtifact.getVersion(),
+                    null,
+                    null,
+                    contentHash(candidateArtifact.getContent()),
+                    null,
+                    candidateArtifact.getContent(),
+                    null,
+                    "STRUCTURE_CONFLICT",
+                    false,
+                    true,
+                    "CREATE_NEW_REVISION",
+                    "Revision artifact has no parent artifact; compare/apply cannot continue.");
+        }
+
+        Artifact baseArtifact = getArtifact(candidateArtifact.getParentArtifactId());
+        Artifact latestAppliedArtifact = findLatestAppliedArtifact(candidateArtifact);
+        Artifact currentArtifact = latestAppliedArtifact == null ? baseArtifact : latestAppliedArtifact;
+        boolean baseVersionConflict = baseVersion != null && currentArtifact.getVersion() != baseVersion;
+        String expectedHash = baseContentHash == null ? "" : baseContentHash.trim();
+        boolean baseHashConflict = !expectedHash.isEmpty()
+                && !contentHash(currentArtifact.getContent()).equalsIgnoreCase(expectedHash);
+        boolean textConflict = latestAppliedArtifact != null || baseVersionConflict || baseHashConflict;
+        String conflictType = textConflict ? "TEXT_CONFLICT" : "NONE";
+        String recommendedAction = textConflict
+                ? "REQUEST_APPROVAL_AND_FORCE_APPLY"
+                : "REQUEST_APPROVAL_AND_APPLY";
+        String conflictReason = textConflict
+                ? latestAppliedArtifact != null
+                        ? buildConflictReason(candidateArtifact, latestAppliedArtifact)
+                        : "Current accepted artifact no longer matches the provided baseVersion/baseContentHash."
+                : "Diff can be applied on top of the current accepted artifact after approval.";
+        return new ArtifactCompareResult(
+                currentArtifact.getId().value(),
+                artifactId,
+                baseArtifact.getId().value(),
+                latestAppliedArtifact == null ? null : latestAppliedArtifact.getId().value(),
+                currentArtifact.getVersion(),
+                candidateArtifact.getVersion(),
+                contentHash(currentArtifact.getContent()),
+                contentHash(candidateArtifact.getContent()),
+                baseArtifact.getContent(),
+                candidateArtifact.getContent(),
+                currentArtifact.getContent(),
+                conflictType,
+                !textConflict,
+                true,
+                recommendedAction,
+                conflictReason);
     }
 
     public ArtifactSnapshot createSnapshot(Artifact artifact, String operationType) {
@@ -282,6 +354,19 @@ public class ArtifactApplicationService {
             String baseContentHash,
             String operation) {
         if (baseVersion != null && artifact.getVersion() != baseVersion) {
+            actionAuditService.record(
+                    artifact.getConversationId(),
+                    "ARTIFACT_STATE_CONFLICT",
+                    "ARTIFACT",
+                    artifact.getId().value(),
+                    "CONFLICT",
+                    "conflictType=TEXT_CONFLICT; Artifact conflict while attempting to "
+                            + operation
+                            + ": expected version "
+                            + baseVersion
+                            + " but current version is "
+                            + artifact.getVersion()
+                            + ".");
             throw new IllegalStateException("Artifact conflict while attempting to "
                     + operation
                     + ": expected version "
@@ -292,6 +377,15 @@ public class ArtifactApplicationService {
         }
         String normalizedHash = baseContentHash == null ? "" : baseContentHash.trim();
         if (!normalizedHash.isEmpty() && !contentHash(artifact.getContent()).equalsIgnoreCase(normalizedHash)) {
+            actionAuditService.record(
+                    artifact.getConversationId(),
+                    "ARTIFACT_STATE_CONFLICT",
+                    "ARTIFACT",
+                    artifact.getId().value(),
+                    "CONFLICT",
+                    "conflictType=TEXT_CONFLICT; Artifact conflict while attempting to "
+                            + operation
+                            + ": content changed on another device.");
             throw new IllegalStateException("Artifact conflict while attempting to "
                     + operation
                     + ": content changed on another device.");
@@ -422,7 +516,9 @@ public class ArtifactApplicationService {
             String conflictReason,
             String latestAppliedArtifactId,
             String snapshotId,
-            boolean conflictBypassed) {
+            boolean conflictBypassed,
+            String conflictType,
+            String recommendedAction) {
 
         public static ApplyDiffResult conflict(
                 String baseArtifactId,
@@ -432,6 +528,8 @@ public class ArtifactApplicationService {
                 int removedLines,
                 int unchangedLines,
                 int changedLines,
+                String conflictType,
+                String recommendedAction,
                 String conflictReason) {
             return new ApplyDiffResult(
                     null,
@@ -445,8 +543,29 @@ public class ArtifactApplicationService {
                     conflictReason,
                     latestAppliedArtifactId,
                     null,
-                    false);
+                    false,
+                    conflictType,
+                    recommendedAction);
         }
+    }
+
+    public record ArtifactCompareResult(
+            String currentArtifactId,
+            String candidateArtifactId,
+            String baseArtifactId,
+            String latestAppliedArtifactId,
+            Integer currentVersion,
+            Integer candidateVersion,
+            String currentContentHash,
+            String candidateContentHash,
+            String baseContent,
+            String candidateContent,
+            String currentContent,
+            String conflictType,
+            boolean canApplyDirectly,
+            boolean requiresApproval,
+            String recommendedAction,
+            String conflictReason) {
     }
 
     private record LinePatchResult(

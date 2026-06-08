@@ -48,7 +48,7 @@ export class RoomManager {
   private readonly agenthub = new AgentHubClient(config.agenthubApiBaseUrl);
   private readonly persistence = new FileCollabPersistence(config.storageDir);
   private readonly objectSnapshotStore = config.snapshotStorageType === "object-storage"
-    ? new ObjectSnapshotStore(config.objectStorageDir, config.objectStorageBucket)
+    ? new ObjectSnapshotStore(this.agenthub)
     : null;
   private readonly redisFanout: RedisFanout | null = config.redisUrl ? new RedisFanout(config.redisUrl) : null;
 
@@ -76,7 +76,7 @@ export class RoomManager {
     deviceId: string
   ): Promise<void> {
     const authorization = await this.agenthub.authorize(artifactId, token, "READ");
-    const room = await this.getOrCreateRoom(artifactId, authorization);
+    const room = await this.getOrCreateRoom(artifactId, authorization, token);
     const canWrite = await this.resolveWritePermission(artifactId, token);
     const client: ClientState = {
       socket,
@@ -165,7 +165,11 @@ export class RoomManager {
     }
   }
 
-  private async getOrCreateRoom(artifactId: string, authorization: AgentHubAuthorization): Promise<RoomState> {
+  private async getOrCreateRoom(
+    artifactId: string,
+    authorization: AgentHubAuthorization,
+    token: string
+  ): Promise<RoomState> {
     const existing = this.rooms.get(artifactId);
     if (existing) {
       existing.metadata = authorization;
@@ -176,8 +180,17 @@ export class RoomManager {
     const doc = new Y.Doc();
     const text = doc.getText("content");
     const redisSnapshot = this.redisFanout ? await this.redisFanout.loadSnapshot(artifactId) : null;
-    const objectSnapshot = this.objectSnapshotStore ? await this.objectSnapshotStore.loadSnapshot(artifactId) : null;
-    const snapshot = redisSnapshot ?? objectSnapshot ?? await this.persistence.loadSnapshot(artifactId);
+    let objectSnapshot: Awaited<ReturnType<ObjectSnapshotStore["loadSnapshot"]>> | null = null;
+    if (this.objectSnapshotStore) {
+      try {
+        objectSnapshot = await this.objectSnapshotStore.loadSnapshot(artifactId, token);
+      } catch (error) {
+        console.warn(`Failed to load backend snapshot for ${artifactId}; falling back to file snapshot: ${
+          error instanceof Error ? error.message : String(error)
+        }`);
+      }
+    }
+    const snapshot = redisSnapshot ?? objectSnapshot?.snapshotBytes ?? await this.persistence.loadSnapshot(artifactId);
     if (snapshot) {
       Y.applyUpdate(doc, snapshot, "snapshot");
     } else {
@@ -185,7 +198,14 @@ export class RoomManager {
       const seededSnapshot = Y.encodeStateAsUpdate(doc);
       if (this.redisFanout) {
         const saved = await this.redisFanout.saveInitialSnapshot(artifactId, seededSnapshot);
-        await this.saveSnapshot(artifactId, seededSnapshot);
+        await this.saveSnapshot(
+          artifactId,
+          seededSnapshot,
+          authorization.room.roomId,
+          authorization.protocol,
+          1,
+          token
+        );
         if (!saved) {
           const canonicalSnapshot = await this.redisFanout.loadSnapshot(artifactId);
           if (canonicalSnapshot) {
@@ -197,7 +217,14 @@ export class RoomManager {
           }
         }
       } else {
-        await this.saveSnapshot(artifactId, seededSnapshot);
+        await this.saveSnapshot(
+          artifactId,
+          seededSnapshot,
+          authorization.room.roomId,
+          authorization.protocol,
+          1,
+          token
+        );
       }
     }
 
@@ -264,16 +291,41 @@ export class RoomManager {
     }
     if (room.persistedUpdatesSinceSnapshot >= config.snapshotEveryUpdates) {
       const snapshot = Y.encodeStateAsUpdate(room.doc);
-      await this.saveSnapshot(room.artifactId, snapshot);
+      await this.saveSnapshot(
+        room.artifactId,
+        snapshot,
+        room.metadata.room.roomId,
+        room.metadata.protocol,
+        room.version,
+        this.pickWritableToken(room)
+      );
       await this.persistence.compactLog(room.artifactId);
       room.persistedUpdatesSinceSnapshot = 0;
     }
   }
 
-  private async saveSnapshot(artifactId: string, snapshot: Uint8Array): Promise<void> {
+  private async saveSnapshot(
+    artifactId: string,
+    snapshot: Uint8Array,
+    roomId: string,
+    protocol: string,
+    roomVersion: number,
+    token: string | null
+  ): Promise<void> {
     await this.persistence.saveSnapshot(artifactId, snapshot);
-    if (this.objectSnapshotStore) {
-      await this.objectSnapshotStore.saveSnapshot(artifactId, snapshot);
+    if (this.objectSnapshotStore && token) {
+      try {
+        await this.objectSnapshotStore.saveSnapshot(artifactId, token, {
+          roomId,
+          protocol,
+          roomVersion,
+          snapshotBytes: snapshot
+        });
+      } catch (error) {
+        console.warn(`Failed to persist backend snapshot for ${artifactId}; local snapshot remains authoritative fallback: ${
+          error instanceof Error ? error.message : String(error)
+        }`);
+      }
     }
     if (this.redisFanout) {
       await this.redisFanout.saveSnapshot(artifactId, snapshot);
@@ -370,5 +422,19 @@ export class RoomManager {
     if (socket.readyState === 1) {
       socket.send(JSON.stringify(payload));
     }
+  }
+
+  private pickWritableToken(room: RoomState): string | null {
+    for (const client of room.clients.values()) {
+      if (client.canWrite && client.token) {
+        return client.token;
+      }
+    }
+    for (const client of room.clients.values()) {
+      if (client.token) {
+        return client.token;
+      }
+    }
+    return null;
   }
 }

@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Artifact } from "./artifactTypes";
 import { buildDiffSummary, type LineDiffEntry } from "./artifactLineage";
 import { getIdValue } from "../../utils/id";
+import type { ArtifactCompareDiffResponse } from "../../api/agenthubApi";
 
 interface DiffSummaryPanelProps {
   artifacts: Artifact[];
   artifact: Artifact | null;
   appliedArtifactId?: string | null;
+  compareResult?: ArtifactCompareDiffResponse | null;
   conflictArtifactId?: string | null;
   conflictMessage?: string | null;
+  onCreateConflictResolutionRevision?: (mergedContent: string) => void;
   onApplyDiff?: (artifact: Artifact) => void;
   onForceApplyDiff?: (artifact: Artifact) => void;
 }
@@ -36,12 +39,15 @@ export function DiffSummaryPanel({
   artifacts,
   artifact,
   appliedArtifactId,
+  compareResult,
   conflictArtifactId,
   conflictMessage,
+  onCreateConflictResolutionRevision,
   onApplyDiff,
   onForceApplyDiff
 }: DiffSummaryPanelProps) {
   const [conflictDismissed, setConflictDismissed] = useState(false);
+  const [manualMergedContent, setManualMergedContent] = useState("");
 
   if (!artifact) {
     return null;
@@ -55,15 +61,23 @@ export function DiffSummaryPanel({
   const showConflict = hasConflict && !conflictDismissed;
   const visibleDiffEntries = summary.lineDiffEntries.slice(0, MAX_VISIBLE_DIFF_LINES);
   const hiddenLineCount = Math.max(summary.lineDiffEntries.length - visibleDiffEntries.length, 0);
+  const compareColumns = useMemo(
+    () => [
+      { label: "当前版本", value: compareResult?.currentContent || "" },
+      { label: "用户基线", value: compareResult?.baseContent || "" },
+      { label: "Agent 候选", value: compareResult?.candidateContent || artifact.content || "" }
+    ],
+    [artifact.content, compareResult]
+  );
   const riskItems = [
-    canApplyDiff ? "应用前必须经过审批，后端会记录快照和审计。" : "当前版本没有可应用的行级变更。",
+    canApplyDiff ? "Apply / Force Apply 前都必须经过审批，后端会记录快照和审计。" : "当前版本没有可应用的行级变更。",
     hasConflict
-      ? "检测到版本冲突，普通应用会被阻止；强制继续必须走审批。"
-      : "未检测到当前版本与最新已应用产物的冲突。",
+      ? "检测到版本冲突，普通 Apply 已被阻止；如果仍要继续，必须走 Force Apply 审批。"
+      : "当前未检测到最新 accepted artifact 冲突。",
     summary.hasRealLineDiff
       ? `行级影响：新增 ${summary.lineDiffStats.added} 行，删除 ${summary.lineDiffStats.removed} 行，估算修改 ${summary.lineDiffStats.changed} 处。`
-      : "没有可展示的行级影响统计。",
-    "Apply、Force Apply、Restore 都会通过 Artifact Snapshot 保留安全回滚点。"
+      : "没有可展示的行级差异统计。",
+    "Apply、Force Apply、Restore 都会通过 Artifact Snapshot 保留回滚点。"
   ];
 
   return (
@@ -78,10 +92,10 @@ export function DiffSummaryPanel({
           <strong>{isApplied ? "当前 Diff 已应用" : "应用 Diff 结果"}</strong>
           <p>
             {isApplied
-              ? "该版本已由后端应用生成，是当前工作台的已应用产物。"
+              ? "该版本已经通过后端 Apply 链路物化成新的 accepted artifact。"
               : canApplyDiff
-                ? "将当前 revision 的行级 Diff 应用到基线版本，并生成新的产物版本。"
-                : "初始版本或无行级变化时无需应用 Diff。"}
+                ? "将当前 revision 的行级 Diff 应用到基线版本，并生成新的 artifact 版本。"
+                : "初始版本或无行级变化时，不需要应用 Diff。"}
           </p>
         </div>
         <button
@@ -98,7 +112,7 @@ export function DiffSummaryPanel({
         <div className="diff-conflict-card" data-testid="artifact-conflict-panel">
           <div>
             <strong>检测到跨端版本冲突</strong>
-            <p>{conflictMessage || "已有更新的已应用产物，当前 revision 可能不是最新操作基线。"}</p>
+            <p>{conflictMessage || "已有更新的 accepted artifact，当前 revision 不再是最新操作基线。"}</p>
             <dl className="diff-conflict-card__facts">
               <div>
                 <dt>当前版本</dt>
@@ -108,14 +122,49 @@ export function DiffSummaryPanel({
               </div>
               <div>
                 <dt>操作基线</dt>
-                <dd>{summary.basedOnLabel || "未知父级产物"}</dd>
+                <dd>{summary.basedOnLabel || "未知父级 artifact"}</dd>
               </div>
               <div>
-                <dt>安全路径</dt>
-                <dd>刷新最新版本后重新审查，或走 Force Apply 审批。</dd>
+                <dt>冲突类型</dt>
+                <dd>{compareResult?.conflictType || "TEXT_CONFLICT"}</dd>
+              </div>
+              <div>
+                <dt>推荐动作</dt>
+                <dd>{compareResult?.recommendedAction || "REQUEST_APPROVAL_AND_FORCE_APPLY"}</dd>
               </div>
             </dl>
           </div>
+
+          {compareResult ? (
+            <div className="diff-conflict-columns" data-testid="artifact-conflict-columns">
+              {compareColumns.map((column) => (
+                <div className="diff-conflict-columns__column" key={column.label}>
+                  <strong>{column.label}</strong>
+                  <pre>{column.value || "(empty)"}</pre>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="diff-conflict-merge-panel">
+            <label htmlFor="artifact-manual-merge-content">人工合并结果</label>
+            <textarea
+              id="artifact-manual-merge-content"
+              data-testid="artifact-manual-merge-content"
+              value={manualMergedContent}
+              placeholder="如果你决定人工解冲，请把最终内容粘贴到这里，再生成新的 Revision。"
+              onChange={(event) => setManualMergedContent(event.target.value)}
+            />
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!manualMergedContent.trim() || !onCreateConflictResolutionRevision}
+              onClick={() => onCreateConflictResolutionRevision?.(manualMergedContent)}
+            >
+              提交人工合并为新 Revision
+            </button>
+          </div>
+
           <div className="diff-conflict-card__actions">
             <button type="button" className="secondary-button" onClick={() => window.location.reload()}>
               刷新最新版本
@@ -124,7 +173,7 @@ export function DiffSummaryPanel({
               查看差异
             </button>
             <button type="button" className="secondary-button" onClick={() => setConflictDismissed(true)}>
-              取消本次操作
+              放弃本次操作
             </button>
             <button
               type="button"
@@ -143,7 +192,7 @@ export function DiffSummaryPanel({
           <strong>应用前可信度检查</strong>
           <p>
             {hasConflict
-              ? "当前 Diff 存在冲突风险。建议先刷新最新产物，或通过 Force Apply 审批确认覆盖风险。"
+              ? "当前 Diff 存在冲突风险。建议先刷新最新版本，或通过 Force Apply 审批确认覆盖风险。"
               : "当前 Diff 可通过常规审批路径应用；系统会记录快照、审计和行级影响。"}
           </p>
         </div>
@@ -156,12 +205,12 @@ export function DiffSummaryPanel({
 
       <div className="diff-summary-section">
         <span className="diff-summary-section__label">修改指令</span>
-        <p>{summary.instruction || "该产物是初始版本。"}</p>
+        <p>{summary.instruction || "该 artifact 是初始版本。"}</p>
       </div>
 
       <div className="diff-summary-section">
         <span className="diff-summary-section__label">基于版本</span>
-        <p>{summary.basedOnLabel || "没有父级产物。"}</p>
+        <p>{summary.basedOnLabel || "没有父级 artifact。"}</p>
       </div>
 
       <div className="diff-summary-section">
@@ -221,7 +270,7 @@ export function DiffSummaryPanel({
               </div>
             ))}
           </div>
-          {hiddenLineCount > 0 ? <p>已截断展示，另有 {hiddenLineCount} 行未显示。</p> : null}
+          {hiddenLineCount > 0 ? <p>已截断显示，另有 {hiddenLineCount} 行未显示。</p> : null}
         </div>
       ) : null}
 

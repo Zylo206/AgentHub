@@ -59,6 +59,7 @@ export function WorkspaceApiProviderPanel({
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("deepseek-chat");
   const [enabled, setEnabled] = useState(true);
+  const [selectedScopeType, setSelectedScopeType] = useState("USER");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creatingAgent, setCreatingAgent] = useState(false);
@@ -74,17 +75,22 @@ export function WorkspaceApiProviderPanel({
     selectedAgent && selectedAgent.preferredAdapterType === "OPENAI_COMPATIBLE"
   );
 
+  function applyConfig(runtimeConfig: OpenAICompatibleRuntimeConfig) {
+    setConfig(runtimeConfig);
+    setEnabled(runtimeConfig.selectedScope.enabled);
+    setProviderName(runtimeConfig.selectedScope.providerName || "Custom OpenAI-compatible");
+    setBaseUrl(runtimeConfig.selectedScope.baseUrl || "");
+    setModel(runtimeConfig.selectedScope.model || "");
+    setApiKey("");
+  }
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void getOpenAICompatibleRuntimeConfig()
+    void getOpenAICompatibleRuntimeConfig(selectedScopeType)
       .then((runtimeConfig) => {
         if (cancelled) return;
-        setConfig(runtimeConfig);
-        setEnabled(runtimeConfig.enabled);
-        if (runtimeConfig.providerName) setProviderName(runtimeConfig.providerName);
-        if (runtimeConfig.baseUrl) setBaseUrl(runtimeConfig.baseUrl);
-        if (runtimeConfig.model) setModel(runtimeConfig.model);
+        applyConfig(runtimeConfig);
       })
       .catch((caughtError) => {
         if (!cancelled) setError(getErrorMessage(caughtError));
@@ -95,7 +101,7 @@ export function WorkspaceApiProviderPanel({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedScopeType]);
 
   function applyPreset(key: string) {
     const preset = PROVIDER_PRESETS.find((item) => item.key === key);
@@ -111,13 +117,14 @@ export function WorkspaceApiProviderPanel({
     setMessage(null);
     try {
       const updated = await updateOpenAICompatibleRuntimeConfig({
+        scopeType: selectedScopeType,
         enabled,
         providerName,
         baseUrl,
         apiKey,
         model
       });
-      setConfig(updated);
+      applyConfig(updated);
       setApiKey("");
       await onConfigured();
       setMessage("API 问答通道已更新。发送 IM 时选择 API Agent 即会走远程 OpenAI-compatible HTTP。");
@@ -183,6 +190,19 @@ export function WorkspaceApiProviderPanel({
         ))}
       </div>
 
+      {config?.availableScopes?.length ? (
+        <label>
+          <span>Scope</span>
+          <select value={selectedScopeType} onChange={(event) => setSelectedScopeType(event.target.value)}>
+            {config.availableScopes.map((scope) => (
+              <option key={scope} value={scope}>
+                {scope}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
       <div className="workspace-api-provider-panel__grid">
         <label>
           <span>供应商</span>
@@ -202,7 +222,7 @@ export function WorkspaceApiProviderPanel({
             type="password"
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
-            placeholder={config?.hasApiKey ? `已配置 ${config.maskedApiKey}` : "sk-..."}
+            placeholder={config?.selectedScope.hasApiKey ? `configured ${config.selectedScope.maskedApiKey}` : "sk-..."}
           />
         </label>
       </div>
@@ -213,7 +233,19 @@ export function WorkspaceApiProviderPanel({
       </label>
 
       <div className="workspace-api-provider-panel__actions">
-        <button type="button" className="primary-button" disabled={loading || saving || !providerName.trim() || !baseUrl.trim() || !model.trim()} onClick={handleSave}>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={
+            loading ||
+            saving ||
+            !config?.selectedScope.canManage ||
+            !providerName.trim() ||
+            !baseUrl.trim() ||
+            !model.trim()
+          }
+          onClick={handleSave}
+        >
           {saving ? "保存中..." : "保存 API 配置"}
         </button>
         <button type="button" className="secondary-button" disabled={creatingAgent} onClick={handlePrepareApiAgent}>
@@ -221,6 +253,20 @@ export function WorkspaceApiProviderPanel({
         </button>
       </div>
 
+      {config ? (
+        <p className="workspace-api-provider-panel__message">
+          Effective: {config.effectiveScope.scopeType}/{config.effectiveScope.scopeId}
+          {config.selectedScope.scopeType !== config.effectiveScope.scopeType ||
+          config.selectedScope.scopeId !== config.effectiveScope.scopeId
+            ? " (inherited)"
+            : ""}
+        </p>
+      ) : null}
+      {config && !config.selectedScope.canManage ? (
+        <p className="workspace-api-provider-panel__error">
+          Current user cannot edit scope {config.selectedScope.scopeType}/{config.selectedScope.scopeId}.
+        </p>
+      ) : null}
       {message ? <p className="workspace-api-provider-panel__message">{message}</p> : null}
       {error ? <p className="workspace-api-provider-panel__error">{error}</p> : null}
     </section>

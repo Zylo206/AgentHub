@@ -80,6 +80,22 @@ export interface TaskStep {
   parallelGroupKey?: string | null;
   dependsOnStepOrders?: number[];
   routingReason?: string | null;
+  nodeId?: string | null;
+  nodeType?: string | null;
+  retryPolicy?: string | null;
+  timeoutSeconds?: number | null;
+  idempotencyKey?: string | null;
+  fallbackStrategy?: string | null;
+  nodeStatus?: string | null;
+  terminalStatus?: string | null;
+  retryAttempt?: number | null;
+  executionToken?: string | null;
+  leaseVersion?: number | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  failureType?: string | null;
+  discardedReason?: string | null;
+  finalDecision?: string | null;
   realOutputUsed?: boolean;
   artifactParseStatus?: string | null;
   artifactQualityStatus?: string | null;
@@ -113,7 +129,60 @@ export interface ExecutionBatch {
 export interface TaskGraph {
   graphType: string;
   executionBatches: ExecutionBatch[];
+  nodes?: TaskGraphNode[];
   summary: string;
+}
+
+export interface TaskGraphNode {
+  nodeId: string;
+  nodeType: string;
+  stepOrder: number;
+  dependsOnNodeIds: string[];
+  retryPolicy?: string | null;
+  timeoutSeconds?: number | null;
+  idempotencyKey?: string | null;
+  fallbackStrategy?: string | null;
+  status?: string | null;
+  terminalStatus?: string | null;
+  retryAttempt?: number | null;
+  executionToken?: string | null;
+  leaseVersion?: number | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  failureType?: string | null;
+  discardedReason?: string | null;
+  finalDecision?: string | null;
+}
+
+export interface TaskRunTimelineEntry {
+  timelineId: string;
+  entryType: string;
+  taskRunId: string;
+  taskStepId?: string | null;
+  nodeId?: string | null;
+  title: string;
+  detail: string;
+  status: string;
+  failureType?: string | null;
+  createdAt: string;
+}
+
+export interface TaskRunObservabilityValueCount {
+  label: string;
+  count: number;
+}
+
+export interface TaskRunObservabilitySummary {
+  taskRunCount: number;
+  timelineEntryCount: number;
+  retryCount: number;
+  fallbackCount: number;
+  discardedResultCount: number;
+  approvalBypassAttempts: number;
+  failureTypes: TaskRunObservabilityValueCount[];
+  conflictTypes: TaskRunObservabilityValueCount[];
+  fallbackReasons: TaskRunObservabilityValueCount[];
+  discardedReasons: TaskRunObservabilityValueCount[];
 }
 
 export interface OrchestratorDecisionLog {
@@ -135,6 +204,8 @@ export interface TaskRun {
   steps: TaskStep[];
   taskGraph?: TaskGraph;
   orchestratorDecisionLog?: OrchestratorDecisionLog;
+  timeline?: TaskRunTimelineEntry[];
+  retryCount?: number;
   resultSummary: string;
   createdAt: string;
   updatedAt: string;

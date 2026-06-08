@@ -1,10 +1,16 @@
 package com.agenthub.application.agent;
 
+import com.agenthub.application.audit.ActionAuditService;
+import com.agenthub.application.auth.AccessDeniedException;
 import com.agenthub.application.auth.AuthPrincipal;
 import com.agenthub.application.auth.AuthSessionService;
 import com.agenthub.application.auth.AuthenticationRequiredException;
 import com.agenthub.common.TimeProvider;
+import com.agenthub.domain.conversation.ConversationId;
 import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -12,13 +18,16 @@ public class OpenAICompatibleRuntimeConfigService {
 
     private static final String ADAPTER_TYPE = "OPENAI_COMPATIBLE";
     private static final String USER_SCOPE = "USER";
+    private static final String ORG_SCOPE = "ORG";
     private static final String GLOBAL_SCOPE = "GLOBAL";
     private static final String GLOBAL_SCOPE_ID = "GLOBAL";
+    private static final ConversationId AUDIT_CONVERSATION_ID = new ConversationId("system:adapter-runtime-config");
 
     private final TimeProvider timeProvider;
     private final AuthSessionService authSessionService;
     private final OpenAICompatibleRuntimeConfigRepository repository;
     private final OpenAICompatibleRuntimeConfigCryptoService cryptoService;
+    private final ActionAuditService actionAuditService;
     private final String persistenceMode;
 
     public OpenAICompatibleRuntimeConfigService(
@@ -26,23 +35,42 @@ public class OpenAICompatibleRuntimeConfigService {
             AuthSessionService authSessionService,
             OpenAICompatibleRuntimeConfigRepository repository,
             OpenAICompatibleRuntimeConfigCryptoService cryptoService,
+            ActionAuditService actionAuditService,
             @org.springframework.beans.factory.annotation.Value("${agenthub.persistence.mode:memory}") String persistenceMode) {
         this.timeProvider = timeProvider;
         this.authSessionService = authSessionService;
         this.repository = repository;
         this.cryptoService = cryptoService;
+        this.actionAuditService = actionAuditService;
         this.persistenceMode = persistenceMode == null ? "memory" : persistenceMode.trim().toLowerCase();
     }
 
-    public synchronized RuntimeConfigView get() {
+    public synchronized RuntimeConfigView get(String requestedScopeType) {
         AuthPrincipal principal = authSessionService.current();
-        OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig config = loadCurrentUserConfig(principal);
-        return toView(config, principal);
+        ScopeTarget scopeTarget = resolveScopeTarget(principal, requestedScopeType);
+        OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig selected = repository.find(
+                        ADAPTER_TYPE,
+                        scopeTarget.scopeType(),
+                        scopeTarget.scopeId())
+                .orElse(OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig.empty(
+                        ADAPTER_TYPE,
+                        scopeTarget.scopeType(),
+                        scopeTarget.scopeId()));
+        ResolvedConfig effective = resolveEffectiveConfig(principal);
+        return toView(selected, scopeTarget, effective, principal);
     }
 
     public synchronized RuntimeConfigView update(UpdateRuntimeConfigCommand command) {
         AuthPrincipal principal = authSessionService.current();
-        OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig current = loadCurrentUserConfig(principal);
+        ScopeTarget scopeTarget = resolveScopeTarget(principal, command.scopeType());
+        OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig current = repository.find(
+                        ADAPTER_TYPE,
+                        scopeTarget.scopeType(),
+                        scopeTarget.scopeId())
+                .orElse(OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig.empty(
+                        ADAPTER_TYPE,
+                        scopeTarget.scopeType(),
+                        scopeTarget.scopeId()));
         String providerName = trimToDefault(command.providerName(), "Custom OpenAI-compatible");
         String baseUrl = trim(command.baseUrl());
         String model = trim(command.model());
@@ -53,8 +81,8 @@ public class OpenAICompatibleRuntimeConfigService {
         OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig saved = repository.save(
                 new OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig(
                         ADAPTER_TYPE,
-                        USER_SCOPE,
-                        principal.userId(),
+                        scopeTarget.scopeType(),
+                        scopeTarget.scopeId(),
                         enabled,
                         providerName,
                         baseUrl,
@@ -63,16 +91,23 @@ public class OpenAICompatibleRuntimeConfigService {
                         timeProvider.now(),
                         principal.userId(),
                         principal.role()));
-        return toView(saved, principal);
+        actionAuditService.record(
+                AUDIT_CONVERSATION_ID,
+                "UPSERT_ADAPTER_RUNTIME_CONFIG",
+                "ADAPTER_RUNTIME_CONFIG",
+                ADAPTER_TYPE + ":" + scopeTarget.scopeType() + ":" + scopeTarget.scopeId(),
+                "COMPLETED",
+                "Updated OpenAI-compatible runtime config for scope "
+                        + scopeTarget.scopeType() + ":" + scopeTarget.scopeId()
+                        + " with provider " + providerName + " and model " + model + ".");
+        ResolvedConfig effective = resolveEffectiveConfig(principal);
+        return toView(saved, scopeTarget, effective, principal);
     }
 
     public synchronized RuntimeConfig snapshot() {
         try {
             AuthPrincipal principal = authSessionService.current();
-            RuntimeConfig userConfig = toRuntimeConfig(loadCurrentUserConfig(principal));
-            if (userConfig.complete() || userConfig.enabled()) {
-                return userConfig;
-            }
+            return toRuntimeConfig(resolveEffectiveConfig(principal).config());
         } catch (AuthenticationRequiredException ignored) {
             // Some internal paths may not have an auth context. Fall back to global or env config.
         }
@@ -81,32 +116,45 @@ public class OpenAICompatibleRuntimeConfigService {
                 .orElse(RuntimeConfig.empty());
     }
 
-    private OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig loadCurrentUserConfig(AuthPrincipal principal) {
-        return repository.find(ADAPTER_TYPE, USER_SCOPE, principal.userId())
-                .orElse(OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig.empty(
-                        ADAPTER_TYPE,
-                        USER_SCOPE,
-                        principal.userId()));
-    }
-
     private RuntimeConfigView toView(
             OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig value,
+            ScopeTarget scopeTarget,
+            ResolvedConfig effective,
             AuthPrincipal principal) {
         return new RuntimeConfigView(
-                value.enabled(),
-                value.providerName(),
-                value.baseUrl(),
-                value.model(),
-                !value.apiKey().isBlank(),
-                mask(value.apiKey()),
-                value.updatedAt() == null ? null : value.updatedAt().toString(),
-                value.scopeType(),
-                value.scopeId(),
-                principal.userId().equals(value.scopeId()) || principal.isAdmin(),
-                "ADMIN_OR_SELF",
-                apiKeyStorageMode(),
-                value.updatedByUserId(),
-                value.updatedByRole());
+                new ScopeConfigView(
+                        value.scopeType(),
+                        value.scopeId(),
+                        !value.providerName().isBlank() || !value.baseUrl().isBlank() || !value.model().isBlank()
+                                || !value.apiKey().isBlank() || value.enabled(),
+                        value.enabled(),
+                        value.providerName(),
+                        value.baseUrl(),
+                        value.model(),
+                        !value.apiKey().isBlank(),
+                        mask(value.apiKey()),
+                        value.updatedAt() == null ? null : value.updatedAt().toString(),
+                        scopeTarget.canManage(),
+                        scopeTarget.managedByRole(),
+                        value.updatedByUserId(),
+                        value.updatedByRole()),
+                new ScopeConfigView(
+                        effective.scopeType(),
+                        effective.scopeId(),
+                        isConfigured(effective.config()),
+                        effective.config().enabled(),
+                        effective.config().providerName(),
+                        effective.config().baseUrl(),
+                        effective.config().model(),
+                        !effective.config().apiKey().isBlank(),
+                        mask(effective.config().apiKey()),
+                        effective.config().updatedAt() == null ? null : effective.config().updatedAt().toString(),
+                        principal.isAdmin() || effective.scopeType().equals(USER_SCOPE),
+                        "RESOLVED",
+                        effective.config().updatedByUserId(),
+                        effective.config().updatedByRole()),
+                availableScopes(principal),
+                apiKeyStorageMode());
     }
 
     private RuntimeConfig toRuntimeConfig(OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig value) {
@@ -145,6 +193,71 @@ public class OpenAICompatibleRuntimeConfigService {
         return value.substring(0, 3) + "..." + value.substring(value.length() - 4);
     }
 
+    private ResolvedConfig resolveEffectiveConfig(AuthPrincipal principal) {
+        Optional<OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig> userConfig = repository.find(
+                ADAPTER_TYPE,
+                USER_SCOPE,
+                principal.userId());
+        if (userConfig.isPresent()) {
+            return new ResolvedConfig(USER_SCOPE, principal.userId(), userConfig.get());
+        }
+        for (String orgTag : principal.orgTags()) {
+            Optional<OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig> orgConfig = repository.find(
+                    ADAPTER_TYPE,
+                    ORG_SCOPE,
+                    orgTag);
+            if (orgConfig.isPresent()) {
+                return new ResolvedConfig(ORG_SCOPE, orgTag, orgConfig.get());
+            }
+        }
+        return repository.find(ADAPTER_TYPE, GLOBAL_SCOPE, GLOBAL_SCOPE_ID)
+                .map(config -> new ResolvedConfig(GLOBAL_SCOPE, GLOBAL_SCOPE_ID, config))
+                .orElse(new ResolvedConfig(GLOBAL_SCOPE, GLOBAL_SCOPE_ID, OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig.empty(
+                        ADAPTER_TYPE,
+                        GLOBAL_SCOPE,
+                        GLOBAL_SCOPE_ID)));
+    }
+
+    private ScopeTarget resolveScopeTarget(AuthPrincipal principal, String requestedScopeType) {
+        String normalizedScope = requestedScopeType == null || requestedScopeType.isBlank()
+                ? USER_SCOPE
+                : requestedScopeType.trim().toUpperCase(Locale.ROOT);
+        return switch (normalizedScope) {
+            case USER_SCOPE -> new ScopeTarget(USER_SCOPE, principal.userId(), true, "SELF");
+            case ORG_SCOPE -> {
+                requireAdmin(principal, ORG_SCOPE);
+                yield new ScopeTarget(ORG_SCOPE, principal.primaryOrgTag(), true, "ADMIN");
+            }
+            case GLOBAL_SCOPE -> {
+                requireAdmin(principal, GLOBAL_SCOPE);
+                yield new ScopeTarget(GLOBAL_SCOPE, GLOBAL_SCOPE_ID, true, "ADMIN");
+            }
+            default -> throw new IllegalArgumentException("Unsupported runtime config scope: " + requestedScopeType);
+        };
+    }
+
+    private void requireAdmin(AuthPrincipal principal, String scopeType) {
+        if (principal == null || !principal.isAdmin()) {
+            throw new AccessDeniedException("Admin permission is required to manage " + scopeType + " runtime config.");
+        }
+    }
+
+    private List<String> availableScopes(AuthPrincipal principal) {
+        if (principal != null && principal.isAdmin()) {
+            return List.of(USER_SCOPE, ORG_SCOPE, GLOBAL_SCOPE);
+        }
+        return List.of(USER_SCOPE);
+    }
+
+    private boolean isConfigured(OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig value) {
+        return value != null
+                && (value.enabled()
+                || !value.providerName().isBlank()
+                || !value.baseUrl().isBlank()
+                || !value.apiKey().isBlank()
+                || !value.model().isBlank());
+    }
+
     public record RuntimeConfig(
             boolean enabled,
             String providerName,
@@ -163,6 +276,16 @@ public class OpenAICompatibleRuntimeConfigService {
     }
 
     public record RuntimeConfigView(
+            ScopeConfigView selectedScope,
+            ScopeConfigView effectiveScope,
+            List<String> availableScopes,
+            String apiKeyStorageMode) {
+    }
+
+    public record ScopeConfigView(
+            String scopeType,
+            String scopeId,
+            boolean configured,
             boolean enabled,
             String providerName,
             String baseUrl,
@@ -170,20 +293,31 @@ public class OpenAICompatibleRuntimeConfigService {
             boolean hasApiKey,
             String maskedApiKey,
             String updatedAt,
-            String scopeType,
-            String scopeId,
             boolean canManage,
             String managedByRole,
-            String apiKeyStorageMode,
             String updatedByUserId,
             String updatedByRole) {
     }
 
     public record UpdateRuntimeConfigCommand(
+            String scopeType,
             boolean enabled,
             String providerName,
             String baseUrl,
             String apiKey,
             String model) {
+    }
+
+    private record ScopeTarget(
+            String scopeType,
+            String scopeId,
+            boolean canManage,
+            String managedByRole) {
+    }
+
+    private record ResolvedConfig(
+            String scopeType,
+            String scopeId,
+            OpenAICompatibleRuntimeConfigRepository.PersistedRuntimeConfig config) {
     }
 }

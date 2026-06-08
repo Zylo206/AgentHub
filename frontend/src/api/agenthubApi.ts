@@ -14,6 +14,7 @@ import type {
   LightweightAttachment,
   Message,
   OrchestratorTriggerSuggestion,
+  TaskRunObservabilitySummary,
   TaskRun,
   TaskSpec
 } from "../features/chat/chatTypes";
@@ -141,6 +142,21 @@ export function getArtifactCollabWebSocketUrl(): string {
   return withAuthQuery(`${websocketBase}/api/doc-collab`);
 }
 
+export function compareArtifactDiff(
+  artifactId: string,
+  options: { baseVersion?: number | null; baseContentHash?: string | null } = {}
+): Promise<ArtifactCompareDiffResponse> {
+  const params = new URLSearchParams();
+  if (typeof options.baseVersion === "number") {
+    params.set("baseVersion", String(options.baseVersion));
+  }
+  if (options.baseContentHash?.trim()) {
+    params.set("baseContentHash", options.baseContentHash.trim());
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request<ArtifactCompareDiffResponse>(`/api/artifacts/${artifactId}/compare-diff${suffix}`);
+}
+
 export function getArtifactYjsCollabWebSocketUrl(artifactId: string, deviceId: string): string {
   const configuredBase = import.meta.env.VITE_DOC_COLLAB_WS_URL as string | undefined;
   const defaultBase = API_BASE.includes(":8080")
@@ -255,6 +271,27 @@ export interface ApplyDiffResponse {
   latestAppliedArtifactId?: string | null;
   snapshotId?: string | null;
   conflictBypassed: boolean;
+  conflictType?: string | null;
+  recommendedAction?: string | null;
+}
+
+export interface ArtifactCompareDiffResponse {
+  currentArtifactId?: string | null;
+  candidateArtifactId: string;
+  baseArtifactId?: string | null;
+  latestAppliedArtifactId?: string | null;
+  currentVersion?: number | null;
+  candidateVersion?: number | null;
+  currentContentHash?: string | null;
+  candidateContentHash?: string | null;
+  baseContent?: string | null;
+  candidateContent?: string | null;
+  currentContent?: string | null;
+  conflictType: string;
+  canApplyDirectly: boolean;
+  requiresApproval: boolean;
+  recommendedAction: string;
+  conflictReason: string;
 }
 
 export interface CreateAgentRequest {
@@ -321,7 +358,10 @@ export function getAdapterQualityMetrics(): Promise<AdapterQualityMetrics[]> {
   return request<AdapterQualityMetrics[]>("/api/adapters/quality-metrics");
 }
 
-export interface OpenAICompatibleRuntimeConfig {
+export interface OpenAICompatibleRuntimeConfigScopeView {
+  scopeType: string;
+  scopeId: string;
+  configured: boolean;
   enabled: boolean;
   providerName: string;
   baseUrl: string;
@@ -329,9 +369,21 @@ export interface OpenAICompatibleRuntimeConfig {
   hasApiKey: boolean;
   maskedApiKey: string;
   updatedAt?: string | null;
+  canManage: boolean;
+  managedByRole: string;
+  updatedByUserId?: string | null;
+  updatedByRole?: string | null;
+}
+
+export interface OpenAICompatibleRuntimeConfig {
+  selectedScope: OpenAICompatibleRuntimeConfigScopeView;
+  effectiveScope: OpenAICompatibleRuntimeConfigScopeView;
+  availableScopes: string[];
+  apiKeyStorageMode: string;
 }
 
 export interface UpdateOpenAICompatibleRuntimeConfigRequest {
+  scopeType?: string;
   enabled: boolean;
   providerName: string;
   baseUrl: string;
@@ -339,8 +391,9 @@ export interface UpdateOpenAICompatibleRuntimeConfigRequest {
   model: string;
 }
 
-export function getOpenAICompatibleRuntimeConfig(): Promise<OpenAICompatibleRuntimeConfig> {
-  return request<OpenAICompatibleRuntimeConfig>("/api/adapters/openai-compatible/runtime-config");
+export function getOpenAICompatibleRuntimeConfig(scopeType?: string): Promise<OpenAICompatibleRuntimeConfig> {
+  const suffix = scopeType ? `?scopeType=${encodeURIComponent(scopeType)}` : "";
+  return request<OpenAICompatibleRuntimeConfig>(`/api/adapters/openai-compatible/runtime-config${suffix}`);
 }
 
 export function updateOpenAICompatibleRuntimeConfig(
@@ -598,6 +651,12 @@ export function getTaskSpecsByConversation(conversationId: string): Promise<Task
 
 export function getTaskRunsByConversation(conversationId: string): Promise<TaskRun[]> {
   return request<TaskRun[]>(`/api/conversations/${conversationId}/task-runs`);
+}
+
+export function getTaskRunObservabilityByConversation(
+  conversationId: string
+): Promise<TaskRunObservabilitySummary> {
+  return request<TaskRunObservabilitySummary>(`/api/conversations/${conversationId}/task-run-observability`);
 }
 
 export function getTaskRun(taskRunId: string): Promise<TaskRun> {

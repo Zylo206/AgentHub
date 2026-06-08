@@ -1015,6 +1015,12 @@ public class OrchestratorService {
                 stepPlan.parallelGroupKey(),
                 stepPlan.dependsOnStepOrders(),
                 routingReason == null || routingReason.isBlank() ? stepPlan.routingReason() : routingReason,
+                stepPlan.requiredSkill(),
+                "NO_RETRY",
+                null,
+                taskRunId.value() + ":" + stepPlan.stepOrder(),
+                "STEP_FALLBACK_TO_MOCK",
+                0,
                 now);
     }
 
@@ -1130,6 +1136,15 @@ public class OrchestratorService {
                     mergeSessionArtifactSummaries(artifactSummaries, sessionContext),
                     producedArtifactIds,
                     preferredAdapterType,
+                    "GROUP_" + stepOrder,
+                    List.of(),
+                    "Rule-based routing",
+                    "DEMO_STEP",
+                    "NO_RETRY",
+                    null,
+                    taskRunId.value() + ":" + stepOrder,
+                    "STEP_FALLBACK_TO_MOCK",
+                    0,
                     now));
         }
 
@@ -1485,9 +1500,19 @@ public class OrchestratorService {
                                 + ", failurePolicy=" + batch.getFailurePolicy())
                         .toList())
                 + "; adapter status is recorded on each TaskStep.";
-        String aggregationDecision = "Aggregator persisted " + artifacts.size()
-                + " artifact(s), including " + adapterOutputArtifacts.size()
-                + " adapter output artifact(s). Retrieved context sources="
+        String aggregationDecision = "Aggregator merged node outputs by artifact type. code="
+                + artifacts.stream().filter(artifact -> artifact.getType() == ArtifactType.CODE).count()
+                + ", markdown/doc="
+                + artifacts.stream().filter(artifact -> artifact.getType() == ArtifactType.MARKDOWN).count()
+                + ", review="
+                + artifacts.stream().filter(artifact -> artifact.getType() == ArtifactType.REVIEW_REPORT).count()
+                + ", deploy="
+                + artifacts.stream().filter(artifact -> artifact.getType() == ArtifactType.WEB_PREVIEW).count()
+                + ", adoptedRealArtifacts="
+                + adapterOutputArtifacts.size()
+                + ", discardedNodes="
+                + steps.stream().filter(step -> step.getDiscardedReason() != null && !step.getDiscardedReason().isBlank()).count()
+                + ", retrievedContextSources="
                 + retrievedContextItems.size()
                 + ". reviewDecision=" + reviewDecision.decision()
                 + ", reviewSource=" + reviewDecision.source()
@@ -1547,15 +1572,20 @@ public class OrchestratorService {
     private String buildStepDecision(TaskStep step) {
         return "Step " + step.getStepOrder()
                 + " agent=" + step.getAssignedAgentId().value()
+                + ", nodeType=" + nullSafe(step.getNodeType(), "TASK_STEP")
                 + ", preferredAdapter=" + nullSafe(step.getPreferredAdapterType(), "MOCK")
                 + ", actualAdapter=" + nullSafe(step.getActualAdapterType(), "MOCK")
                 + ", adapterStatus=" + nullSafe(step.getAdapterStatus(), "UNKNOWN")
+                + ", terminalStatus=" + nullSafe(step.getTerminalStatus(), "UNKNOWN")
+                + ", retryAttempt=" + (step.getRetryAttempt() == null ? 0 : step.getRetryAttempt())
+                + ", failureType=" + nullSafe(step.getFailureType(), "NONE")
                 + ", parallelGroup=" + nullSafe(step.getParallelGroupKey(), "GROUP_" + step.getStepOrder())
                 + ", dependsOn=" + step.getDependsOnStepOrders()
                 + ", producedArtifacts=" + step.getProducedArtifactIds().stream()
                         .map(ArtifactId::value)
                         .toList()
-                + ", routingReason=" + nullSafe(step.getRoutingReason(), "Rule-based routing");
+                + ", routingReason=" + nullSafe(step.getRoutingReason(), "Rule-based routing")
+                + formatOptional(", finalDecision=", step.getFinalDecision());
     }
 
     private String buildFallbackDecision(OrchestratorPlan plan, List<TaskStep> steps) {

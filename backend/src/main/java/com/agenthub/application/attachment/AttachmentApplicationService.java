@@ -9,6 +9,7 @@ import com.agenthub.domain.conversation.ConversationRepository;
 import com.agenthub.domain.message.MessageAttachment;
 import java.io.IOException;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -74,12 +75,7 @@ public class AttachmentApplicationService {
                     attachmentId,
                     fileName,
                     new ByteArrayInputStream(bytes));
-            AttachmentScanService.ScanResult scanResult = attachmentScanService.scan(
-                    attachmentId,
-                    fileName,
-                    attachmentStorageRegistry.resolve(
-                            storedAttachment.storageProvider(),
-                            storedAttachment.storagePath()));
+            AttachmentScanService.ScanResult scanResult = scan(bytes, attachmentId, fileName);
             AttachmentRecord record = new AttachmentRecord(
                     attachmentId,
                     conversationRef,
@@ -141,9 +137,13 @@ public class AttachmentApplicationService {
                 .orElse(requestAttachment);
     }
 
-    public Path resolveStoragePath(String attachmentId) {
+    public AttachmentStorageService.AttachmentContent openAttachmentContent(String attachmentId) {
         AttachmentRecord attachment = getAttachment(attachmentId);
-        return attachmentStorageRegistry.resolve(attachment);
+        try {
+            return attachmentStorageRegistry.open(attachment);
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Failed to open attachment content", exception);
+        }
     }
 
     private String preview(String contentType, String fileName, byte[] bytes) {
@@ -185,5 +185,15 @@ public class AttachmentApplicationService {
 
     private String normalizeContentType(String contentType) {
         return contentType == null || contentType.isBlank() ? "application/octet-stream" : contentType.trim();
+    }
+
+    private AttachmentScanService.ScanResult scan(byte[] bytes, String attachmentId, String fileName) throws IOException {
+        Path tempFile = Files.createTempFile("agenthub-attachment-scan-", ".bin");
+        try {
+            Files.write(tempFile, bytes);
+            return attachmentScanService.scan(attachmentId, fileName, tempFile);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
     }
 }

@@ -104,3 +104,23 @@
 - riskLevel 是规则化字段，不代表真实安全扫描结果。
 - affectedItems 和 diff preview 是操作影响摘要，不等于完整代码安全分析。
 - 如果 realtime 事件失败，REST 数据仍是权威来源。
+
+## 2026-06-08 补充
+
+轻量生产化闭环新增以下审计口径：
+
+- `APPROVAL_BYPASS_ATTEMPT`
+  - 缺少 `approvalId`
+  - `approvalId` 已过期
+  - `approvalId` 未批准
+  - `approvalId` 与 action / target 不匹配
+- `APPLY_DIFF` 的 `CONFLICT`
+- `ARTIFACT_STATE_CONFLICT`
+- 过期执行结果丢弃
+- 重复提交拒绝
+
+冲突类 summary 统一使用：
+
+- `conflictType=TEXT_CONFLICT; ...`
+- `conflictType=STRUCTURE_CONFLICT; ...`
+- `conflictType=APPROVAL_CONFLICT; ...`

@@ -402,6 +402,7 @@ export function ArtifactPanel({
     activeInspectorTab,
     appliedDiffArtifactId,
     artifactOperationMessage,
+    diffCompareResult,
     diffConflictArtifactId,
     diffConflictMessage,
     draftContent,
@@ -421,6 +422,7 @@ export function ArtifactPanel({
     handleConfirmApproval,
     handleCopyArtifactContent,
     handleCopyPreviewUrl,
+    handleCreateConflictResolutionRevision,
     handleCreateDeployment,
     handleCreateDraftRevision,
     handleCreateRevision,
@@ -572,6 +574,7 @@ export function ArtifactPanel({
                   draftDiffPreview={draftDiffPreview}
                   revisionInstruction={revisionInstruction}
                   appliedDiffArtifactId={appliedDiffArtifactId}
+                  diffCompareResult={diffCompareResult}
                   diffConflictArtifactId={diffConflictArtifactId}
                   diffConflictMessage={diffConflictMessage}
                   canSendSelectionToChat={Boolean(onSendSelectionToChat)}
@@ -587,6 +590,9 @@ export function ArtifactPanel({
                   onRevisionInstructionChange={setRevisionInstruction}
                   onCreateRevision={() => {
                     void handleCreateRevision();
+                  }}
+                  onCreateConflictResolutionRevision={(mergedContent) => {
+                    void handleCreateConflictResolutionRevision(mergedContent);
                   }}
                   onSelectArtifact={onSelectArtifact}
                   onCreateApprovalRequest={onCreateApprovalRequest}

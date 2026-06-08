@@ -12,11 +12,21 @@ public class TaskGraph {
 
     private final String graphType;
     private final List<ExecutionBatch> executionBatches;
+    private final List<TaskGraphNode> nodes;
     private final String summary;
 
     public TaskGraph(String graphType, List<ExecutionBatch> executionBatches, String summary) {
+        this(graphType, executionBatches, List.of(), summary);
+    }
+
+    public TaskGraph(
+            String graphType,
+            List<ExecutionBatch> executionBatches,
+            List<TaskGraphNode> nodes,
+            String summary) {
         this.graphType = graphType;
         this.executionBatches = List.copyOf(executionBatches);
+        this.nodes = nodes == null ? List.of() : List.copyOf(nodes);
         this.summary = summary;
     }
 
@@ -68,6 +78,33 @@ public class TaskGraph {
                             "STEP_FALLBACK_TO_MOCK");
                 })
                 .toList();
+        List<TaskGraphNode> nodes = steps.stream()
+                .sorted(Comparator.comparingInt(TaskStep::getStepOrder))
+                .map(step -> new TaskGraphNode(
+                        step.getNodeId(),
+                        step.getNodeType(),
+                        step.getStepOrder(),
+                        step.getDependsOnStepOrders().stream()
+                                .map(dependsOnStepOrder -> findStepByOrder(steps, dependsOnStepOrder))
+                                .filter(match -> match != null)
+                                .map(TaskStep::getNodeId)
+                                .distinct()
+                                .toList(),
+                        step.getRetryPolicy(),
+                        step.getTimeoutSeconds(),
+                        step.getIdempotencyKey(),
+                        step.getFallbackStrategy(),
+                        step.getNodeStatus(),
+                        step.getTerminalStatus(),
+                        step.getRetryAttempt(),
+                        step.getExecutionToken(),
+                        step.getLeaseVersion(),
+                        step.getStartedAt(),
+                        step.getCompletedAt(),
+                        step.getFailureType(),
+                        step.getDiscardedReason(),
+                        step.getFinalDecision()))
+                .toList();
 
         long parallelBatchCount = batches.stream()
                 .filter(batch -> batch.getStepOrders().size() > 1)
@@ -75,6 +112,7 @@ public class TaskGraph {
         return new TaskGraph(
                 "ORCHESTRATOR_TASK_GRAPH",
                 batches,
+                nodes,
                 "TaskGraph contains " + batches.size() + " execution batch(es), "
                         + parallelBatchCount + " parallel batch(es).");
     }
@@ -86,6 +124,16 @@ public class TaskGraph {
         return stepsByGroup.entrySet().stream()
                 .filter(entry -> entry.getValue().stream().anyMatch(step -> step.getStepOrder() == stepOrder))
                 .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static TaskStep findStepByOrder(List<TaskStep> steps, Integer stepOrder) {
+        if (stepOrder == null) {
+            return null;
+        }
+        return steps.stream()
+                .filter(step -> step.getStepOrder() == stepOrder)
                 .findFirst()
                 .orElse(null);
     }
@@ -115,6 +163,10 @@ public class TaskGraph {
 
     public List<ExecutionBatch> getExecutionBatches() {
         return executionBatches;
+    }
+
+    public List<TaskGraphNode> getNodes() {
+        return nodes;
     }
 
     public String getSummary() {

@@ -1,6 +1,12 @@
 import type { Artifact } from "../artifacts/artifactTypes";
 import type { Agent } from "../agents/agentTypes";
-import type { StreamingPreviewState, TaskRun, TaskSpec, TaskStep } from "./chatTypes";
+import type {
+  StreamingPreviewState,
+  TaskRun,
+  TaskRunObservabilitySummary,
+  TaskSpec,
+  TaskStep
+} from "./chatTypes";
 import { AdapterRoutingExplainPanel } from "./AdapterRoutingExplainPanel";
 import { OrchestratorExplainDetails } from "./OrchestratorExplainDetails";
 import { TaskRunSummaryStrip } from "./TaskRunSummaryStrip";
@@ -22,6 +28,7 @@ interface TaskRunPanelProps {
   loading: boolean;
   selectedTaskRunId: string | null;
   selectedTaskStepId: string | null;
+  observabilitySummary?: TaskRunObservabilitySummary | null;
   streamingPreviewsByStepId?: Record<string, StreamingPreviewState>;
   onSelectStep: (taskRunId: string, step: TaskStep) => void;
   onCancelTaskRun?: (taskRunId: string) => Promise<void>;
@@ -107,6 +114,7 @@ export function TaskRunPanel({
   loading,
   selectedTaskRunId,
   selectedTaskStepId,
+  observabilitySummary,
   streamingPreviewsByStepId = {},
   onSelectStep,
   onCancelTaskRun,
@@ -137,6 +145,57 @@ export function TaskRunPanel({
           </p>
         </div>
       </div>
+
+      {observabilitySummary ? (
+        <section className="task-run-observability" data-testid="task-run-observability">
+          <div className="task-run-observability__headline">
+            <strong>运行诊断</strong>
+            <span>
+              Retry {observabilitySummary.retryCount} / Fallback {observabilitySummary.fallbackCount} / Conflict{" "}
+              {observabilitySummary.conflictTypes.reduce((sum, item) => sum + item.count, 0)} / Approval bypass{" "}
+              {observabilitySummary.approvalBypassAttempts}
+            </span>
+          </div>
+          <div className="task-run-observability__grid">
+            <div>
+              <strong>Top fallback</strong>
+              <ul>
+                {observabilitySummary.fallbackReasons.length > 0 ? (
+                  observabilitySummary.fallbackReasons.map((item) => (
+                    <li key={`fallback-${item.label}`}>{item.label} x{item.count}</li>
+                  ))
+                ) : (
+                  <li>None</li>
+                )}
+              </ul>
+            </div>
+            <div>
+              <strong>Conflict type</strong>
+              <ul>
+                {observabilitySummary.conflictTypes.length > 0 ? (
+                  observabilitySummary.conflictTypes.map((item) => (
+                    <li key={`conflict-${item.label}`}>{item.label} x{item.count}</li>
+                  ))
+                ) : (
+                  <li>None</li>
+                )}
+              </ul>
+            </div>
+            <div>
+              <strong>Discarded result</strong>
+              <ul>
+                {observabilitySummary.discardedReasons.length > 0 ? (
+                  observabilitySummary.discardedReasons.map((item) => (
+                    <li key={`discarded-${item.label}`}>{item.label} x{item.count}</li>
+                  ))
+                ) : (
+                  <li>None</li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {taskSpecs.length > 0 ? (
         <div className="task-spec-strip">
@@ -180,6 +239,10 @@ export function TaskRunPanel({
 
               <div className="task-run-card__goal">
                 {sanitizeProductionText(taskRun.taskPlan?.goal) || "暂无任务计划目标。"}
+              </div>
+
+              <div className="task-run-card__goal">
+                时间线 {taskRun.timeline?.length ?? 0} 条 / Retry {taskRun.retryCount ?? 0}
               </div>
 
               <TaskRunSummaryStrip taskRun={taskRun} producedArtifacts={producedArtifacts} />

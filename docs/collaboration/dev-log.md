@@ -9814,3 +9814,145 @@
 - 当前 object-storage backend 仍是 filesystem-backed bucket layout，用于把“存储语义”和“元数据边界”先抽出来；这不是已经接好真实 S3 / MinIO SDK。
 - `OPENAI_COMPATIBLE` runtime config 已从“重启即丢”的内存单例升级为 repository persistence，但本轮没有补全多租户 org-level / conversation-level provider 配置。
 - `mvn -q -DskipTests package` 在本机仍可能因为现有 `target/*.jar` 文件占用而卡在 Spring Boot repackage rename；测试编译链路已通过。
+
+## 2026-06-08：持久化分层推进第二轮
+
+### 目标
+
+- 把对象存储从 filesystem 模拟推进到真实 MinIO/S3-compatible 适配器。
+- 把 `OPENAI_COMPATIBLE` provider config 升级为 `USER -> ORG -> GLOBAL` scope 解析，并补审计闭环。
+- 给 `doc-collab` 增加 snapshot manifest 表和后端对象存储恢复链。
+- 补本地依赖 init/check 脚本，覆盖 MySQL / Redis / object storage。
+
+### 改动
+
+- backend 新增共享对象存储层：
+  - 新增 `ObjectStorageClient`
+  - 默认 `filesystem` provider 继续保留本地 bucket layout
+  - 新增真实 `s3` provider，支持 MinIO/S3-compatible endpoint、access key、secret key、region、path-style、auto-create bucket
+  - 新增后台管理接口：
+    - `GET /api/admin/object-storage/health`
+    - `POST /api/admin/object-storage/buckets/{bucketName}/ensure`
+- 附件存储正式接入共享对象存储层：
+  - `OBJECT_STORAGE` 不再直接假设本地目录
+  - 下载链路从 `Path` 切换为 provider `open()` 流式读取，兼容本地盘和 S3/MinIO
+  - 上传扫描改为使用临时文件，不再依赖对象存储 provider 暴露本地路径
+- `OPENAI_COMPATIBLE` runtime config 增强为 scope 配置域：
+  - 新增 `USER / ORG / GLOBAL` scope 解析，优先级为 `USER -> ORG -> GLOBAL`
+  - 管理权限：
+    - 普通用户只能管理 `USER`
+    - `ADMIN` 可管理 `ORG / GLOBAL`
+  - 更新接口支持 `scopeType`
+  - 前端 `IM API 接入` 面板增加 scope 切换和 effective scope 提示
+  - 配置写入沿用加密 JDBC 持久化，不返回明文 API key
+  - 配置变更写入审计链路，目标为 `UPSERT_ADAPTER_RUNTIME_CONFIG`
+- `doc-collab` snapshot 恢复链升级：
+  - backend 新增 `agenthub_collab_snapshot_manifests`
+  - backend 新增：
+    - `GET /api/artifacts/{artifactId}/collab-room/v2/snapshot`
+    - `PUT /api/artifacts/{artifactId}/collab-room/v2/snapshot`
+  - `doc-collab` 不再自己维护第二套 object-storage metadata
+  - `ObjectSnapshotStore` 改为通过 bearer token 调用 Spring 后端保存和读取 snapshot
+  - room 恢复顺序调整为：
+    - Redis snapshot
+    - backend snapshot manifest + object blob
+    - local file snapshot
+    - local update log / Redis Streams replay
+  - backend snapshot 保存写入 `STORE_COLLAB_SNAPSHOT` 审计
+- 新增本地依赖脚本：
+  - `scripts/init-local-mysql.mjs`
+  - `scripts/check-redis.mjs`
+  - `scripts/check-object-storage.mjs`
+  - `scripts/init-object-storage-bucket.mjs`
+- 同步更新：
+  - `application.yml`
+  - `schema-jdbc.sql`
+  - `.env.example`
+  - `scripts/README.md`
+  - `docs/plans/next.md`
+
+### 验证
+
+- `cd backend && mvn test`：通过，17 tests，0 failures。
+- `cd frontend && npm.cmd run build`：通过。
+- `cd doc-collab && npm.cmd run build`：通过。
+- `node --check scripts/check-redis.mjs`：通过。
+- `node --check scripts/check-object-storage.mjs`：通过。
+- `node --check scripts/init-object-storage-bucket.mjs`：通过。
+- `node --check scripts/init-local-mysql.mjs`：通过。
+- `git diff --check`：通过，仅 CRLF warning。
+
+### 边界
+
+- 默认 runtime 仍然是 `memory + MOCK + local file`，真实 MinIO/S3-compatible object storage 是 opt-in。
+- `mvn -q -DskipTests package` 仍被本机已存在的 `backend/target/*.jar` 文件占用影响 Spring Boot repackage rename；源码编译和测试链路已通过。
+- `doc-collab` 当前通过后端 bearer token 读写 snapshot manifest/object blob，尚未单独引入 service-to-service credential。
+
+## 2026-06-08：轻量生产化闭环第一阶段
+
+### 目标
+
+- 把当前 `TaskGraph + parallelGroup + optimistic conflict + approval/audit + SSE` 收敛成一条可生产验收的轻量闭环。
+- 第一阶段只交付显式任务节点、运行控制字段、结构化冲突 compare/apply、冲突面板、聚合解释和诊断查询。
+
+### 改动
+
+- backend 新增轻量 DAG 节点持久化字段：
+  - `nodeId`
+  - `nodeType`
+  - `retryPolicy`
+  - `timeoutSeconds`
+  - `idempotencyKey`
+  - `fallbackStrategy`
+  - `nodeStatus`
+  - `terminalStatus`
+  - `retryAttempt`
+  - `executionToken`
+  - `leaseVersion`
+  - `startedAt`
+  - `completedAt`
+  - `failureType`
+  - `discardedReason`
+  - `finalDecision`
+- `TaskRun` 增加 timeline 视图和 retry count。
+- `AgentStepExecutor` 现在会为 step 分配 execution ticket，并在重复提交、过期 lease、结果丢弃时写审计和 SSE 节点状态事件。
+- `ArtifactApplicationService` 新增 `compareDiff(...)`，`apply-diff` 返回 `conflictType / recommendedAction`。
+- stale Artifact state 和 apply conflict 现在统一写 `ActionAuditLog`，summary 使用 `conflictType=...; ...`。
+- 新增 `TaskRunObservabilityService` 和 `GET /api/conversations/{conversationId}/task-run-observability`。
+- 前端 `TaskRunPanel` 现在展示节点字段和 conversation-level observability summary。
+- `DiffSummaryPanel` 升级为第一阶段 Conflict Resolution Panel：
+  - 当前版本
+  - 用户基线
+  - Agent 候选
+  - 冲突类型
+  - 推荐动作
+  - 手动合并内容 -> 新 revision
+- 新增脚本：
+  - `task-dag-smoke-test.mjs`
+  - `run-control-smoke-test.mjs`
+  - `conflict-smoke-test.mjs`
+  - `aggregator-smoke-test.mjs`
+  - `observability-smoke-test.mjs`
+  - `conflict-e2e-browser.mjs`
+
+### 验证
+
+- 本阶段代码完成后需要至少跑：
+  - `cd backend && mvn test`
+  - `cd frontend && npm.cmd run build`
+  - `node --check scripts/task-dag-smoke-test.mjs`
+  - `node --check scripts/run-control-smoke-test.mjs`
+  - `node --check scripts/conflict-smoke-test.mjs`
+  - `node --check scripts/aggregator-smoke-test.mjs`
+  - `node --check scripts/observability-smoke-test.mjs`
+  - `node --check scripts/conflict-e2e-browser.mjs`
+
+### 边界
+
+- 这仍然不是通用工作流 DSL。
+- 冲突处理仍是显式 compare / apply / force-apply / manual-merge-revision，不是语义 rebase。
+- Browser conflict E2E 依赖本地 frontend/backend 已启动和 Playwright runtime 已安装。
+
+### 下一步
+
+- 如果要继续往生产级推进，下一轮重点是更细的 timeline UI、主动 cancel/stop 延迟环境验收，以及更完整的人工解冲编辑体验。

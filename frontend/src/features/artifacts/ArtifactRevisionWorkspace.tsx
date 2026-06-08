@@ -2,6 +2,7 @@ import type { SyntheticEvent } from "react";
 import { ArtifactCollaborationPanel } from "./ArtifactCollaborationPanel";
 import { DiffSummaryPanel } from "./DiffSummaryPanel";
 import type { Artifact } from "./artifactTypes";
+import type { ArtifactCompareDiffResponse } from "../../api/agenthubApi";
 
 interface DraftSelection {
   startLine: number;
@@ -27,6 +28,7 @@ interface ArtifactRevisionWorkspaceProps {
   draftDiffPreview: DraftDiffPreview | null;
   revisionInstruction: string;
   appliedDiffArtifactId: string | null;
+  diffCompareResult: ArtifactCompareDiffResponse | null;
   diffConflictArtifactId: string | null;
   diffConflictMessage: string | null;
   canSendSelectionToChat: boolean;
@@ -39,6 +41,7 @@ interface ArtifactRevisionWorkspaceProps {
   onSendSelectionToChat: () => void;
   onRevisionInstructionChange: (value: string) => void;
   onCreateRevision: () => void;
+  onCreateConflictResolutionRevision: (mergedContent: string) => void;
   onApplyDiff: (artifact: Artifact) => void;
   onForceApplyDiff: (artifact: Artifact) => void;
   onSelectArtifact: (artifactId: string) => void;
@@ -72,6 +75,7 @@ export function ArtifactRevisionWorkspace({
   draftDiffPreview,
   revisionInstruction,
   appliedDiffArtifactId,
+  diffCompareResult,
   diffConflictArtifactId,
   diffConflictMessage,
   canSendSelectionToChat,
@@ -84,6 +88,7 @@ export function ArtifactRevisionWorkspace({
   onSendSelectionToChat,
   onRevisionInstructionChange,
   onCreateRevision,
+  onCreateConflictResolutionRevision,
   onApplyDiff,
   onForceApplyDiff,
   onSelectArtifact,
@@ -220,8 +225,10 @@ export function ArtifactRevisionWorkspace({
         artifacts={allArtifacts}
         artifact={artifact}
         appliedArtifactId={appliedDiffArtifactId}
+        compareResult={diffCompareResult}
         conflictArtifactId={diffConflictArtifactId}
         conflictMessage={diffConflictMessage}
+        onCreateConflictResolutionRevision={onCreateConflictResolutionRevision}
         onApplyDiff={onApplyDiff}
         onForceApplyDiff={onForceApplyDiff}
       />

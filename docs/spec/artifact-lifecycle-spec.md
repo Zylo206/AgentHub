@@ -109,3 +109,19 @@
 - 当前 Diff 是轻量 line diff，不是完整 Git patch engine。
 - Restore 是 Artifact 内容级恢复，不是文件系统或 Git 仓库恢复。
 - Deploy Preview 是本地静态模拟，不是真实公网部署。
+
+## 2026-06-08 补充
+
+Artifact compare / apply 第一阶段补齐以下边界：
+
+- `GET /api/artifacts/{artifactId}/compare-diff` 成为前端冲突面板的标准 compare 入口
+- compare 返回 `conflictType / canApplyDirectly / requiresApproval / recommendedAction / conflictReason`
+- 当前 conflict type 统一为：
+  - `NONE`
+  - `TEXT_CONFLICT`
+  - `STRUCTURE_CONFLICT`
+  - `APPROVAL_CONFLICT`
+- `apply-diff` 仍是唯一后端写入口
+- 任何 stale diff 都不能直接覆盖当前 accepted artifact
+- `force=true` 只能在审批通过后执行
+- 人工解冲第一阶段不是直接覆盖 accepted artifact，而是“提交手动合并内容 -> 生成新的 revision -> 再走 diff/apply/approval”

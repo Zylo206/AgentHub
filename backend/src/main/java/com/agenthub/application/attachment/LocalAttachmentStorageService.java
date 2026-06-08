@@ -38,12 +38,12 @@ public class LocalAttachmentStorageService implements AttachmentStorageService {
     }
 
     @Override
-    public Path resolve(String storagePath) {
+    public AttachmentContent open(String storagePath, String storageKey) throws IOException {
         Path resolved = Path.of(storagePath).toAbsolutePath().normalize();
         if (!resolved.startsWith(storageDir)) {
             throw new IllegalArgumentException("Attachment path escapes storage directory");
         }
-        return resolved;
+        return new AttachmentContent(Files.newInputStream(resolved), Files.size(resolved), "application/octet-stream");
     }
 
     private String extensionOf(String fileName) {

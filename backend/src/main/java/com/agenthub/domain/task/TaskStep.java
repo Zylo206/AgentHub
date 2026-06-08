@@ -24,6 +24,22 @@ public class TaskStep {
     private final String parallelGroupKey;
     private final List<Integer> dependsOnStepOrders;
     private final String routingReason;
+    private final String nodeId;
+    private final String nodeType;
+    private final String retryPolicy;
+    private final Integer timeoutSeconds;
+    private final String idempotencyKey;
+    private final String fallbackStrategy;
+    private final String nodeStatus;
+    private final String terminalStatus;
+    private final Integer retryAttempt;
+    private final String executionToken;
+    private final Integer leaseVersion;
+    private final Instant startedAt;
+    private final Instant completedAt;
+    private final String failureType;
+    private final String discardedReason;
+    private final String finalDecision;
     private final boolean realOutputUsed;
     private final String artifactParseStatus;
     private final String artifactBuildValidationStatus;
@@ -259,6 +275,94 @@ public class TaskStep {
             List<ArtifactId> producedArtifactIds,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                id,
+                taskRunId,
+                stepOrder,
+                assignedAgentId,
+                taskDescription,
+                status,
+                inputContext,
+                outputContent,
+                preferredAdapterType,
+                actualAdapterType,
+                adapterStatus,
+                adapterResponseSummary,
+                adapterErrorMessage,
+                parallelGroupKey,
+                dependsOnStepOrders,
+                routingReason,
+                null,
+                "TASK_STEP",
+                "NO_RETRY",
+                null,
+                null,
+                "STEP_FALLBACK_TO_MOCK",
+                null,
+                null,
+                0,
+                null,
+                1,
+                createdAt,
+                updatedAt,
+                null,
+                null,
+                null,
+                realOutputUsed,
+                artifactParseStatus,
+                artifactBuildValidationStatus,
+                artifactBuildValidationReason,
+                artifactQualityStatus,
+                artifactQualityScore,
+                artifactQualityReason,
+                producedArtifactIds,
+                createdAt,
+                updatedAt);
+    }
+
+    public TaskStep(
+            TaskStepId id,
+            TaskRunId taskRunId,
+            int stepOrder,
+            AgentId assignedAgentId,
+            String taskDescription,
+            TaskStepStatus status,
+            String inputContext,
+            String outputContent,
+            String preferredAdapterType,
+            String actualAdapterType,
+            String adapterStatus,
+            String adapterResponseSummary,
+            String adapterErrorMessage,
+            String parallelGroupKey,
+            List<Integer> dependsOnStepOrders,
+            String routingReason,
+            String nodeId,
+            String nodeType,
+            String retryPolicy,
+            Integer timeoutSeconds,
+            String idempotencyKey,
+            String fallbackStrategy,
+            String nodeStatus,
+            String terminalStatus,
+            Integer retryAttempt,
+            String executionToken,
+            Integer leaseVersion,
+            Instant startedAt,
+            Instant completedAt,
+            String failureType,
+            String discardedReason,
+            String finalDecision,
+            boolean realOutputUsed,
+            String artifactParseStatus,
+            String artifactBuildValidationStatus,
+            String artifactBuildValidationReason,
+            String artifactQualityStatus,
+            Integer artifactQualityScore,
+            String artifactQualityReason,
+            List<ArtifactId> producedArtifactIds,
+            Instant createdAt,
+            Instant updatedAt) {
         this.id = id;
         this.taskRunId = taskRunId;
         this.stepOrder = stepOrder;
@@ -276,6 +380,32 @@ public class TaskStep {
         this.parallelGroupKey = parallelGroupKey;
         this.dependsOnStepOrders = dependsOnStepOrders == null ? List.of() : List.copyOf(dependsOnStepOrders);
         this.routingReason = routingReason;
+        this.nodeId = nodeId == null || nodeId.isBlank() ? id.value() : nodeId;
+        this.nodeType = nodeType == null || nodeType.isBlank() ? "TASK_STEP" : nodeType;
+        this.retryPolicy = retryPolicy == null || retryPolicy.isBlank() ? "NO_RETRY" : retryPolicy;
+        this.timeoutSeconds = timeoutSeconds;
+        this.idempotencyKey = idempotencyKey == null || idempotencyKey.isBlank()
+                ? taskRunId.value() + ":" + stepOrder
+                : idempotencyKey;
+        this.fallbackStrategy = fallbackStrategy == null || fallbackStrategy.isBlank()
+                ? "STEP_FALLBACK_TO_MOCK"
+                : fallbackStrategy;
+        this.nodeStatus = nodeStatus == null || nodeStatus.isBlank()
+                ? deriveNodeStatus(status, adapterStatus, realOutputUsed)
+                : nodeStatus;
+        this.terminalStatus = terminalStatus == null || terminalStatus.isBlank()
+                ? deriveTerminalStatus(this.nodeStatus, adapterStatus, realOutputUsed)
+                : terminalStatus;
+        this.retryAttempt = retryAttempt == null ? 0 : retryAttempt;
+        this.executionToken = executionToken;
+        this.leaseVersion = leaseVersion == null ? 1 : leaseVersion;
+        this.startedAt = startedAt == null ? createdAt : startedAt;
+        this.completedAt = completedAt == null ? updatedAt : completedAt;
+        this.failureType = failureType == null || failureType.isBlank()
+                ? deriveFailureType(adapterStatus, adapterErrorMessage, artifactParseStatus, artifactBuildValidationStatus, artifactQualityStatus)
+                : failureType;
+        this.discardedReason = discardedReason;
+        this.finalDecision = finalDecision;
         this.realOutputUsed = realOutputUsed;
         this.artifactParseStatus = artifactParseStatus;
         this.artifactBuildValidationStatus = artifactBuildValidationStatus;
@@ -387,6 +517,70 @@ public class TaskStep {
         return routingReason;
     }
 
+    public String getNodeId() {
+        return nodeId;
+    }
+
+    public String getNodeType() {
+        return nodeType;
+    }
+
+    public String getRetryPolicy() {
+        return retryPolicy;
+    }
+
+    public Integer getTimeoutSeconds() {
+        return timeoutSeconds;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public String getFallbackStrategy() {
+        return fallbackStrategy;
+    }
+
+    public String getNodeStatus() {
+        return nodeStatus;
+    }
+
+    public String getTerminalStatus() {
+        return terminalStatus;
+    }
+
+    public Integer getRetryAttempt() {
+        return retryAttempt;
+    }
+
+    public String getExecutionToken() {
+        return executionToken;
+    }
+
+    public Integer getLeaseVersion() {
+        return leaseVersion;
+    }
+
+    public Instant getStartedAt() {
+        return startedAt;
+    }
+
+    public Instant getCompletedAt() {
+        return completedAt;
+    }
+
+    public String getFailureType() {
+        return failureType;
+    }
+
+    public String getDiscardedReason() {
+        return discardedReason;
+    }
+
+    public String getFinalDecision() {
+        return finalDecision;
+    }
+
     public boolean isRealOutputUsed() {
         return realOutputUsed;
     }
@@ -442,6 +636,68 @@ public class TaskStep {
             }
         }
         return false;
+    }
+
+    private static String deriveNodeStatus(TaskStepStatus status, String adapterStatus, boolean realOutputUsed) {
+        if ("STOPPED".equalsIgnoreCase(adapterStatus) || "CANCELLED".equalsIgnoreCase(adapterStatus)) {
+            return "CANCELLED";
+        }
+        if ("FALLBACK_USED".equalsIgnoreCase(adapterStatus) && !realOutputUsed) {
+            return "FALLBACK";
+        }
+        if (status == TaskStepStatus.FAILED) {
+            return "FAILED";
+        }
+        if (status == TaskStepStatus.SKIPPED) {
+            return "SKIPPED";
+        }
+        if (status == TaskStepStatus.RUNNING) {
+            return "RUNNING";
+        }
+        if (status == TaskStepStatus.WAITING) {
+            return "PENDING";
+        }
+        return "SUCCEEDED";
+    }
+
+    private static String deriveTerminalStatus(String nodeStatus, String adapterStatus, boolean realOutputUsed) {
+        if ("CANCELLED".equals(nodeStatus)) {
+            return "STOPPED".equalsIgnoreCase(adapterStatus) ? "STOPPED" : "CANCELLED";
+        }
+        if ("FALLBACK".equals(nodeStatus) || ("FALLBACK_USED".equalsIgnoreCase(adapterStatus) && !realOutputUsed)) {
+            return "FALLBACK";
+        }
+        return nodeStatus;
+    }
+
+    private static String deriveFailureType(
+            String adapterStatus,
+            String adapterErrorMessage,
+            String artifactParseStatus,
+            String artifactBuildValidationStatus,
+            String artifactQualityStatus) {
+        if ("STOPPED".equalsIgnoreCase(adapterStatus)) {
+            return "CONTROL_STOPPED";
+        }
+        if ("CANCELLED".equalsIgnoreCase(adapterStatus)) {
+            return "CONTROL_CANCELLED";
+        }
+        if (isFailureStatus(artifactParseStatus, "PARSE_FAILED")) {
+            return "PARSE_FAILED";
+        }
+        if (isFailureStatus(artifactBuildValidationStatus, "FAILED", "BUILD_FAILED")) {
+            return "BUILD_FAILED";
+        }
+        if (isFailureStatus(artifactQualityStatus, "REJECTED", "QUALITY_FAILED")) {
+            return "QUALITY_REJECTED";
+        }
+        if (adapterErrorMessage != null && adapterErrorMessage.toUpperCase().contains("TIMEOUT")) {
+            return "ADAPTER_TIMEOUT";
+        }
+        if ("FAILED".equalsIgnoreCase(adapterStatus)) {
+            return "ADAPTER_FAILED";
+        }
+        return null;
     }
 
     private static String extractBuildValidationReason(String qualityReason) {

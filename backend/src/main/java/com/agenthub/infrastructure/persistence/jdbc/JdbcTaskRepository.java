@@ -182,10 +182,12 @@ public class JdbcTaskRepository implements TaskRepository {
                 (id, task_run_id, step_order, assigned_agent_id, task_description, status, input_context, output_content,
                  preferred_adapter_type, actual_adapter_type, adapter_status, adapter_response_summary,
                  adapter_error_message, parallel_group_key, depends_on_step_orders_json, routing_reason,
-                 real_output_used, artifact_parse_status, artifact_build_validation_status,
-                 artifact_build_validation_reason, artifact_quality_status, artifact_quality_score, artifact_quality_reason,
-                 produced_artifact_ids_json, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 node_id, node_type, retry_policy, timeout_seconds, idempotency_key, fallback_strategy, node_status,
+                 terminal_status, retry_attempt, execution_token, lease_version, started_at, completed_at,
+                 failure_type, discarded_reason, final_decision, real_output_used, artifact_parse_status,
+                 artifact_build_validation_status, artifact_build_validation_reason, artifact_quality_status,
+                 artifact_quality_score, artifact_quality_reason, produced_artifact_ids_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open()) {
             try (var delete = connection.prepareStatement(deleteSql)) {
@@ -210,20 +212,48 @@ public class JdbcTaskRepository implements TaskRepository {
                     insert.setString(14, step.getParallelGroupKey());
                     insert.setString(15, JdbcSerializationSupport.toJson(step.getDependsOnStepOrders()));
                     insert.setString(16, step.getRoutingReason());
-                    insert.setBoolean(17, step.isRealOutputUsed());
-                    insert.setString(18, step.getArtifactParseStatus());
-                    insert.setString(19, step.getArtifactBuildValidationStatus());
-                    insert.setString(20, step.getArtifactBuildValidationReason());
-                    insert.setString(21, step.getArtifactQualityStatus());
-                    if (step.getArtifactQualityScore() == null) {
-                        insert.setObject(22, null);
+                    insert.setString(17, step.getNodeId());
+                    insert.setString(18, step.getNodeType());
+                    insert.setString(19, step.getRetryPolicy());
+                    if (step.getTimeoutSeconds() == null) {
+                        insert.setObject(20, null);
                     } else {
-                        insert.setInt(22, step.getArtifactQualityScore());
+                        insert.setInt(20, step.getTimeoutSeconds());
                     }
-                    insert.setString(23, step.getArtifactQualityReason());
-                    insert.setString(24, JdbcSerializationSupport.artifactIdsJson(step.getProducedArtifactIds()));
-                    insert.setTimestamp(25, JdbcSerializationSupport.timestamp(step.getCreatedAt()));
-                    insert.setTimestamp(26, JdbcSerializationSupport.timestamp(step.getUpdatedAt()));
+                    insert.setString(21, step.getIdempotencyKey());
+                    insert.setString(22, step.getFallbackStrategy());
+                    insert.setString(23, step.getNodeStatus());
+                    insert.setString(24, step.getTerminalStatus());
+                    if (step.getRetryAttempt() == null) {
+                        insert.setObject(25, null);
+                    } else {
+                        insert.setInt(25, step.getRetryAttempt());
+                    }
+                    insert.setString(26, step.getExecutionToken());
+                    if (step.getLeaseVersion() == null) {
+                        insert.setObject(27, null);
+                    } else {
+                        insert.setInt(27, step.getLeaseVersion());
+                    }
+                    insert.setTimestamp(28, JdbcSerializationSupport.timestamp(step.getStartedAt()));
+                    insert.setTimestamp(29, JdbcSerializationSupport.timestamp(step.getCompletedAt()));
+                    insert.setString(30, step.getFailureType());
+                    insert.setString(31, step.getDiscardedReason());
+                    insert.setString(32, step.getFinalDecision());
+                    insert.setBoolean(33, step.isRealOutputUsed());
+                    insert.setString(34, step.getArtifactParseStatus());
+                    insert.setString(35, step.getArtifactBuildValidationStatus());
+                    insert.setString(36, step.getArtifactBuildValidationReason());
+                    insert.setString(37, step.getArtifactQualityStatus());
+                    if (step.getArtifactQualityScore() == null) {
+                        insert.setObject(38, null);
+                    } else {
+                        insert.setInt(38, step.getArtifactQualityScore());
+                    }
+                    insert.setString(39, step.getArtifactQualityReason());
+                    insert.setString(40, JdbcSerializationSupport.artifactIdsJson(step.getProducedArtifactIds()));
+                    insert.setTimestamp(41, JdbcSerializationSupport.timestamp(step.getCreatedAt()));
+                    insert.setTimestamp(42, JdbcSerializationSupport.timestamp(step.getUpdatedAt()));
                     insert.addBatch();
                 }
                 insert.executeBatch();
@@ -412,6 +442,22 @@ public class JdbcTaskRepository implements TaskRepository {
                             resultSet.getString("parallel_group_key"),
                             JdbcSerializationSupport.integerList(resultSet.getString("depends_on_step_orders_json")),
                             resultSet.getString("routing_reason"),
+                            readOptionalColumn(resultSet, "node_id"),
+                            readOptionalColumn(resultSet, "node_type"),
+                            readOptionalColumn(resultSet, "retry_policy"),
+                            readOptionalInteger(resultSet, "timeout_seconds"),
+                            readOptionalColumn(resultSet, "idempotency_key"),
+                            readOptionalColumn(resultSet, "fallback_strategy"),
+                            readOptionalColumn(resultSet, "node_status"),
+                            readOptionalColumn(resultSet, "terminal_status"),
+                            readOptionalInteger(resultSet, "retry_attempt"),
+                            readOptionalColumn(resultSet, "execution_token"),
+                            readOptionalInteger(resultSet, "lease_version"),
+                            JdbcSerializationSupport.instant(resultSet.getTimestamp("started_at")),
+                            JdbcSerializationSupport.instant(resultSet.getTimestamp("completed_at")),
+                            readOptionalColumn(resultSet, "failure_type"),
+                            readOptionalColumn(resultSet, "discarded_reason"),
+                            readOptionalColumn(resultSet, "final_decision"),
                             readOptionalBoolean(resultSet, "real_output_used"),
                             readOptionalColumn(resultSet, "artifact_parse_status"),
                             readOptionalColumn(resultSet, "artifact_build_validation_status"),
@@ -488,6 +534,22 @@ public class JdbcTaskRepository implements TaskRepository {
                         parallel_group_key VARCHAR(128),
                         depends_on_step_orders_json TEXT,
                         routing_reason TEXT,
+                        node_id VARCHAR(128),
+                        node_type VARCHAR(128),
+                        retry_policy VARCHAR(64),
+                        timeout_seconds INT,
+                        idempotency_key VARCHAR(255),
+                        fallback_strategy VARCHAR(128),
+                        node_status VARCHAR(64),
+                        terminal_status VARCHAR(64),
+                        retry_attempt INT,
+                        execution_token VARCHAR(128),
+                        lease_version INT,
+                        started_at TIMESTAMP,
+                        completed_at TIMESTAMP,
+                        failure_type VARCHAR(128),
+                        discarded_reason TEXT,
+                        final_decision TEXT,
                         real_output_used BOOLEAN,
                         artifact_parse_status VARCHAR(64),
                         artifact_build_validation_status VARCHAR(64),
@@ -501,6 +563,22 @@ public class JdbcTaskRepository implements TaskRepository {
                     )
                     """);
             ensureColumn(connection, "agenthub_task_steps", "artifact_build_validation_reason", "TEXT");
+            ensureColumn(connection, "agenthub_task_steps", "node_id", "VARCHAR(128)");
+            ensureColumn(connection, "agenthub_task_steps", "node_type", "VARCHAR(128)");
+            ensureColumn(connection, "agenthub_task_steps", "retry_policy", "VARCHAR(64)");
+            ensureColumn(connection, "agenthub_task_steps", "timeout_seconds", "INT");
+            ensureColumn(connection, "agenthub_task_steps", "idempotency_key", "VARCHAR(255)");
+            ensureColumn(connection, "agenthub_task_steps", "fallback_strategy", "VARCHAR(128)");
+            ensureColumn(connection, "agenthub_task_steps", "node_status", "VARCHAR(64)");
+            ensureColumn(connection, "agenthub_task_steps", "terminal_status", "VARCHAR(64)");
+            ensureColumn(connection, "agenthub_task_steps", "retry_attempt", "INT");
+            ensureColumn(connection, "agenthub_task_steps", "execution_token", "VARCHAR(128)");
+            ensureColumn(connection, "agenthub_task_steps", "lease_version", "INT");
+            ensureColumn(connection, "agenthub_task_steps", "started_at", "TIMESTAMP NULL");
+            ensureColumn(connection, "agenthub_task_steps", "completed_at", "TIMESTAMP NULL");
+            ensureColumn(connection, "agenthub_task_steps", "failure_type", "VARCHAR(128)");
+            ensureColumn(connection, "agenthub_task_steps", "discarded_reason", "TEXT");
+            ensureColumn(connection, "agenthub_task_steps", "final_decision", "TEXT");
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to initialize task schema", exception);
         }

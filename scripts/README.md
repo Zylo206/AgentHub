@@ -129,15 +129,16 @@ node scripts/collab-cluster-smoke-test.mjs
 
 It opens 20 clients across the configured doc-collab nodes and verifies final Yjs convergence. Without those environment variables it exits with `[SKIP]`.
 
-To validate the snapshot/object-storage boundary locally, you can enable the filesystem-backed object-storage layout for `doc-collab`:
+To validate the snapshot/object-storage boundary locally, enable backend-managed object storage for `doc-collab`:
 
 ```powershell
 $env:DOC_COLLAB_SNAPSHOT_STORAGE_TYPE="object-storage"
-$env:DOC_COLLAB_OBJECT_STORAGE_DIR="C:/Users/<your-user>/.agenthub/agenthub/object-storage"
-$env:DOC_COLLAB_OBJECT_STORAGE_BUCKET="doc-collab"
+$env:AGENTHUB_OBJECT_STORAGE_PROVIDER="filesystem"
+$env:AGENTHUB_OBJECT_STORAGE_FILESYSTEM_ROOT_DIR="C:/Users/<your-user>/.agenthub/agenthub/object-storage"
+$env:AGENTHUB_COLLAB_V2_SNAPSHOT_OBJECT_STORAGE_BUCKET="doc-collab-snapshots"
 ```
 
-This keeps the local file snapshot fallback and adds an object-storage-style snapshot copy for restart recovery drills without introducing a cloud SDK dependency.
+This keeps the local file snapshot fallback and adds a backend object-storage snapshot manifest + blob path for restart recovery drills. For real MinIO, switch `AGENTHUB_OBJECT_STORAGE_PROVIDER=s3` and provide the S3-compatible endpoint and credentials.
 
 Optional stronger checks are only enabled when set, so they do not block `DEFAULT_MOCK` or non-real runs:
 
@@ -340,7 +341,42 @@ The explicit schema file is available at `backend/src/main/resources/schema-jdbc
 
 `schema-jdbc.sql` is a fresh-initialization schema, not a migration script. If you already have an older AgentHub JDBC database, recreate it for local validation or apply equivalent `ALTER TABLE` statements manually before running the JDBC smoke flow.
 
-The JDBC profile now also persists per-user `OPENAI_COMPATIBLE` IM API runtime config in `agenthub_adapter_runtime_configs`. When you save API keys through `/api/adapters/openai-compatible/runtime-config` in JDBC mode, set `AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY` so the API key is encrypted before it is written to MySQL.
+The JDBC profile now also persists `OPENAI_COMPATIBLE` IM API runtime config in `agenthub_adapter_runtime_configs`. Scope resolution is `USER -> ORG -> GLOBAL`. When you save API keys through `/api/adapters/openai-compatible/runtime-config` in JDBC mode, set `AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY` so the API key is encrypted before it is written to MySQL.
+
+Admin users can now manage shared scopes by passing `scopeType=ORG` or `scopeType=GLOBAL` to the runtime-config endpoint. Normal users remain limited to `USER`.
+
+## Local Dependency Bootstrap
+
+New local helper scripts:
+
+```powershell
+node scripts/init-local-mysql.mjs
+node scripts/check-redis.mjs
+node scripts/check-object-storage.mjs
+node scripts/init-object-storage-bucket.mjs
+```
+
+`check-object-storage.mjs` and `init-object-storage-bucket.mjs` call the backend admin object-storage endpoints, so start the backend first and keep the default `admin/admin` demo account or provide:
+
+```powershell
+$env:AGENTHUB_OBJECT_STORAGE_ADMIN_USERNAME="admin"
+$env:AGENTHUB_OBJECT_STORAGE_ADMIN_PASSWORD="admin"
+```
+
+Real MinIO/S3-compatible object storage example:
+
+```powershell
+$env:AGENTHUB_OBJECT_STORAGE_PROVIDER="s3"
+$env:AGENTHUB_OBJECT_STORAGE_S3_ENDPOINT="http://127.0.0.1:9000"
+$env:AGENTHUB_OBJECT_STORAGE_S3_ACCESS_KEY="minioadmin"
+$env:AGENTHUB_OBJECT_STORAGE_S3_SECRET_KEY="minioadmin"
+$env:AGENTHUB_OBJECT_STORAGE_S3_REGION="us-east-1"
+$env:AGENTHUB_OBJECT_STORAGE_S3_FORCE_PATH_STYLE="true"
+$env:AGENTHUB_ATTACHMENTS_STORAGE_TYPE="object-storage"
+$env:DOC_COLLAB_SNAPSHOT_STORAGE_TYPE="object-storage"
+node scripts/init-object-storage-bucket.mjs
+node scripts/check-object-storage.mjs
+```
 
 For a repeatable local MySQL initialization flow, use the opt-in helper script. It uses the local `mysql` CLI, creates the database if needed, and applies `schema-jdbc.sql`:
 
@@ -657,3 +693,39 @@ mvn spring-boot:run
 ```
 
 Do not write real API keys into `.env.example`, README, or committed scripts. After startup, open `/agents` and use the Adapter Test panel to test `OPENAI_COMPATIBLE`.
+
+## Lightweight Task DAG / Conflict Smokes
+
+The lightweight production-closure scripts focus on explicit task nodes, run-control fields, structured conflict handling, aggregator explainability, and conversation-level observability.
+
+```powershell
+node scripts/task-dag-smoke-test.mjs
+node scripts/run-control-smoke-test.mjs
+node scripts/conflict-smoke-test.mjs
+node scripts/aggregator-smoke-test.mjs
+node scripts/observability-smoke-test.mjs
+```
+
+- `task-dag-smoke-test.mjs`: verifies `TaskGraph.nodes`, node fields, execution batches, and task timeline replay.
+- `run-control-smoke-test.mjs`: verifies `executionToken`, `leaseVersion`, `idempotencyKey`, and deterministic terminal cancel rejection.
+- `conflict-smoke-test.mjs`: verifies `compare-diff`, stale diff blocking, force apply with approval, and related audit entries.
+- `aggregator-smoke-test.mjs`: verifies typed aggregator summary fields such as `code=`, `markdown/doc=`, `review=`, and `deploy=`.
+- `observability-smoke-test.mjs`: verifies `/api/conversations/{conversationId}/task-run-observability`.
+
+Optional active cancel verification remains opt-in because it requires the backend to be started with artificial step delay:
+
+```powershell
+$env:AGENTHUB_ORCHESTRATOR_STEP_DELAY_MILLIS="3000"
+$env:AGENTHUB_RUN_CONTROL_EXPECT_ACTIVE_CANCEL="true"
+node scripts/run-control-smoke-test.mjs
+```
+
+## Conflict Browser E2E
+
+`conflict-e2e-browser.mjs` is a focused browser gate for the first-phase Conflict Resolution Panel:
+
+```powershell
+node scripts/conflict-e2e-browser.mjs
+```
+
+It seeds a stale-diff scenario through the backend API, opens `/workspace`, selects the conflict revision, verifies the three-column conflict panel, fills manual merged content, and creates a new revision from the browser path.

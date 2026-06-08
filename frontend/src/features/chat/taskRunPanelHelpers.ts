@@ -149,7 +149,7 @@ export function getProducedArtifactsForRun(artifacts: Artifact[], taskRun: TaskR
 export function countFallbackSteps(taskRun: TaskRun): number {
   return taskRun.steps.filter((step) => {
     const adapterDisplay = getAdapterDisplay(step);
-    return adapterDisplay.fallbackUsed || adapterDisplay.status === "FALLBACK_USED";
+    return adapterDisplay.fallbackUsed || adapterDisplay.status === "FALLBACK_USED" || step.terminalStatus === "FALLBACK";
   }).length;
 }
 

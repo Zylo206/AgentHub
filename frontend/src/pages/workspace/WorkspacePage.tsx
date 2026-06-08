@@ -27,6 +27,7 @@ import type {
   Message,
   OrchestratorTriggerSuggestion,
   StreamingPreviewState,
+  TaskRunObservabilitySummary,
   TaskRun,
   TaskSpec,
   TaskStep
@@ -115,6 +116,7 @@ export function WorkspacePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [taskSpecs, setTaskSpecs] = useState<TaskSpec[]>([]);
   const [taskRuns, setTaskRuns] = useState<TaskRun[]>([]);
+  const [taskRunObservability, setTaskRunObservability] = useState<TaskRunObservabilitySummary | null>(null);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
   const [artifactSnapshots, setArtifactSnapshots] = useState<ArtifactSnapshot[]>([]);
@@ -283,6 +285,7 @@ export function WorkspacePage() {
     setMessages,
     setTaskSpecs,
     setTaskRuns,
+    setTaskRunObservability,
     setArtifacts,
     setDeployments,
     setArtifactSnapshots,
@@ -503,6 +506,7 @@ export function WorkspacePage() {
       setMessages([]);
       setTaskSpecs([]);
       setTaskRuns([]);
+      setTaskRunObservability(null);
       setArtifacts([]);
       setDeployments([]);
       setArtifactSnapshots([]);
@@ -684,6 +688,7 @@ export function WorkspacePage() {
         loading={loadingTaskRuns}
         selectedTaskRunId={selectedTaskRunId}
         selectedTaskStepId={selectedTaskStepId}
+        observabilitySummary={taskRunObservability}
         streamingPreviewsByStepId={streamingPreviewsByStepId}
         onSelectStep={handleSelectTaskStep}
         onCancelTaskRun={handleCancelTaskRun}

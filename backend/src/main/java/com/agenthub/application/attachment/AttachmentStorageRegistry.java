@@ -3,7 +3,6 @@ package com.agenthub.application.attachment;
 import com.agenthub.domain.attachment.AttachmentRecord;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,12 +35,15 @@ public class AttachmentStorageRegistry {
         return requireProvider(defaultProvider).store(attachmentId, originalFileName, inputStream);
     }
 
-    public Path resolve(AttachmentRecord attachmentRecord) {
-        return requireProvider(attachmentRecord.getStorageProvider()).resolve(attachmentRecord.getStoragePath());
+    public AttachmentStorageService.AttachmentContent open(AttachmentRecord attachmentRecord) throws IOException {
+        return requireProvider(attachmentRecord.getStorageProvider()).open(
+                attachmentRecord.getStoragePath(),
+                attachmentRecord.getStorageKey());
     }
 
-    public Path resolve(String providerKey, String storagePath) {
-        return requireProvider(providerKey).resolve(storagePath);
+    public AttachmentStorageService.AttachmentContent open(String providerKey, String storagePath, String storageKey)
+            throws IOException {
+        return requireProvider(providerKey).open(storagePath, storageKey);
     }
 
     private AttachmentStorageService requireProvider(String providerKey) {

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/adapters")
@@ -41,8 +42,9 @@ public class AgentAdapterController {
     }
 
     @GetMapping("/openai-compatible/runtime-config")
-    public ApiResponse<?> getOpenAICompatibleRuntimeConfig() {
-        return ApiResponse.success(openAICompatibleRuntimeConfigService.get());
+    public ApiResponse<?> getOpenAICompatibleRuntimeConfig(
+            @RequestParam(value = "scopeType", required = false) String scopeType) {
+        return ApiResponse.success(openAICompatibleRuntimeConfigService.get(scopeType));
     }
 
     @PostMapping("/openai-compatible/runtime-config")
@@ -50,6 +52,7 @@ public class AgentAdapterController {
             @Valid @RequestBody OpenAICompatibleRuntimeConfigRequest request) {
         return ApiResponse.success(
                 openAICompatibleRuntimeConfigService.update(new UpdateRuntimeConfigCommand(
+                        request.scopeType(),
                         request.enabled(),
                         request.providerName(),
                         request.baseUrl(),
@@ -96,6 +99,7 @@ record ExecuteAdapterRequest(
 }
 
 record OpenAICompatibleRuntimeConfigRequest(
+        String scopeType,
         boolean enabled,
         @NotBlank String providerName,
         @NotBlank String baseUrl,

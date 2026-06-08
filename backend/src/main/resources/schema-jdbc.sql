@@ -162,6 +162,22 @@ CREATE TABLE IF NOT EXISTS agenthub_task_steps (
     parallel_group_key VARCHAR(128),
     depends_on_step_orders_json TEXT,
     routing_reason TEXT,
+    node_id VARCHAR(128),
+    node_type VARCHAR(128),
+    retry_policy VARCHAR(64),
+    timeout_seconds INT,
+    idempotency_key VARCHAR(255),
+    fallback_strategy VARCHAR(128),
+    node_status VARCHAR(64),
+    terminal_status VARCHAR(64),
+    retry_attempt INT,
+    execution_token VARCHAR(128),
+    lease_version INT,
+    started_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
+    failure_type VARCHAR(128),
+    discarded_reason TEXT,
+    final_decision TEXT,
     real_output_used BOOLEAN,
     artifact_parse_status VARCHAR(64),
     artifact_build_validation_status VARCHAR(64),
@@ -309,4 +325,20 @@ CREATE TABLE IF NOT EXISTS agenthub_adapter_runtime_configs (
     updated_by_user_id VARCHAR(128),
     updated_by_role VARCHAR(64),
     PRIMARY KEY (adapter_type, scope_type, scope_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_collab_snapshot_manifests (
+    artifact_id VARCHAR(128) PRIMARY KEY,
+    conversation_id VARCHAR(128) NOT NULL,
+    room_id VARCHAR(255) NOT NULL,
+    protocol VARCHAR(64) NOT NULL,
+    room_version INT NOT NULL,
+    storage_provider VARCHAR(64) NOT NULL,
+    storage_bucket VARCHAR(255) NOT NULL,
+    storage_key TEXT NOT NULL,
+    checksum_sha256 VARCHAR(128) NOT NULL,
+    snapshot_size_bytes BIGINT NOT NULL,
+    updated_by_user_id VARCHAR(128) NOT NULL,
+    updated_at TIMESTAMP NULL,
+    INDEX idx_agenthub_collab_snapshot_conversation_updated (conversation_id, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
