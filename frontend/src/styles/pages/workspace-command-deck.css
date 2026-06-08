@@ -135,8 +135,120 @@
 }
 
 .workspace-page .workspace-command-deck__advanced-body .workspace-session-summary,
-.workspace-page .workspace-command-deck__advanced-body .workspace-access-panel {
+.workspace-page .workspace-command-deck__advanced-body .workspace-access-panel,
+.workspace-page .workspace-command-deck__advanced-body .workspace-api-provider-panel {
   margin: 0 !important;
+}
+
+.workspace-api-provider-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.92), rgba(255, 255, 255, 0.96)),
+    #ffffff;
+}
+
+.workspace-api-provider-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-api-provider-panel__header span:first-child {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-api-provider-panel__header h3 {
+  margin: 2px 0 0;
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.workspace-api-provider-panel__copy,
+.workspace-api-provider-panel__message,
+.workspace-api-provider-panel__error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.workspace-api-provider-panel__copy {
+  color: #475569;
+}
+
+.workspace-api-provider-panel__message {
+  color: #047857;
+}
+
+.workspace-api-provider-panel__error {
+  color: #b91c1c;
+}
+
+.workspace-api-provider-panel__presets,
+.workspace-api-provider-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-api-provider-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workspace-api-provider-panel label {
+  display: grid;
+  gap: 5px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workspace-api-provider-panel input {
+  min-height: 34px;
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 700;
+  padding: 0 10px;
+  outline: none;
+}
+
+.workspace-api-provider-panel input:focus {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.workspace-api-provider-panel__toggle {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 8px !important;
+  color: #475569 !important;
+}
+
+.workspace-api-provider-panel__toggle input {
+  min-height: auto;
+  width: auto;
+}
+
+@media (max-width: 680px) {
+  .workspace-api-provider-panel__grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .workspace-page .workspace-command-deck .selected-agent-banner {

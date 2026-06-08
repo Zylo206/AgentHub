@@ -11,11 +11,18 @@ import org.springframework.stereotype.Service;
 @Service
 public class LocalAttachmentStorageService implements AttachmentStorageService {
 
+    public static final String PROVIDER_KEY = "LOCAL";
+
     private final Path storageDir;
 
     public LocalAttachmentStorageService(
             @Value("${agenthub.attachments.storage-dir:./.agenthub/uploads}") String storageDir) {
         this.storageDir = Path.of(storageDir).toAbsolutePath().normalize();
+    }
+
+    @Override
+    public String providerKey() {
+        return PROVIDER_KEY;
     }
 
     @Override
@@ -27,7 +34,7 @@ public class LocalAttachmentStorageService implements AttachmentStorageService {
             throw new IOException("Resolved attachment path escapes storage directory");
         }
         Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
-        return new StoredAttachment(target.toString(), storageDir.relativize(target).toString());
+        return new StoredAttachment(target.toString(), storageDir.relativize(target).toString(), providerKey());
     }
 
     @Override

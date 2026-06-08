@@ -29,7 +29,7 @@ public class AttachmentApplicationService {
 
     private final AttachmentRepository attachmentRepository;
     private final ConversationRepository conversationRepository;
-    private final AttachmentStorageService attachmentStorageService;
+    private final AttachmentStorageRegistry attachmentStorageRegistry;
     private final AttachmentAccessGuard attachmentAccessGuard;
     private final AttachmentScanService attachmentScanService;
     private final IdGenerator idGenerator;
@@ -39,7 +39,7 @@ public class AttachmentApplicationService {
     public AttachmentApplicationService(
             AttachmentRepository attachmentRepository,
             ConversationRepository conversationRepository,
-            AttachmentStorageService attachmentStorageService,
+            AttachmentStorageRegistry attachmentStorageRegistry,
             AttachmentAccessGuard attachmentAccessGuard,
             AttachmentScanService attachmentScanService,
             IdGenerator idGenerator,
@@ -47,7 +47,7 @@ public class AttachmentApplicationService {
             @Value("${agenthub.attachments.max-file-size-bytes:5242880}") long maxFileSizeBytes) {
         this.attachmentRepository = attachmentRepository;
         this.conversationRepository = conversationRepository;
-        this.attachmentStorageService = attachmentStorageService;
+        this.attachmentStorageRegistry = attachmentStorageRegistry;
         this.attachmentAccessGuard = attachmentAccessGuard;
         this.attachmentScanService = attachmentScanService;
         this.idGenerator = idGenerator;
@@ -70,14 +70,16 @@ public class AttachmentApplicationService {
         String fileName = sanitizeFileName(file.getOriginalFilename());
         try {
             byte[] bytes = file.getBytes();
-            AttachmentStorageService.StoredAttachment storedAttachment = attachmentStorageService.store(
+            AttachmentStorageService.StoredAttachment storedAttachment = attachmentStorageRegistry.store(
                     attachmentId,
                     fileName,
                     new ByteArrayInputStream(bytes));
             AttachmentScanService.ScanResult scanResult = attachmentScanService.scan(
                     attachmentId,
                     fileName,
-                    attachmentStorageService.resolve(storedAttachment.storagePath()));
+                    attachmentStorageRegistry.resolve(
+                            storedAttachment.storageProvider(),
+                            storedAttachment.storagePath()));
             AttachmentRecord record = new AttachmentRecord(
                     attachmentId,
                     conversationRef,
@@ -91,6 +93,7 @@ public class AttachmentApplicationService {
                     "CONVERSATION",
                     "LOCAL_USER",
                     scanResult.status(),
+                    storedAttachment.storageProvider(),
                     preview(file.getContentType(), file.getOriginalFilename(), bytes),
                     timeProvider.now(),
                     null);
@@ -140,7 +143,7 @@ public class AttachmentApplicationService {
 
     public Path resolveStoragePath(String attachmentId) {
         AttachmentRecord attachment = getAttachment(attachmentId);
-        return attachmentStorageService.resolve(attachment.getStoragePath());
+        return attachmentStorageRegistry.resolve(attachment);
     }
 
     private String preview(String contentType, String fileName, byte[] bytes) {

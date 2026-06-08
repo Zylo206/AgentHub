@@ -29,8 +29,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Known issue`: backend managed process default jar path is relative to the Tauri runtime directory and fails until the user enters the absolute backend jar path.
    - `Next`: harden real user management, persistent account storage, invite/member directory flows, and broader permission coverage for less-used maintenance endpoints.
    - `Done`: first-phase Artifact realtime collaboration is implemented for `CODE` and `MARKDOWN` drafts: REST room state, `/api/doc-collab` WebSocket sync, presence / cursor metadata, persisted room snapshots, and approval-gated publish to Artifact Revision.
-   - `Next`: add production member-management UI, richer presence details, a fuller Conflict Panel workflow for compare / force / cancel decisions, and browser smoke coverage for two-session collaboration.
-   - `Boundary`: the current collaboration room uses AgentHub's server-authoritative versioned document protocol. Full Yjs / Automerge CRDT updates and Redis / NATS / Kafka multi-node fanout remain a v2 track.
+   - `Done`: `doc-collab/` now implements `AGENTHUB_ARTIFACT_COLLAB_V2_YJS` as an independent Node / TypeScript service with Yjs binary updates, Y.Text content, file-backed snapshot/update recovery, optional Redis Streams + Pub/Sub fanout, and Spring permission/publish delegation.
+   - `Next`: add production member-management UI, richer presence details, a fuller Conflict Panel workflow for compare / force / cancel decisions, and live Redis-backed multi-node validation.
+   - `Boundary`: V1 remains the local fallback protocol. V2 uses Yjs, not Automerge. Redis fanout exists behind `REDIS_URL`, but production acceptance still needs a real three-node / 20-client run.
 
 1. **Monitor real Adapter output quality convergence**
    - Focus on `OPENAI_COMPATIBLE -> REAL_FIRST -> REAL_ADAPTER Artifact`.
@@ -49,6 +50,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: direct adapter execute results now also feed Adapter Quality Metrics, so `/api/adapters/{type}/execute` parse / fallback / accepted outcomes are visible outside TaskStep-created runs.
    - `Done`: `scripts/adapter-quality-matrix-smoke.mjs` now probes direct adapter execute across multiple task types and summarizes `ACCEPTED / PARSE_FAILED / QUALITY_FAILED / BUILD_FAILED / FALLBACK / SKIPPED` by adapter.
    - `Done`: Artifact Revision now promotes an accepted `REAL_ADAPTER` CODE output from the revision worker as the primary revised Artifact, while static revision output remains fallback.
+   - `Done`: Workspace Advanced now includes an IM API provider panel for `OPENAI_COMPATIBLE`: users can configure provider name, Base URL, API key, and model at backend runtime, then select or create an API Q&A Agent for IM routing. This is remote HTTP API support, not local CLI setup.
+   - `Done`: `OPENAI_COMPATIBLE` runtime config now persists through the repository boundary instead of a process-local singleton: memory mode keeps a per-user in-memory scope, and JDBC mode stores per-user config in `agenthub_adapter_runtime_configs`.
+   - `Done`: JDBC runtime-config persistence now encrypts stored API keys when `AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY` is configured; the backend never returns plaintext API keys to the frontend.
    - Real provider validation must be opt-in and must not commit keys.
 
 2. **Maintain REAL_FIRST primary Artifact rules**
@@ -143,7 +147,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: JDBC repositories and schema now cover Agent, ApprovalRequest, and ActionAuditLog; real MySQL restart verification covered agents, approval requests, action audits, memories, task steps, and attachments.
    - `Done`: JDBC repositories and schema now also cover Deployment and ArtifactSnapshot; `jdbc-smoke-test.mjs` restart verify checks deployment preview records and snapshot operation history.
    - `Done`: real MySQL create / restart verify passed again with Deployment and ArtifactSnapshot coverage on a temporary JDBC database.
+   - `Done`: attachment storage now has a provider boundary: `LOCAL` and `OBJECT_STORAGE` implementations can coexist, and each `AttachmentRecord` now persists its `storageProvider` so existing files remain readable after switching the default backend.
    - `Boundary`: this validates schema and repository create/query/update/restart paths; it does not make MySQL the default runtime.
+   - `Boundary`: the current object-storage backend is a filesystem-backed bucket layout for local/prod-like validation; real S3/MinIO SDK integration is still deferred.
    - The memory profile must remain the default stable path.
 
 8. **Converge Stop / Cancel execution semantics**
@@ -329,7 +335,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: Workspace Access Panel now supports PRIVATE / ORG / PUBLIC visibility, org tag, and OWNER / EDITOR / REVIEWER / VIEWER member management.
    - `Done`: Workspace conversation creation explicitly separates single-Agent chat and multi-Agent group collaboration, and passes `SINGLE` / `GROUP` to the backend.
    - `Done`: Conversation list displays the current mode as single Agent conversation or multi-Agent group chat.
-   - `Boundary`: Artifact-level realtime co-editing now exists for `CODE` / `MARKDOWN` drafts, while formal Artifact mutation still uses optimistic concurrency and approval. Full CRDT / OT remains deferred.
+   - `Done`: doc-collab snapshot persistence can now mirror into an object-storage-style bucket layout through `DOC_COLLAB_SNAPSHOT_STORAGE_TYPE=object-storage`, while keeping local file snapshots and Redis recovery as compatible fallbacks.
+   - `Boundary`: Artifact-level realtime co-editing now exists for `CODE` / `MARKDOWN` drafts through V1 fallback and V2 Yjs. Formal Artifact mutation still uses optimistic concurrency and approval.
+   - `Boundary`: the current doc-collab object-storage path is filesystem-backed and validates the persistence boundary plus restart recovery chain; it is not yet a cloud object-storage SDK integration.
    - `Boundary`: member management uses existing demo-token users and role strings; it is not enterprise IAM / SSO.
 
 ## Not Now
@@ -338,8 +346,9 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 - No mobile client.
 - No desktop distribution package or default desktop runtime requirement.
 - No real Vercel / Netlify / Docker / Kubernetes deployment.
-- No multi-node event bus.
-- No full Yjs / Automerge CRDT collaboration protocol.
+- No Kafka-backed collaboration event bus.
+- No Automerge collaboration protocol.
+- Redis-backed doc-collab fanout exists but is not part of the default Web / backend runtime.
 - No full multi-provider token streaming or token-level persistence.
 - No simultaneous deep OpenCode platform integration.
 - No Claude Code workspace-write mode.

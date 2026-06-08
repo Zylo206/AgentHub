@@ -160,13 +160,25 @@ public class ArtifactCollaborationService {
     }
 
     public synchronized Artifact publishDraft(String artifactId, String approvalId, String summary) {
+        return publishDraft(artifactId, approvalId, summary, null, PROTOCOL, null);
+    }
+
+    public synchronized Artifact publishDraft(
+            String artifactId,
+            String approvalId,
+            String summary,
+            String contentOverride,
+            String protocol,
+            Integer externalRoomVersion) {
         Artifact artifact = loadEditableArtifact(artifactId, true);
         RoomState room = rooms.computeIfAbsent(artifactId, ignored -> loadOrCreateRoom(artifact));
         refreshArtifactMetadata(room, artifact);
+        String publishedContent = contentOverride == null ? room.content : contentOverride;
+        int publishedVersion = externalRoomVersion == null ? room.version : externalRoomVersion;
         Artifact revision = artifactApplicationService.createCollaborationRevision(
                 artifactId,
-                room.content,
-                room.version,
+                publishedContent,
+                publishedVersion,
                 summary == null || summary.isBlank() ? "Publish collaborative draft." : summary.trim());
         actionAuditService.record(
                 new ConversationId(room.conversationId),
@@ -175,10 +187,39 @@ public class ArtifactCollaborationService {
                 artifactId,
                 "COMPLETED",
                 "Published collaborative draft room " + room.roomId
+                        + " using protocol " + normalizeProtocol(protocol)
                         + " as revision " + revision.getId().value()
                         + " after approval " + approvalId + ".");
         publishRoomEvent(room, "DRAFT_PUBLISHED");
         return revision;
+    }
+
+    public synchronized CollabAuthorizationView authorize(String artifactId, String mode, AuthPrincipal principal) {
+        String normalizedMode = mode == null || mode.isBlank()
+                ? "READ"
+                : mode.trim().toUpperCase(Locale.ROOT);
+        CollabRoomView room = "WRITE".equals(normalizedMode)
+                ? openWritableRoom(artifactId)
+                : openRoom(artifactId);
+        return new CollabAuthorizationView(
+                "AGENTHUB_ARTIFACT_COLLAB_V2_YJS",
+                normalizedMode,
+                room,
+                new CollabUserView(
+                        principal.userId(),
+                        principal.displayName(),
+                        principal.role(),
+                        true,
+                        "WRITE".equals(normalizedMode)));
+    }
+
+    private CollabRoomView openWritableRoom(String artifactId) {
+        Artifact artifact = loadEditableArtifact(artifactId, true);
+        RoomState room = rooms.computeIfAbsent(artifactId, ignored -> loadOrCreateRoom(artifact));
+        refreshArtifactMetadata(room, artifact);
+        pruneStaleParticipants(room);
+        persist(room);
+        return toView(room);
     }
 
     private Artifact loadEditableArtifact(String artifactId, boolean writable) {
@@ -299,6 +340,10 @@ public class ArtifactCollaborationService {
         return deviceId == null || deviceId.isBlank() ? "browser" : deviceId.trim();
     }
 
+    private String normalizeProtocol(String protocol) {
+        return protocol == null || protocol.isBlank() ? PROTOCOL : protocol.trim();
+    }
+
     private void compactOperations(RoomState room) {
         if (room.operations.size() <= MAX_RETAINED_OPERATIONS) {
             return;
@@ -379,6 +424,21 @@ public class ArtifactCollaborationService {
             String updatedAt,
             List<CollabParticipantView> participants,
             List<CollabOperationView> operations) {
+    }
+
+    public record CollabAuthorizationView(
+            String protocol,
+            String mode,
+            CollabRoomView room,
+            CollabUserView user) {
+    }
+
+    public record CollabUserView(
+            String userId,
+            String displayName,
+            String role,
+            boolean canRead,
+            boolean canWrite) {
     }
 
     public record CollabParticipantView(

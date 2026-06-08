@@ -17,6 +17,7 @@ public class AttachmentRecord {
     private final String visibility;
     private final String ownerUserId;
     private final String scanStatus;
+    private final String storageProvider;
     private final String contentPreview;
     private final Instant createdAt;
     private final Instant deletedAt;
@@ -44,6 +45,7 @@ public class AttachmentRecord {
                 "CONVERSATION",
                 null,
                 "SKIPPED",
+                "LOCAL",
                 contentPreview,
                 createdAt,
                 null);
@@ -62,6 +64,42 @@ public class AttachmentRecord {
             String visibility,
             String ownerUserId,
             String scanStatus,
+            String contentPreview,
+            Instant createdAt,
+            Instant deletedAt) {
+        this(
+                attachmentId,
+                conversationId,
+                messageId,
+                fileName,
+                contentType,
+                sizeBytes,
+                storagePath,
+                storageKey,
+                checksumSha256,
+                visibility,
+                ownerUserId,
+                scanStatus,
+                "LOCAL",
+                contentPreview,
+                createdAt,
+                deletedAt);
+    }
+
+    public AttachmentRecord(
+            String attachmentId,
+            ConversationId conversationId,
+            String messageId,
+            String fileName,
+            String contentType,
+            long sizeBytes,
+            String storagePath,
+            String storageKey,
+            String checksumSha256,
+            String visibility,
+            String ownerUserId,
+            String scanStatus,
+            String storageProvider,
             String contentPreview,
             Instant createdAt,
             Instant deletedAt) {
@@ -92,6 +130,7 @@ public class AttachmentRecord {
         this.visibility = normalizeOptional(visibility) == null ? "CONVERSATION" : normalizeOptional(visibility);
         this.ownerUserId = normalizeOptional(ownerUserId);
         this.scanStatus = normalizeOptional(scanStatus) == null ? "SKIPPED" : normalizeOptional(scanStatus);
+        this.storageProvider = normalizeOptional(storageProvider) == null ? "LOCAL" : normalizeOptional(storageProvider);
         this.contentPreview = normalizeOptional(contentPreview);
         this.createdAt = createdAt;
         this.deletedAt = deletedAt;
@@ -111,6 +150,7 @@ public class AttachmentRecord {
                 visibility,
                 ownerUserId,
                 scanStatus,
+                storageProvider,
                 contentPreview,
                 createdAt,
                 deletedAt);
@@ -130,6 +170,7 @@ public class AttachmentRecord {
                 visibility,
                 ownerUserId,
                 nextScanStatus,
+                storageProvider,
                 contentPreview,
                 createdAt,
                 deletedAt);
@@ -149,6 +190,7 @@ public class AttachmentRecord {
                 visibility,
                 ownerUserId,
                 scanStatus,
+                storageProvider,
                 contentPreview,
                 createdAt,
                 deletedAt);
@@ -200,6 +242,10 @@ public class AttachmentRecord {
 
     public String getScanStatus() {
         return scanStatus;
+    }
+
+    public String getStorageProvider() {
+        return storageProvider;
     }
 
     public String getContentPreview() {

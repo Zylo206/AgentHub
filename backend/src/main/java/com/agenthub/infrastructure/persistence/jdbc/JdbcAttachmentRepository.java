@@ -34,8 +34,8 @@ public class JdbcAttachmentRepository implements AttachmentRepository {
         String sql = """
                 REPLACE INTO agenthub_attachments
                 (attachment_id, conversation_id, message_id, file_name, content_type, size_bytes, storage_path,
-                 storage_key, checksum_sha256, visibility, owner_user_id, scan_status, content_preview, created_at, deleted_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 storage_key, checksum_sha256, visibility, owner_user_id, scan_status, storage_provider, content_preview, created_at, deleted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = connectionFactory.open();
                 var statement = connection.prepareStatement(sql)) {
@@ -51,9 +51,10 @@ public class JdbcAttachmentRepository implements AttachmentRepository {
             statement.setString(10, attachmentRecord.getVisibility());
             statement.setString(11, attachmentRecord.getOwnerUserId());
             statement.setString(12, attachmentRecord.getScanStatus());
-            statement.setString(13, attachmentRecord.getContentPreview());
-            statement.setTimestamp(14, JdbcSerializationSupport.timestamp(attachmentRecord.getCreatedAt()));
-            statement.setTimestamp(15, JdbcSerializationSupport.timestamp(attachmentRecord.getDeletedAt()));
+            statement.setString(13, attachmentRecord.getStorageProvider());
+            statement.setString(14, attachmentRecord.getContentPreview());
+            statement.setTimestamp(15, JdbcSerializationSupport.timestamp(attachmentRecord.getCreatedAt()));
+            statement.setTimestamp(16, JdbcSerializationSupport.timestamp(attachmentRecord.getDeletedAt()));
             statement.executeUpdate();
             return attachmentRecord;
         } catch (SQLException exception) {
@@ -228,6 +229,7 @@ public class JdbcAttachmentRepository implements AttachmentRepository {
                 resultSet.getString("visibility"),
                 resultSet.getString("owner_user_id"),
                 resultSet.getString("scan_status"),
+                resultSet.getString("storage_provider"),
                 resultSet.getString("content_preview"),
                 JdbcSerializationSupport.instant(resultSet.getTimestamp("created_at")),
                 JdbcSerializationSupport.instant(resultSet.getTimestamp("deleted_at")));
@@ -250,13 +252,26 @@ public class JdbcAttachmentRepository implements AttachmentRepository {
                         visibility VARCHAR(64),
                         owner_user_id VARCHAR(128),
                         scan_status VARCHAR(64),
+                        storage_provider VARCHAR(64),
                         content_preview TEXT,
                         created_at TIMESTAMP,
                         deleted_at TIMESTAMP
                     )
                     """);
+            ensureColumn(connection, "agenthub_attachments", "storage_provider", "VARCHAR(64) DEFAULT 'LOCAL'");
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to initialize attachment schema", exception);
+        }
+    }
+
+    private void ensureColumn(Connection connection, String tableName, String columnName, String definition)
+            throws SQLException {
+        try (var statement = connection.createStatement()) {
+            statement.executeUpdate("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + definition);
+        } catch (SQLException exception) {
+            if (!exception.getMessage().toLowerCase(Locale.ROOT).contains("duplicate column")) {
+                throw exception;
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ import {
 import { getIdValue } from "../../utils/id";
 import type { ArtifactCollabRoom } from "./artifactCollaborationTypes";
 import type { Artifact } from "./artifactTypes";
+import { useArtifactYjsCollaboration } from "./useArtifactYjsCollaboration";
 
 interface ArtifactCollaborationPanelProps {
   artifact: Artifact;
@@ -59,15 +60,18 @@ export function ArtifactCollaborationPanel({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [deviceId] = useState(() => getDeviceId());
   const socketRef = useRef<WebSocket | null>(null);
   const dirtyRef = useRef(false);
-  const deviceIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!deviceIdRef.current) {
-      deviceIdRef.current = getDeviceId();
-    }
-  }, []);
+  const yjsCollab = useArtifactYjsCollaboration({
+    artifactId,
+    deviceId,
+    initialContent: room?.content || artifact.content || "",
+    enabled: isCollaborativeArtifact(artifact) && import.meta.env.VITE_DOC_COLLAB_V2_ENABLED !== "false"
+  });
+  const usingYjs = yjsCollab.active;
+  const displayedContent = usingYjs ? yjsCollab.content : content;
+  const displayedParticipants = usingYjs ? yjsCollab.participants : room?.participants || [];
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +108,7 @@ export function ArtifactCollaborationPanel({
   }, [artifact, artifactId]);
 
   useEffect(() => {
-    if (!room || !artifactId || !isCollaborativeArtifact(artifact)) {
+    if (!room || !artifactId || !isCollaborativeArtifact(artifact) || usingYjs) {
       return;
     }
 
@@ -115,7 +119,7 @@ export function ArtifactCollaborationPanel({
       socket.send(JSON.stringify({
         action: "JOIN",
         artifactId,
-        deviceId: deviceIdRef.current || "browser"
+        deviceId
       }));
     };
 
@@ -158,10 +162,10 @@ export function ArtifactCollaborationPanel({
       socketRef.current = null;
       socket.close();
     };
-  }, [artifact, artifactId, room?.roomId]);
+  }, [artifact, artifactId, deviceId, room?.roomId, usingYjs]);
 
   useEffect(() => {
-    if (!room || !dirtyRef.current) {
+    if (!room || !dirtyRef.current || usingYjs) {
       return;
     }
 
@@ -183,7 +187,7 @@ export function ArtifactCollaborationPanel({
       updateArtifactCollabDocument(artifactId, {
         baseVersion: room.version,
         content,
-        deviceId: deviceIdRef.current || "browser",
+        deviceId,
         summary
       })
         .then((updatedRoom) => {
@@ -198,9 +202,13 @@ export function ArtifactCollaborationPanel({
     }, 600);
 
     return () => window.clearTimeout(handle);
-  }, [artifactId, content, room]);
+  }, [artifactId, content, deviceId, room, usingYjs]);
 
   function handleContentChange(value: string) {
+    if (usingYjs) {
+      yjsCollab.updateContent(value);
+      return;
+    }
     if (room && value.length > room.maxDocumentChars) {
       setErrorMessage(`协同草稿超过 ${room.maxDocumentChars} 字符上限。`);
       return;
@@ -212,6 +220,10 @@ export function ArtifactCollaborationPanel({
 
   function handleSelectionChange(event: SyntheticEvent<HTMLTextAreaElement>) {
     const range = getSelectionRange(event.currentTarget);
+    if (usingYjs) {
+      yjsCollab.updateCursor(range.start, range.end, true);
+      return;
+    }
     const socket = socketRef.current;
     const payload = {
       action: "CURSOR",
@@ -224,7 +236,7 @@ export function ArtifactCollaborationPanel({
       return;
     }
     void updateArtifactCollabPresence(artifactId, {
-      deviceId: deviceIdRef.current || "browser",
+      deviceId,
       cursorStart: range.start,
       cursorEnd: range.end,
       editing: true
@@ -259,10 +271,17 @@ export function ArtifactCollaborationPanel({
         return;
       }
       await onApproveApprovalRequest(approvalId);
+      const protocol = usingYjs ? yjsCollab.protocol : room.protocol;
+      const roomVersion = usingYjs ? yjsCollab.roomVersion : room.version;
       const revision = await publishArtifactCollabDraft(
         artifactId,
         approvalId,
-        `Published collaborative room ${room.roomId} version ${room.version}.`
+        `Published collaborative room ${room.roomId} version ${roomVersion ?? room.version}.`,
+        {
+          protocol,
+          roomVersion,
+          content: usingYjs ? yjsCollab.content : null
+        }
       );
       onSelectArtifact(getIdValue(revision.id));
       setStatusMessage(`已发布协同草稿为 ${revision.title} v${revision.version}。`);
@@ -294,19 +313,29 @@ export function ArtifactCollaborationPanel({
           <strong>多人实时协同草稿</strong>
           <p>Artifact 级协同房间。发布后生成 Revision，再进入现有 Diff / Approval / Audit 链路。</p>
         </div>
-        <span>{syncing ? "Syncing" : room ? `Room v${room.version}` : "Loading"}</span>
+        <span>
+          {usingYjs
+            ? yjsCollab.connected
+              ? `Yjs v${yjsCollab.roomVersion ?? room?.version ?? 1}`
+              : yjsCollab.status
+            : syncing
+              ? "Syncing"
+              : room
+                ? `Room v${room.version}`
+                : "Loading"}
+        </span>
       </div>
 
       <div className="artifact-collab-panel__meta">
-        <span>{room?.protocol || "AGENTHUB_ARTIFACT_COLLAB_V1"}</span>
-        <span>{room ? `${room.participants.length} 人在线` : "等待房间"}</span>
+        <span>{usingYjs ? yjsCollab.protocol : room?.protocol || "AGENTHUB_ARTIFACT_COLLAB_V1"}</span>
+        <span>{room ? `${displayedParticipants.length} 人在线` : "等待房间"}</span>
         <span>{room?.lastCompactedAt ? "Op log compacted" : "Op log active"}</span>
       </div>
 
       <textarea
         className="artifact-collab-panel__editor"
         data-testid="artifact-collab-editor"
-        value={content}
+        value={displayedContent}
         spellCheck={false}
         disabled={!room || publishing}
         onChange={(event) => handleContentChange(event.target.value)}
@@ -316,7 +345,7 @@ export function ArtifactCollaborationPanel({
       />
 
       <div className="artifact-collab-panel__participants">
-        {(room?.participants || []).map((participant) => (
+        {displayedParticipants.map((participant) => (
           <span key={`${participant.userId}:${participant.deviceId}`}>
             {participant.displayName} · {participant.editing ? "editing" : participant.status}
           </span>
@@ -324,6 +353,11 @@ export function ArtifactCollaborationPanel({
       </div>
 
       {errorMessage ? <p className="artifact-collab-panel__message artifact-collab-panel__message--error">{errorMessage}</p> : null}
+      {yjsCollab.errorMessage && !usingYjs ? (
+        <p className="artifact-collab-panel__message artifact-collab-panel__message--error">
+          {yjsCollab.errorMessage}
+        </p>
+      ) : null}
       {statusMessage ? <p className="artifact-collab-panel__message">{statusMessage}</p> : null}
 
       <div className="artifact-collab-panel__actions">
@@ -331,7 +365,7 @@ export function ArtifactCollaborationPanel({
           type="button"
           className="primary-button"
           data-testid="artifact-collab-publish"
-          disabled={!room || publishing || dirtyRef.current}
+          disabled={!room || publishing || dirtyRef.current || (usingYjs && !yjsCollab.connected)}
           onClick={() => {
             void handlePublishDraft();
           }}

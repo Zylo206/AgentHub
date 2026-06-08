@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import {
   getAgents,
+  getAdapters,
   getArtifact,
   removeConversationMember,
   updateConversationVisibility,
@@ -42,6 +43,7 @@ import { displayAdapterName } from "../../utils/productionLabels";
 import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
 import { WorkspaceArtifactInspectorShell } from "./WorkspaceArtifactInspectorShell";
 import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
+import { WorkspaceApiProviderPanel } from "./WorkspaceApiProviderPanel";
 import { WorkspaceChatLane } from "./WorkspaceChatLane";
 import { WorkspaceCommandDeck } from "./WorkspaceCommandDeck";
 import { WorkspaceDiagnosticsDrawer } from "./WorkspaceDiagnosticsDrawer";
@@ -667,6 +669,11 @@ export function WorkspacePage() {
     }
   }
 
+  async function handleApiProviderConfigured() {
+    const adapters = await getAdapters();
+    setAdapterDescriptors(adapters);
+  }
+
   const diagnosticSections = {
     taskrun: (
       <TaskRunPanel
@@ -767,6 +774,22 @@ export function WorkspacePage() {
 
   const commandDeckAdvanced = (
     <>
+      <WorkspaceApiProviderPanel
+        agents={agents}
+        adapterDescriptors={adapterDescriptors}
+        selectedAgent={selectedAgent}
+        onSelectAgent={setSelectedAgent}
+        onAgentCreated={(agent) => {
+          setAgents((current) => {
+            const agentId = getIdValue(agent.id);
+            const exists = current.some((item) => getIdValue(item.id) === agentId);
+            return exists
+              ? current.map((item) => (getIdValue(item.id) === agentId ? agent : item))
+              : [...current, agent];
+          });
+        }}
+        onConfigured={handleApiProviderConfigured}
+      />
       <WorkspaceSessionSummary
         currentConversation={currentConversation}
         selectedAgent={selectedAgent}

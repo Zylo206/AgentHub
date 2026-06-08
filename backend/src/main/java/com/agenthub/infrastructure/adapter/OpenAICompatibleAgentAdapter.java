@@ -1,9 +1,11 @@
 package com.agenthub.infrastructure.adapter;
 
-import com.agenthub.common.TimeProvider;
+import com.agenthub.application.agent.OpenAICompatibleRuntimeConfigService;
+import com.agenthub.application.agent.OpenAICompatibleRuntimeConfigService.RuntimeConfig;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.application.realtime.RunCancellationRegistry;
+import com.agenthub.common.TimeProvider;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +33,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
     private final AdapterArtifactContractValidator artifactContractValidator;
     private final RealtimeEventPublisher realtimeEventPublisher;
     private final RunCancellationRegistry runCancellationRegistry;
+    private final OpenAICompatibleRuntimeConfigService runtimeConfigService;
     private final boolean enabled;
     private final String baseUrl;
     private final String apiKey;
@@ -49,6 +52,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
             AdapterArtifactContractValidator artifactContractValidator,
             RealtimeEventPublisher realtimeEventPublisher,
             RunCancellationRegistry runCancellationRegistry,
+            OpenAICompatibleRuntimeConfigService runtimeConfigService,
             @Value("${agenthub.adapters.openai-compatible.enabled:false}") boolean enabled,
             @Value("${agenthub.adapters.openai-compatible.base-url:}") String baseUrl,
             @Value("${agenthub.adapters.openai-compatible.api-key:}") String apiKey,
@@ -65,6 +69,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         this.artifactContractValidator = artifactContractValidator;
         this.realtimeEventPublisher = realtimeEventPublisher;
         this.runCancellationRegistry = runCancellationRegistry;
+        this.runtimeConfigService = runtimeConfigService;
         this.enabled = enabled;
         this.baseUrl = baseUrl == null ? "" : baseUrl.trim();
         this.apiKey = apiKey == null ? "" : apiKey.trim();
@@ -85,7 +90,8 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
 
     @Override
     public AgentAdapterDescriptor describe() {
-        if (!enabled) {
+        EffectiveProviderConfig effectiveConfig = effectiveConfig();
+        if (!effectiveConfig.enabled()) {
             return new AgentAdapterDescriptor(
                     AgentAdapterType.OPENAI_COMPATIBLE,
                     AgentAdapterHealthStatus.DISABLED,
@@ -95,7 +101,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                     "Set agenthub.adapters.openai-compatible.enabled=true to enable it.");
         }
 
-        if (fixtureEnabled) {
+        if (fixtureEnabled && !effectiveConfig.runtimeConfigured()) {
             return new AgentAdapterDescriptor(
                     AgentAdapterType.OPENAI_COMPATIBLE,
                     AgentAdapterHealthStatus.AVAILABLE,
@@ -106,13 +112,13 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         }
 
         List<String> missingFields = new ArrayList<>();
-        if (baseUrl.isBlank()) {
+        if (effectiveConfig.baseUrl().isBlank()) {
             missingFields.add("base-url");
         }
-        if (apiKey.isBlank()) {
+        if (effectiveConfig.apiKey().isBlank()) {
             missingFields.add("api-key");
         }
-        if (model.isBlank()) {
+        if (effectiveConfig.model().isBlank()) {
             missingFields.add("model");
         }
         if (!missingFields.isEmpty()) {
@@ -121,7 +127,7 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                     AgentAdapterHealthStatus.MISCONFIGURED,
                     true,
                     false,
-                    "OpenAI Compatible adapter is enabled but missing required configuration.",
+                    "OpenAI Compatible adapter is enabled but missing required API provider configuration.",
                     "Missing configuration: " + String.join(", ", missingFields));
         }
 
@@ -131,9 +137,17 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                 true,
                 false,
                 streamingEnabled
-                        ? "OpenAI Compatible adapter is configured and ready for streaming chat completions calls."
-                        : "OpenAI Compatible adapter is configured and ready for non-stream chat completions calls.",
-                null);
+                        ? "OpenAI Compatible adapter is configured for IM API Q&A through streaming chat completions."
+                        : "OpenAI Compatible adapter is configured for IM API Q&A through non-stream chat completions.",
+                null,
+                List.of("chat-completions", "artifact-json-contract", "im-question-answering-api"),
+                List.of("API key remains backend-only", "No local CLI execution", "MOCK fallback is preserved"),
+                Map.of(
+                        "providerName", effectiveConfig.providerName(),
+                        "baseUrl", effectiveConfig.baseUrl(),
+                        "model", effectiveConfig.model(),
+                        "runtimeConfigured", effectiveConfig.runtimeConfigured(),
+                        "apiKeyConfigured", !effectiveConfig.apiKey().isBlank()));
     }
 
     @Override
@@ -155,12 +169,13 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
                     timeProvider.now());
         }
 
-        if (fixtureEnabled) {
+        EffectiveProviderConfig effectiveConfig = effectiveConfig();
+        if (fixtureEnabled && !effectiveConfig.runtimeConfigured()) {
             return executeFixture(request, startedAt);
         }
 
         try {
-            return executeProviderRequest(request, startedAt);
+            return executeProviderRequest(request, startedAt, effectiveConfig);
         } catch (AdapterResponseException exception) {
             return failedResponse(request, startedAt, exception.getMessage());
         } catch (InterruptedException exception) {
@@ -172,21 +187,31 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         }
     }
 
-    private AgentResponse executeProviderRequest(AgentRequest request, Instant startedAt)
+    private AgentResponse executeProviderRequest(
+            AgentRequest request,
+            Instant startedAt,
+            EffectiveProviderConfig effectiveConfig)
             throws AdapterResponseException, InterruptedException {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
-        String nonStreamingPayload = buildRequestPayload(request, false);
-        String streamingPayload = streamingEnabled ? buildRequestPayload(request, true) : nonStreamingPayload;
+        String nonStreamingPayload = buildRequestPayload(request, false, effectiveConfig);
+        String streamingPayload = streamingEnabled
+                ? buildRequestPayload(request, true, effectiveConfig)
+                : nonStreamingPayload;
         int totalAttempts = maxRetries + 1;
         String lastRetryableFailure = "";
 
         for (int attempt = 1; attempt <= totalAttempts; attempt++) {
             try {
                 ProviderMessage providerMessage = streamingEnabled
-                        ? sendStreamingRequestWithFallback(client, streamingPayload, nonStreamingPayload, request)
-                        : sendNonStreamingRequest(client, nonStreamingPayload);
+                        ? sendStreamingRequestWithFallback(
+                                client,
+                                streamingPayload,
+                                nonStreamingPayload,
+                                request,
+                                effectiveConfig)
+                        : sendNonStreamingRequest(client, nonStreamingPayload, effectiveConfig);
                 if (providerMessage.statusCode() < 200 || providerMessage.statusCode() >= 300) {
                     String errorMessage = describeProviderHttpError(providerMessage.statusCode(), providerMessage.body());
                     if (isRetryableHttpStatus(providerMessage.statusCode()) && attempt < totalAttempts) {
@@ -259,9 +284,10 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
 
     private ProviderMessage sendNonStreamingRequest(
             HttpClient client,
-            String payload) throws IOException, InterruptedException {
+            String payload,
+            EffectiveProviderConfig effectiveConfig) throws IOException, InterruptedException {
         HttpResponse<String> httpResponse = client.send(
-                buildHttpRequest(payload),
+                buildHttpRequest(payload, effectiveConfig),
                 HttpResponse.BodyHandlers.ofString());
         return new ProviderMessage(httpResponse.statusCode(), httpResponse.body(), null);
     }
@@ -270,22 +296,23 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
             HttpClient client,
             String streamingPayload,
             String nonStreamingPayload,
-            AgentRequest request) throws IOException, InterruptedException, AdapterResponseException {
+            AgentRequest request,
+            EffectiveProviderConfig effectiveConfig) throws IOException, InterruptedException, AdapterResponseException {
         ProviderMessage providerMessage;
         try {
-            providerMessage = sendStreamingRequest(client, streamingPayload, request);
+            providerMessage = sendStreamingRequest(client, streamingPayload, request, effectiveConfig);
         } catch (AdapterResponseException exception) {
             if (isCancellationRequested(request)) {
                 throw exception;
             }
-            return sendNonStreamingRequest(client, nonStreamingPayload);
+            return sendNonStreamingRequest(client, nonStreamingPayload, effectiveConfig);
         }
         if (isCancellationRequested(request)) {
             throw new AdapterResponseException(
                     "OpenAI Compatible streaming response was cancelled before completion.");
         }
         if (shouldFallbackFromStreaming(providerMessage) && !isCancellationRequested(request)) {
-            return sendNonStreamingRequest(client, nonStreamingPayload);
+            return sendNonStreamingRequest(client, nonStreamingPayload, effectiveConfig);
         }
         return providerMessage;
     }
@@ -301,9 +328,10 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
     private ProviderMessage sendStreamingRequest(
             HttpClient client,
             String payload,
-            AgentRequest request) throws IOException, InterruptedException, AdapterResponseException {
+            AgentRequest request,
+            EffectiveProviderConfig effectiveConfig) throws IOException, InterruptedException, AdapterResponseException {
         HttpResponse<Stream<String>> httpResponse = client.send(
-                buildHttpRequest(payload),
+                buildHttpRequest(payload, effectiveConfig),
                 HttpResponse.BodyHandlers.ofLines());
         if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
             String body;
@@ -334,20 +362,23 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         return new ProviderMessage(httpResponse.statusCode(), "", content.toString());
     }
 
-    private String buildRequestPayload(AgentRequest request, boolean stream) throws AdapterResponseException {
+    private String buildRequestPayload(
+            AgentRequest request,
+            boolean stream,
+            EffectiveProviderConfig effectiveConfig) throws AdapterResponseException {
         try {
-            return objectMapper.writeValueAsString(buildPayload(request, stream));
+            return objectMapper.writeValueAsString(buildPayload(request, stream, effectiveConfig));
         } catch (JsonProcessingException exception) {
             throw new AdapterResponseException("OpenAI Compatible adapter failed to serialize request payload.");
         }
     }
 
-    private HttpRequest buildHttpRequest(String payload) {
+    private HttpRequest buildHttpRequest(String payload, EffectiveProviderConfig effectiveConfig) {
         return HttpRequest.newBuilder()
-                .uri(URI.create(buildChatCompletionsUrl(baseUrl)))
+                .uri(URI.create(buildChatCompletionsUrl(effectiveConfig.baseUrl())))
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + apiKey)
+                .header("Authorization", "Bearer " + effectiveConfig.apiKey())
                 .POST(HttpRequest.BodyPublishers.ofString(payload))
                 .build();
     }
@@ -376,9 +407,12 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         return builder.toString();
     }
 
-    private JsonNode buildPayload(AgentRequest request, boolean stream) {
+    private JsonNode buildPayload(
+            AgentRequest request,
+            boolean stream,
+            EffectiveProviderConfig effectiveConfig) {
         var root = objectMapper.createObjectNode();
-        root.put("model", model);
+        root.put("model", effectiveConfig.model());
         root.put("temperature", 0.2);
         root.put("stream", stream);
         if (jsonResponseFormatEnabled) {
@@ -610,6 +644,28 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
             return normalized + "chat/completions";
         }
         return normalized + "/chat/completions";
+    }
+
+    private EffectiveProviderConfig effectiveConfig() {
+        RuntimeConfig runtimeConfig = runtimeConfigService.snapshot();
+        if (runtimeConfig.enabled()) {
+            return new EffectiveProviderConfig(
+                    true,
+                    runtimeConfig.providerName().isBlank()
+                            ? "Custom OpenAI-compatible"
+                            : runtimeConfig.providerName(),
+                    runtimeConfig.baseUrl(),
+                    runtimeConfig.apiKey(),
+                    runtimeConfig.model(),
+                    true);
+        }
+        return new EffectiveProviderConfig(
+                enabled,
+                "Environment OpenAI-compatible",
+                baseUrl,
+                apiKey,
+                model,
+                false);
     }
 
     private String extractResponseContent(String responseBody) throws AdapterResponseException {
@@ -857,6 +913,10 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
         if (!apiKey.isBlank()) {
             sanitized = sanitized.replace(apiKey, "[REDACTED_API_KEY]");
         }
+        String runtimeApiKey = runtimeConfigService.snapshot().apiKey();
+        if (!runtimeApiKey.isBlank()) {
+            sanitized = sanitized.replace(runtimeApiKey, "[REDACTED_API_KEY]");
+        }
         sanitized = sanitized.replaceAll("(?i)bearer\\s+[A-Za-z0-9._~+/=-]+", "Bearer [REDACTED]");
         sanitized = sanitized.replaceAll("(?i)(api[_-]?key[\"'\\s:=]+)[^\\s,\"'}]+", "$1[REDACTED]");
         return sanitized;
@@ -878,6 +938,15 @@ public class OpenAICompatibleAgentAdapter implements AgentAdapter {
     }
 
     private record ProviderMessage(int statusCode, String body, String content) {
+    }
+
+    private record EffectiveProviderConfig(
+            boolean enabled,
+            String providerName,
+            String baseUrl,
+            String apiKey,
+            String model,
+            boolean runtimeConfigured) {
     }
 
     private static class AdapterResponseException extends Exception {

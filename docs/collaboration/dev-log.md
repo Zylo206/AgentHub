@@ -9693,3 +9693,124 @@
 - 新增 `scripts/collab-smoke-test.mjs`，验证双客户端 room join、文档更新、presence、发布审批拒绝和发布为 Revision。
 - 增加 Redis / NATS fanout 方案设计，再进入真正多节点部署。
 - 增加 Yjs provider adapter，将 `REPLACE_DOCUMENT` 协议升级为 CRDT update frames。
+
+## 2026-06-08：Artifact 协同 V2 Yjs 服务与 Redis fanout
+
+### 改动
+
+- 新增独立 `doc-collab/` Node / TypeScript 服务：
+  - 协议：`AGENTHUB_ARTIFACT_COLLAB_V2_YJS`
+  - WebSocket：`/rooms/{artifactId}?access_token=...`
+  - CRDT：每个 Artifact room 一个 Yjs `Y.Doc`，正文为 `Y.Text("content")`
+  - 二进制帧：首字节 `1`，后续字节为 Yjs update
+  - 本地持久化：`DOC_COLLAB_STORAGE_DIR` 下保存 snapshot 和 update log
+  - 快照压缩：`DOC_COLLAB_SNAPSHOT_EVERY_UPDATES`
+  - Redis：配置 `REDIS_URL` 后启用 Redis Streams + Pub/Sub fanout
+- Spring 后端新增 V2 授权与发布扩展：
+  - `POST /api/artifacts/{artifactId}/collab-room/authorize`
+  - `/publish` 支持传入 V2 materialized content、protocol、roomVersion
+  - 发布仍要求 `PUBLISH_COLLAB_DRAFT` 审批，并只生成 Artifact Revision，不直接覆盖 base Artifact
+- 前端新增 `useArtifactYjsCollaboration`：
+  - V2 Yjs provider 优先
+  - V2 不可用时回退到现有 V1 协同面板
+  - 发布时 materialize Yjs 文本并复用现有 Approval / Artifact Revision 链路
+- 新增脚本：
+  - `scripts/collab-smoke-test.mjs`
+  - `scripts/collab-cluster-smoke-test.mjs`
+- 更新：
+  - `.env.example`
+  - `docs/spec/artifact-realtime-collaboration-spec.md`
+  - `docs/plans/next.md`
+  - `scripts/README.md`
+
+### 验收目标
+
+- V1 客户端继续可用。
+- V2 客户端能打开同一个 Artifact 房间并读到初始内容。
+- 两个 Yjs 客户端并发编辑后内容收敛。
+- 断线重连后能恢复最新 Yjs 状态。
+- 发布协同草稿必须审批，且只生成 Artifact Revision。
+- Redis 多节点模式下，多个 doc-collab 节点通过 Streams + Pub/Sub fanout 收敛。
+
+### 边界
+
+- `doc-collab` 是独立服务，不是 Spring 默认运行时的一部分。
+- Redis fanout 已实现为可配置路径，但本阶段仍需要真实 Redis 和三个服务实例做运行验收。
+- Kafka 不作为低延迟协同房间 fanout 的第一选择，仍适合审计或异步流水场景。
+
+## 2026-06-08：Workspace IM API 接入窗口
+
+### 改动
+
+- 新增 Workspace 高级工具里的 `IM API 接入` 面板：
+  - 支持选择 DeepSeek / OpenAI / 自定义 OpenAI-compatible 供应商。
+  - 支持填写供应商名称、Base URL / API、模型名称、API Key。
+  - 支持一键选择或创建 `OPENAI_COMPATIBLE` 的 `API 问答 Agent`，让 IM 问答走远程 API 通道。
+- 新增后端运行时配置接口：
+  - `GET /api/adapters/openai-compatible/runtime-config`
+  - `POST /api/adapters/openai-compatible/runtime-config`
+- `OPENAI_COMPATIBLE` Adapter 现在优先读取页面运行时配置：
+  - 页面配置完整时直接走 OpenAI-compatible HTTP Chat Completions。
+  - 页面配置关闭时保留原环境变量配置和 fixture 行为。
+  - Descriptor 暴露 providerName / baseUrl / model / runtimeConfigured / apiKeyConfigured，不返回明文 API Key。
+
+### 验证
+
+- `cd backend && mvn test` 通过：13/13。
+- `cd frontend && npm.cmd run build` 通过。
+
+### 边界
+
+- 该入口服务于 IM 端问答 API 支持，不是 Claude Code / Codex 本地 CLI 配置。
+- API Key 只提交到后端运行时内存，不写入前端 localStorage，不提交到仓库。
+- 当前不是多供应商持久化密钥库；后端重启后运行时页面配置会丢失，仍可用环境变量方式做长期配置。
+
+## 2026-06-08：持久化分层推进第一轮
+
+### 改动
+
+- `OPENAI_COMPATIBLE` runtime config 从进程内单例改为 repository 边界：
+  - 新增 `OpenAICompatibleRuntimeConfigRepository`
+  - `memory` 模式使用 `InMemoryOpenAICompatibleRuntimeConfigRepository`
+  - `jdbc` 模式使用 `JdbcOpenAICompatibleRuntimeConfigRepository`
+  - 新增 `agenthub_adapter_runtime_configs` 表
+- runtime config 作用域改为“当前登录用户”：
+  - `GET/POST /api/adapters/openai-compatible/runtime-config` 现在读写当前用户的 `USER` scope
+  - 响应增加 `scopeType / scopeId / canManage / apiKeyStorageMode / updatedByUserId / updatedByRole`
+  - `OPENAI_COMPATIBLE` Adapter 在有认证上下文时优先读取当前用户 scope，未命中时保留 global/env fallback 可能性
+- JDBC 模式下新增 API key 加密：
+  - 新增 `OpenAICompatibleRuntimeConfigCryptoService`
+  - 配置项：`AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY`
+  - JDBC 持久化写入 `api_key_encrypted`
+  - 前端和 descriptor 仍只看到 masked key，不返回明文
+- 附件存储从“单一本地盘”升级为 provider 抽象：
+  - `AttachmentStorageService` 增加 `providerKey`
+  - 新增 `AttachmentStorageRegistry`
+  - 保留 `LOCAL` 实现
+  - 新增 `OBJECT_STORAGE` 实现，当前采用 filesystem-backed bucket layout
+  - `AttachmentRecord` 和 JDBC schema 新增 `storageProvider`
+  - 默认存储实现可通过 `AGENTHUB_ATTACHMENTS_STORAGE_TYPE` 切换，旧附件仍能按记录里的 provider 读取
+- doc-collab 快照链路增加 object-storage-style snapshot mirror：
+  - 新增 `doc-collab/src/objectSnapshotStore.ts`
+  - `DOC_COLLAB_SNAPSHOT_STORAGE_TYPE=object-storage` 时，snapshot 会同时写入 object-storage-style bucket
+  - room 恢复顺序扩展为：Redis snapshot -> object-storage snapshot -> local file snapshot -> update log / Redis Streams replay
+- 更新：
+  - `application.yml`
+  - `.env.example`
+  - `schema-jdbc.sql`
+  - `scripts/README.md`
+  - `docs/plans/next.md`
+  - `docs/spec/artifact-realtime-collaboration-spec.md`
+
+### 验证
+
+- `cd backend && mvn test`：通过，16 tests，0 failures。
+- `cd frontend && npm.cmd run build`：通过。
+- `cd doc-collab && npm.cmd run build`：通过。
+- `git diff --check`：通过，仅 CRLF warning。
+
+### 边界
+
+- 当前 object-storage backend 仍是 filesystem-backed bucket layout，用于把“存储语义”和“元数据边界”先抽出来；这不是已经接好真实 S3 / MinIO SDK。
+- `OPENAI_COMPATIBLE` runtime config 已从“重启即丢”的内存单例升级为 repository persistence，但本轮没有补全多租户 org-level / conversation-level provider 配置。
+- `mvn -q -DskipTests package` 在本机仍可能因为现有 `target/*.jar` 文件占用而卡在 Spring Boot repackage rename；测试编译链路已通过。

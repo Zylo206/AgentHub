@@ -141,6 +141,16 @@ export function getArtifactCollabWebSocketUrl(): string {
   return withAuthQuery(`${websocketBase}/api/doc-collab`);
 }
 
+export function getArtifactYjsCollabWebSocketUrl(artifactId: string, deviceId: string): string {
+  const configuredBase = import.meta.env.VITE_DOC_COLLAB_WS_URL as string | undefined;
+  const defaultBase = API_BASE.includes(":8080")
+    ? API_BASE.replace(/^http/i, "ws").replace(":8080", ":8091")
+    : API_BASE.replace(/^http/i, "ws");
+  const websocketBase = (configuredBase || defaultBase).replace(/\/$/, "");
+  const url = `${websocketBase}/rooms/${encodeURIComponent(artifactId)}?deviceId=${encodeURIComponent(deviceId)}`;
+  return withAuthQuery(url);
+}
+
 async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized = true): Promise<T> {
   let response: Response;
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
@@ -309,6 +319,37 @@ export interface AdapterQualityMetrics {
 
 export function getAdapterQualityMetrics(): Promise<AdapterQualityMetrics[]> {
   return request<AdapterQualityMetrics[]>("/api/adapters/quality-metrics");
+}
+
+export interface OpenAICompatibleRuntimeConfig {
+  enabled: boolean;
+  providerName: string;
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  maskedApiKey: string;
+  updatedAt?: string | null;
+}
+
+export interface UpdateOpenAICompatibleRuntimeConfigRequest {
+  enabled: boolean;
+  providerName: string;
+  baseUrl: string;
+  apiKey?: string;
+  model: string;
+}
+
+export function getOpenAICompatibleRuntimeConfig(): Promise<OpenAICompatibleRuntimeConfig> {
+  return request<OpenAICompatibleRuntimeConfig>("/api/adapters/openai-compatible/runtime-config");
+}
+
+export function updateOpenAICompatibleRuntimeConfig(
+  requestBody: UpdateOpenAICompatibleRuntimeConfigRequest
+): Promise<OpenAICompatibleRuntimeConfig> {
+  return request<OpenAICompatibleRuntimeConfig>("/api/adapters/openai-compatible/runtime-config", {
+    method: "POST",
+    body: JSON.stringify(requestBody)
+  });
 }
 
 export interface ExecuteAdapterRequest {
@@ -679,11 +720,22 @@ export function updateArtifactCollabPresence(
 export function publishArtifactCollabDraft(
   artifactId: string,
   approvalId: string,
-  summary: string
+  summary: string,
+  options: {
+    protocol?: string;
+    roomVersion?: number | null;
+    content?: string | null;
+  } = {}
 ): Promise<Artifact> {
   return request<Artifact>(`/api/artifacts/${artifactId}/collab-room/publish`, {
     method: "POST",
-    body: JSON.stringify({ approvalId, summary })
+    body: JSON.stringify({
+      approvalId,
+      summary,
+      protocol: options.protocol ?? null,
+      roomVersion: options.roomVersion ?? null,
+      content: options.content ?? null
+    })
   });
 }
 

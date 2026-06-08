@@ -66,6 +66,17 @@ public class ArtifactCollaborationController {
                 body.editing()));
     }
 
+    @PostMapping("/api/artifacts/{artifactId}/collab-room/authorize")
+    public ApiResponse<?> authorize(
+            @PathVariable("artifactId") String artifactId,
+            @RequestBody(required = false) CollabAuthorizeRequest request) {
+        AuthPrincipal principal = authSessionService.current();
+        CollabAuthorizeRequest body = request == null
+                ? new CollabAuthorizeRequest("READ", "AGENTHUB_ARTIFACT_COLLAB_V1")
+                : request;
+        return ApiResponse.success(collaborationService.authorize(artifactId, body.mode(), principal));
+    }
+
     @PostMapping("/api/artifacts/{artifactId}/collab-room/publish")
     public ApiResponse<?> publishDraft(
             @PathVariable("artifactId") String artifactId,
@@ -77,10 +88,21 @@ public class ArtifactCollaborationController {
                 "PUBLISH_COLLAB_DRAFT",
                 "ARTIFACT",
                 artifactId);
-        Artifact revision = collaborationService.publishDraft(artifactId, request.approvalId(), request.summary());
+        Artifact revision = collaborationService.publishDraft(
+                artifactId,
+                request.approvalId(),
+                request.summary(),
+                request.content(),
+                request.protocol(),
+                request.roomVersion());
         approvalApplicationService.consume(request.approvalId());
         return ApiResponse.success(revision, "Collaborative draft published as Artifact revision");
     }
+}
+
+record CollabAuthorizeRequest(
+        String mode,
+        String protocol) {
 }
 
 record CollabDocumentUpdateRequest(
@@ -100,5 +122,8 @@ record CollabPresenceRequest(
 
 record CollabPublishRequest(
         @NotBlank String approvalId,
-        String summary) {
+        String summary,
+        String protocol,
+        Integer roomVersion,
+        String content) {
 }

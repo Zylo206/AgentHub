@@ -2,6 +2,8 @@ package com.agenthub.api.adapter;
 
 import com.agenthub.application.agent.AgentAdapterApplicationService;
 import com.agenthub.application.agent.AgentAdapterApplicationService.ExecuteAgentAdapterCommand;
+import com.agenthub.application.agent.OpenAICompatibleRuntimeConfigService;
+import com.agenthub.application.agent.OpenAICompatibleRuntimeConfigService.UpdateRuntimeConfigCommand;
 import com.agenthub.common.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -19,9 +21,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class AgentAdapterController {
 
     private final AgentAdapterApplicationService agentAdapterApplicationService;
+    private final OpenAICompatibleRuntimeConfigService openAICompatibleRuntimeConfigService;
 
-    public AgentAdapterController(AgentAdapterApplicationService agentAdapterApplicationService) {
+    public AgentAdapterController(
+            AgentAdapterApplicationService agentAdapterApplicationService,
+            OpenAICompatibleRuntimeConfigService openAICompatibleRuntimeConfigService) {
         this.agentAdapterApplicationService = agentAdapterApplicationService;
+        this.openAICompatibleRuntimeConfigService = openAICompatibleRuntimeConfigService;
     }
 
     @GetMapping
@@ -32,6 +38,24 @@ public class AgentAdapterController {
     @GetMapping("/quality-metrics")
     public ApiResponse<?> listQualityMetrics() {
         return ApiResponse.success(agentAdapterApplicationService.listQualityMetrics());
+    }
+
+    @GetMapping("/openai-compatible/runtime-config")
+    public ApiResponse<?> getOpenAICompatibleRuntimeConfig() {
+        return ApiResponse.success(openAICompatibleRuntimeConfigService.get());
+    }
+
+    @PostMapping("/openai-compatible/runtime-config")
+    public ApiResponse<?> updateOpenAICompatibleRuntimeConfig(
+            @Valid @RequestBody OpenAICompatibleRuntimeConfigRequest request) {
+        return ApiResponse.success(
+                openAICompatibleRuntimeConfigService.update(new UpdateRuntimeConfigCommand(
+                        request.enabled(),
+                        request.providerName(),
+                        request.baseUrl(),
+                        request.apiKey(),
+                        request.model())),
+                "OpenAI-compatible runtime provider updated");
     }
 
     @PostMapping("/{adapterType}/execute")
@@ -69,4 +93,12 @@ record ExecuteAdapterRequest(
         List<String> contextItems,
         List<String> artifactSummaries,
         Map<String, Object> metadata) {
+}
+
+record OpenAICompatibleRuntimeConfigRequest(
+        boolean enabled,
+        @NotBlank String providerName,
+        @NotBlank String baseUrl,
+        String apiKey,
+        @NotBlank String model) {
 }

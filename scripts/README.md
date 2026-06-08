@@ -93,6 +93,52 @@ $env:AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER="true"; node scripts/smoke-test.mjs
 
 Without this flag, the smoke test remains stable in the default Mock / fallback environment.
 
+## Artifact Collaboration V2 Smoke Tests
+
+`collab-smoke-test.mjs` verifies the Yjs V2 collaboration path. It requires the Spring backend and the independent `doc-collab` service to be running. It uses `doc-collab` dependencies from `doc-collab/node_modules`.
+
+Setup:
+
+```powershell
+cd doc-collab
+npm install
+npm run build
+$env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
+$env:DOC_COLLAB_PORT="8091"
+npm run start
+```
+
+Then run from the repository root:
+
+```powershell
+$env:AGENTHUB_API_BASE_URL="http://127.0.0.1:8080"
+$env:DOC_COLLAB_WS_BASE_URL="ws://127.0.0.1:8091"
+node scripts/collab-smoke-test.mjs
+```
+
+The smoke test logs in as `demo/demo`, creates a CODE or MARKDOWN Artifact when `AGENTHUB_COLLAB_SMOKE_ARTIFACT_ID` is not provided, opens two Yjs clients, verifies convergence, reconnect recovery, approval creation, approval execution, and publish to Artifact Revision.
+
+`collab-cluster-smoke-test.mjs` is opt-in for Redis-backed multi-node validation:
+
+```powershell
+$env:DOC_COLLAB_CLUSTER_URLS="ws://127.0.0.1:8091,ws://127.0.0.1:8092,ws://127.0.0.1:8093"
+$env:AGENTHUB_COLLAB_SMOKE_ARTIFACT_ID="<artifact-id>"
+$env:AGENTHUB_COLLAB_SMOKE_TOKEN="<bearer-token>"
+node scripts/collab-cluster-smoke-test.mjs
+```
+
+It opens 20 clients across the configured doc-collab nodes and verifies final Yjs convergence. Without those environment variables it exits with `[SKIP]`.
+
+To validate the snapshot/object-storage boundary locally, you can enable the filesystem-backed object-storage layout for `doc-collab`:
+
+```powershell
+$env:DOC_COLLAB_SNAPSHOT_STORAGE_TYPE="object-storage"
+$env:DOC_COLLAB_OBJECT_STORAGE_DIR="C:/Users/<your-user>/.agenthub/agenthub/object-storage"
+$env:DOC_COLLAB_OBJECT_STORAGE_BUCKET="doc-collab"
+```
+
+This keeps the local file snapshot fallback and adds an object-storage-style snapshot copy for restart recovery drills without introducing a cloud SDK dependency.
+
 Optional stronger checks are only enabled when set, so they do not block `DEFAULT_MOCK` or non-real runs:
 
 ```powershell
@@ -293,6 +339,8 @@ The default smoke checks `/api/health.persistenceMode` when `AGENTHUB_SMOKE_EXPE
 The explicit schema file is available at `backend/src/main/resources/schema-jdbc.sql`. Run it against the target MySQL-compatible database before starting the backend if you want deterministic local setup instead of relying only on repository auto-create behavior.
 
 `schema-jdbc.sql` is a fresh-initialization schema, not a migration script. If you already have an older AgentHub JDBC database, recreate it for local validation or apply equivalent `ALTER TABLE` statements manually before running the JDBC smoke flow.
+
+The JDBC profile now also persists per-user `OPENAI_COMPATIBLE` IM API runtime config in `agenthub_adapter_runtime_configs`. When you save API keys through `/api/adapters/openai-compatible/runtime-config` in JDBC mode, set `AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY` so the API key is encrypted before it is written to MySQL.
 
 For a repeatable local MySQL initialization flow, use the opt-in helper script. It uses the local `mysql` CLI, creates the database if needed, and applies `schema-jdbc.sql`:
 

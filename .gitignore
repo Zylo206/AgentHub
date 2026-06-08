@@ -12,6 +12,11 @@ desktop/node_modules/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
 
+# Doc collaboration service
+doc-collab/node_modules/
+doc-collab/dist/
+doc-collab/.agenthub/
+
 # Build caches
 *.tsbuildinfo
 **/*.tsbuildinfo

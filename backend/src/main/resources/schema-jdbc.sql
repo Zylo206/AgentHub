@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS agenthub_attachments (
     visibility VARCHAR(64),
     owner_user_id VARCHAR(128),
     scan_status VARCHAR(64),
+    storage_provider VARCHAR(64) DEFAULT 'LOCAL',
     content_preview TEXT,
     created_at TIMESTAMP NULL,
     deleted_at TIMESTAMP NULL,
@@ -293,4 +294,19 @@ CREATE TABLE IF NOT EXISTS agenthub_action_audits (
     created_at TIMESTAMP NULL,
     INDEX idx_agenthub_action_audits_conversation_created (conversation_id, created_at),
     INDEX idx_agenthub_action_audits_action_created (action_type, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_adapter_runtime_configs (
+    adapter_type VARCHAR(64) NOT NULL,
+    scope_type VARCHAR(32) NOT NULL,
+    scope_id VARCHAR(128) NOT NULL,
+    enabled BOOLEAN DEFAULT FALSE,
+    provider_name VARCHAR(255),
+    base_url TEXT,
+    api_key_encrypted LONGTEXT,
+    model VARCHAR(255),
+    updated_at TIMESTAMP NULL,
+    updated_by_user_id VARCHAR(128),
+    updated_by_role VARCHAR(64),
+    PRIMARY KEY (adapter_type, scope_type, scope_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

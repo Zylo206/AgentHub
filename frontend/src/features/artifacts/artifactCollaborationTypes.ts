@@ -43,4 +43,6 @@ export interface ArtifactCollabRoom {
   updatedAt?: string | null;
   participants: ArtifactCollabParticipant[];
   operations: ArtifactCollabOperation[];
+  redisFanoutEnabled?: boolean;
+  instanceId?: string;
 }
