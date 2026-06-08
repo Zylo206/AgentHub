@@ -54,6 +54,11 @@ public class FilesystemObjectStorageClient implements ObjectStorageClient {
         return new ObjectContent(Files.newInputStream(target), Files.size(target), "application/octet-stream");
     }
 
+    @Override
+    public void delete(String bucket, String key) throws IOException {
+        Files.deleteIfExists(resolvePath(bucket, key));
+    }
+
     private Path bucketDir(String bucket) {
         return rootDir.resolve(normalizeBucket(bucket)).normalize();
     }

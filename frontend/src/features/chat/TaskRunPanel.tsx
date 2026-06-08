@@ -106,6 +106,94 @@ function TaskRunExplainDisclosure({
   );
 }
 
+function RejectionRecoveryPanel({
+  taskRuns,
+  artifacts
+}: {
+  taskRuns: TaskRun[];
+  artifacts: Artifact[];
+}) {
+  const blockedRuns = taskRuns.filter((taskRun) => String(taskRun.status).toUpperCase() === "BLOCKED");
+  const rejectedArtifacts = artifacts.filter((artifact) => String(artifact.qualityStatus || "").toUpperCase() === "REJECTED");
+  const acceptedReviewArtifacts = artifacts.filter(
+    (artifact) =>
+      String(artifact.type || "").toUpperCase() === "REVIEW_REPORT" &&
+      String(artifact.status || "").toUpperCase() === "ACCEPTED"
+  );
+  const revisionArtifacts = artifacts.filter((artifact) => artifact.parentArtifactId || artifact.revisionInstruction);
+  const latestRejectedArtifact = rejectedArtifacts.length > 0 ? rejectedArtifacts[rejectedArtifacts.length - 1] : null;
+  const latestRevisionArtifact = revisionArtifacts.length > 0 ? revisionArtifacts[revisionArtifacts.length - 1] : null;
+  const latestAcceptedReviewArtifact = acceptedReviewArtifacts.length > 0
+    ? acceptedReviewArtifacts[acceptedReviewArtifacts.length - 1]
+    : null;
+
+  if (
+    blockedRuns.length === 0 &&
+    !latestRejectedArtifact &&
+    !latestRevisionArtifact &&
+    !latestAcceptedReviewArtifact
+  ) {
+    return null;
+  }
+
+  return (
+    <section className="task-run-observability" data-testid="rejection-recovery-panel">
+      <div className="task-run-observability__headline">
+        <strong>REJECTION / Retry-Recover</strong>
+        <span>
+          Blocked runs {blockedRuns.length} / Revisions {revisionArtifacts.length} / Accepted reviews{" "}
+          {acceptedReviewArtifacts.length}
+        </span>
+      </div>
+      <div className="task-run-observability__grid">
+        <div>
+          <strong>Latest blocked run</strong>
+          <ul>
+            {blockedRuns.length > 0 ? (
+              blockedRuns.slice(-3).map((taskRun) => (
+                <li key={`blocked-${formatId(taskRun.id)}`}>
+                  {formatId(taskRun.id)} - {displayStatus(taskRun.status)}
+                </li>
+              ))
+            ) : (
+              <li>None</li>
+            )}
+          </ul>
+        </div>
+        <div>
+          <strong>Retry / revise source</strong>
+          <ul>
+            {latestRejectedArtifact ? (
+              <li>
+                {latestRejectedArtifact.title} - {sanitizeProductionText(latestRejectedArtifact.qualityReason)}
+              </li>
+            ) : (
+              <li>None</li>
+            )}
+            {latestRevisionArtifact ? (
+              <li>
+                Latest revision: {latestRevisionArtifact.title}
+              </li>
+            ) : null}
+          </ul>
+        </div>
+        <div>
+          <strong>Recovery status</strong>
+          <ul>
+            {latestAcceptedReviewArtifact ? (
+              <li>
+                Accepted review: {latestAcceptedReviewArtifact.title}
+              </li>
+            ) : (
+              <li>Pending</li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function TaskRunPanel({
   agents,
   artifacts,
@@ -196,6 +284,8 @@ export function TaskRunPanel({
           </div>
         </section>
       ) : null}
+
+      <RejectionRecoveryPanel taskRuns={taskRuns} artifacts={artifacts} />
 
       {taskSpecs.length > 0 ? (
         <div className="task-spec-strip">

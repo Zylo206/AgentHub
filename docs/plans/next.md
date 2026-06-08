@@ -32,6 +32,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: `doc-collab/` now implements `AGENTHUB_ARTIFACT_COLLAB_V2_YJS` as an independent Node / TypeScript service with Yjs binary updates, Y.Text content, file-backed snapshot/update recovery, optional Redis Streams + Pub/Sub fanout, and Spring permission/publish delegation.
    - `Done`: V2 snapshot persistence now has a backend-owned manifest path: `agenthub_collab_snapshot_manifests`, backend object-storage snapshot upload/download endpoints, backend-managed object buckets, and restore order `Redis -> backend object snapshot -> local file snapshot -> update log`.
    - `Done`: shared backend object storage is now first-class and supports both `filesystem` and real `s3` provider modes for attachment `OBJECT_STORAGE` and doc-collab snapshot persistence.
+   - `Done`: backend admin object-storage endpoints now support bucket ensure plus live write/read/delete verification, and `scripts/object-storage-smoke-test.mjs` validates real MinIO roundtrip, attachment roundtrip, and collab snapshot persistence.
    - `Next`: add production member-management UI, richer presence details, a fuller Conflict Panel workflow for compare / force / cancel decisions, and live Redis-backed multi-node validation.
    - `Boundary`: V1 remains the local fallback protocol. V2 uses Yjs, not Automerge. Redis fanout exists behind `REDIS_URL`, but production acceptance still needs a real three-node / 20-client run.
 
@@ -56,6 +57,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: `OPENAI_COMPATIBLE` runtime config now persists through the repository boundary instead of a process-local singleton: memory mode keeps a per-user in-memory scope, and JDBC mode stores per-user config in `agenthub_adapter_runtime_configs`.
    - `Done`: JDBC runtime-config persistence now encrypts stored API keys when `AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY` is configured; the backend never returns plaintext API keys to the frontend.
    - `Done`: `OPENAI_COMPATIBLE` runtime config now resolves `USER -> ORG -> GLOBAL`, allows admin-managed shared scopes, and records config mutations through the audit path without returning plaintext API keys.
+   - `Done`: ordinary IM single-Agent chat now has a backend `direct-agent-reply` path for `OPENAI_COMPATIBLE`-style remote Q&A instead of only persisting the user message or relying on demo-task orchestration.
+   - `Done`: `scripts/openai-provider-matrix-smoke.mjs` now validates the IM remote Q&A path across multiple OpenAI-compatible providers by updating runtime config, sending a real chat message, and verifying the direct reply result.
    - Real provider validation must be opt-in and must not commit keys.
 
 2. **Maintain REAL_FIRST primary Artifact rules**
@@ -137,6 +140,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: opt-in smoke with `AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION=true` verifies the rejection path and then verifies Artifact Revision returns to a `COMPLETED` / accepted review path.
    - `Done`: opt-in smoke with `AGENTHUB_SMOKE_EXPECT_REVIEW_QUALITY_REJECTION=true` verifies quality-gate rejection and revision recovery.
    - `Done`: Artifact Revision now reuses the Reviewer gate after revision execution; build / quality / parse failures can block the revision TaskRun and emit retry / revise guidance.
+   - `Done`: `TaskRunPanel` now includes a focused `REJECTION / Retry-Recover` summary so blocked runs, retry source Artifacts, latest revision, and accepted recovery review are visible without opening raw message details.
+   - `Done`: `scripts/rejection-recovery-smoke-test.mjs` now provides a dedicated API-level recovery drill for `REJECTION -> revise -> accepted review -> observability`.
    - `Boundary`: this is a rule-based review decision loop using available build/quality metadata; it is not a full static analysis engine or automatic code-fix system.
 
 7. **Run a JDBC / MySQL real database verification sprint**
@@ -152,7 +157,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Done`: real MySQL create / restart verify passed again with Deployment and ArtifactSnapshot coverage on a temporary JDBC database.
    - `Done`: attachment storage now has a provider boundary: `LOCAL` and `OBJECT_STORAGE` implementations can coexist, and each `AttachmentRecord` now persists its `storageProvider` so existing files remain readable after switching the default backend.
    - `Boundary`: this validates schema and repository create/query/update/restart paths; it does not make MySQL the default runtime.
-   - `Boundary`: the current object-storage backend is a filesystem-backed bucket layout for local/prod-like validation; real S3/MinIO SDK integration is still deferred.
+   - `Boundary`: real S3/MinIO object storage is now supported through the shared backend object-storage abstraction, but it remains opt-in and is not part of the default local `memory + MOCK` runtime.
    - The memory profile must remain the default stable path.
 
 8. **Converge Stop / Cancel execution semantics**

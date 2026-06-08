@@ -13,6 +13,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
@@ -99,6 +100,15 @@ public class S3ObjectStorageClient implements ObjectStorageClient {
             return new ObjectContent(response, sizeBytes, contentType);
         } catch (Exception exception) {
             throw new IOException("Failed to open object " + bucket + "/" + key + ": " + exception.getMessage(), exception);
+        }
+    }
+
+    @Override
+    public void delete(String bucket, String key) throws IOException {
+        try {
+            requireClient().deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+        } catch (Exception exception) {
+            throw new IOException("Failed to delete object " + bucket + "/" + key + ": " + exception.getMessage(), exception);
         }
     }
 

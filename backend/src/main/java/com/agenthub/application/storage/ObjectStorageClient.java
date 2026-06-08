@@ -15,6 +15,8 @@ public interface ObjectStorageClient {
 
     ObjectContent open(String bucket, String key) throws IOException;
 
+    void delete(String bucket, String key) throws IOException;
+
     record StoredObject(
             String bucket,
             String key,

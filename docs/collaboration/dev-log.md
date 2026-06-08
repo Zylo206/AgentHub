@@ -9956,3 +9956,38 @@
 ### 下一步
 
 - 如果要继续往生产级推进，下一轮重点是更细的 timeline UI、主动 cancel/stop 延迟环境验收，以及更完整的人工解冲编辑体验。
+
+## 2026-06-08 - MinIO live smoke, IM provider matrix, and rejection recovery closure
+
+### 变更
+
+- 后端对象存储补了独立 `ObjectStorageAdminService`：
+  - `ObjectStorageClient` 新增 `delete(...)`
+  - `ObjectStorageAdminController` 新增 bucket `verify` 和 default-bucket `ensure`
+  - live verify 现在会真实执行 `ensure -> write -> read -> checksum compare -> delete`
+- `S3ObjectStorageClient` 和 `FilesystemObjectStorageClient` 都补齐了 delete 实现。
+- 普通 IM 单 Agent 问答新增后端 `direct-agent-reply` 路径：
+  - 基于用户消息和目标 Agent 直接执行 Adapter
+  - 从 Adapter Artifact JSON 中提取 `assistantMessage`
+  - 持久化 direct IM 产物并回写一条 Agent 消息
+- Workspace 发送消息后，如果目标 Agent 的 `preferredAdapterType=OPENAI_COMPATIBLE` 且不是多 Agent 群聊，前端会自动请求 direct IM reply。
+- `TaskRunPanel` 新增 `REJECTION / Retry-Recover` 摘要，集中展示 blocked runs、最近拒绝产物、最近 revision、最新 accepted review。
+- 新增脚本：
+  - `scripts/object-storage-smoke-test.mjs`
+  - `scripts/openai-provider-matrix-smoke.mjs`
+  - `scripts/rejection-recovery-smoke-test.mjs`
+- `check-object-storage.mjs` 已适配新的 health 返回结构。
+
+### 验证
+
+- `cd backend && mvn test` 通过，17 tests，0 failures。
+- `cd frontend && npm.cmd run build` 通过。
+- `node --check scripts/object-storage-smoke-test.mjs` 通过。
+- `node --check scripts/openai-provider-matrix-smoke.mjs` 通过。
+- `node --check scripts/rejection-recovery-smoke-test.mjs` 通过。
+
+### 边界
+
+- 这轮只补了 IM 单 Agent 远程问答 direct-reply 闭环，没有改多 Agent 群聊和 orchestrator 主链。
+- `object-storage-smoke-test.mjs` 需要真实后端 `s3`/MinIO 配置和可用服务；当前代码已支持，但是否能 live 跑通取决于本机 MinIO/网络环境。
+- provider matrix smoke 会改写当前用户的 `OPENAI_COMPATIBLE` runtime config，建议使用独立 smoke 用户或单独环境。

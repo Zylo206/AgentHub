@@ -2,6 +2,7 @@ package com.agenthub.api.message;
 
 import com.agenthub.application.attachment.AttachmentApplicationService;
 import com.agenthub.application.auth.ConversationAccessService;
+import com.agenthub.application.message.DirectAgentReplyService;
 import com.agenthub.application.message.MessageApplicationService;
 import com.agenthub.application.orchestrator.OrchestratorAutoTriggerService;
 import com.agenthub.common.ApiResponse;
@@ -26,16 +27,19 @@ public class MessageController {
     private static final Logger logger = LoggerFactory.getLogger(MessageController.class);
 
     private final MessageApplicationService messageApplicationService;
+    private final DirectAgentReplyService directAgentReplyService;
     private final OrchestratorAutoTriggerService orchestratorAutoTriggerService;
     private final AttachmentApplicationService attachmentApplicationService;
     private final ConversationAccessService conversationAccessService;
 
     public MessageController(
             MessageApplicationService messageApplicationService,
+            DirectAgentReplyService directAgentReplyService,
             OrchestratorAutoTriggerService orchestratorAutoTriggerService,
             AttachmentApplicationService attachmentApplicationService,
             ConversationAccessService conversationAccessService) {
         this.messageApplicationService = messageApplicationService;
+        this.directAgentReplyService = directAgentReplyService;
         this.orchestratorAutoTriggerService = orchestratorAutoTriggerService;
         this.attachmentApplicationService = attachmentApplicationService;
         this.conversationAccessService = conversationAccessService;
@@ -85,6 +89,15 @@ public class MessageController {
         return ApiResponse.success(
                 messageApplicationService.regenerateAgentReply(conversationId, messageId),
                 "Agent reply regenerated");
+    }
+
+    @PostMapping("/{messageId}/direct-agent-reply")
+    public ApiResponse<?> directAgentReply(
+            @PathVariable("conversationId") String conversationId,
+            @PathVariable("messageId") String messageId) {
+        return ApiResponse.success(
+                directAgentReplyService.reply(conversationId, messageId),
+                "Direct agent reply completed");
     }
 
     @PostMapping("/{messageId}/orchestrator-run")

@@ -42,8 +42,10 @@ async function login() {
 async function main() {
   const token = await login();
   const health = await api("/api/admin/object-storage/health", { method: "GET" }, token);
-  pass(`object storage provider=${health.provider} configured=${health.configured} bucket=${health.bucket}`);
+  const bucketSummary = Array.isArray(health.buckets)
+    ? health.buckets.map((bucket) => `${bucket.purpose}:${bucket.bucketName}`).join(", ")
+    : "<none>";
+  pass(`object storage provider=${health.provider} configured=${health.configured} buckets=${bucketSummary}`);
 }
 
 main().catch((error) => fail("Object-storage health check failed", error));
-

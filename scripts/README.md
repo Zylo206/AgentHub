@@ -363,6 +363,14 @@ $env:AGENTHUB_OBJECT_STORAGE_ADMIN_USERNAME="admin"
 $env:AGENTHUB_OBJECT_STORAGE_ADMIN_PASSWORD="admin"
 ```
 
+For a stronger live MinIO roundtrip, use the dedicated smoke script after starting backend with `AGENTHUB_OBJECT_STORAGE_PROVIDER=s3` and `AGENTHUB_ATTACHMENTS_STORAGE_TYPE=object-storage`:
+
+```powershell
+node scripts/object-storage-smoke-test.mjs
+```
+
+This verifies admin health, default bucket ensure, per-bucket write/read/delete roundtrip, attachment upload/download through object storage, and backend-managed collab snapshot upload/download through object storage.
+
 Real MinIO/S3-compatible object storage example:
 
 ```powershell
@@ -452,6 +460,14 @@ node scripts/smoke-test.mjs
 ```
 
 This sends a rejection-triggering prompt and expects `TaskRun.status=BLOCKED`, `messageType=REJECTION`, a `REJECTED` Review Report, and a retry / revise advice artifact.
+
+For a focused recovery drill that also verifies the revise/retry closure and observability summary, run:
+
+```powershell
+node scripts/rejection-recovery-smoke-test.mjs
+```
+
+It verifies `TaskRun.status=BLOCKED`, `REJECTION` protocol messages with retry/revise guidance, a follow-up Artifact Revision returning to `COMPLETED`, an `ACCEPTED` follow-up Review Artifact, and conversation-level task-run observability after recovery.
 
 If backend is started with message-level auto trigger and Adapter stats persistence enabled, enable the stricter checks:
 
@@ -693,6 +709,15 @@ mvn spring-boot:run
 ```
 
 Do not write real API keys into `.env.example`, README, or committed scripts. After startup, open `/agents` and use the Adapter Test panel to test `OPENAI_COMPATIBLE`.
+
+To validate the IM remote Q&A entry path across multiple OpenAI-compatible providers, use the provider-matrix smoke. It updates runtime config, creates or reuses an `OPENAI_COMPATIBLE` IM Agent, sends a chat message, and verifies `direct-agent-reply` returns a real IM reply instead of only exercising `/api/adapters/{type}/execute`.
+
+```powershell
+$env:AGENTHUB_OPENAI_PROVIDER_MATRIX_JSON='[{"providerName":"deepseek","baseUrl":"https://api.deepseek.com","apiKey":"<key>","model":"deepseek-v4-flash","scopeType":"USER"}]'
+node scripts/openai-provider-matrix-smoke.mjs
+```
+
+This script mutates the current user's runtime config scope. Use a dedicated local smoke account when you need strict environment isolation.
 
 ## Lightweight Task DAG / Conflict Smokes
 

@@ -8,6 +8,7 @@ import {
   getPinnedContextsByConversation,
   pinMessageAsContext,
   regenerateAgentReply,
+  requestDirectAgentReply,
   saveMessageAsMemory,
   sendMessage,
   uploadConversationAttachment,
@@ -72,6 +73,16 @@ function getErrorMessage(error: unknown): string {
 
 function isDeployIntent(content: string): boolean {
   return DEPLOY_INTENT_PATTERN.test(content || "");
+}
+
+function shouldRequestDirectImReply(targetAgent: Agent | null, mentionedAgents: Agent[]): boolean {
+  if (!targetAgent) {
+    return false;
+  }
+  if (mentionedAgents.length > 1) {
+    return false;
+  }
+  return String(targetAgent.preferredAdapterType || "").toUpperCase() === "OPENAI_COMPATIBLE";
 }
 
 function buildArtifactSelectionRevisionInstruction(
@@ -221,6 +232,16 @@ export function useWorkspaceMessageActions({
       if (selectedArtifactSnippet) {
         void runArtifactSelectionRevisionFromChat(selectedArtifactSnippet, contentToSend, sentMessageId);
         setOperationMessage("已发送局部修改请求，系统正在后台生成 Draft Revision。");
+      }
+      if (shouldRequestDirectImReply(targetAgent, mentionedAgents)) {
+        try {
+          const replyResult = await requestDirectAgentReply(currentConversationId, sentMessageId);
+          setOperationMessage(
+            `已通过 ${replyResult.actualAdapterType} 完成 IM 远程问答回复${replyResult.producedArtifactIds.length > 0 ? `，并生成 ${replyResult.producedArtifactIds.length} 个产物` : ""}。`
+          );
+        } catch (error) {
+          setErrorMessage(`消息已发送，但远程 API 问答回复失败：${getErrorMessage(error)}`);
+        }
       }
       const localAgentCreationDraft = inferAgentCreationDraft(contentToSend);
       if (localAgentCreationDraft) {

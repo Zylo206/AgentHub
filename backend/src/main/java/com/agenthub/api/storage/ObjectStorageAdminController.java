@@ -3,7 +3,7 @@ package com.agenthub.api.storage;
 import com.agenthub.application.auth.AccessDeniedException;
 import com.agenthub.application.auth.AuthPrincipal;
 import com.agenthub.application.auth.AuthSessionService;
-import com.agenthub.application.collab.CollabSnapshotStorageService;
+import com.agenthub.application.storage.ObjectStorageAdminService;
 import com.agenthub.common.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,27 +16,43 @@ import org.springframework.web.bind.annotation.RestController;
 public class ObjectStorageAdminController {
 
     private final AuthSessionService authSessionService;
-    private final CollabSnapshotStorageService collabSnapshotStorageService;
+    private final ObjectStorageAdminService objectStorageAdminService;
 
     public ObjectStorageAdminController(
             AuthSessionService authSessionService,
-            CollabSnapshotStorageService collabSnapshotStorageService) {
+            ObjectStorageAdminService objectStorageAdminService) {
         this.authSessionService = authSessionService;
-        this.collabSnapshotStorageService = collabSnapshotStorageService;
+        this.objectStorageAdminService = objectStorageAdminService;
     }
 
     @GetMapping("/health")
     public ApiResponse<?> health() {
         requireAdmin(authSessionService.current());
-        return ApiResponse.success(collabSnapshotStorageService.health());
+        return ApiResponse.success(objectStorageAdminService.health());
     }
 
     @PostMapping("/buckets/{bucketName}/ensure")
     public ApiResponse<?> ensureBucket(@PathVariable("bucketName") String bucketName) {
         requireAdmin(authSessionService.current());
         return ApiResponse.success(
-                collabSnapshotStorageService.ensureBucket(bucketName),
+                objectStorageAdminService.ensureBucket(bucketName),
                 "Object-storage bucket ensured");
+    }
+
+    @PostMapping("/buckets/{bucketName}/verify")
+    public ApiResponse<?> verifyBucket(@PathVariable("bucketName") String bucketName) {
+        requireAdmin(authSessionService.current());
+        return ApiResponse.success(
+                objectStorageAdminService.verifyBucket(bucketName),
+                "Object-storage bucket verified");
+    }
+
+    @PostMapping("/default-buckets/ensure")
+    public ApiResponse<?> ensureDefaultBuckets() {
+        requireAdmin(authSessionService.current());
+        return ApiResponse.success(
+                objectStorageAdminService.ensureDefaultBuckets(),
+                "Default object-storage buckets ensured");
     }
 
     private void requireAdmin(AuthPrincipal principal) {

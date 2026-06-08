@@ -582,6 +582,15 @@ export interface AttachmentRecord {
   deletedAt?: string | null;
 }
 
+export interface DirectAgentReplyResult {
+  message: Message;
+  actualAdapterType: string;
+  preferredAdapterType: string;
+  fallbackUsed: boolean;
+  producedArtifactIds: string[];
+  usedAssistantMessage: boolean;
+}
+
 export function uploadConversationAttachment(conversationId: string, file: File): Promise<AttachmentRecord> {
   const formData = new FormData();
   formData.append("file", file);
@@ -601,6 +610,12 @@ export function getMessages(conversationId: string): Promise<Message[]> {
 
 export function regenerateAgentReply(conversationId: string, messageId: string): Promise<Message> {
   return request<Message>(`/api/conversations/${conversationId}/messages/${messageId}/regenerate-agent-reply`, {
+    method: "POST"
+  });
+}
+
+export function requestDirectAgentReply(conversationId: string, messageId: string): Promise<DirectAgentReplyResult> {
+  return request<DirectAgentReplyResult>(`/api/conversations/${conversationId}/messages/${messageId}/direct-agent-reply`, {
     method: "POST"
   });
 }
