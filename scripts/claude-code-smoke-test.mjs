@@ -3,6 +3,7 @@
 const API_BASE = (process.env.AGENTHUB_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const EXPECT_STREAMING = process.env.AGENTHUB_CLAUDE_CODE_SMOKE_EXPECT_STREAMING === "true";
 const REQUIRE_REAL_CLI = process.env.AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI === "true";
+let authToken = "";
 
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
@@ -164,9 +165,13 @@ function requireValue(value, message) {
 }
 
 async function request(path, options = {}) {
+  if (!authToken && path !== "/api/auth/login") {
+    await loginForSmoke();
+  }
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers || {})
     },
     ...options
@@ -183,6 +188,19 @@ async function request(path, options = {}) {
     return body.data;
   }
   return body;
+}
+
+async function loginForSmoke() {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "demo", password: "demo" })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.data?.token) {
+    throw new Error(payload?.message || `Claude Code smoke auth login failed: HTTP ${response.status}`);
+  }
+  authToken = payload.data.token;
 }
 
 function parseSseBlock(block) {
@@ -221,10 +239,16 @@ function parseSseEventData(event) {
 }
 
 async function collectRealtimeEvents(conversationId, expectedEventTypes, trigger) {
+  if (!authToken) {
+    await loginForSmoke();
+  }
   const controller = new AbortController();
   const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events`, {
     signal: controller.signal,
-    headers: { Accept: "text/event-stream" }
+    headers: {
+      Accept: "text/event-stream",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+    }
   });
   if (!response.ok || !response.body) {
     throw new Error(`SSE stream failed: HTTP ${response.status}`);

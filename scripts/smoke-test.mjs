@@ -7,6 +7,7 @@ const FRONTEND_BASE = (process.env.AGENTHUB_FRONTEND_BASE_URL || "http://127.0.0
 const EXPECT_REAL_ADAPTER = process.env.AGENTHUB_SMOKE_EXPECT_REAL_ADAPTER === "true";
 const EXPECT_OPENAI_FIXTURE = process.env.AGENTHUB_SMOKE_EXPECT_OPENAI_FIXTURE === "true";
 const EXPECT_REAL_FIRST = process.env.AGENTHUB_SMOKE_EXPECT_REAL_FIRST === "true";
+const EXPECT_OPENAI_SMOKE_AGENTS = EXPECT_OPENAI_FIXTURE || EXPECT_REAL_FIRST;
 const EXPECT_REVIEW_REJECTION = process.env.AGENTHUB_SMOKE_EXPECT_REVIEW_REJECTION === "true";
 const EXPECT_REVIEW_QUALITY_REJECTION = process.env.AGENTHUB_SMOKE_EXPECT_REVIEW_QUALITY_REJECTION === "true";
 const EXPECT_ANY_REVIEW_REJECTION = EXPECT_REVIEW_REJECTION || EXPECT_REVIEW_QUALITY_REJECTION;
@@ -448,6 +449,7 @@ async function runSmokeTest() {
   console.log(`AgentHub frontend preview target: ${FRONTEND_BASE}`);
   console.log(`AgentHub real adapter artifact expectation: ${EXPECT_REAL_ADAPTER ? "enabled" : "disabled"}`);
   console.log(`AgentHub OpenAI fixture expectation: ${EXPECT_OPENAI_FIXTURE ? "enabled" : "disabled"}`);
+  console.log(`AgentHub OpenAI smoke-agent expectation: ${EXPECT_OPENAI_SMOKE_AGENTS ? "enabled" : "disabled"}`);
   console.log(`AgentHub REAL_FIRST expectation: ${EXPECT_REAL_FIRST ? "enabled" : "disabled"}`);
   console.log(`AgentHub reviewer rejection expectation: ${EXPECT_REVIEW_REJECTION ? "enabled" : "disabled"}`);
   console.log(`AgentHub reviewer quality-gate rejection expectation: ${EXPECT_REVIEW_QUALITY_REJECTION ? "enabled" : "disabled"}`);
@@ -495,6 +497,12 @@ async function runSmokeTest() {
       throw new Error(`OPENAI_COMPATIBLE fixture adapter not available. Loaded adapters: ${adapterSummary}`);
     }
   }
+  if (EXPECT_REAL_FIRST) {
+    const openaiAdapter = adapters.find((adapter) => adapter.adapterType === "OPENAI_COMPATIBLE");
+    if (!openaiAdapter || openaiAdapter.status !== "AVAILABLE") {
+      throw new Error(`OPENAI_COMPATIBLE adapter not available for REAL_FIRST smoke. Loaded adapters: ${adapterSummary}`);
+    }
+  }
   pass(`adapters loaded: ${adapterSummary}`);
   pass("adapter route stats exposed");
 
@@ -526,42 +534,46 @@ async function runSmokeTest() {
   });
   const draftedAgentId = requireValue(getIdValue(draftedAgent.id), "drafted agent id missing");
   pass(`natural-language agent draft created and persisted: ${draftedAgentId} (${agentDraft.draftSource})`);
-  let fixtureOpenAiCodeAgentId = null;
-  let fixtureOpenAiReviewAgentId = null;
-  if (EXPECT_OPENAI_FIXTURE) {
-    const fixtureOpenAiCodeAgent = await request("/api/agents", {
+  let openAiSmokeCodeAgentId = null;
+  let openAiSmokeReviewAgentId = null;
+  if (EXPECT_OPENAI_SMOKE_AGENTS) {
+    const openAiSmokeCodeAgent = await request("/api/agents", {
       method: "POST",
       body: JSON.stringify({
-        name: `Smoke OpenAI Fixture Code Agent ${Date.now()}`,
+        name: EXPECT_OPENAI_FIXTURE
+          ? `Smoke OpenAI Fixture Code Agent ${Date.now()}`
+          : `Smoke OpenAI RealFirst Code Agent ${Date.now()}`,
         systemPrompt: "Return AgentHub artifact JSON contract for smoke verification.",
         capabilityTags: ["smoke", "real-adapter"],
         toolTags: ["code", "preview"],
         preferredAdapterType: "OPENAI_COMPATIBLE"
       })
     });
-    fixtureOpenAiCodeAgentId = requireValue(getIdValue(fixtureOpenAiCodeAgent.id), "fixtureOpenAiCodeAgentId missing");
-    const fixtureOpenAiReviewAgent = await request("/api/agents", {
+    openAiSmokeCodeAgentId = requireValue(getIdValue(openAiSmokeCodeAgent.id), "openAiSmokeCodeAgentId missing");
+    const openAiSmokeReviewAgent = await request("/api/agents", {
       method: "POST",
       body: JSON.stringify({
-        name: `Smoke OpenAI Fixture Review Agent ${Date.now()}`,
+        name: EXPECT_OPENAI_FIXTURE
+          ? `Smoke OpenAI Fixture Review Agent ${Date.now()}`
+          : `Smoke OpenAI RealFirst Review Agent ${Date.now()}`,
         systemPrompt: "Review AgentHub artifacts and return approval or rejection in artifact JSON.",
         capabilityTags: ["smoke", "real-adapter", "review"],
         toolTags: ["review"],
         preferredAdapterType: "OPENAI_COMPATIBLE"
       })
     });
-    fixtureOpenAiReviewAgentId = requireValue(
-      getIdValue(fixtureOpenAiReviewAgent.id),
-      "fixtureOpenAiReviewAgentId missing"
+    openAiSmokeReviewAgentId = requireValue(
+      getIdValue(openAiSmokeReviewAgent.id),
+      "openAiSmokeReviewAgentId missing"
     );
-    pass(`OPENAI fixture agents created: ${fixtureOpenAiCodeAgentId}, ${fixtureOpenAiReviewAgentId}`);
+    pass(`OPENAI smoke agents created: ${openAiSmokeCodeAgentId}, ${openAiSmokeReviewAgentId}`);
   }
   const mentionedAgentIds = [
-    fixtureOpenAiCodeAgentId || getIdValue(frontendAgent?.id),
-    fixtureOpenAiReviewAgentId || getIdValue(reviewerAgent?.id)
+    openAiSmokeCodeAgentId || getIdValue(frontendAgent?.id),
+    openAiSmokeReviewAgentId || getIdValue(reviewerAgent?.id)
   ].filter(Boolean);
   if (mentionedAgentIds.length < 2) {
-    throw new Error("expected built-in Frontend Builder and Reviewer agents for multi-mention smoke test");
+    throw new Error("expected default agents or OPENAI smoke agents for multi-mention smoke test");
   }
   pass(`agents loaded for multi-mention: ${mentionedAgentIds.join(", ")}`);
 

@@ -7,6 +7,7 @@ const TASK_FILTER = new Set(parseCsv(process.env.AGENTHUB_ADAPTER_QUALITY_MATRIX
 const REQUIRE_AVAILABLE = process.env.AGENTHUB_ADAPTER_QUALITY_MATRIX_REQUIRE_AVAILABLE === "true";
 const REQUIRE_REAL = process.env.AGENTHUB_ADAPTER_QUALITY_MATRIX_REQUIRE_REAL === "true";
 const STRICT = process.env.AGENTHUB_ADAPTER_QUALITY_MATRIX_STRICT === "true";
+let authToken = "";
 
 const OUTCOME = {
   ACCEPTED: "ACCEPTED",
@@ -103,12 +104,16 @@ function getIdValue(value) {
 }
 
 async function request(path, init = {}) {
+  if (!authToken && path !== "/api/auth/login") {
+    await loginForSmoke();
+  }
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         ...(init.headers || {})
       }
     });
@@ -122,6 +127,19 @@ async function request(path, init = {}) {
     throw new Error(payload?.message || `HTTP ${response.status}: ${text.slice(0, 300)}`);
   }
   return payload.data;
+}
+
+async function loginForSmoke() {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "demo", password: "demo" })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.data?.token) {
+    throw new Error(payload?.message || `Adapter quality matrix auth login failed: HTTP ${response.status}`);
+  }
+  authToken = payload.data.token;
 }
 
 function classifyDiagnostic(diagnostic) {

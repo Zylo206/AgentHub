@@ -26,6 +26,7 @@ const EXPECT_EXECUTE_JSON_CONTRACT = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXP
 const EXPECT_REAL_FIRST_ARTIFACT = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_REAL_FIRST_ARTIFACT === "true";
 const EXPECT_CODE_BUILD = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_CODE_BUILD === "true";
 const EXPECT_STREAMING = process.env.AGENTHUB_REAL_ADAPTER_SMOKE_EXPECT_STREAMING === "true";
+let authToken = "";
 
 const DEMO_PROMPT =
   "Generate a React login page artifact with email login and verification-code login. Return AgentHub artifact JSON only.";
@@ -153,10 +154,16 @@ function parseSseEventData(event) {
 }
 
 async function collectRealtimeEvents(conversationId, expectedEventTypes, trigger) {
+  if (!authToken) {
+    await loginForSmoke();
+  }
   const controller = new AbortController();
   const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/events`, {
     signal: controller.signal,
-    headers: { Accept: "text/event-stream" }
+    headers: {
+      Accept: "text/event-stream",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+    }
   });
   if (!response.ok || !response.body) {
     throw new Error(`SSE stream failed: HTTP ${response.status}`);
@@ -418,12 +425,16 @@ async function verifyCodeArtifactBuild(artifact) {
 }
 
 async function request(path, init = {}) {
+  if (!authToken && path !== "/api/auth/login") {
+    await loginForSmoke();
+  }
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         ...(init.headers || {})
       }
     });
@@ -452,6 +463,19 @@ async function request(path, init = {}) {
   }
 
   return payload.data;
+}
+
+async function loginForSmoke() {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "demo", password: "demo" })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.data?.token) {
+    throw new Error(payload?.message || `Real adapter smoke auth login failed: HTTP ${response.status}`);
+  }
+  authToken = payload.data.token;
 }
 
 function parseArtifactJson(content) {

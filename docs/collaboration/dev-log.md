@@ -9510,3 +9510,139 @@
   - `/agents?view=cli`：只显示本地 CLI 健康检查，无横向滚动、无深色块、无 `MOCK` / `fallback` / `Set agenthub` / `disabled` / `UNKNOWN` / `NOT_PROBED` 可见文案。
   - `/desktop?conversationId=conv_4d5`：无横向滚动、无深色块、无低对比元素。
 - Browser console 仍保留本轮编辑期间的 Vite HMR 历史 reload error；最终 `build` 和 `e2e-browser` 已通过，不是当前代码编译或运行阻断。
+
+## 2026-06-08：v1.5 全量验收与中文文档交付
+
+### 改动
+
+- 新增 `docs/acceptance-report-v1.5.md`，沉淀本轮全量项目验收结论、验收范围、自动化证据、功能完成度和已知问题。
+- 新增 `docs/technical-design-v1.5.md`，以 v1.5 状态重写技术文档，明确前后端、桌面壳、Orchestrator、Adapter、Context、Artifact、Approval、Deploy Preview 和验证体系。
+- 新增 `docs/product-design-v1.5.md`，以 v1.5 状态重写中文产品文档，明确产品定位、目标用户、主路径、功能清单、版本完成度和边界。
+- 将“默认 Web 基线通过”和“条件能力未实测/脚本前置问题”在文档中分开表述，避免把 JDBC、真实适配器或本地静态预览误写成默认完成项。
+
+### 验证
+
+- `cd backend && mvn test` 通过，13 个测试全部通过。
+- `cd backend && mvn -DskipTests package` 通过，Spring Boot 可执行 jar 重打包成功。
+- `cd frontend && npm.cmd run lint` 通过。
+- `cd frontend && npm.cmd run build` 通过。
+- `node scripts/smoke-test.mjs` 通过，覆盖会话、附件、Context/Memory、TaskRun、Artifact、Diff、Approval、Deploy、Restore、Audit。
+- `node scripts/sse-smoke-test.mjs` 通过，覆盖 SSE 事件、`Last-Event-ID` 回放和实时状态。
+- `node scripts/e2e-browser.mjs` 通过，覆盖 Agent 创建、协作主路径、Artifact Apply/Restore/Deploy、Preview、REJECTION 恢复和三尺寸布局门禁。
+- `cd desktop/src-tauri && cargo check` 通过。
+- `cd desktop && npm.cmd run build -- --no-bundle` 通过，生成 `desktop/src-tauri/target/release/agenthub-desktop.exe`。
+
+### 边界
+
+- `node scripts/real-adapter-smoke-test.mjs` 因未配置真实提供商环境变量而跳过，本轮不将真实 OpenAI-compatible 记为实测通过。
+- `node scripts/jdbc-smoke-test.mjs` 预检失败，原因是当前运行后端 `persistenceMode=memory`，本轮不将 JDBC/MySQL 记为实测通过。
+- `node scripts/adapter-quality-matrix-smoke.mjs`、`node scripts/codex-smoke-test.mjs`、`node scripts/claude-code-smoke-test.mjs` 在启用鉴权的后端上直接命中 `/api/adapters` 的 `401 Login required`，说明这些条件 smoke 脚本尚未补齐与默认 smoke 一致的登录前置。
+
+### 后续建议
+
+- 优先修复条件 smoke 脚本的认证前置，使真实适配器和质量矩阵验收可直接复用 demo 登录。
+- 下一轮在 `jdbc` 模式和至少一个真实适配器下补跑条件验收，形成真正的全项证据闭环。
+
+## 2026-06-08：真实 CLI 条件能力验收补测
+
+### 改动
+
+- 修复 `scripts/codex-smoke-test.mjs`、`scripts/claude-code-smoke-test.mjs`、`scripts/adapter-quality-matrix-smoke.mjs` 的认证前置不一致问题：
+  - 增加 `/api/auth/login` demo 登录。
+  - 为 REST 请求补齐 `Authorization: Bearer <token>`。
+  - 为 CLI streaming 相关 SSE 订阅补齐鉴权头。
+- 保持测试语义不变，只解决在启用鉴权的后端上无法进入真实适配器执行阶段的问题。
+
+### 验证
+
+- 本机外沙箱 CLI 验证通过：
+  - `codex --version` -> `codex-cli 0.134.0`
+  - `claude --version` -> `2.1.143 (Claude Code)`
+  - `where.exe codex` / `where.exe claude` 确认可执行路径，其中后端使用 `.cmd` 直连路径。
+- 启动隔离后端 `http://127.0.0.1:18120`，启用真实 CLI：
+  - `AGENTHUB_CODEX_ENABLED=true`
+  - `AGENTHUB_CODEX_COMMAND=C:\Users\shens\AppData\Roaming\npm\codex.cmd`
+  - `AGENTHUB_CLAUDE_CODE_ENABLED=true`
+  - `AGENTHUB_CLAUDE_CODE_COMMAND=C:\Users\shens\AppData\Roaming\npm\claude.cmd`
+  - `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`
+- `GET /api/adapters` 验证通过：
+  - `CODEX=AVAILABLE`，version/help/schema/output/sandbox/session-bridge 能力齐全。
+  - `CLAUDE_CODE=AVAILABLE`，version/help/json/tool-policy/session-bridge 能力齐全。
+- `node scripts/codex-smoke-test.mjs` 在 `AGENTHUB_API_BASE_URL=http://127.0.0.1:18120`、`AGENTHUB_CODEX_SMOKE_REQUIRE_REAL_CLI=true` 下通过：
+  - direct execute 返回有效 Artifact JSON。
+  - `REAL_FIRST` demo-task 完成，生成 `CODEX / REAL_ADAPTER` Artifact。
+- `node scripts/claude-code-smoke-test.mjs` 在 `AGENTHUB_API_BASE_URL=http://127.0.0.1:18120`、`AGENTHUB_CLAUDE_CODE_SMOKE_REQUIRE_REAL_CLI=true` 下通过：
+  - direct execute 返回有效 Artifact JSON。
+  - `REAL_FIRST` demo-task 完成，生成 `CLAUDE_CODE / REAL_ADAPTER` Artifact。
+- `node scripts/adapter-quality-matrix-smoke.mjs` 在 `CLAUDE_CODE,CODEX`、`requireAvailable=true`、`requireReal=true` 下通过：
+  - `CODEX` 8/8 任务 `ACCEPTED`
+  - `CLAUDE_CODE` 8 个任务中 7 个 `ACCEPTED`，1 个 `PARSE_FAILED`
+
+### 边界
+
+- 当前机器没有现成的 `AGENTHUB_OPENAI_*` 真实提供商环境变量，因此本轮未执行真实 `OPENAI_COMPATIBLE` 条件验收。
+- `adapter-quality-matrix` 中 `CLAUDE_CODE/data_model` 出现一次 `PARSE_FAILED`，原因为返回内容未通过 AgentHub Artifact JSON 合约校验；这说明真实 CLI 已进入执行阶段，但质量稳定性仍非 100%。
+
+## 2026-06-08：真实 OpenAI-compatible 条件能力补测
+
+### 改动
+
+- 修复 `scripts/real-adapter-smoke-test.mjs` 的鉴权前置：
+  - 增加 `/api/auth/login` demo 登录。
+  - 为 REST 请求和 SSE 订阅补齐 `Authorization: Bearer <token>`。
+- 复用同一套 demo 登录策略，避免真实 OpenAI-compatible smoke 在启用鉴权的后端上被 `401 Login required` 阻断。
+
+### 验证
+
+- 使用真实 DeepSeek OpenAI-compatible 配置启动隔离后端 `http://127.0.0.1:18121`：
+  - `AGENTHUB_OPENAI_ENABLED=true`
+  - `AGENTHUB_OPENAI_BASE_URL=https://api.deepseek.com`
+  - `AGENTHUB_OPENAI_MODEL=deepseek-v4-flash`
+  - `AGENTHUB_OPENAI_FIXTURE_ENABLED=false`
+  - `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`
+- `/api/adapters` 验证 `OPENAI_COMPATIBLE=AVAILABLE`。
+- `node scripts/real-adapter-smoke-test.mjs` 在 `AGENTHUB_API_BASE_URL=http://127.0.0.1:18121` 下通过：
+  - `OPENAI_COMPATIBLE execute` 返回有效 Artifact JSON。
+  - `REAL_FIRST` demo-task 完成。
+  - 主产物 `LoginPage.tsx` 被接受为 `REAL_ADAPTER` 主 Artifact。
+  - 静态 fallback Artifact 被归档 3 个。
+- `node scripts/adapter-quality-matrix-smoke.mjs` 在 `OPENAI_COMPATIBLE`、`requireAvailable=true`、`requireReal=true` 下通过：
+  - 8/8 任务 `ACCEPTED`
+
+### 边界
+
+- `node scripts/smoke-test.mjs` 在同一后端下配合 `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true` 仍失败，但定位表明失败原因不是 DeepSeek 真实调用不可用，而是默认 demo-task 绑定的前端步骤仍路由到 `MOCK`，没有把 `OPENAI_COMPATIBLE` 作为该条演示链路的实际执行适配器。
+
+## 2026-06-08：默认 REAL_FIRST smoke 链路绑定真实 OpenAI 适配器
+
+### 改动
+
+- 调整 `scripts/smoke-test.mjs` 的默认 `REAL_FIRST` 路径：
+  - 新增 `EXPECT_OPENAI_SMOKE_AGENTS = EXPECT_OPENAI_FIXTURE || EXPECT_REAL_FIRST`。
+  - 当 `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true` 时，不再复用内置 `Frontend Builder(CODEX)` 和 `Reviewer(CLAUDE_CODE)` 作为多 mention smoke Agent。
+  - 改为像 fixture 路径一样创建一对临时 smoke Agent，并将两者的 `preferredAdapterType` 固定为 `OPENAI_COMPATIBLE`，从而让 demo-task 第 1 步稳定进入真实 OpenAI-compatible 适配器执行，而不是在只启用 DeepSeek 时落回 `MOCK`。
+- 保留 `EXPECT_OPENAI_FIXTURE` 的原有语义；fixture 校验仍要求 `/api/adapters` 描述符中明确体现 `fixture`。
+
+### 验证
+
+- `node --check scripts/smoke-test.mjs` 通过。
+- 在隔离后端 `http://127.0.0.1:18122` 下，启用：
+  - `AGENTHUB_OPENAI_ENABLED=true`
+  - `AGENTHUB_OPENAI_BASE_URL=https://api.deepseek.com`
+  - `AGENTHUB_OPENAI_MODEL=deepseek-v4-flash`
+  - `AGENTHUB_OPENAI_FIXTURE_ENABLED=false`
+  - `AGENTHUB_ARTIFACT_GENERATION_MODE=REAL_FIRST`
+- 运行：
+  - `AGENTHUB_API_BASE_URL=http://127.0.0.1:18122`
+  - `AGENTHUB_FRONTEND_BASE_URL=http://127.0.0.1:5173`
+  - `AGENTHUB_SMOKE_EXPECT_REAL_FIRST=true`
+  - `node scripts/smoke-test.mjs`
+- 结果通过：
+  - `OPENAI smoke agents created`
+  - `adapter output artifacts loaded: 11`
+  - `REAL_FIRST primary artifact validated: LoginPage.tsx`
+  - 整体 smoke 完整通过
+
+### 边界
+
+- 第一次在后端刚启动后立刻执行 smoke 时出现一次短暂 `fetch failed`；后端健康后重跑即通过，未复现为逻辑错误。
