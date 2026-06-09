@@ -11,7 +11,7 @@ interface WorkspacePresenceBarProps {
 function formatPresenceStatus(status: string): string {
   const normalized = status.toUpperCase();
   if (normalized === "TYPING") {
-    return "正在输入";
+    return "输入中";
   }
   if (normalized === "ACTIVE") {
     return "在线";
@@ -51,12 +51,13 @@ export function WorkspacePresenceBar({ currentUser, deviceId, error, records }: 
   const activeRecords = records.slice(0, 6);
   const typingRecords = activeRecords.filter((record) => record.status.toUpperCase() === "TYPING");
   const artifactViewers = activeRecords.filter((record) => Boolean(record.activeArtifactId));
-  const summaryParts = [
-    `${activeRecords.length || 1} 在线`,
-    typingRecords.length > 0 ? `${typingRecords.length} 输入中` : null,
-    artifactViewers.length > 0 ? `${artifactViewers.length} 看产物` : null,
-    formatDisplayName(currentUser?.displayName)
-  ].filter(Boolean);
+  const statusSummary =
+    typingRecords.length > 0
+      ? `${typingRecords.length} 人输入中`
+      : artifactViewers.length > 0
+        ? `${artifactViewers.length} 人查看产物`
+        : "状态同步中";
+  const summaryParts = [`${activeRecords.length || 1} 在线`, statusSummary, formatDisplayName(currentUser?.displayName)];
 
   return (
     <section className="workspace-presence-bar" data-testid="workspace-presence-bar">

@@ -166,7 +166,12 @@ export function useWorkspaceDataLoaders({
         return agentData.find((agent) => getIdValue(agent.id) === previousId) ?? null;
       });
       setConversations(conversationData);
-      setCurrentConversationId((previousId) => previousId ?? firstConversationId);
+      setCurrentConversationId((previousId) => {
+        if (previousId && conversationData.some((conversation) => getIdValue(conversation.id) === previousId)) {
+          return previousId;
+        }
+        return firstConversationId;
+      });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {

@@ -394,7 +394,9 @@
 }
 
 .agent-builder-page .agent-builder-layout {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px) !important;
+  max-width: 1120px !important;
+  margin: 0 auto !important;
+  grid-template-columns: minmax(0, 1fr) !important;
 }
 
 .agent-builder-page .agent-builder-capability-fieldset {
@@ -488,6 +490,13 @@
   margin: 0 auto;
 }
 
+.agent-builder-page:not(.agent-builder-page--cli) .agent-builder-shell,
+.agent-builder-page:not(.agent-builder-page--cli) .agent-builder-hero {
+  max-width: 1120px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
 .agent-builder-page .conversational-agent-panel {
   padding: 20px !important;
 }
@@ -568,6 +577,7 @@
 .agent-builder-page .agent-builder-preview {
   display: grid;
   gap: 12px;
+  position: static !important;
 }
 
 .agent-builder-page .agent-builder-preview__avatar {

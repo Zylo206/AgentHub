@@ -7,17 +7,16 @@ import { displayArtifactSourceKind, displayArtifactType, displayStatus, normaliz
 import { displayAdapterName, sanitizeProductionText } from "../../utils/productionLabels";
 import { formatId, getIdValue } from "../../utils/id";
 import "../../styles/workspace.css";
-import "../../styles/production-alignment.css";
 import "../../styles/pages/preview.css";
 
 type PreviewTrustTone = "success" | "warning" | "danger" | "neutral";
 
 function getPreviewMode(artifact: Artifact): string {
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
-    return "HTML iframe 预览";
+    return "HTML 页面快照";
   }
   if (artifact.type === "CODE") {
-    return "代码预览";
+    return "代码文本";
   }
   if (artifact.type === "MARKDOWN") {
     return "Markdown 文本";
@@ -26,36 +25,36 @@ function getPreviewMode(artifact: Artifact): string {
     return "评审报告";
   }
   if (artifact.type === "API_CONTRACT" || artifact.type === "DATA_MODEL") {
-    return "结构化文本";
+    return "结构化文档";
   }
-  return "文本预览";
+  return "文档文本";
 }
 
 function getPresentationMode(artifact: Artifact): { label: string; description: string } {
   if (artifact.type === "CODE") {
     return {
-      label: "Source Code Mode",
-      description: "以只读代码块展示原始源码，适合检查构建门禁、复制和回到 Workspace 做 Revision。"
+      label: "代码预览",
+      description: "当前页面只读展示源代码内容；如需修改，请回到工作区发起草稿修订或 Diff 审批。"
     };
   }
 
   if (artifact.type === "WEB_PREVIEW" && artifact.content.trim().startsWith("<")) {
     return {
-      label: "HTML Preview Mode",
-      description: "使用 iframe srcDoc 展示 HTML 快照；仍是本地静态预览，不代表真实云部署。"
+      label: "页面快照",
+      description: "当前展示的是本地产物快照，只用于查看界面，不代表真实对外部署地址。"
     };
   }
 
   if (artifact.type === "MARKDOWN" || artifact.type === "REVIEW_REPORT") {
     return {
-      label: "Document Mode",
-      description: "以文档预览方式展示 Markdown / Review Report，保留原始文本和审计上下文。"
+      label: "文档预览",
+      description: "当前按文档方式展示文本内容，保留原始内容和审计上下文。"
     };
   }
 
   return {
-    label: "Structured Text Mode",
-    description: "以结构化文本展示 API Contract、Data Model 或其他产物内容。"
+    label: "结构化内容",
+    description: "当前展示 API 契约、数据模型或其他结构化产物内容。"
   };
 }
 
@@ -82,7 +81,6 @@ function getPreviewTrustTone(artifact: Artifact): PreviewTrustTone {
   if (artifact.sourceKind === "REAL_ADAPTER") {
     return "success";
   }
-
   return "neutral";
 }
 
@@ -90,64 +88,56 @@ function getPreviewTrustLabel(artifact: Artifact): string {
   const tone = getPreviewTrustTone(artifact);
 
   if (tone === "success") {
-    return "真实 Adapter 产物预览";
+    return "真实产物预览";
   }
   if (tone === "danger") {
-    return "门禁失败预览";
+    return "风险产物预览";
   }
   if (tone === "warning") {
     return "本地静态预览";
   }
-
-  return "本地预览";
+  return "普通预览";
 }
 
 function getPreviewTrustDescription(artifact: Artifact): string {
   if (getPreviewTrustTone(artifact) === "danger") {
-    return "该 Artifact 存在质量、构建或评审风险，页面仅展示当前内容，不代表可交付状态。";
+    return "当前产物存在质量、构建或审批风险。这里仅展示内容，不代表可直接交付。";
   }
   if (artifact.sourceKind === "REAL_ADAPTER") {
-    return "该页面展示真实 Adapter 产物的当前版本，并保留 AgentHub 的版本、来源和门禁信息。";
+    return "当前页面展示真实适配器产物的当前版本，并保留版本、来源和质量状态。";
   }
-
-  return "该页面展示本地静态 Preview URL，对应 Artifact 内容快照，不代表真实云部署或公网发布。";
+  return "当前页面展示本地静态快照，适合查看和验收，不代表已完成真实部署或正式发布。";
 }
 
 function getPreviewNextAction(artifact: Artifact): string {
   if (getPreviewTrustTone(artifact) === "danger") {
-    return "回到 Workspace 查看质量门禁原因，执行 Revision 后再重新评审。";
+    return "回到工作区处理风险、重新评审后再继续交付。";
   }
   if (artifact.sourceKind === "REAL_ADAPTER") {
-    return "可作为真实 Adapter 产物候选继续审批、生成本地预览或加入交付记录。";
+    return "可继续走 Diff、审批、部署预览或交付记录。";
   }
-  return "当前是本地静态预览，适合演示兜底；如需交付，请优先生成真实 Adapter 版本。";
+  return "适合本地验收；如果要正式交付，优先生成真实适配器版本。";
 }
 
 function formatPreviewSize(content: string | null | undefined): string {
   const length = (content || "").length;
   if (length >= 1000) {
-    return `${(length / 1000).toFixed(1)}k chars`;
+    return `${(length / 1000).toFixed(1)}k 字符`;
   }
-  return `${length} chars`;
+  return `${length} 字符`;
 }
 
 function renderPreviewContent(artifact: Artifact) {
   const content = artifact.content || "";
 
   if (artifact.type === "WEB_PREVIEW" && content.trim().startsWith("<")) {
-    return (
-      <iframe
-        className="preview-page__iframe"
-        title={artifact.title}
-        sandbox=""
-        srcDoc={content}
-      />
-    );
+    return <iframe className="preview-page__iframe" title={artifact.title} sandbox="" srcDoc={content} />;
   }
 
-  const className = artifact.type === "CODE" || artifact.type === "API_CONTRACT" || artifact.type === "DATA_MODEL"
-    ? "preview-page__code"
-    : "preview-page__text";
+  const className =
+    artifact.type === "CODE" || artifact.type === "API_CONTRACT" || artifact.type === "DATA_MODEL"
+      ? "preview-page__code"
+      : "preview-page__text";
 
   return (
     <pre className={className}>
@@ -170,7 +160,7 @@ export function PreviewPage() {
       const normalizedArtifactId = artifactId?.trim();
       if (!normalizedArtifactId) {
         setArtifact(null);
-        setErrorMessage("Artifact ID is required.");
+        setErrorMessage("缺少产物 ID。");
         setLoading(false);
         return;
       }
@@ -205,7 +195,7 @@ export function PreviewPage() {
         if (!cancelled) {
           setArtifact(null);
           setConversationArtifacts([]);
-          setErrorMessage(error instanceof Error ? error.message : "Request failed.");
+          setErrorMessage(error instanceof Error ? error.message : "读取产物失败。");
         }
       } finally {
         if (!cancelled) {
@@ -232,164 +222,170 @@ export function PreviewPage() {
   return (
     <main className="preview-page">
       <header className="preview-page__topbar">
-        <div>
-          <p className="eyebrow">AgentHub Preview</p>
-          <h1>Artifact 预览工作台</h1>
-          <span>Local Preview · Static Snapshot · Not Cloud Deploy</span>
+        <div className="preview-page__hero-copy">
+          <p className="eyebrow">产物预览</p>
+          <h1>产物预览工作台</h1>
+          <span className="preview-page__topbar-note">只读查看当前产物内容、版本链和来源状态。</span>
         </div>
-        <div className="preview-page__boundary-badges" aria-label="Preview boundary">
-          <span>Local Preview</span>
-          <span>Static Snapshot</span>
-          <span>Not Cloud Deploy</span>
+        <div className="preview-page__topbar-actions">
+          <div className="preview-page__boundary-badges" aria-label="预览边界">
+            <span>本地预览</span>
+            <span>静态快照</span>
+            <span>只读查看</span>
+          </div>
+          <Link to="/workspace" className="preview-page__back-link">
+            返回工作区
+          </Link>
         </div>
-        <Link to="/workspace" className="preview-page__back-link">返回 Workspace</Link>
       </header>
 
       {loading ? (
         <section className="preview-page__state">
-          <strong>正在加载 Artifact 预览...</strong>
-          <span>正在读取 Artifact 内容。</span>
+          <strong>正在加载产物预览...</strong>
+          <span>正在读取后端中的 Artifact 内容。</span>
         </section>
       ) : errorMessage ? (
         <section className="preview-page__state preview-page__state--error">
-          <strong>未找到 Artifact</strong>
+          <strong>未找到产物</strong>
           <span>{errorMessage}</span>
-          <Link to="/workspace">返回 Workspace</Link>
+          <Link to="/workspace">返回工作区</Link>
         </section>
       ) : artifact ? (
         <section className="preview-page__card">
-          <div className="preview-page__meta">
-            <div>
-              <p className="eyebrow">本地静态预览</p>
-              <h2>{artifact.title}</h2>
-              <span>{formatId(artifact.id)}</span>
-            </div>
-            <div className="preview-page__badges">
-              <span className="status-pill">{displayArtifactType(artifact.type)}</span>
-              <span className={`status-pill status-pill--${normalizeStatusClass(artifact.status)}`}>
-                {displayStatus(artifact.status)}
-              </span>
-              <span className={`status-pill status-pill--${trustTone}`}>
-                {getPreviewTrustLabel(artifact)}
-              </span>
-            </div>
-          </div>
+          <div className="preview-page__layout">
+            <aside className="preview-page__sidebar">
+              <section className="preview-page__panel preview-page__panel--hero">
+                <div className="preview-page__meta-head">
+                  <div>
+                    <p className="eyebrow">当前产物</p>
+                    <h2>{artifact.title}</h2>
+                    <span className="preview-page__artifact-id">{formatId(artifact.id)}</span>
+                  </div>
+                  <div className="preview-page__badges">
+                    <span className="status-pill">{displayArtifactType(artifact.type)}</span>
+                    <span className={`status-pill status-pill--${normalizeStatusClass(artifact.status)}`}>
+                      {displayStatus(artifact.status)}
+                    </span>
+                    <span className={`status-pill status-pill--${trustTone}`}>{getPreviewTrustLabel(artifact)}</span>
+                  </div>
+                </div>
+              </section>
 
-          <div className="preview-page__metadata-bar" aria-label="Artifact preview metadata">
-            <span>
-              <strong>Source</strong>
-              {displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}
-            </span>
-            <span>
-              <strong>Adapter</strong>
-              {artifact.sourceAdapterType ? displayAdapterName(artifact.sourceAdapterType) : "N/A"}
-            </span>
-            <span>
-              <strong>Quality</strong>
-              {sanitizeProductionText(artifact.qualityStatus || artifact.realAdapterOutcome || "NOT_EVALUATED")}
-            </span>
-            <span>
-              <strong>Mode</strong>
-              {sanitizeProductionText(artifact.generationMode || previewMode)}
-            </span>
-          </div>
+              <section className="preview-page__panel preview-page__panel--facts">
+                <div className="preview-page__facts-grid" aria-label="产物预览元数据">
+                  <article className="preview-page__fact">
+                    <span>来源</span>
+                    <strong>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</strong>
+                  </article>
+                  <article className="preview-page__fact">
+                    <span>执行通道</span>
+                    <strong>{artifact.sourceAdapterType ? displayAdapterName(artifact.sourceAdapterType) : "无"}</strong>
+                  </article>
+                  <article className="preview-page__fact">
+                    <span>质量状态</span>
+                    <strong>{sanitizeProductionText(artifact.qualityStatus || artifact.realAdapterOutcome || "未评估")}</strong>
+                  </article>
+                  <article className="preview-page__fact">
+                    <span>显示模式</span>
+                    <strong>{sanitizeProductionText(artifact.generationMode || previewMode)}</strong>
+                  </article>
+                </div>
+              </section>
 
-          <section className={`preview-page__studio preview-page__studio--${trustTone}`} data-testid="preview-studio">
-            <div className="preview-page__studio-hero">
-              <div>
-                <span className="preview-page__studio-eyebrow">Preview Studio</span>
-                <strong>{getPreviewTrustLabel(artifact)}</strong>
-                <p>{getPreviewTrustDescription(artifact)}</p>
-              </div>
-              <span>{sanitizeProductionText(artifact.realAdapterOutcome || "本地备用路径")}</span>
-            </div>
-            <div className="preview-page__studio-grid">
-              <article>
-                <span>来源</span>
-                <strong>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</strong>
-                <small>{artifact.sourceAdapterType ? displayAdapterName(artifact.sourceAdapterType) : "无外部 Adapter"}</small>
-              </article>
-              <article>
-                <span>版本链</span>
-                <strong>{versionEntries.length} 个版本</strong>
-                <small>当前 v{artifact.version}</small>
-              </article>
-              <article>
-                <span>构建</span>
-                <strong>{artifact.buildValidationStatus || "NOT_EVALUATED"}</strong>
-                <small>{artifact.buildValidationReason || "无阻断原因"}</small>
-              </article>
-              <article>
-                <span>内容体量</span>
-                <strong>{formatPreviewSize(artifact.content)}</strong>
-                <small>{previewMode}</small>
-              </article>
-            </div>
-            <div className="preview-page__boundary" data-testid="preview-boundary">
-              <div>
-                <span>交付边界</span>
-                <strong>{getPreviewNextAction(artifact)}</strong>
-              </div>
-              <p>
-                Preview 页面只读取后端 Artifact 内容，不执行真实构建、不发布公网地址，也不会绕过 Workspace
-                中的审批、审计和快照恢复链路。
-              </p>
-            </div>
-          </section>
+              <section className={`preview-page__panel preview-page__panel--trust preview-page__panel--${trustTone}`} data-testid="preview-studio">
+                <div className="preview-page__trust-head">
+                  <div>
+                    <span className="preview-page__section-kicker">预览说明</span>
+                    <strong>{getPreviewTrustLabel(artifact)}</strong>
+                    <p>{getPreviewTrustDescription(artifact)}</p>
+                  </div>
+                  <span className="preview-page__trust-route">
+                    {sanitizeProductionText(artifact.realAdapterOutcome || "本地静态路径")}
+                  </span>
+                </div>
+                <div className="preview-page__summary-grid">
+                  <article className="preview-page__summary-card">
+                    <span>版本链</span>
+                    <strong>{versionEntries.length} 个版本</strong>
+                    <small>当前 v{artifact.version}</small>
+                  </article>
+                  <article className="preview-page__summary-card">
+                    <span>构建状态</span>
+                    <strong>{sanitizeProductionText(artifact.buildValidationStatus || "未评估")}</strong>
+                    <small>{sanitizeProductionText(artifact.buildValidationReason || "暂无阻断原因")}</small>
+                  </article>
+                  <article className="preview-page__summary-card">
+                    <span>内容体量</span>
+                    <strong>{formatPreviewSize(artifact.content)}</strong>
+                    <small>{previewMode}</small>
+                  </article>
+                  <article className="preview-page__summary-card">
+                    <span>下一步</span>
+                    <strong>{getPreviewNextAction(artifact)}</strong>
+                    <small>如需修改，请回到工作区走草稿、Diff 和审批链。</small>
+                  </article>
+                </div>
+              </section>
+            </aside>
 
-          <div className="preview-page__workbench">
-            <dl className="preview-page__details">
-              <div>
-                <dt>Artifact ID</dt>
-                <dd>{formatId(artifact.id)}</dd>
-              </div>
-              <div>
-                <dt>预览模式</dt>
-                <dd>{previewMode}</dd>
-              </div>
-              <div>
-                <dt>更新时间</dt>
-                <dd>{new Date(artifact.updatedAt).toLocaleString()}</dd>
-              </div>
-              <div>
-                <dt>来源</dt>
-                <dd>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</dd>
-              </div>
-            </dl>
+            <section className="preview-page__main-pane">
+              <section className="preview-page__panel preview-page__panel--details">
+                <dl className="preview-page__details">
+                  <div>
+                    <dt>产物 ID</dt>
+                    <dd>{formatId(artifact.id)}</dd>
+                  </div>
+                  <div>
+                    <dt>预览模式</dt>
+                    <dd>{previewMode}</dd>
+                  </div>
+                  <div>
+                    <dt>更新时间</dt>
+                    <dd>{new Date(artifact.updatedAt).toLocaleString()}</dd>
+                  </div>
+                  <div>
+                    <dt>来源类型</dt>
+                    <dd>{displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE")}</dd>
+                  </div>
+                </dl>
+              </section>
 
-            <div className="preview-page__versions">
-              <div>
-                <strong>Preview 快照</strong>
-                <span>当前版本链共 {versionEntries.length} 个本地可预览快照</span>
-              </div>
-              <div className="preview-page__version-list">
-                {versionEntries.map((entry) => {
-                  const isActive = entry.artifactId === getIdValue(artifact.id);
-                  return (
-                    <Link
-                      key={entry.artifactId}
-                      className={`preview-page__version-item ${isActive ? "preview-page__version-item--active" : ""}`}
-                      to={`/preview/${entry.artifactId}`}
-                    >
-                      <small>{isActive ? "CURRENT SNAPSHOT" : "LOCAL CANDIDATE"}</small>
-                      <strong>v{entry.artifact.version}</strong>
-                      <span>{entry.isRevision ? "Revision" : "Base"}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+              <section className="preview-page__panel preview-page__panel--versions">
+                <div className="preview-page__panel-title">
+                  <div>
+                    <strong>版本快照</strong>
+                    <span>当前版本链共 {versionEntries.length} 个可预览快照。</span>
+                  </div>
+                </div>
+                <div className="preview-page__version-list">
+                  {versionEntries.map((entry) => {
+                    const isActive = entry.artifactId === getIdValue(artifact.id);
+                    return (
+                      <Link
+                        key={entry.artifactId}
+                        className={`preview-page__version-item ${isActive ? "preview-page__version-item--active" : ""}`}
+                        to={`/preview/${entry.artifactId}`}
+                      >
+                        <small>{isActive ? "当前快照" : "候选版本"}</small>
+                        <strong>v{entry.artifact.version}</strong>
+                        <span>{entry.isRevision ? "修订版本" : "基础版本"}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
 
-          <div className="preview-page__content">
-            <div className="preview-page__content-toolbar">
-              <div>
-                <strong>{presentationMode?.label || "内容预览"}</strong>
-                <span>{artifact.title}</span>
-              </div>
-              <span>{presentationMode?.description || previewMode}</span>
-            </div>
-            {renderPreviewContent(artifact)}
+              <section className="preview-page__panel preview-page__panel--content">
+                <div className="preview-page__content-toolbar">
+                  <div>
+                    <strong>{presentationMode?.label || "内容预览"}</strong>
+                    <span>{artifact.title}</span>
+                  </div>
+                  <span>{presentationMode?.description || previewMode}</span>
+                </div>
+                {renderPreviewContent(artifact)}
+              </section>
+            </section>
           </div>
         </section>
       ) : null}

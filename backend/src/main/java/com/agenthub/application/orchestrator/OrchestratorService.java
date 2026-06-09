@@ -1223,6 +1223,7 @@ public class OrchestratorService {
         }
 
         return plan.steps().stream()
+                .filter(stepPlan -> stepPlan.stepOrder() > 3)
                 .filter(stepPlan -> additionalMentionedAgentIds.contains(stepPlan.agentId()))
                 .map(stepPlan -> {
                     Agent mentionedAgent = agentApplicationService.getAgent(stepPlan.agentId());

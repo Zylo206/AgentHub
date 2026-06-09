@@ -26,7 +26,7 @@ export function WorkspaceCollaborationToolbar({
   onRunManualDebug
 }: WorkspaceCollaborationToolbarProps) {
   const primaryLabel = autoTriggerRunningMessageId
-    ? "启动中..."
+    ? "协作启动中..."
     : latestTriggerReady
       ? latestTriggerPrimaryLabel
       : "发送任务后确认协作";
@@ -36,7 +36,7 @@ export function WorkspaceCollaborationToolbar({
       <div className="workspace-main__toolbar workspace-main__toolbar--collaboration">
         <div className="section-header">
           <h3>协作消息流</h3>
-          <span>发送任务后确认启动，Agent 会在同一会话中按步骤回复。</span>
+          <span>先发送任务消息，再由 Orchestrator 发起协作。</span>
         </div>
         <div className="workspace-main__collaboration-actions" data-testid="workspace-collaboration-actions">
           <button
@@ -54,9 +54,9 @@ export function WorkspaceCollaborationToolbar({
             data-testid="debug-actions-toggle"
             onClick={onToggleDebugActions}
             aria-expanded={showDebugActions}
-            title="高级运行工具用于本地排查；主路径仍从发送任务消息后确认协作开始。"
+            title="仅用于补跑、排查和验收，不改变默认协作链路。"
           >
-            {showDebugActions ? "隐藏运行" : "高级运行"}
+            {showDebugActions ? "收起高级运行" : "高级运行"}
           </button>
         </div>
       </div>
@@ -65,7 +65,7 @@ export function WorkspaceCollaborationToolbar({
         <div className="workspace-debug-panel" data-testid="debug-actions-panel">
           <div className="workspace-debug-panel__header">
             <strong>高级运行工具</strong>
-            <p>用于本地排查和验收复现。默认工作流仍是发送任务消息后确认协作。</p>
+            <p>用于本地补跑和验收复核，默认工作流仍以聊天协作为主。</p>
           </div>
           <button
             type="button"
@@ -78,17 +78,6 @@ export function WorkspaceCollaborationToolbar({
           </button>
         </div>
       ) : null}
-
-      <div className="workspace-main__flow-guide" data-testid="workspace-flow-guide" aria-label="Agent collaboration flow">
-        <span>主路径</span>
-        <strong>发送任务</strong>
-        <em>-&gt;</em>
-        <strong>确认协作</strong>
-        <em>-&gt;</em>
-        <strong>Agent 回复</strong>
-        <em>-&gt;</em>
-        <strong>Artifact / Diff / Deploy</strong>
-      </div>
     </>
   );
 }

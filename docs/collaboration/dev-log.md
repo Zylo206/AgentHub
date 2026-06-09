@@ -9991,3 +9991,116 @@
 - 这轮只补了 IM 单 Agent 远程问答 direct-reply 闭环，没有改多 Agent 群聊和 orchestrator 主链。
 - `object-storage-smoke-test.mjs` 需要真实后端 `s3`/MinIO 配置和可用服务；当前代码已支持，但是否能 live 跑通取决于本机 MinIO/网络环境。
 - provider matrix smoke 会改写当前用户的 `OPENAI_COMPATIBLE` runtime config，建议使用独立 smoke 用户或单独环境。
+
+## 2026-06-09 - JDBC startup switch and workspace refresh stabilization
+
+### 变更
+
+- `scripts/start-local.ps1` 新增显式持久化模式参数：
+  - `-PersistenceMode memory|jdbc`
+  - `-JdbcUrl`
+  - `-JdbcUsername`
+  - `-JdbcPassword`
+- 本地启动脚本现在会把 `AGENTHUB_PERSISTENCE_MODE` 显式写入后端进程，避免宿主 shell 遗留 env 造成 profile 漂移。
+- Workspace 新增轻量会话 session cache：
+  - 刷新时先恢复最近一次会话列表和 `currentConversationId`
+  - 等待后端数据回填时不再先渲染“空会话 / 空工作区”
+- `loadInitialData` 现在会校验当前会话 id 是否仍存在；若不存在则回退到最新会话，避免刷新后指向过期会话 id。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：通过。
+- 本机 MySQL 实库初始化通过：`node scripts/mysql-init-profile.mjs` 成功创建 `agenthub` 并应用 `schema-jdbc.sql`。
+- JDBC 最小重启恢复验证通过：
+  - 启动 JDBC backend
+  - 创建 conversation + message
+  - 停止并重启 backend
+  - 重新按 ID 查回 conversation 和 message 成功
+- Browser 本地刷新验证通过：刷新 `/workspace` 后会话列表仍保持可见，未再出现会话空态或消息空态闪现。
+
+### 边界
+
+- 这轮没有把 MySQL 改成全局默认 profile，默认仍是 `memory`；JDBC 仅通过显式启动参数或 env 开启。
+- session cache 只用于降低刷新抖动，不替代后端权威数据；真实持久化仍以后端 JDBC/MySQL 为准。
+
+## 2026-06-09 - Prevent duplicate core review steps when @Reviewer is mentioned
+
+### 变更
+
+- `OrchestratorService.buildAdditionalMentionedAgentStepCommands(...)` 现在只会为追加的 mentioned-agent step 生成执行命令，不再回收 core step 1-3。
+- 这样消息里显式 `@Reviewer` / `@Frontend Builder` 时，不会再次下发同一个 `stepOrder` 和同一个 `idempotencyKey`。
+- `scripts/smoke-test.mjs` 新增显式断言：
+  - 默认 demo-task 的 `stepOrder` 必须唯一
+  - 不允许出现 `DUPLICATE_SUBMISSION_REJECTED`
+  - message rerun 也要满足同样约束
+
+### 验证
+
+- `cd backend && mvn -q -DskipTests package`：通过。
+- `node --check scripts/smoke-test.mjs`：通过。
+- JDBC 后端独立启动后，`node scripts/smoke-test.mjs` 在 `AGENTHUB_SMOKE_EXPECT_JDBC_PROFILE=true` 下通过。
+- 复现用的 `@Reviewer` + `@Frontend Builder` 默认 demo-task 路径已恢复为 `COMPLETED`，不再出现 `DUPLICATE_SUBMISSION_REJECTED` 和误判 `BLOCKED`。
+
+### 边界
+
+- 这轮没有改 Planner 结构，也没有改 Reviewer 的质量门禁语义；只修正 mentioned-agent 执行命令不该重复映射 core step 的问题。
+
+## 2026-06-09 - Workspace composer and diagnostics polish
+
+### 变更
+
+- Workspace 输入区改为稳定的单行工具栏布局：
+  - `@Agent` 按钮只插入 `@`
+  - 输入 `@` 后立即展示可用 Agent 列表
+  - 支持方向键、`Enter`、`Tab` 选择候选 Agent
+  - 路由提示改成紧凑 pill，不再用展开式说明块压住输入框
+- 中间栏顶部继续降噪：
+  - `WorkspaceHeader`、`WorkspacePresenceBar`、`WorkspaceCollaborationToolbar` 文案收短
+  - 主链路指引收敛为 `发送任务 -> 确认协作 -> 交付产物`
+  - 高级工具入口保留，但只作为紧凑下拉入口
+- 诊断抽屉补状态记忆：
+  - 记住当前打开的诊断标签
+  - 记住各标签内部滚动位置
+  - Adapter 路由表列数与实际字段对齐，避免显示挤坏
+- `/agents` 创建业务 Agent 视图继续收口：
+  - 非 CLI 视图整体宽度收敛到 1120px
+  - 顶部说明区、表单区和预览区统一居中对齐
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：通过。
+- Browser 本地验证通过：
+  - `/workspace` 输入 `@` 后出现 6 个 Agent 候选
+  - 路由 pill 显示为 `可选 Agent 6 / Orchestrator / 自动分派`
+  - 顶部流程条已收敛为 `主链路 / 发送任务 / 确认协作 / 交付产物`
+  - `/agents` 创建页当前为单列居中布局，右侧预览不再 sticky 悬空
+
+### 边界
+
+- 这轮没有改本地 CLI 执行链路，只修正了前端展示和交互；CLI 是否可用仍由后端 Adapter 健康探测决定。
+- Context 面板本轮以降噪和滚动恢复为主，没有重写检索解释模型。
+
+## 2026-06-09 - Preview workbench cleanup and flow-guide removal
+
+### 变更
+
+- 删除工作区中间栏的主链路提示条，只保留真正可操作的协作入口和高级运行入口。
+- 重写 `PreviewPage` 顶部和主体布局：
+  - 顶部改成纯中文说明，移除无意义英文标签
+  - 左侧收敛为产物概览、来源/质量事实卡和预览说明
+  - 右侧统一为详情、版本快照和内容预览，修正上下不对齐问题
+- 重新整理预览页样式层，提升说明文字、事实卡和边界说明的对比度，避免浅色文字影响阅读。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：通过。
+- Browser 本地检查通过：
+  - `/workspace` 顶部主链路提示条已删除，仅保留协作入口与高级运行入口
+  - `/preview/:artifactId` 顶部已切为纯中文文案
+  - 桌面宽度下预览页恢复为左右双栏，左侧概览与右侧详情顶部对齐
+  - 旧的英文标记 `AgentHub Preview / Artifact ID / Local Preview / Static Snapshot / Workspace` 不再显示
+
+### 边界
+
+- 这轮没有新增独立代码编辑器；当前代码修改仍走 Artifact 工作区内的草稿修订与 Diff 流程。
+- 这轮没有新增登录/注册路由；右侧 `LoginPage.tsx` 仍是示例产物，不是实际认证页面。

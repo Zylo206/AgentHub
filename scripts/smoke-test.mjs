@@ -807,6 +807,21 @@ async function runSmokeTest() {
   if (steps.length < 3) {
     throw new Error(`demo task expected at least 3 steps, got ${steps.length}`);
   }
+  const uniqueStepOrders = new Set(steps.map((step) => step.stepOrder));
+  if (uniqueStepOrders.size !== steps.length) {
+    throw new Error(`demo task produced duplicate stepOrder values: ${steps.map((step) => step.stepOrder).join(", ")}`);
+  }
+  const duplicateSubmissionStep = steps.find((step) =>
+    String(step.failureType || "").includes("DUPLICATE_SUBMISSION_REJECTED") ||
+    String(step.discardedReason || "").includes("Duplicate step submission rejected") ||
+    String(step.finalDecision || "").includes("DUPLICATE_SUBMISSION_REJECTED") ||
+    String(step.outputContent || "").includes("Duplicate step submission rejected")
+  );
+  if (duplicateSubmissionStep) {
+    throw new Error(
+      `demo task should not reject duplicate core steps when @Reviewer is present; offending stepOrder=${duplicateSubmissionStep.stepOrder}`
+    );
+  }
   const resultSummary = String(taskRun.resultSummary || "");
   if (!resultSummary.includes("规划模式：")) {
     throw new Error("demo task resultSummary did not expose planner mode");
@@ -908,6 +923,17 @@ async function runSmokeTest() {
   }
   if (rerunSteps.length < 3) {
     throw new Error(`message rerun task expected at least 3 steps, got ${rerunSteps.length}`);
+  }
+  const duplicateSubmissionRerunStep = rerunSteps.find((step) =>
+    String(step.failureType || "").includes("DUPLICATE_SUBMISSION_REJECTED") ||
+    String(step.discardedReason || "").includes("Duplicate step submission rejected") ||
+    String(step.finalDecision || "").includes("DUPLICATE_SUBMISSION_REJECTED") ||
+    String(step.outputContent || "").includes("Duplicate step submission rejected")
+  );
+  if (duplicateSubmissionRerunStep) {
+    throw new Error(
+      `message rerun should not reject duplicate core steps when @Reviewer is present; offending stepOrder=${duplicateSubmissionRerunStep.stepOrder}`
+    );
   }
   pass(`message rerun demo task completed: ${rerunTaskRunId}, steps=${rerunSteps.length}`);
 

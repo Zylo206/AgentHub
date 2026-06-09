@@ -375,8 +375,11 @@ export function useArtifactOperationController({
     setDraftContent(selectedArtifact?.content || "");
     setDraftNote("");
     setDraftSelection(null);
-    setActiveInspectorTab("overview");
   }, [selectedArtifact]);
+
+  useEffect(() => {
+    setActiveInspectorTab("overview");
+  }, [selectedArtifactId]);
 
   async function handleCreateRevision() {
     if (!selectedArtifactId || !revisionInstruction.trim()) {

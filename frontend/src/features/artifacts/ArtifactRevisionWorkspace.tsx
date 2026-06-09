@@ -97,6 +97,18 @@ export function ArtifactRevisionWorkspace({
 }: ArtifactRevisionWorkspaceProps) {
   return (
     <>
+      <DiffSummaryPanel
+        artifacts={allArtifacts}
+        artifact={artifact}
+        appliedArtifactId={appliedDiffArtifactId}
+        compareResult={diffCompareResult}
+        conflictArtifactId={diffConflictArtifactId}
+        conflictMessage={diffConflictMessage}
+        onCreateConflictResolutionRevision={onCreateConflictResolutionRevision}
+        onApplyDiff={onApplyDiff}
+        onForceApplyDiff={onForceApplyDiff}
+      />
+
       <ArtifactCollaborationPanel
         artifact={artifact}
         onSelectArtifact={onSelectArtifact}
@@ -221,17 +233,6 @@ export function ArtifactRevisionWorkspace({
         </button>
       </div>
 
-      <DiffSummaryPanel
-        artifacts={allArtifacts}
-        artifact={artifact}
-        appliedArtifactId={appliedDiffArtifactId}
-        compareResult={diffCompareResult}
-        conflictArtifactId={diffConflictArtifactId}
-        conflictMessage={diffConflictMessage}
-        onCreateConflictResolutionRevision={onCreateConflictResolutionRevision}
-        onApplyDiff={onApplyDiff}
-        onForceApplyDiff={onForceApplyDiff}
-      />
     </>
   );
 }

@@ -1,4 +1,14 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
+
+const DIAGNOSTIC_SCROLL_STORAGE_KEY = "agenthub:workspace-diagnostics-scroll";
+
+function readDiagnosticScrollPositions(): Record<string, number> {
+  try {
+    return JSON.parse(window.sessionStorage.getItem(DIAGNOSTIC_SCROLL_STORAGE_KEY) || "{}") as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
 
 export interface WorkspaceDiagnosticPanel<T extends string> {
   key: T;
@@ -19,6 +29,27 @@ export function WorkspaceDiagnosticsDrawer<T extends string>({
   sections,
   onTogglePanel
 }: WorkspaceDiagnosticsDrawerProps<T>) {
+  const scrollPositionsRef = useRef<Record<string, number>>(readDiagnosticScrollPositions());
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useLayoutEffect(() => {
+    if (!activePanel) {
+      return;
+    }
+
+    const element = sectionRefs.current[activePanel];
+    if (!element) {
+      return;
+    }
+
+    const nextScrollTop = scrollPositionsRef.current[activePanel] ?? 0;
+    if (Math.abs(element.scrollTop - nextScrollTop) <= 1) {
+      return;
+    }
+
+    element.scrollTop = nextScrollTop;
+  }, [activePanel, sections]);
+
   return (
     <section
       className={`workspace-diagnostics ${activePanel ? "workspace-diagnostics--expanded" : "workspace-diagnostics--collapsed"}`}
@@ -44,6 +75,9 @@ export function WorkspaceDiagnosticsDrawer<T extends string>({
         {panels.map((panel) => (
           <div
             key={panel.key}
+            ref={(element) => {
+              sectionRefs.current[panel.key] = element;
+            }}
             className={[
               "workspace-diagnostics__section",
               `workspace-diagnostics__section--${panel.key}`,
@@ -51,8 +85,19 @@ export function WorkspaceDiagnosticsDrawer<T extends string>({
             ]
               .filter(Boolean)
               .join(" ")}
+            onScroll={(event) => {
+              scrollPositionsRef.current[panel.key] = event.currentTarget.scrollTop;
+              try {
+                window.sessionStorage.setItem(
+                  DIAGNOSTIC_SCROLL_STORAGE_KEY,
+                  JSON.stringify(scrollPositionsRef.current)
+                );
+              } catch {
+                // Ignore sessionStorage failures in private mode or restricted environments.
+              }
+            }}
           >
-            {sections[panel.key]}
+            <div className="workspace-diagnostics__section-body">{sections[panel.key]}</div>
           </div>
         ))}
       </div>

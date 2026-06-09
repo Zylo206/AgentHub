@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useRef } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent } from "../agents/agentTypes";
 import type { ArtifactSelectionReference } from "../artifacts/artifactTypes";
 import type { LightweightAttachment, Message } from "./chatTypes";
@@ -21,6 +21,12 @@ interface ChatInputProps {
   onClearQuote?: () => void;
   onClearArtifactSelection?: () => void;
   onSend: () => void;
+}
+
+interface MentionQuery {
+  query: string;
+  start: number;
+  end: number;
 }
 
 function uniqueAgents(agents: Agent[]): Agent[] {
@@ -56,6 +62,42 @@ function getAttachmentContentType(attachment: LightweightAttachment): string {
   return attachment.contentType || attachment.mimeType || "attachment";
 }
 
+function getActiveMentionQuery(value: string, cursorPosition: number): MentionQuery | null {
+  const safeCursor = Math.max(0, Math.min(cursorPosition, value.length));
+  const beforeCursor = value.slice(0, safeCursor);
+  const mentionMatch = beforeCursor.match(/(?:^|\s)@([^\s@]*)$/);
+  if (!mentionMatch) {
+    return null;
+  }
+
+  const mentionToken = mentionMatch[0].trimStart();
+  const start = beforeCursor.length - mentionToken.length;
+
+  return {
+    query: mentionMatch[1] || "",
+    start,
+    end: safeCursor
+  };
+}
+
+function sortAgentsByMatch(agents: Agent[], query: string): Agent[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return agents;
+  }
+
+  return [...agents].sort((left, right) => {
+    const leftName = left.name.toLowerCase();
+    const rightName = right.name.toLowerCase();
+    const leftStarts = leftName.startsWith(normalizedQuery) ? 0 : 1;
+    const rightStarts = rightName.startsWith(normalizedQuery) ? 0 : 1;
+    if (leftStarts !== rightStarts) {
+      return leftStarts - rightStarts;
+    }
+    return leftName.localeCompare(rightName);
+  });
+}
+
 export function ChatInput({
   value,
   disabled,
@@ -74,6 +116,10 @@ export function ChatInput({
   onSend
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [cursorPosition, setCursorPosition] = useState(value.length);
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0);
+
   const routingPreview = useMemo(() => {
     const parsedMention = parseLeadingAgentMention(value, agents);
     const mentionedAgents = parsedMention.error ? [] : parsedMention.matchedAgents;
@@ -84,7 +130,7 @@ export function ChatInput({
     if (parsedMention.error) {
       return {
         mode: "MENTION_ERROR",
-        title: "Agent 指定有误",
+        title: "Agent 指定异常",
         detail: parsedMention.error,
         agents: [],
         adapters: [],
@@ -95,8 +141,8 @@ export function ChatInput({
     if (targetAgents.length > 1) {
       return {
         mode: "MULTI_AGENT",
-        title: "To: 多 Agent 协作",
-        detail: "消息开头的多个 @Agent 会被作为协作成员，Orchestrator 会按能力和可用性拆分任务。",
+        title: "多 Agent 协作",
+        detail: "消息开头的多个 @Agent 会作为协作成员，由 Orchestrator 继续拆分任务。",
         agents: targetAgents,
         adapters,
         capabilities
@@ -107,7 +153,7 @@ export function ChatInput({
       return {
         mode: "SINGLE_AGENT",
         title: `To: @${targetAgents[0].name}`,
-        detail: "该 Agent 会优先处理本次消息；需要更多成员时，Orchestrator 仍可补充分工。",
+        detail: "当前消息优先发给该 Agent；需要时 Orchestrator 仍可补充其他成员。",
         agents: targetAgents,
         adapters,
         capabilities
@@ -116,13 +162,43 @@ export function ChatInput({
 
     return {
       mode: "AUTO_ROUTE",
-      title: "To: Orchestrator 自动分派",
-      detail: "未指定 Agent 时，将按任务意图、工具能力和可用性选择内置或自建 Agent。",
+      title: "To: Orchestrator",
+      detail: "未指定 Agent 时，按能力和可用性自动分派。",
       agents: [],
       adapters: [],
       capabilities: []
     };
   }, [agents, selectedAgent, value]);
+
+  const activeMentionQuery = useMemo(() => getActiveMentionQuery(value, cursorPosition), [cursorPosition, value]);
+
+  const mentionSuggestions = useMemo(() => {
+    if (!activeMentionQuery) {
+      return [];
+    }
+
+    const normalizedQuery = activeMentionQuery.query.trim().toLowerCase();
+    const filteredAgents = agents.filter((agent) => {
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      return [agent.name, agent.role, agent.preferredAdapterType, ...agent.capabilityTags, ...agent.toolTags]
+        .filter(Boolean)
+        .some((candidate) => String(candidate).toLowerCase().includes(normalizedQuery));
+    });
+
+    return sortAgentsByMatch(filteredAgents, normalizedQuery).slice(0, 6);
+  }, [activeMentionQuery, agents]);
+
+  useEffect(() => {
+    setActiveMentionIndex((current) => {
+      if (mentionSuggestions.length === 0) {
+        return 0;
+      }
+      return Math.min(current, mentionSuggestions.length - 1);
+    });
+  }, [mentionSuggestions]);
 
   async function addLocalFiles(files: FileList | null) {
     if (!files || files.length === 0) {
@@ -167,26 +243,144 @@ export function ChatInput({
     }
   }
 
+  function updateCursorPositionFromTextarea() {
+    if (!textareaRef.current) {
+      return;
+    }
+    setCursorPosition(textareaRef.current.selectionStart || 0);
+  }
+
+  function applyMention(agent: Agent) {
+    if (!activeMentionQuery) {
+      return;
+    }
+
+    const mentionText = `@${agent.name} `;
+    const nextValue = `${value.slice(0, activeMentionQuery.start)}${mentionText}${value.slice(activeMentionQuery.end)}`;
+    const nextCursorPosition = activeMentionQuery.start + mentionText.length;
+
+    onChange(nextValue);
+    setCursorPosition(nextCursorPosition);
+    setActiveMentionIndex(0);
+
+    requestAnimationFrame(() => {
+      if (!textareaRef.current) {
+        return;
+      }
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  }
+
+  function insertTextAtCursor(text: string) {
+    const selectionStart = textareaRef.current?.selectionStart ?? value.length;
+    const selectionEnd = textareaRef.current?.selectionEnd ?? value.length;
+    const nextValue = `${value.slice(0, selectionStart)}${text}${value.slice(selectionEnd)}`;
+    const nextCursorPosition = selectionStart + text.length;
+    onChange(nextValue);
+    setCursorPosition(nextCursorPosition);
+
+    requestAnimationFrame(() => {
+      if (!textareaRef.current) {
+        return;
+      }
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  }
+
+  function handleTextareaKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (mentionSuggestions.length === 0 || !activeMentionQuery) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveMentionIndex((current) => (current + 1) % mentionSuggestions.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveMentionIndex((current) => (current - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+      return;
+    }
+
+    if ((event.key === "Enter" || event.key === "Tab") && !event.shiftKey) {
+      event.preventDefault();
+      applyMention(mentionSuggestions[activeMentionIndex] ?? mentionSuggestions[0]);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setCursorPosition(value.length);
+    }
+  }
+
   function insertMentionHint() {
     if (disabled || sending) {
       return;
     }
-    const mentionName = selectedAgent?.name || agents[0]?.name;
-    const mention = mentionName ? `@${mentionName} ` : "@";
-    onChange(value.trim() ? `${value} ${mention}` : mention);
+    insertTextAtCursor("@");
   }
+
+  const routeSummary =
+    routingPreview.agents.length > 0
+      ? routingPreview.agents.map((agent) => `@${agent.name}`).join(" / ")
+      : "Orchestrator";
+  const routeMeta = routingPreview.adapters.length > 0 ? routingPreview.adapters.join(" / ") : "自动分派";
+  const routePillLabel = activeMentionQuery
+    ? mentionSuggestions.length > 0
+      ? `可选 Agent ${mentionSuggestions.length}`
+      : "未找到 Agent"
+    : routingPreview.mode === "MENTION_ERROR"
+      ? "路由异常"
+      : "当前路由";
 
   return (
     <form className="chat-input" data-testid="chat-input" onSubmit={handleSubmit}>
       <textarea
+        ref={textareaRef}
         className="chat-input__textarea"
         data-testid="chat-input-textarea"
         rows={3}
-        placeholder="发送消息，@Agent 或描述你的任务..."
+        placeholder="发送消息，输入 @ 查看可用 Agent，或直接描述你的任务。"
         value={value}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setCursorPosition(event.target.selectionStart || event.target.value.length);
+        }}
+        onClick={updateCursorPositionFromTextarea}
+        onKeyDown={handleTextareaKeyDown}
+        onSelect={updateCursorPositionFromTextarea}
       />
+
+      {mentionSuggestions.length > 0 && activeMentionQuery ? (
+        <div className="chat-agent-mention-menu" data-testid="chat-agent-mention-menu" role="listbox" aria-label="Agent suggestions">
+          {mentionSuggestions.map((agent, index) => {
+            const isActive = index === activeMentionIndex;
+            return (
+              <button
+                key={getIdValue(agent.id) || agent.name}
+                type="button"
+                role="option"
+                aria-selected={isActive}
+                className={`chat-agent-mention-menu__item${isActive ? " chat-agent-mention-menu__item--active" : ""}`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  applyMention(agent);
+                }}
+              >
+                <strong>@{agent.name}</strong>
+                <span>{agent.role}</span>
+                <em>{agent.preferredAdapterType || "MOCK"}</em>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div className="chat-input__context-chips" aria-label="Composer context">
         {quotedMessage ? (
@@ -202,7 +396,7 @@ export function ChatInput({
 
         {artifactSelectionReference ? (
           <div className="chat-context-chip chat-artifact-selection-preview" data-testid="chat-artifact-selection-preview">
-            <strong>正在局部修改</strong>
+            <strong>局部修改</strong>
             <span>
               正在修改 {artifactSelectionReference.artifactTitle} v{artifactSelectionReference.artifactVersion} 的第{" "}
               {artifactSelectionReference.startLine}-{artifactSelectionReference.endLine} 行
@@ -253,25 +447,15 @@ export function ChatInput({
           <button type="button" className="ghost-button" disabled={disabled || sending} onClick={insertMentionHint}>
             @Agent
           </button>
-          <details className={`chat-routing-preview chat-routing-preview--${routingPreview.mode.toLowerCase()}`} data-testid="chat-routing-preview">
-            <summary>
-              <span>Explain</span>
-              <strong>{routingPreview.title}</strong>
-              {routingPreview.agents.length > 0 ? (
-                <small>{routingPreview.agents.map((agent) => `@${agent.name}`).join(" ")}</small>
-              ) : null}
-              <em>{attachments.length > 0 ? `${attachments.length} 个附件` : "无附件"}</em>
-            </summary>
-            <p>{routingPreview.detail}</p>
-            <div className="chat-routing-preview__chips">
-              {routingPreview.agents.map((agent) => (
-                <em key={getIdValue(agent.id)}>@{agent.name}</em>
-              ))}
-              {routingPreview.capabilities.map((capability) => (
-                <em key={capability}>{capability}</em>
-              ))}
-            </div>
-          </details>
+          <div
+            className={`chat-routing-pill chat-routing-pill--${routingPreview.mode.toLowerCase()}`}
+            data-testid="chat-routing-preview"
+            title={routingPreview.detail}
+          >
+            <span>{routePillLabel}</span>
+            <strong>{routeSummary}</strong>
+            <em>{routeMeta}</em>
+          </div>
         </div>
         <button
           type="submit"

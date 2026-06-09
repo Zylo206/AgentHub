@@ -62,6 +62,7 @@ import { useWorkspaceMessageActions } from "./useWorkspaceMessageActions";
 import { useWorkspacePresence } from "./useWorkspacePresence";
 import { useWorkspaceRealtime } from "./useWorkspaceRealtime";
 import { useWorkspaceTaskRunControls } from "./useWorkspaceTaskRunControls";
+import { readWorkspaceSessionCache, writeWorkspaceSessionCache } from "./workspaceSessionCache";
 import "../../styles/workspace.css";
 import "../../styles/workspace/tokens.css";
 import "../../styles/workspace/shell.css";
@@ -79,6 +80,7 @@ import "../../styles/pages/workspace-chat-lane.css";
 import "../../styles/pages/artifact-inspector.css";
 
 type DiagnosticPanelKey = "taskrun" | "context" | "adapter" | "audit" | "local";
+const ACTIVE_DIAGNOSTIC_PANEL_STORAGE_KEY = "agenthub:workspace-active-diagnostic-panel";
 const DIAGNOSTIC_PANELS: Array<{ key: DiagnosticPanelKey; label: string; summary: string }> = [
   { key: "taskrun", label: "TaskRun", summary: "任务运行" },
   { key: "context", label: "Context", summary: "上下文" },
@@ -98,6 +100,15 @@ function getErrorMessage(error: unknown): string {
   return "未知错误";
 }
 
+function readActiveDiagnosticPanel(): DiagnosticPanelKey | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const rawValue = window.sessionStorage.getItem(ACTIVE_DIAGNOSTIC_PANEL_STORAGE_KEY);
+  return DIAGNOSTIC_PANELS.some((panel) => panel.key === rawValue) ? (rawValue as DiagnosticPanelKey) : null;
+}
+
 function findTaskStep(taskRuns: TaskRun[], taskRunId: string | null, taskStepId: string | null): TaskStep | null {
   if (!taskRunId || !taskStepId) {
     return null;
@@ -108,11 +119,12 @@ function findTaskStep(taskRuns: TaskRun[], taskRunId: string | null, taskStepId:
 }
 
 export function WorkspacePage() {
+  const [cachedWorkspaceSession] = useState(() => readWorkspaceSessionCache());
   const [agents, setAgents] = useState<Agent[]>([]);
   const [adapterDescriptors, setAdapterDescriptors] = useState<AdapterDescriptor[]>([]);
   const [adapterQualityMetrics, setAdapterQualityMetrics] = useState<AdapterQualityMetrics[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>(cachedWorkspaceSession.conversations);
   const [messages, setMessages] = useState<Message[]>([]);
   const [taskSpecs, setTaskSpecs] = useState<TaskSpec[]>([]);
   const [taskRuns, setTaskRuns] = useState<TaskRun[]>([]);
@@ -134,7 +146,9 @@ export function WorkspacePage() {
   const [handoffSummaries, setHandoffSummaries] = useState<HandoffSummary[]>([]);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
+    cachedWorkspaceSession.currentConversationId
+  );
   const [conversationQuery, setConversationQuery] = useState("");
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
   const [conversationCreateMode, setConversationCreateMode] = useState<WorkspaceConversationCreateMode>("GROUP");
@@ -150,18 +164,20 @@ export function WorkspacePage() {
   const [quoteMode, setQuoteMode] = useState<"quote" | "reply">("quote");
   const [artifactSelectionReference, setArtifactSelectionReference] = useState<ArtifactSelectionReference | null>(null);
 
-  const [loadingAgents, setLoadingAgents] = useState(false);
-  const [loadingConversations, setLoadingConversations] = useState(false);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [loadingTaskRuns, setLoadingTaskRuns] = useState(false);
-  const [loadingArtifacts, setLoadingArtifacts] = useState(false);
+  const [loadingAgents, setLoadingAgents] = useState(true);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(Boolean(cachedWorkspaceSession.currentConversationId));
+  const [loadingTaskRuns, setLoadingTaskRuns] = useState(Boolean(cachedWorkspaceSession.currentConversationId));
+  const [loadingArtifacts, setLoadingArtifacts] = useState(Boolean(cachedWorkspaceSession.currentConversationId));
   const [loadingArtifactDetail, setLoadingArtifactDetail] = useState(false);
   const [loadingContext, setLoadingContext] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [runningDemoTask, setRunningDemoTask] = useState(false);
   const [showDebugActions, setShowDebugActions] = useState(false);
-  const [activeDiagnosticPanel, setActiveDiagnosticPanel] = useState<DiagnosticPanelKey | null>(null);
+  const [activeDiagnosticPanel, setActiveDiagnosticPanel] = useState<DiagnosticPanelKey | null>(() =>
+    readActiveDiagnosticPanel()
+  );
   const [savingAccessPolicy, setSavingAccessPolicy] = useState(false);
   const [artifactInspectorCollapsed, setArtifactInspectorCollapsed] = useState(false);
   const { workspaceStyle, onArtifactInspectorResizeStart } = useArtifactInspectorLayout(artifactInspectorCollapsed);
@@ -172,6 +188,7 @@ export function WorkspacePage() {
 
   const currentConversation =
     conversations.find((conversation) => getIdValue(conversation.id) === currentConversationId) ?? null;
+  const workspaceMainEmpty = !currentConversationId && !loadingConversations && conversations.length === 0;
   const latestUserMessage = [...messages].reverse().find((message) => message.senderType === "USER") ?? null;
   const currentParticipantAgents = useMemo(() => {
     if (!currentConversation) {
@@ -474,6 +491,26 @@ export function WorkspacePage() {
   }, [loadInitialData]);
 
   useEffect(() => {
+    writeWorkspaceSessionCache({
+      conversations,
+      currentConversationId
+    });
+  }, [conversations, currentConversationId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (activeDiagnosticPanel) {
+      window.sessionStorage.setItem(ACTIVE_DIAGNOSTIC_PANEL_STORAGE_KEY, activeDiagnosticPanel);
+      return;
+    }
+
+    window.sessionStorage.removeItem(ACTIVE_DIAGNOSTIC_PANEL_STORAGE_KEY);
+  }, [activeDiagnosticPanel]);
+
+  useEffect(() => {
     function handleAgentCreated(event: Event) {
       const createdAgent = (event as CustomEvent<{ agent?: Agent }>).detail?.agent ?? null;
       void getAgents()
@@ -734,7 +771,7 @@ export function WorkspacePage() {
 
   const commandDeckNotices = (
     <>
-      {errorMessage ? (
+      {errorMessage?.trim() ? (
         <div className="workspace-error">
           <span>{errorMessage}</span>
           <button type="button" className="secondary-button" onClick={() => setErrorMessage(null)}>
@@ -742,7 +779,7 @@ export function WorkspacePage() {
           </button>
         </div>
       ) : null}
-      {operationMessage ? (
+      {operationMessage?.trim() ? (
         <div className="workspace-notice">
           <span>{operationMessage}</span>
           <button type="button" className="secondary-button" onClick={() => setOperationMessage(null)}>
@@ -845,12 +882,17 @@ export function WorkspacePage() {
         onToggleConversationPinned={handleToggleConversationPinned}
       />
 
-      <main className={`workspace-main ${currentConversationId ? "" : "workspace-main--empty"}`}>
+      <main className={`workspace-main ${workspaceMainEmpty ? "workspace-main--empty" : ""}`}>
         <WorkspaceCommandDeck
           header={
             <WorkspaceHeader
               currentConversation={currentConversation}
               currentParticipantAgents={currentParticipantAgents}
+              selectedAgent={selectedAgent}
+              selectedAgentAdapterDescriptor={selectedAgentAdapterDescriptor}
+              latestTaskRun={selectedTaskRun}
+              messageCount={messages.length}
+              artifactCount={artifacts.length}
               actionAuditCount={actionAudits.length}
               realtimeStatus={realtimeStatus}
               activeRealtimeRunSummary={activeRealtimeRunSummary}

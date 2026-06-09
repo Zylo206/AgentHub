@@ -379,6 +379,18 @@ cd ..
 powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1 -UsePackagedBackend
 ```
 
+To start the backend in JDBC/MySQL mode instead of the default `memory` mode:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1 `
+  -PersistenceMode jdbc `
+  -JdbcUrl "jdbc:mysql://127.0.0.1:3306/agenthub?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC" `
+  -JdbcUsername "<username>" `
+  -JdbcPassword "<password>"
+```
+
+`-PersistenceMode memory` remains the default, and the script now writes the persistence mode explicitly into the backend process so inherited shell env does not accidentally switch profiles.
+
 Optional port overrides:
 
 ```powershell

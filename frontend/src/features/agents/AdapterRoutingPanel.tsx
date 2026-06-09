@@ -72,10 +72,10 @@ export function AdapterRoutingPanel({ adapterDescriptors, selectedAgent }: Adapt
     return (
       <section className="adapter-routing-panel">
         <div className="adapter-routing-panel__header">
-          <strong>Adapter 路由说明</strong>
+          <strong>Adapter 路由</strong>
           <span>暂无候选通道</span>
         </div>
-        <p>后端暂未返回 Adapter 状态，路由会使用本地备用能力保证链路可用。</p>
+        <p>后端还没有返回适配器状态，当前会退回默认稳定通道。</p>
       </section>
     );
   }
@@ -85,34 +85,41 @@ export function AdapterRoutingPanel({ adapterDescriptors, selectedAgent }: Adapt
       <div className="adapter-routing-panel__header">
         <div>
           <strong>Adapter 路由说明</strong>
-          <p>按健康度、成功率、备用路径比例和首选权重综合评分。</p>
+          <p>这里只解释为什么本次消息优先走某个执行通道，不会改变主聊天链路。</p>
         </div>
         <span className="adapter-routing-panel__selected">
-          当前选择 {displayAdapterName(selectedCandidate?.adapterType)}
+          当前优先 {displayAdapterName(selectedCandidate?.adapterType)}
         </span>
       </div>
 
-      <div className="adapter-routing-panel__grid">
+      <div className="adapter-routing-table" role="table" aria-label="Adapter routing score table">
+        <div className="adapter-routing-table__row adapter-routing-table__row--head" role="row">
+          <span role="columnheader">Adapter</span>
+          <span role="columnheader">状态</span>
+          <span role="columnheader">总分</span>
+          <span role="columnheader">健康</span>
+          <span role="columnheader">成功</span>
+          <span role="columnheader">回退</span>
+          <span role="columnheader">首选</span>
+          <span role="columnheader">尝试</span>
+        </div>
         {candidates.map((candidate) => (
-          <article
-            className={`adapter-routing-card ${
-              candidate.adapterType === selectedCandidate?.adapterType ? "adapter-routing-card--selected" : ""
+          <div
+            className={`adapter-routing-table__row ${
+              candidate.adapterType === selectedCandidate?.adapterType ? "adapter-routing-table__row--selected" : ""
             }`}
             key={candidate.adapterType}
+            role="row"
           >
-            <div className="adapter-routing-card__topline">
-              <strong>{displayAdapterName(candidate.adapterType)}</strong>
-              <span>{displayStatus(candidate.status)}</span>
-            </div>
-            <div className="adapter-routing-card__score">{candidate.totalScore.toFixed(1)}</div>
-            <div className="adapter-routing-card__metrics">
-              <span>健康 {candidate.healthScore.toFixed(0)}</span>
-              <span>成功 {candidate.successRateScore.toFixed(0)}</span>
-              <span>备用扣分 {candidate.backupPenaltyScore.toFixed(0)}</span>
-              <span>首选加权 {candidate.preferredBonusScore.toFixed(0)}</span>
-              <span>尝试 {candidate.routeAttempts}</span>
-            </div>
-          </article>
+            <strong role="cell">{displayAdapterName(candidate.adapterType)}</strong>
+            <span role="cell">{displayStatus(candidate.status)}</span>
+            <span role="cell">{candidate.totalScore.toFixed(1)}</span>
+            <span role="cell">{candidate.healthScore.toFixed(0)}</span>
+            <span role="cell">{candidate.successRateScore.toFixed(0)}</span>
+            <span role="cell">{candidate.backupPenaltyScore.toFixed(0)}</span>
+            <span role="cell">{candidate.preferredBonusScore.toFixed(0)}</span>
+            <span role="cell">{candidate.routeAttempts}</span>
+          </div>
         ))}
       </div>
     </section>
