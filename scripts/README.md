@@ -347,6 +347,51 @@ Admin users can now manage shared scopes by passing `scopeType=ORG` or `scopeTyp
 
 ## Local Dependency Bootstrap
 
+## One-Click Local Start
+
+For the normal Web path, the fastest Windows entry is:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
+```
+
+This opens separate terminal windows for:
+
+- backend: `http://127.0.0.1:8080`
+- frontend: `http://127.0.0.1:5173/workspace`
+
+If you also want the Yjs V2 collaboration service:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1 -IncludeDocCollab
+```
+
+That additionally starts:
+
+- `doc-collab`: `ws://127.0.0.1:8091`
+
+If you already built the backend executable jar and want to start from the packaged artifact instead of `mvn spring-boot:run`:
+
+```powershell
+cd backend
+mvn -q -DskipTests package
+cd ..
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1 -UsePackagedBackend
+```
+
+Optional port overrides:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1 -BackendPort 18080 -FrontendPort 15173 -DocCollabPort 18091 -IncludeDocCollab
+```
+
+Boundary:
+
+- this is a local convenience starter, not a production process manager
+- it does not stop old processes for you
+- `doc-collab` requires `cd doc-collab && npm install && npm run build` to have been run first
+- packaged-backend mode requires `backend/target/agenthub-backend-0.1.0-SNAPSHOT-exec.jar`
+
 New local helper scripts:
 
 ```powershell
