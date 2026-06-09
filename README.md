@@ -2,11 +2,6 @@
 
 AgentHub 是一个 IM-first 多 Agent 协作平台 MVP。用户像使用即时通讯工具一样，通过会话、Agent 联系人、`@Agent` 指令和协作消息流，驱动多个 Agent 完成代码、页面、API 文档、评审报告等 Artifact 的生成、修改、评审和预览。
 
-当前仓库强调两件事：
-
-- 默认本地运行要稳定，允许 `memory + MOCK` 直接启动；
-- 真实能力必须显式暴露边界，不能把 fallback、静态模板或本地预览包装成生产完成度。
-
 ## 当前能力概览
 
 - IM Workspace：会话、消息流、`@Agent`、多 Agent 协作建议、TaskRun 解释链。
