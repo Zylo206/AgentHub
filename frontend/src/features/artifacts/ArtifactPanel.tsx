@@ -472,51 +472,8 @@ export function ArtifactPanel({
         {loadingArtifactDetail ? (
           <div className="panel-empty">正在加载产物详情...</div>
         ) : !selectedArtifact ? (
-          <div className="artifact-scaffold-inspector" aria-label="Artifact inspector scaffold">
-            <div className="artifact-scaffold-inspector__hero">
-              <span className="artifact-scaffold-card__icon">A</span>
-              <div>
-                <strong>LoginPage.tsx</strong>
-                <p>React 组件 / 本地静态预览示例</p>
-                <small>ID: art_7f3b5c9a / 示例创建时间 10:53</small>
-              </div>
-              <button type="button" disabled>本地预览</button>
-            </div>
-            <div className="artifact-inspector-tabs artifact-inspector-tabs--scaffold" aria-label="Artifact scaffold sections">
-              <span className="artifact-inspector-tabs__item artifact-inspector-tabs__item--active">概览</span>
-              <span className="artifact-inspector-tabs__item">版本 6</span>
-              <span className="artifact-inspector-tabs__item">快照 3</span>
-              <span className="artifact-inspector-tabs__item">预览 2</span>
-            </div>
-            <div className="artifact-scaffold-metrics">
-              <article><span>来源</span><strong>REAL_ADAPTER</strong></article>
-              <article><span>质量</span><strong>ACCEPTED</strong></article>
-              <article><span>构建</span><strong>PASS</strong></article>
-              <article><span>运行</span><strong>HEALTHY</strong></article>
-            </div>
-            <section className="artifact-scaffold-diagnostics">
-              <header>
-                <strong>诊断</strong>
-                <span>示例全部通过</span>
-              </header>
-              <p>TypeScript <em>passed</em></p>
-              <p>ESLint <em>passed</em></p>
-              <p>Vite build <em>passed</em></p>
-              <p>A11y <em>passed</em></p>
-            </section>
-            <section className="artifact-scaffold-preview">
-              <header>
-                <strong>本地预览示例</strong>
-                <span>Local static sample</span>
-              </header>
-              <div className="artifact-scaffold-login-preview">
-                <b>Welcome back</b>
-                <span>Sign in to your Agent workspace</span>
-                <i>Email</i>
-                <i>Password</i>
-                <button type="button" disabled>Sign in</button>
-              </div>
-            </section>
+          <div className="panel-empty artifact-panel__empty-state artifact-panel__empty-detail">
+            当前还没有可查看的产物详情。生成产物后，可在这里查看概览、Diff、版本、快照和本地预览。
           </div>
         ) : (
           <div className={"artifact-preview artifact-preview--tab-" + activeInspectorTab}>

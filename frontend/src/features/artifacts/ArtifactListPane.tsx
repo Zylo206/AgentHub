@@ -41,32 +41,8 @@ export function ArtifactListPane({
       {loadingArtifacts ? (
         <div className="panel-empty">正在加载产物...</div>
       ) : artifacts.length === 0 ? (
-        <div className="artifact-scaffold-list" aria-label="Artifact scaffold examples">
-          <article className="artifact-scaffold-card artifact-scaffold-card--active">
-            <span className="artifact-scaffold-card__icon">A</span>
-            <div>
-              <strong>LoginPage.tsx</strong>
-              <small>React 组件示例</small>
-            </div>
-            <em>v1.2.0</em>
-          </article>
-          <article className="artifact-scaffold-card">
-            <span className="artifact-scaffold-card__icon artifact-scaffold-card__icon--api">API</span>
-            <div>
-              <strong>auth.api.yaml</strong>
-              <small>OpenAPI 合约示例</small>
-            </div>
-            <em>合约</em>
-          </article>
-          <article className="artifact-scaffold-card">
-            <span className="artifact-scaffold-card__icon artifact-scaffold-card__icon--review">R</span>
-            <div>
-              <strong>安全审计报告</strong>
-              <small>Review Report 示例</small>
-            </div>
-            <em>通过</em>
-          </article>
-          <p>确认协作后，Agent 生成的真实产物会出现在这里。</p>
+        <div className="panel-empty artifact-panel__empty-state">
+          当前会话还没有真实产物。开始协作后，代码、文档和评审报告会显示在这里。
         </div>
       ) : (
         <div className="artifact-card-list" data-testid="artifact-card-list">

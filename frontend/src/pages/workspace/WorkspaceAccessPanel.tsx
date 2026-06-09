@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { searchUserDirectory, type UserDirectoryItem } from "../../api/agenthubApi";
 import type { Conversation } from "../../features/conversations/conversationTypes";
 
 type ConversationVisibility = "PRIVATE" | "ORG" | "PUBLIC";
@@ -6,6 +7,7 @@ type ConversationMemberRole = "OWNER" | "EDITOR" | "REVIEWER" | "VIEWER";
 
 interface WorkspaceAccessPanelProps {
   conversation: Conversation | null;
+  currentUserId?: string | null;
   saving: boolean;
   onUpdateVisibility: (visibility: ConversationVisibility, orgTag: string | null) => Promise<void>;
   onUpsertMember: (userId: string, memberRole: string) => Promise<void>;
@@ -13,14 +15,13 @@ interface WorkspaceAccessPanelProps {
 }
 
 const ROLE_DESCRIPTIONS: Record<ConversationMemberRole, string> = {
-  OWNER: "可以管理会话、成员、权限和高风险操作。",
-  EDITOR: "可以发送消息、运行任务，并参与 Artifact 修改。",
-  REVIEWER: "可以评审、批准或拒绝高风险操作。",
-  VIEWER: "只能查看会话、产物和运行证据。"
+  OWNER: "可管理会话、成员、权限和高风险操作。",
+  EDITOR: "可发送消息、运行任务，并参与 Artifact 修改。",
+  REVIEWER: "可评审、批准或拒绝高风险操作。",
+  VIEWER: "只能查看会话、产物和运行结果。"
 };
 
 const ROLE_OPTIONS: ConversationMemberRole[] = ["VIEWER", "REVIEWER", "EDITOR", "OWNER"];
-const QUICK_MEMBERS = ["demo-user", "reviewer-user", "operator-user"];
 
 function getVisibilityLabel(visibility: ConversationVisibility | undefined): string {
   if (visibility === "PUBLIC") {
@@ -45,26 +46,57 @@ function canManage(role: ConversationMemberRole): boolean {
 
 export function WorkspaceAccessPanel({
   conversation,
+  currentUserId,
   saving,
   onUpdateVisibility,
   onUpsertMember,
   onRemoveMember
 }: WorkspaceAccessPanelProps) {
   const [expanded, setExpanded] = useState(false);
-  const [memberUserId, setMemberUserId] = useState("reviewer-user");
+  const [memberUserId, setMemberUserId] = useState("");
   const [memberRole, setMemberRole] = useState<ConversationMemberRole>("REVIEWER");
-
-  const currentUserId = "demo-user";
+  const [directoryQuery, setDirectoryQuery] = useState("");
+  const [directoryResults, setDirectoryResults] = useState<UserDirectoryItem[]>([]);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
 
   const currentUserRole = useMemo<ConversationMemberRole>(() => {
-    if (!conversation) {
+    if (!conversation || !currentUserId) {
       return "VIEWER";
     }
     if (conversation.ownerUserId === currentUserId) {
       return "OWNER";
     }
     return normalizeRole(conversation.memberRoles?.[currentUserId] ?? "VIEWER");
-  }, [conversation]);
+  }, [conversation, currentUserId]);
+
+  useEffect(() => {
+    if (!expanded) {
+      return;
+    }
+
+    let cancelled = false;
+    setDirectoryLoading(true);
+    void searchUserDirectory(directoryQuery)
+      .then((items) => {
+        if (!cancelled) {
+          setDirectoryResults(items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDirectoryResults([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDirectoryLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [directoryQuery, expanded]);
 
   if (!conversation) {
     return null;
@@ -74,10 +106,10 @@ export function WorkspaceAccessPanel({
   const orgTag = conversation.orgTag ?? "";
   const memberEntries = Object.entries(conversation.memberRoles ?? {});
   const managementAllowed = canManage(currentUserRole);
-  const disabledReason = managementAllowed ? "" : `当前用户是 ${currentUserRole}，只有 OWNER 可以修改成员和权限。`;
+  const disabledReason = managementAllowed ? "" : `当前用户角色为 ${currentUserRole}，只有 OWNER 可以调整成员与权限。`;
 
   return (
-    <section className="workspace-access-panel" data-testid="workspace-access-panel">
+    <section className="workspace-access-panel workspace-access-panel--sidebar" data-testid="workspace-access-panel">
       <button
         type="button"
         className="workspace-access-panel__summary"
@@ -93,10 +125,10 @@ export function WorkspaceAccessPanel({
       {expanded ? (
         <div className="workspace-access-panel__body">
           <div className="workspace-access-panel__role-note">
-            <strong>当前权限态</strong>
+            <strong>当前权限</strong>
             <span>
-              当前用户 {currentUserId} 是 {currentUserRole}。
-              {managementAllowed ? " 可以调整可见范围、成员和角色。" : ` ${disabledReason}`}
+              当前用户 {currentUserId || "未登录"} 的角色是 {currentUserRole}。
+              {managementAllowed ? " 你可以调整可见范围、成员和角色。" : ` ${disabledReason}`}
             </span>
           </div>
 
@@ -105,11 +137,11 @@ export function WorkspaceAccessPanel({
             {ROLE_OPTIONS.map((role) => `${role}: ${ROLE_DESCRIPTIONS[role]}`).join(" / ")}
           </div>
 
-          <div className="workspace-access-panel__row">
+          <div className="workspace-access-panel__row workspace-access-panel__row--visibility">
             <label>
               可见范围
               <select
-                defaultValue={visibility}
+                value={visibility}
                 disabled={saving || !managementAllowed}
                 onChange={(event) => void onUpdateVisibility(event.target.value as ConversationVisibility, orgTag || null)}
               >
@@ -129,21 +161,54 @@ export function WorkspaceAccessPanel({
             </label>
           </div>
 
+          <div className="workspace-access-panel__directory">
+            <div className="workspace-access-panel__directory-header">
+              <strong>成员目录</strong>
+              <input
+                value={directoryQuery}
+                disabled={saving || !managementAllowed}
+                onChange={(event) => setDirectoryQuery(event.target.value)}
+                placeholder="搜索用户名、邮箱或显示名"
+              />
+            </div>
+            <div className="workspace-access-panel__directory-list">
+              {directoryLoading ? <span className="workspace-access-panel__empty">搜索中...</span> : null}
+              {!directoryLoading && directoryResults.length === 0 ? (
+                <span className="workspace-access-panel__empty">没有匹配用户。</span>
+              ) : null}
+              {!directoryLoading
+                ? directoryResults.map((user) => (
+                    <button
+                      key={user.userId}
+                      type="button"
+                      className={`workspace-access-panel__directory-item${memberUserId === user.userId ? " workspace-access-panel__directory-item--selected" : ""}`}
+                      disabled={saving || !managementAllowed}
+                      onClick={() => setMemberUserId(user.userId)}
+                    >
+                      <span>
+                        <strong>{user.displayName}</strong>
+                        <small>
+                          {user.username} / {user.email}
+                        </small>
+                      </span>
+                      <em>
+                        {user.role} / {user.primaryOrgTag}
+                      </em>
+                    </button>
+                  ))
+                : null}
+            </div>
+          </div>
+
           <div className="workspace-access-panel__row">
             <label>
-              成员
+              已选成员
               <input
-                list="workspace-member-candidates"
                 value={memberUserId}
                 disabled={saving || !managementAllowed}
                 onChange={(event) => setMemberUserId(event.target.value)}
-                placeholder="输入或选择用户 ID"
+                placeholder="从上方目录选择用户"
               />
-              <datalist id="workspace-member-candidates">
-                {QUICK_MEMBERS.map((userId) => (
-                  <option key={userId} value={userId} />
-                ))}
-              </datalist>
             </label>
             <label>
               角色
@@ -153,7 +218,9 @@ export function WorkspaceAccessPanel({
                 onChange={(event) => setMemberRole(normalizeRole(event.target.value))}
               >
                 {ROLE_OPTIONS.map((role) => (
-                  <option key={role} value={role}>{role}</option>
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
                 ))}
               </select>
             </label>
@@ -188,7 +255,7 @@ export function WorkspaceAccessPanel({
                 </span>
               ))
             ) : (
-              <span className="workspace-access-panel__empty">暂无显式成员，只有 owner 可访问。</span>
+              <span className="workspace-access-panel__empty">暂无显式成员，目前只有 owner 可访问。</span>
             )}
           </div>
         </div>

@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS agenthub_conversations (
     title VARCHAR(512) NOT NULL,
     type VARCHAR(64) NOT NULL,
     participant_agent_ids_json TEXT,
+    owner_user_id VARCHAR(128) DEFAULT 'demo-user',
+    org_tag VARCHAR(128) DEFAULT 'DEFAULT',
+    visibility VARCHAR(32) DEFAULT 'PRIVATE',
+    member_roles_json TEXT,
     pinned BOOLEAN DEFAULT FALSE,
     archived BOOLEAN DEFAULT FALSE,
     unread_count INT DEFAULT 0,
@@ -18,6 +22,41 @@ CREATE TABLE IF NOT EXISTS agenthub_conversations (
     updated_at TIMESTAMP NULL,
     INDEX idx_agenthub_conversations_updated_at (updated_at),
     INDEX idx_agenthub_conversations_inbox (archived, pinned, last_message_at, updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_users (
+    id VARCHAR(128) PRIMARY KEY,
+    username VARCHAR(128) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    display_name VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    is_admin BOOLEAN DEFAULT FALSE,
+    primary_org_tag VARCHAR(128) DEFAULT 'DEFAULT',
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    last_login_at TIMESTAMP NULL,
+    UNIQUE KEY uq_agenthub_users_username (username),
+    UNIQUE KEY uq_agenthub_users_email (email),
+    INDEX idx_agenthub_users_status_created (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agenthub_user_sessions (
+    session_id VARCHAR(128) PRIMARY KEY,
+    user_id VARCHAR(128) NOT NULL,
+    access_token_hash VARCHAR(128) NOT NULL,
+    refresh_token_hash VARCHAR(128) NOT NULL,
+    access_expires_at TIMESTAMP NULL,
+    refresh_expires_at TIMESTAMP NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    last_used_at TIMESTAMP NULL,
+    revoked_at TIMESTAMP NULL,
+    client_ip VARCHAR(128),
+    user_agent VARCHAR(512),
+    UNIQUE KEY uq_agenthub_user_sessions_access (access_token_hash),
+    UNIQUE KEY uq_agenthub_user_sessions_refresh (refresh_token_hash),
+    INDEX idx_agenthub_user_sessions_user_updated (user_id, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS agenthub_agents (

@@ -533,3 +533,48 @@
     grid-template-columns: 1fr;
   }
 }
+
+.workspace-page .workspace-command-deck__presence-row {
+  grid-template-columns: minmax(0, 1fr) 132px;
+}
+
+.workspace-page .workspace-command-deck__advanced {
+  min-width: 132px;
+}
+
+.workspace-page .workspace-command-deck__advanced > summary {
+  gap: 6px;
+  color: #334155;
+}
+
+.workspace-page .workspace-command-deck__advanced > summary::after {
+  content: "展开" !important;
+}
+
+.workspace-page .workspace-command-deck__advanced[open] > summary::after {
+  content: "收起" !important;
+}
+
+.workspace-page .workspace-command-deck__advanced > summary::after {
+  margin-left: 0;
+  color: #2563eb;
+}
+
+.workspace-page .workspace-command-deck__advanced-body {
+  width: min(560px, calc(100vw - 360px));
+}
+
+.workspace-page .workspace-command-deck__advanced-body .workspace-session-summary,
+.workspace-page .workspace-command-deck__advanced-body .workspace-api-provider-panel {
+  border-radius: 16px;
+}
+
+@media (max-width: 1180px) {
+  .workspace-page .workspace-command-deck__presence-row {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-page .workspace-command-deck__advanced {
+    min-width: 0;
+  }
+}

@@ -59,17 +59,25 @@ const API_BASE =
   (isTauriRuntime() ? "http://127.0.0.1:8080" : "http://localhost:8080");
 export const API_BASE_URL = API_BASE;
 const AUTH_TOKEN_STORAGE_KEY = "agenthub.auth.token";
+const AUTH_REFRESH_TOKEN_STORAGE_KEY = "agenthub.auth.refreshToken";
 
 export interface AuthUser {
   userId: string;
+  username?: string | null;
+  email?: string | null;
   displayName: string;
   role: string;
+  status?: string | null;
+  isAdmin?: boolean | null;
   orgTags: string[];
 }
 
 export interface AuthLoginResult {
   token: string;
+  refreshToken: string;
   user: AuthUser;
+  accessExpiresAt?: string | null;
+  refreshExpiresAt?: string | null;
 }
 
 export interface PresenceRecord {
@@ -113,7 +121,14 @@ export function getAuthToken(): string | null {
   return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 }
 
-function setAuthToken(token: string | null): void {
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(AUTH_REFRESH_TOKEN_STORAGE_KEY);
+}
+
+function setAuthTokens(token: string | null, refreshToken: string | null): void {
   if (typeof window === "undefined") {
     return;
   }
@@ -122,6 +137,22 @@ function setAuthToken(token: string | null): void {
   } else {
     window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   }
+  if (refreshToken) {
+    window.localStorage.setItem(AUTH_REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+  } else {
+    window.localStorage.removeItem(AUTH_REFRESH_TOKEN_STORAGE_KEY);
+  }
+}
+
+export function clearStoredAuth(): void {
+  setAuthTokens(null, null);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("agenthub:auth-cleared"));
+  }
+}
+
+export function hasStoredAuth(): boolean {
+  return Boolean(getAuthToken());
 }
 
 function withAuthQuery(url: string): string {
@@ -171,10 +202,6 @@ async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized 
   let response: Response;
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   let authToken = getAuthToken();
-  if (!authToken && path !== "/api/auth/login") {
-    const loginResult = await login("demo", "demo");
-    authToken = loginResult.token;
-  }
 
   try {
     response = await fetch(`${API_BASE}${path}`, {
@@ -209,9 +236,18 @@ async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized 
     }
   }
 
-  if (response.status === 401 && retryOnUnauthorized && path !== "/api/auth/login") {
-    await login("demo", "demo");
-    return request<T>(path, init, false);
+  if (
+    response.status === 401 &&
+    retryOnUnauthorized &&
+    !path.startsWith("/api/auth/login") &&
+    !path.startsWith("/api/auth/register") &&
+    !path.startsWith("/api/auth/refresh")
+  ) {
+    const refreshed = await refreshAccessToken().catch(() => null);
+    if (refreshed?.token) {
+      return request<T>(path, init, false);
+    }
+    clearStoredAuth();
   }
 
   if (!response.ok) {
@@ -239,7 +275,37 @@ export async function login(username: string, password: string): Promise<AuthLog
     },
     false
   );
-  setAuthToken(result.token);
+  setAuthTokens(result.token, result.refreshToken);
+  return result;
+}
+
+export async function register(username: string, email: string, password: string): Promise<AuthLoginResult> {
+  const result = await request<AuthLoginResult>(
+    "/api/auth/register",
+    {
+      method: "POST",
+      body: JSON.stringify({ username, email, password })
+    },
+    false
+  );
+  setAuthTokens(result.token, result.refreshToken);
+  return result;
+}
+
+export async function refreshAccessToken(): Promise<AuthLoginResult | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    return null;
+  }
+  const result = await request<AuthLoginResult>(
+    "/api/auth/refresh",
+    {
+      method: "POST",
+      body: JSON.stringify({ refreshToken })
+    },
+    false
+  );
+  setAuthTokens(result.token, result.refreshToken);
   return result;
 }
 
@@ -248,8 +314,83 @@ export function getCurrentUser(): Promise<AuthUser> {
 }
 
 export async function logout(): Promise<void> {
-  await request<boolean>("/api/auth/logout", { method: "POST" }).catch(() => false);
-  setAuthToken(null);
+  await request<boolean>(
+    "/api/auth/logout",
+    {
+      method: "POST",
+      body: JSON.stringify({ refreshToken: getRefreshToken() })
+    },
+    false
+  ).catch(() => false);
+  clearStoredAuth();
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  displayName: string;
+  status: string;
+  isAdmin: boolean;
+  primaryOrgTag: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  lastLoginAt?: string | null;
+}
+
+export interface UserDirectoryItem {
+  userId: string;
+  username: string;
+  email: string;
+  displayName: string;
+  role: string;
+  status: string;
+  primaryOrgTag: string;
+}
+
+export interface CreateAdminUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  isAdmin: boolean;
+  primaryOrgTag?: string | null;
+}
+
+export function getAdminUsers(): Promise<AdminUser[]> {
+  return request<AdminUser[]>("/api/admin/users");
+}
+
+export function createAdminUser(requestBody: CreateAdminUserRequest): Promise<AdminUser> {
+  return request<AdminUser>("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(requestBody)
+  });
+}
+
+export function updateAdminUserStatus(userId: string, status: "ACTIVE" | "DISABLED" | "LOCKED"): Promise<AdminUser> {
+  return request<AdminUser>(`/api/admin/users/${encodeURIComponent(userId)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status })
+  });
+}
+
+export function resetAdminUserPassword(userId: string, newPassword: string): Promise<AdminUser> {
+  return request<AdminUser>(`/api/admin/users/${encodeURIComponent(userId)}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ newPassword })
+  });
+}
+
+export function updateAdminUserAdminFlag(userId: string, isAdmin: boolean): Promise<AdminUser> {
+  return request<AdminUser>(`/api/admin/users/${encodeURIComponent(userId)}/admin`, {
+    method: "POST",
+    body: JSON.stringify({ isAdmin })
+  });
+}
+
+export function searchUserDirectory(query = ""): Promise<UserDirectoryItem[]> {
+  const suffix = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : "";
+  return request<UserDirectoryItem[]>(`/api/users/directory${suffix}`);
 }
 
 export interface ArtifactRevisionResponse {

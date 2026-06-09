@@ -1,0 +1,115 @@
+.admin-users-page {
+  display: grid;
+  gap: 24px;
+  padding: 24px;
+}
+
+.admin-users-page__hero {
+  padding: 28px 32px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(76, 110, 245, 0.12), rgba(91, 138, 255, 0.04));
+  border: 1px solid rgba(128, 145, 186, 0.18);
+}
+
+.admin-users-page__hero h1 {
+  margin: 6px 0 10px;
+}
+
+.admin-users-page__hero p,
+.admin-users-page__eyebrow {
+  margin: 0;
+  color: #52607a;
+}
+
+.admin-users-page__eyebrow {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-users-page__grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.admin-users-card {
+  border-radius: 24px;
+  background: #fff;
+  border: 1px solid rgba(128, 145, 186, 0.18);
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.admin-users-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-users-card h2 {
+  margin: 0;
+}
+
+.admin-users-card__error {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #b42318;
+}
+
+.admin-users-form {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-users-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-users-form__checkbox {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-users-table {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-users-row {
+  border: 1px solid rgba(128, 145, 186, 0.18);
+  border-radius: 18px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-users-row__summary,
+.admin-users-row__controls,
+.admin-users-row__password {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-users-row__summary span {
+  color: #52607a;
+  font-size: 0.92rem;
+}
+
+.admin-users-row__password input {
+  min-width: 220px;
+}
+
+@media (max-width: 1080px) {
+  .admin-users-page__grid {
+    grid-template-columns: 1fr;
+  }
+}

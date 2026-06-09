@@ -3,6 +3,7 @@ import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes"
 import { ConversationList, type ConversationFilter } from "../../features/conversations/ConversationList";
 import type { Conversation } from "../../features/conversations/conversationTypes";
 import { getIdValue } from "../../utils/id";
+import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 
 export type WorkspaceConversationCreateMode = "SINGLE" | "GROUP";
 
@@ -15,8 +16,11 @@ interface WorkspaceSidebarProps {
   conversationQuery: string;
   creatingConversation: boolean;
   currentConversationId: string | null;
+  currentConversation: Conversation | null;
+  currentUserId?: string | null;
   loadingAgents: boolean;
   loadingConversations: boolean;
+  savingAccessPolicy: boolean;
   selectedAgent: Agent | null;
   onArchiveConversation: (conversation: Conversation) => void;
   onConversationCreateModeChange: (mode: WorkspaceConversationCreateMode) => void;
@@ -27,6 +31,9 @@ interface WorkspaceSidebarProps {
   onSelectAgent: (agent: Agent) => void;
   onSelectConversation: (conversationId: string) => void;
   onToggleConversationPinned: (conversation: Conversation) => void;
+  onUpdateVisibility: (visibility: "PRIVATE" | "ORG" | "PUBLIC", orgTag: string | null) => Promise<void>;
+  onUpsertMember: (userId: string, memberRole: string) => Promise<void>;
+  onRemoveMember: (userId: string) => Promise<void>;
 }
 
 export function WorkspaceSidebar({
@@ -38,8 +45,11 @@ export function WorkspaceSidebar({
   conversationQuery,
   creatingConversation,
   currentConversationId,
+  currentConversation,
+  currentUserId,
   loadingAgents,
   loadingConversations,
+  savingAccessPolicy,
   selectedAgent,
   onArchiveConversation,
   onConversationCreateModeChange,
@@ -49,7 +59,10 @@ export function WorkspaceSidebar({
   onRestoreConversation,
   onSelectAgent,
   onSelectConversation,
-  onToggleConversationPinned
+  onToggleConversationPinned,
+  onUpdateVisibility,
+  onUpsertMember,
+  onRemoveMember
 }: WorkspaceSidebarProps) {
   return (
     <aside className="workspace-sidebar" data-testid="workspace-sidebar">
@@ -58,22 +71,32 @@ export function WorkspaceSidebar({
           <h1>AgentHub</h1>
           <p>IM-first 多 Agent 协作工作台</p>
         </div>
+
         <div className="conversation-create-mode" data-testid="conversation-create-mode">
           <button
             type="button"
-            className={conversationCreateMode === "SINGLE" ? "conversation-create-mode__button conversation-create-mode__button--active" : "conversation-create-mode__button"}
+            className={
+              conversationCreateMode === "SINGLE"
+                ? "conversation-create-mode__button conversation-create-mode__button--active"
+                : "conversation-create-mode__button"
+            }
             onClick={() => onConversationCreateModeChange("SINGLE")}
           >
             单聊
           </button>
           <button
             type="button"
-            className={conversationCreateMode === "GROUP" ? "conversation-create-mode__button conversation-create-mode__button--active" : "conversation-create-mode__button"}
+            className={
+              conversationCreateMode === "GROUP"
+                ? "conversation-create-mode__button conversation-create-mode__button--active"
+                : "conversation-create-mode__button"
+            }
             onClick={() => onConversationCreateModeChange("GROUP")}
           >
             群聊
           </button>
         </div>
+
         <button
           type="button"
           className="primary-button"
@@ -105,6 +128,23 @@ export function WorkspaceSidebar({
             onRestore={onRestoreConversation}
           />
         </section>
+
+        {currentConversation ? (
+          <section className="workspace-section workspace-section--conversation-settings">
+            <div className="section-header">
+              <h3>会话设置</h3>
+              <span>{currentConversation.visibility || "PRIVATE"}</span>
+            </div>
+            <WorkspaceAccessPanel
+              conversation={currentConversation}
+              currentUserId={currentUserId ?? null}
+              saving={savingAccessPolicy}
+              onUpdateVisibility={onUpdateVisibility}
+              onUpsertMember={onUpsertMember}
+              onRemoveMember={onRemoveMember}
+            />
+          </section>
+        ) : null}
 
         <section className="workspace-section">
           <div className="section-header">

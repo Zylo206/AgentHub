@@ -14,6 +14,8 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Boundary`: this is mapped to AgentHub resources: Conversation, Message, Artifact, TaskRun, Approval, Audit, Context, Attachment, and Memory.
    - `Boundary`: auth is now enabled by default; frontend and smoke scripts use the demo account automatically so memory + MOCK fallback remains locally verifiable.
    - `Done`: default login is enabled with AgentHub bearer-token demo accounts; frontend, smoke, SSE smoke, and browser E2E authenticate automatically.
+   - `Done`: first-phase real local account system now exists behind `AGENTHUB_AUTH_MODE=real`: JDBC-backed `agenthub_users` + `agenthub_user_sessions`, username/email + password login, register, refresh, logout, `me`, bootstrapped admin/demo accounts, and frontend route guards.
+   - `Done`: minimal admin user management now exists at `/admin/users`: list, create, enable/disable/lock, reset password, and grant/revoke admin.
    - `Done`: Conversation has owner / org / visibility / member role metadata, with memory/JDBC compatibility defaults.
    - `Done`: main service/API paths enforce conversation read/write authorization, SSE subscription authorization, presence heartbeat/list, and Artifact optimistic conflict checks for Apply / Restore / Deploy.
    - `Done`: Workspace now has a lightweight Presence bar for online devices, typing state, active Artifact, and current user context.
@@ -27,7 +29,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
    - `Partial`: Desktop Console Context / Memory candidate flow is not closed yet; clicking the context candidate action did not populate the candidate panel during the Tauri run.
    - `Partial`: Desktop Console CLI probes identify local `claude` / `codex` paths, but the product UI still reports `0/2 available` and does not expose full version / auth / schema / stream / sandbox conclusions there.
    - `Known issue`: backend managed process default jar path is relative to the Tauri runtime directory and fails until the user enters the absolute backend jar path.
-   - `Next`: harden real user management, persistent account storage, invite/member directory flows, and broader permission coverage for less-used maintenance endpoints.
+   - `Next`: harden real user management with invite/member directory flows, richer account audit views, and broader permission coverage for less-used maintenance endpoints.
    - `Done`: first-phase Artifact realtime collaboration is implemented for `CODE` and `MARKDOWN` drafts: REST room state, `/api/doc-collab` WebSocket sync, presence / cursor metadata, persisted room snapshots, and approval-gated publish to Artifact Revision.
    - `Done`: `doc-collab/` now implements `AGENTHUB_ARTIFACT_COLLAB_V2_YJS` as an independent Node / TypeScript service with Yjs binary updates, Y.Text content, file-backed snapshot/update recovery, optional Redis Streams + Pub/Sub fanout, and Spring permission/publish delegation.
    - `Done`: V2 snapshot persistence now has a backend-owned manifest path: `agenthub_collab_snapshot_manifests`, backend object-storage snapshot upload/download endpoints, backend-managed object buckets, and restore order `Redis -> backend object snapshot -> local file snapshot -> update log`.
@@ -363,6 +365,7 @@ AgentHub is in late MVP enhancement. The next stage is to keep moving from half-
 - No mobile client.
 - No desktop distribution package or default desktop runtime requirement.
 - No real Vercel / Netlify / Docker / Kubernetes deployment.
+- No OAuth / SSO / MFA in the current local-account phase.
 - No Kafka-backed collaboration event bus.
 - No Automerge collaboration protocol.
 - Redis-backed doc-collab fanout exists but is not part of the default Web / backend runtime.

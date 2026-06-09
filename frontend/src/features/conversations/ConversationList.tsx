@@ -96,6 +96,7 @@ export function ConversationList({
     }
     return !conversation.archived;
   });
+
   const filters: Array<{ key: ConversationFilter; label: string; count: number }> = [
     { key: "ALL", label: "全部", count: activeConversations.length },
     { key: "UNREAD", label: "未读", count: unreadConversations.length },
@@ -106,8 +107,8 @@ export function ConversationList({
   function openContextMenu(event: MouseEvent, conversation: Conversation) {
     event.preventDefault();
     const sidebarRect = event.currentTarget.closest(".workspace-sidebar")?.getBoundingClientRect();
-    const menuWidth = 176;
-    const menuHeight = 150;
+    const menuWidth = 220;
+    const menuHeight = 164;
     const leftBoundary = (sidebarRect?.left ?? 0) + 8;
     const rightBoundary = (sidebarRect?.right ?? window.innerWidth) - menuWidth - 8;
     const topBoundary = (sidebarRect?.top ?? 0) + 8;
@@ -139,7 +140,7 @@ export function ConversationList({
     <div className="conversation-list conversation-list--im" data-testid="conversation-list">
       <div className="im-list-tools">
         <label className="im-search-box">
-          <span>搜索</span>
+          <span className="sr-only">搜索会话</span>
           <span className="im-search-box__control">
             <input
               data-testid="conversation-search-input"
@@ -159,6 +160,7 @@ export function ConversationList({
             ) : null}
           </span>
         </label>
+
         <div className="conversation-filter-tabs" aria-label="Conversation filters">
           {filters.map((item) => (
             <button
@@ -175,9 +177,10 @@ export function ConversationList({
             </button>
           ))}
         </div>
+
         <div className="conversation-list-status" data-testid="conversation-list-status">
           <span>{visibleConversations.length} 条可见</span>
-          <span>{loading ? "正在同步" : query ? "搜索结果" : "最近活跃排序"}</span>
+          <span>{loading ? "正在同步" : query ? "搜索结果" : "按最近活跃排序"}</span>
         </div>
       </div>
 
@@ -185,13 +188,13 @@ export function ConversationList({
 
       {visibleConversations.length === 0 && !loading ? (
         <div className="conversation-empty-im" aria-label="Conversation empty examples">
-          <div className="conversation-empty-im__eyebrow">{query || filter !== "ALL" ? "未找到匹配会话" : "暂无会话"}</div>
-          <strong>{query || filter !== "ALL" ? "换个关键词或切回全部会话。" : "点击“新建会话”开始一次协作。"}</strong>
-          <p>发送任务后，这里只展示真实会话；未读、置顶、归档状态来自后端数据。</p>
+          <div className="conversation-empty-im__eyebrow">{query || filter !== "ALL" ? "没有匹配会话" : "暂无会话"}</div>
+          <strong>{query || filter !== "ALL" ? "换个关键词，或切回全部会话。" : "点击“新建会话”开始一次协作。"}</strong>
+          <p>这里展示真实会话列表，并保留未读、置顶和归档状态。</p>
           <div className="conversation-empty-im__hints">
             <span>搜索 Agent / 消息</span>
             <span>置顶关键协作</span>
-            <span>右键删除会话</span>
+            <span>右键归档会话</span>
           </div>
         </div>
       ) : null}
@@ -300,10 +303,10 @@ export function ConversationList({
               className="conversation-context-menu__danger"
               onClick={() => handleContextAction("delete")}
             >
-              删除会话
+              归档会话
             </button>
           )}
-          <small>当前删除会移动到归档，可在“归档”中恢复。</small>
+          <small>当前删除行为会先移动到归档，之后仍可恢复。</small>
         </div>
       ) : null}
     </div>

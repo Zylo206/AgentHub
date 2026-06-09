@@ -32,7 +32,11 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     private boolean isPublicPath(String path) {
-        return path.equals("/api/auth/login") || path.equals("/api/health") || path.startsWith("/actuator");
+        return path.equals("/api/auth/login")
+                || path.equals("/api/auth/register")
+                || path.equals("/api/auth/refresh")
+                || path.equals("/api/health")
+                || path.startsWith("/actuator");
     }
 
     private String extractToken(HttpServletRequest request) {

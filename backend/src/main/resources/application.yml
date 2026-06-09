@@ -10,7 +10,17 @@ mybatis:
 
 agenthub:
   auth:
+    mode: ${AGENTHUB_AUTH_MODE:demo}
     enabled: ${AGENTHUB_AUTH_ENABLED:true}
+    access-token-ttl-seconds: ${AGENTHUB_AUTH_ACCESS_TOKEN_TTL_SECONDS:900}
+    refresh-token-ttl-days: ${AGENTHUB_AUTH_REFRESH_TOKEN_TTL_DAYS:14}
+    bootstrap:
+      admin-username: ${AGENTHUB_AUTH_BOOTSTRAP_ADMIN_USERNAME:admin}
+      admin-email: ${AGENTHUB_AUTH_BOOTSTRAP_ADMIN_EMAIL:admin@agenthub.local}
+      admin-password: ${AGENTHUB_AUTH_BOOTSTRAP_ADMIN_PASSWORD:Admin123!}
+      demo-username: ${AGENTHUB_AUTH_BOOTSTRAP_DEMO_USERNAME:demo}
+      demo-email: ${AGENTHUB_AUTH_BOOTSTRAP_DEMO_EMAIL:demo@agenthub.local}
+      demo-password: ${AGENTHUB_AUTH_BOOTSTRAP_DEMO_PASSWORD:demo}
   realtime:
     enabled: ${AGENTHUB_REALTIME_ENABLED:true}
     heartbeat-seconds: ${AGENTHUB_REALTIME_HEARTBEAT_SECONDS:25}

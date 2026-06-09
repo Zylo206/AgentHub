@@ -43,7 +43,6 @@ import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../uti
 import { displayAdapterName } from "../../utils/productionLabels";
 import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
 import { WorkspaceArtifactInspectorShell } from "./WorkspaceArtifactInspectorShell";
-import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 import { WorkspaceApiProviderPanel } from "./WorkspaceApiProviderPanel";
 import { WorkspaceChatLane } from "./WorkspaceChatLane";
 import { WorkspaceCommandDeck } from "./WorkspaceCommandDeck";
@@ -843,13 +842,6 @@ export function WorkspacePage() {
         memoryCount={memories.length}
         artifactCount={artifacts.length}
       />
-      <WorkspaceAccessPanel
-        conversation={currentConversation}
-        saving={savingAccessPolicy}
-        onUpdateVisibility={handleUpdateConversationVisibility}
-        onUpsertMember={handleUpsertConversationMember}
-        onRemoveMember={handleRemoveConversationMember}
-      />
     </>
   );
 
@@ -868,8 +860,11 @@ export function WorkspacePage() {
         conversationQuery={conversationQuery}
         creatingConversation={creatingConversation}
         currentConversationId={currentConversationId}
+        currentConversation={currentConversation}
+        currentUserId={currentUser?.userId ?? null}
         loadingAgents={loadingAgents}
         loadingConversations={loadingConversations}
+        savingAccessPolicy={savingAccessPolicy}
         selectedAgent={selectedAgent}
         onArchiveConversation={handleArchiveConversation}
         onConversationCreateModeChange={setConversationCreateMode}
@@ -880,6 +875,9 @@ export function WorkspacePage() {
         onSelectAgent={handleSelectAgent}
         onSelectConversation={handleSelectConversation}
         onToggleConversationPinned={handleToggleConversationPinned}
+        onUpdateVisibility={handleUpdateConversationVisibility}
+        onUpsertMember={handleUpsertConversationMember}
+        onRemoveMember={handleRemoveConversationMember}
       />
 
       <main className={`workspace-main ${workspaceMainEmpty ? "workspace-main--empty" : ""}`}>

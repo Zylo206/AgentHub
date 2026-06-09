@@ -4,9 +4,16 @@ import java.util.List;
 
 public record AuthPrincipal(
         String userId,
+        String username,
+        String email,
         String displayName,
         String role,
+        String status,
         List<String> orgTags) {
+
+    public AuthPrincipal(String userId, String displayName, String role, List<String> orgTags) {
+        this(userId, null, null, displayName, role, "ACTIVE", orgTags);
+    }
 
     public boolean isAdmin() {
         return "ADMIN".equalsIgnoreCase(role);

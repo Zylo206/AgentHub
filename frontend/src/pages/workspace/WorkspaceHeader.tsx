@@ -71,7 +71,7 @@ export function WorkspaceHeader({
   const latestActivity = formatRelativeTime(currentConversation.lastMessageAt || currentConversation.updatedAt);
   const routeLabel = selectedAgent ? `@${selectedAgent.name}` : isGroup ? "Orchestrator 协作" : "自动分派";
   const latestRunStatus = latestTaskRun ? displayStatus(latestTaskRun.status) : null;
-  const summaryLine = realtimeHint || (realtimeStatus === "CONNECTED" ? `最近活跃 ${latestActivity}` : "等待协作");
+  const summaryLine = realtimeHint || (realtimeStatus === "CONNECTED" ? `最近活跃：${latestActivity}` : "等待协作开始");
   const stats = [
     { label: "消息", value: messageCount > 0 ? String(messageCount) : null },
     { label: "产物", value: artifactCount > 0 ? String(artifactCount) : null },
@@ -92,9 +92,7 @@ export function WorkspaceHeader({
             <span className="workspace-main__hero-chip">{participantCount} 个 Agent</span>
             <span className="workspace-main__hero-chip">{routeLabel}</span>
             {latestRunStatus ? (
-              <span className="workspace-main__hero-chip workspace-main__hero-chip--status">
-                最近运行 {latestRunStatus}
-              </span>
+              <span className="workspace-main__hero-chip workspace-main__hero-chip--status">最近运行：{latestRunStatus}</span>
             ) : null}
             {selectedAgentAdapterDescriptor ? (
               <span

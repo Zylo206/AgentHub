@@ -10104,3 +10104,90 @@
 
 - 这轮没有新增独立代码编辑器；当前代码修改仍走 Artifact 工作区内的草稿修订与 Diff 流程。
 - 这轮没有新增登录/注册路由；右侧 `LoginPage.tsx` 仍是示例产物，不是实际认证页面。
+
+## 2026-06-09 - Real local auth and minimal admin console
+
+### 变更
+
+- 后端新增真实本地账号体系：
+  - `agenthub_users`
+  - `agenthub_user_sessions`
+  - `AGENTHUB_AUTH_MODE=demo|real`
+  - JDBC 持久化用户、access token、refresh token
+  - bcrypt 密码哈希
+  - 登录限流
+- `AuthSessionService` 从写死 demo token 改为：
+  - `POST /api/auth/register`
+  - `POST /api/auth/login`
+  - `POST /api/auth/refresh`
+  - `POST /api/auth/logout`
+  - `GET /api/auth/me`
+- 新增 real mode 启动 bootstrap：
+  - 默认管理员账号
+  - 默认 demo 账号
+- 前端移除 `agenthubApi.ts` 中“无 token 自动 demo/demo 登录”逻辑。
+- 前端新增：
+  - `/login`
+  - `/register`
+  - 登录态守卫
+  - 顶部当前用户与退出登录
+  - `/admin/users` 最小用户管理后台
+- Workspace 权限面板不再写死 `demo-user`，改为读取当前真实用户。
+
+### 验证
+
+- `cd backend && mvn -q -DskipTests package`：通过。
+- `cd frontend && npm.cmd run build`：通过。
+
+### 边界
+
+- 当前为本地账号体系，不含 OAuth、短信、MFA、SSO。
+- real auth 依赖 JDBC/MySQL；`demo` 模式继续保留给本地演示和默认 smoke。
+- `/admin/users` 当前只覆盖用户管理，不含完整运营后台、组织树或邀请码流程。
+
+## 2026-06-09 - Workspace 侧栏与诊断区可用性修正
+
+### 变更
+
+- 将成员目录和会话成员管理入口从 Workspace 的“高级工具”弹层迁移到左侧“会话设置”区域。
+- `WorkspaceAccessPanel` 接入真实用户目录搜索结果，保留现有成员增删和可见范围修改能力。
+- 顶部应用栏重排：
+  - 新建按钮与创建菜单归为一组
+  - 当前登录用户与“退出登录”固定到右侧，不再挤压成竖排
+- 会话搜索区收敛为单一搜索输入框，移除额外“搜索”标题框和冗余状态条。
+- 调整底部 diagnostics 抽屉滚动：
+  - 扩大展开高度
+  - 统一由抽屉 section 承担纵向滚动
+  - Context 内容不再被内部容器截断
+- 提升 Adapter 路由说明表格的浅色模式对比度，增强状态与数值可读性。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：通过。
+
+### 边界
+
+- 本次只调整 Workspace 入口位置与可读性，不改动成员权限接口语义。
+- “高级工具”仍保留 API provider 与会话摘要，不再承载成员管理。
+- 本轮未补新的 browser e2e 断言，页面联调以构建通过和现有页面结构核对为主。
+
+## 2026-06-09 - Artifact Inspector 空态与右键菜单修正
+
+### 变更
+
+- 移除 Artifact 示例态默认展示：
+  - 左侧产物列表为空时不再渲染假卡片；
+  - 右侧详情为空时不再渲染示例 Inspector。
+- 会话右键菜单宽度与定位常量统一放大，按钮文案改为单行显示，修复中文被挤压断行。
+- 在 `artifact-inspector.css` 末尾追加最终覆盖层，统一右侧 Inspector 为单一可读布局：
+  - 取消侧栏和详情区的极端压缩高度；
+  - 恢复 Tabs、概览、指标卡、预览区和底部操作区的正常排布；
+  - 空状态改为真实提示，不再与真实产物界面混淆。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：通过。
+
+### 边界
+
+- 本轮只收口右侧 Inspector 的空态与布局冲突，不改 Artifact 业务语义、Diff 流程或审批逻辑。

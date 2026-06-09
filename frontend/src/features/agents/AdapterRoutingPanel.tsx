@@ -87,9 +87,7 @@ export function AdapterRoutingPanel({ adapterDescriptors, selectedAgent }: Adapt
           <strong>Adapter 路由说明</strong>
           <p>这里只解释为什么本次消息优先走某个执行通道，不会改变主聊天链路。</p>
         </div>
-        <span className="adapter-routing-panel__selected">
-          当前优先 {displayAdapterName(selectedCandidate?.adapterType)}
-        </span>
+        <span className="adapter-routing-panel__selected">当前优先 {displayAdapterName(selectedCandidate?.adapterType)}</span>
       </div>
 
       <div className="adapter-routing-table" role="table" aria-label="Adapter routing score table">

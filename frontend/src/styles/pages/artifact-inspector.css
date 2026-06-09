@@ -439,3 +439,182 @@
   border: 1px solid rgba(148, 163, 184, 0.18) !important;
   border-radius: 16px !important;
 }
+
+/* Final override: keep the right inspector on one readable layout. */
+.workspace-page .workspace-artifacts .artifact-panel {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 12px !important;
+  align-content: start !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-panel__sidebar,
+.workspace-page .workspace-artifacts .artifact-panel__detail,
+.workspace-page .workspace-artifacts .artifact-preview,
+.workspace-page .workspace-artifacts .artifact-preview__meta,
+.workspace-page .workspace-artifacts .artifact-preview-dock,
+.workspace-page .workspace-artifacts .artifact-operation-bar,
+.workspace-page .workspace-artifacts .artifact-content-editor,
+.workspace-page .workspace-artifacts .artifact-revision-box,
+.workspace-page .workspace-artifacts .diff-summary-panel,
+.workspace-page .workspace-artifacts .version-history-panel,
+.workspace-page .workspace-artifacts .artifact-snapshot-box,
+.workspace-page .workspace-artifacts .deploy-status-box,
+.workspace-page .workspace-artifacts .artifact-audit-panel,
+.workspace-page .workspace-artifacts .artifact-related-panel,
+.workspace-page .workspace-artifacts .approval-gate {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: visible !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-panel__sidebar {
+  order: 0 !important;
+  padding-bottom: 0 !important;
+  border-bottom: 0 !important;
+  max-height: none !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-card-list {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+  max-height: min(220px, 26vh) !important;
+  overflow-y: auto !important;
+  padding-right: 2px !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-card {
+  min-height: 68px !important;
+  padding: 10px 12px !important;
+  align-items: center !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-card strong,
+.workspace-page .workspace-artifacts .artifact-card p,
+.workspace-page .workspace-artifacts .artifact-card span,
+.workspace-page .workspace-artifacts .artifact-preview__meta strong,
+.workspace-page .workspace-artifacts .artifact-preview__meta p,
+.workspace-page .workspace-artifacts .artifact-preview__line,
+.workspace-page .workspace-artifacts .artifact-inspector-metrics article strong,
+.workspace-page .workspace-artifacts .artifact-inspector-metrics article small {
+  overflow-wrap: anywhere !important;
+  white-space: normal !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-panel__empty-state {
+  padding: 18px 16px !important;
+  border: 1px dashed rgba(148, 163, 184, 0.32) !important;
+  border-radius: 18px !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  line-height: 1.6 !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-panel__empty-detail {
+  min-height: 168px !important;
+  display: grid !important;
+  place-items: center !important;
+  text-align: center !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview {
+  display: grid !important;
+  gap: 12px !important;
+  align-content: start !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-inspector-tabs {
+  position: static !important;
+  top: auto !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  overflow: visible !important;
+  min-height: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0 0 6px !important;
+  border-bottom: 1px solid rgba(31, 35, 41, 0.09) !important;
+  background: transparent !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-inspector-tabs__item {
+  flex: 0 0 auto !important;
+  min-width: 0 !important;
+  min-height: 30px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__meta {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 10px !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 14px !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__meta p:nth-of-type(n+2) {
+  display: block !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__meta-right {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__meta-right span {
+  max-width: none !important;
+  white-space: nowrap !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-inspector-metrics,
+.workspace-page .workspace-artifacts .artifact-cockpit__grid,
+.workspace-page .workspace-artifacts .artifact-badge-system,
+.workspace-page .workspace-artifacts .artifact-operation-deck,
+.workspace-page .workspace-artifacts .artifact-diagnostic-panel__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview-dock__body {
+  max-height: min(320px, 36vh) !important;
+  overflow: auto !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__actions {
+  position: static !important;
+  bottom: auto !important;
+  z-index: auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  margin-top: 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.workspace-page .workspace-artifacts .artifact-preview__actions .secondary-button,
+.workspace-page .workspace-artifacts .artifact-preview__action-button {
+  min-height: 36px !important;
+}
+
+@media (max-width: 1368px) {
+  .workspace-page .workspace-artifacts .artifact-card-list {
+    max-height: 208px !important;
+  }
+
+  .workspace-page .workspace-artifacts .artifact-inspector-metrics,
+  .workspace-page .workspace-artifacts .artifact-cockpit__grid,
+  .workspace-page .workspace-artifacts .artifact-badge-system,
+  .workspace-page .workspace-artifacts .artifact-operation-deck,
+  .workspace-page .workspace-artifacts .artifact-diagnostic-panel__grid,
+  .workspace-page .workspace-artifacts .artifact-preview__actions {
+    grid-template-columns: 1fr !important;
+  }
+}
