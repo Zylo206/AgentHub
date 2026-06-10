@@ -427,7 +427,6 @@ export function ArtifactPanel({
     handleCreateDraftRevision,
     handleCreateRevision,
     handleDownloadArtifact,
-    handleDraftSelectionChange,
     handleDraftSelectionInfoChange,
     handleForceApplyDiffArtifact,
     handleRestoreSnapshot,
@@ -539,7 +538,6 @@ export function ArtifactPanel({
                   onCancelContentEdit={handleCancelContentEdit}
                   onDraftContentChange={setDraftContent}
                   onDraftNoteChange={setDraftNote}
-                  onDraftSelectionChange={handleDraftSelectionChange}
                   onDraftSelectionInfoChange={handleDraftSelectionInfoChange}
                   onCreateDraftRevision={() => {
                     void handleCreateDraftRevision();

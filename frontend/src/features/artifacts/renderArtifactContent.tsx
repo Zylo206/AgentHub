@@ -59,28 +59,25 @@ function highlightCode(code: string, language?: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// Simple markdown → HTML (inline patterns only, for lightweight preview)
+// Markdown → HTML via marked (supports tables, lists, code blocks, etc.)
 // ---------------------------------------------------------------------------
-function renderSimpleMarkdown(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    // Code blocks
-    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="inline-md__code"><code>$2</code></pre>')
-    // Inline code
-    .replace(/`([^`]+)`/g, '<code class="inline-md__inline-code">$1</code>')
-    // Headers
-    .replace(/^### (.+)$/gm, '<h4 class="inline-md__h4">$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3 class="inline-md__h3">$1</h3>')
-    .replace(/^# (.+)$/gm, '<h2 class="inline-md__h2">$1</h2>')
-    // Bold / italic
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    // Unordered list
-    .replace(/^[*-] (.+)$/gm, '<li class="inline-md__li">$1</li>')
-    // Line breaks
-    .replace(/\n/g, "<br/>");
+import { marked } from "marked";
+
+// Configure marked for safe, clean output
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
+function renderMarkdown(text: string): string {
+  try {
+    const result = marked.parse(text);
+    // marked.parse returns string | Promise<string>; sync mode returns string
+    if (typeof result === "string") return result;
+    return text;
+  } catch {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +213,7 @@ export function renderArtifactContent(
       return (
         <div
           className={`${classPrefix}__markdown`}
-          dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(displayContent) }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }}
         />
       );
     }

@@ -77,6 +77,26 @@ npm run dev
 - 演示账号：`demo / demo`
 - 管理员账号：`admin / Admin123!`
 
+### 切换 demo / real
+
+认证模式由 `AGENTHUB_AUTH_MODE` 控制。切换后需要重启后端进程。
+
+- `demo`：默认本地演示模式，直接使用 `demo/demo`、`admin/admin`、`reviewer/reviewer`
+- `real`：真实本地账号模式，启用 JDBC/MySQL 用户体系，bootstrap 账号默认是 `admin/Admin123!` 和 `demo/demo`
+
+`scripts/start-local.ps1` 只负责启动后端和前端，不会自动替你切换 auth mode。你可以在启动前先设置环境变量：
+
+```powershell
+# demo 模式
+$env:AGENTHUB_AUTH_MODE="demo"
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
+
+# real 模式
+$env:AGENTHUB_AUTH_MODE="real"
+$env:AGENTHUB_PERSISTENCE_MODE="jdbc"
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
+```
+
 ### 真实账号 + JDBC 模式
 
 如需切到真实用户体系和 MySQL 持久化，核心变量包括：

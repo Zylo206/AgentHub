@@ -79,7 +79,7 @@ export function ArtifactPreviewModal({
         parts.push(`修改说明: ${revisionNote}`);
       }
       const instruction = parts.join("\n\n");
-      await onCreateRevision(artifact.id.toString(), instruction);
+      await onCreateRevision(String(artifact.id), instruction);
       setEditMode(false);
     } finally {
       setSaving(false);

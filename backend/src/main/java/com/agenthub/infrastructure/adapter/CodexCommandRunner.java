@@ -3,6 +3,7 @@ package com.agenthub.infrastructure.adapter;
 import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.application.realtime.RunCancellationRegistry;
+import com.agenthub.infrastructure.adapter.cli.CliCommandResolver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
@@ -18,7 +19,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -47,29 +47,10 @@ public class CodexCommandRunner {
             return Availability.unavailable("Codex CLI command is not configured.");
         }
 
-        Path directPath = Path.of(normalized);
-        if (directPath.isAbsolute() || normalized.contains("/") || normalized.contains("\\")) {
-            return Files.isRegularFile(directPath)
-                    ? Availability.availableResult(directPath.toString())
-                    : Availability.unavailable("Codex CLI command path is not executable: " + normalized);
-        }
-
-        String pathEnv = System.getenv("PATH");
-        if (pathEnv == null || pathEnv.isBlank()) {
-            return Availability.unavailable("PATH environment variable is empty.");
-        }
-        for (String pathEntry : pathEnv.split(java.io.File.pathSeparator)) {
-            if (pathEntry == null || pathEntry.isBlank()) {
-                continue;
-            }
-            for (String candidateName : commandCandidates(normalized)) {
-                Path candidate = Path.of(pathEntry, candidateName);
-                if (Files.isRegularFile(candidate)) {
-                    return Availability.availableResult(candidate.toString());
-                }
-            }
-        }
-        return Availability.unavailable("Codex CLI command is not available on PATH: " + normalized);
+        CliCommandResolver.ResolvedCommand resolved = CliCommandResolver.resolve(normalized);
+        return resolved.available()
+                ? Availability.availableResult(resolved.executablePath())
+                : Availability.unavailable(resolved.failureReason());
     }
 
     public ProbeResult probe(String command, List<String> args, int timeoutSeconds) {
@@ -77,11 +58,7 @@ public class CodexCommandRunner {
         if (normalized.isBlank()) {
             return ProbeResult.failed("Codex CLI command is not configured.");
         }
-        List<String> commandLine = new ArrayList<>();
-        commandLine.add(resolveCommandExecutable(normalized));
-        if (args != null) {
-            commandLine.addAll(args);
-        }
+        List<String> commandLine = CliCommandResolver.processCommand(resolveCommandExecutable(normalized), args);
         Process process = null;
         try {
             process = new ProcessBuilder(commandLine)
@@ -210,7 +187,10 @@ public class CodexCommandRunner {
     }
 
     private Process startProcess(List<String> commandLine, Path requestDir) throws IOException {
-        return new ProcessBuilder(commandLine)
+        List<String> nativeCommandLine = commandLine.isEmpty()
+                ? commandLine
+                : CliCommandResolver.processCommand(commandLine.get(0), commandLine.subList(1, commandLine.size()));
+        return new ProcessBuilder(nativeCommandLine)
                 .directory(requestDir.toFile())
                 .redirectInput(ProcessBuilder.Redirect.PIPE)
                 .start();
@@ -382,43 +362,7 @@ public class CodexCommandRunner {
     }
 
     private String resolveCommandExecutable(String command) {
-        String normalized = normalize(command);
-        Path directPath = Path.of(normalized);
-        if (directPath.isAbsolute() || normalized.contains("/") || normalized.contains("\\")) {
-            return normalized;
-        }
-
-        String pathEnv = System.getenv("PATH");
-        if (pathEnv == null || pathEnv.isBlank()) {
-            return normalized;
-        }
-
-        for (String pathEntry : pathEnv.split(java.io.File.pathSeparator)) {
-            if (pathEntry == null || pathEntry.isBlank()) {
-                continue;
-            }
-            for (String candidateName : commandCandidates(normalized)) {
-                Path candidate = Path.of(pathEntry, candidateName);
-                if (Files.isRegularFile(candidate)) {
-                    return candidate.toString();
-                }
-            }
-        }
-        return normalized;
-    }
-
-    private List<String> commandCandidates(String commandName) {
-        List<String> candidates = new ArrayList<>();
-        if (isWindows() && !commandName.contains(".")) {
-            candidates.add(commandName + ".cmd");
-            candidates.add(commandName + ".CMD");
-            candidates.add(commandName + ".exe");
-            candidates.add(commandName + ".EXE");
-            candidates.add(commandName + ".bat");
-            candidates.add(commandName + ".BAT");
-        }
-        candidates.add(commandName);
-        return candidates;
+        return CliCommandResolver.resolveExecutable(command);
     }
 
     private void publishStreamChunk(
@@ -520,10 +464,6 @@ public class CodexCommandRunner {
 
     private String nullToBlank(String value) {
         return value == null ? "" : value;
-    }
-
-    private boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 
     public record Options(

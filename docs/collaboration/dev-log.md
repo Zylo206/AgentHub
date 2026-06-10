@@ -10471,3 +10471,107 @@
 ### 边界
 
 - 本轮只处理 persistence mode 条件匹配鲁棒性，不改变 JDBC 凭据要求；如果 MySQL 用户名或密码错误，JDBC 模式仍会按真实连接错误失败。
+
+## 2026-06-10 - CodeMirror 编辑器 + Modal 编辑集成
+
+### 目标
+
+- 将 artifact 编辑的 textarea 升级为 CodeMirror 6，支持行号、语法高亮、括号匹配
+- 在全屏 Modal 预览中加入编辑模式，实现"预览 + 编辑"一体化
+
+### 主要变更
+
+- 新增依赖：`@codemirror/view`、`@codemirror/state`、`@codemirror/language`、`@codemirror/commands`、`@codemirror/lang-javascript`、`@codemirror/lang-python`、`@codemirror/lang-json`、`@codemirror/lang-css`、`@codemirror/lang-html`、`@codemirror/lang-markdown`、`@codemirror/theme-one-dark`
+- 新增 `CodeMirrorEditor.tsx`：CodeMirror 6 React wrapper，支持语言检测、readOnly、onChange、onSelectionChange
+- 更新 `ArtifactRevisionWorkspace.tsx`：textarea 替换为 CodeMirrorEditor
+- 更新 `useArtifactOperationController.ts`：新增 `handleDraftSelectionInfoChange` 接受 CodeMirror 选区信息
+- 更新 `ArtifactPanel.tsx`：传递新的选区处理函数
+- 更新 `ArtifactPreviewModal.tsx`：新增 editMode 切换、CodeMirror 编辑器、修改说明输入、保存修订按钮
+- 更新 `MessageBubble.tsx`：新增 `onCreateRevision` prop 传递给 modal
+- 更新 `MessageStream.tsx`：透传 `onCreateRevision`
+- 更新 `WorkspacePage.tsx`：将 `handleCreateArtifactRevision` 传递给 MessageStream
+- 更新 `artifact.css`：CodeMirror wrapper 样式、modal 编辑栏样式
+
+### 验证
+
+- `cd frontend && npm run build`：通过
+- `cd frontend && npm run lint`：通过
+
+### 边界
+
+- 协作面板（ArtifactCollaborationPanel）的 textarea 本轮不替换，保持 Yjs 协作兼容
+- CodeMirror 主题默认使用 oneDark（暗色），与右侧面板的暗色背景一致
+- 冲突解决的 merge textarea 本轮不替换
+
+## 2026-06-10 - Modal 标题修复 + PreviewPage 重构
+
+### 变更
+
+- 修复全屏 Modal 左上角文件名看不清的问题：字号从 14px 提升到 18px，字重从 800 提升到 900，颜色加深为 #0f172a，增加 max-width: 480px 防止溢出
+- 重构 PreviewPage.tsx：从 384 行单文件拆分为：
+  - `previewPageHelpers.ts`：提取所有辅助函数（getPreviewMode、getPresentationMode、getTrustTone 等）和类型定义
+  - `PreviewPage.tsx`：拆分为 5 个子组件（TopBar、MetaSidebar、VersionList、ContentPanel、主页面），使用 `useArtifactData` 自定义 hook 封装数据加载
+- 去掉顶部冗余的"只读查看当前产物内容、版本链和来源状态"描述文字
+
+### 验证
+
+- `cd frontend && npm run build`：通过
+- `cd frontend && npm run lint`：通过
+
+## 2026-06-10 - P0 缺陷修复：聊天流 Diff 卡片 + 协议消息卡片增强
+
+### 目标
+
+- 修复课题要求中"Diff 视图卡片"在聊天流内缺失的问题
+- 增强 TASK/RESULT/REVIEW 等协议消息卡片的信息密度
+
+### 主要变更
+
+- 新增 `InlineDiffViewer.tsx`：紧凑型行级 Diff 查看器，支持 +/- 前缀着色、行号、统计摘要、展开/收起
+- 新增 `RichProtocolCard.tsx`：增强版协议消息卡片，替代原来的静态文字卡片：
+  - 带 emoji 图标和变体色左边框（TASK=蓝、RESULT=绿、REJECTION=红）
+  - RESULT 消息显示关联产物列表（类型 + 标题 + 版本状态徽章），点击可选中产物
+  - RESULT 消息自动检测内容中的 diff 格式并渲染 InlineDiffViewer
+  - REJECTION 消息保留"生成修复 Revision"和"重新评审"操作按钮
+  - Orchestrator 消息显示 "Orchestrator" 标签
+- 更新 `MessageBubble.tsx`：用 RichProtocolCard 替换原来的 message-protocol-card + message-rejection-cta
+- 移除 `getProtocolDescription` 和 `getProtocolCta` 静态辅助函数（逻辑迁入 RichProtocolCard）
+- 更新 `message.css`：新增 rich-protocol-card 和 inline-diff-viewer 完整样式
+
+### 验证
+
+- `cd frontend && npm run build`：通过
+- `cd frontend && npm run lint`：通过
+
+### 边界
+
+- Diff 解析基于简单文本格式匹配（行首 +/- 空格），非 unified diff 标准
+- 产物关联通过 message.artifactIds 查找，不依赖后端新增 metadata 字段
+
+## 2026-06-10 - P1 修复：PreviewPage 编辑能力 + Markdown 富渲染
+
+### 目标
+
+- 让独立预览页（PreviewPage）也支持编辑，与 Modal 体验对齐
+- 将 Markdown 渲染从简单正则升级为 marked.js，支持表格/嵌套列表/代码块等
+
+### 主要变更
+
+**PreviewPage 编辑能力：**
+- 更新 `PreviewPage.tsx`：ContentPanel 新增 editMode 切换、CodeMirror 编辑器、修改说明输入、保存修订按钮
+- 编辑后直接调用 `createDemoArtifactRevision` API 创建修订，成功后跳转到新版本
+- 更新 `preview.css`：新增编辑栏、保存按钮、CodeMirror wrapper 样式
+
+**Markdown 富渲染：**
+- 更新 `renderArtifactContent.tsx`：用 `marked` 库替换简单正则渲染，支持 GFM（GitHub Flavored Markdown）
+- 更新 `syntax-highlight.css`：新增完整的 markdown 渲染样式（h1-h6、表格、列表、代码块、引用、链接、图片、hr）
+
+### 验证
+
+- `cd frontend && npm run build`：通过
+- `cd frontend && npm run lint`：通过
+
+### 边界
+
+- PreviewPage 编辑直接调用后端 API，不经过 workspace 的 orchestrator 流程
+- marked 使用同步模式，GFM tables/lists/breaks 全部启用

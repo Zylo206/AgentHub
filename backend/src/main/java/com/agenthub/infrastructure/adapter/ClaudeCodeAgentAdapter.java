@@ -4,6 +4,7 @@ import com.agenthub.application.realtime.RealtimeEventPublisher;
 import com.agenthub.application.realtime.RealtimeEventType;
 import com.agenthub.application.realtime.RunCancellationRegistry;
 import com.agenthub.common.TimeProvider;
+import com.agenthub.infrastructure.adapter.cli.CliCommandResolver;
 import com.agenthub.infrastructure.adapter.cli.CliAgentCommandRunner;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -592,50 +593,7 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
     }
 
     private String resolveCommandExecutable() {
-        Path directPath = Path.of(command);
-        if (directPath.isAbsolute() || command.contains("/") || command.contains("\\")) {
-            return command;
-        }
-
-        String pathEnv = System.getenv("PATH");
-        if (pathEnv == null || pathEnv.isBlank()) {
-            return command;
-        }
-
-        for (String pathEntry : pathEnv.split(java.io.File.pathSeparator)) {
-            if (pathEntry == null || pathEntry.isBlank()) {
-                continue;
-            }
-            for (String candidateName : commandCandidates(command)) {
-                Path candidate = Path.of(pathEntry, candidateName);
-                if (Files.isRegularFile(candidate)) {
-                    return candidate.toString();
-                }
-            }
-        }
-        return command;
-    }
-
-    private List<String> commandCandidates(String commandName) {
-        List<String> candidates = new ArrayList<>();
-        if (isWindows() && !commandName.contains(".")) {
-            String pathExt = System.getenv("PATHEXT");
-            String[] extensions = pathExt == null || pathExt.isBlank()
-                    ? new String[] {".EXE", ".CMD", ".BAT"}
-                    : pathExt.split(";");
-            for (String extension : extensions) {
-                if (extension != null && !extension.isBlank()) {
-                    candidates.add(commandName + extension.toLowerCase(Locale.ROOT));
-                    candidates.add(commandName + extension.toUpperCase(Locale.ROOT));
-                }
-            }
-        }
-        candidates.add(commandName);
-        return candidates;
-    }
-
-    private boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        return CliCommandResolver.resolveExecutable(command);
     }
 
     private Path prepareRequestDir(AgentRequest request) throws AdapterResponseException {
@@ -655,7 +613,10 @@ public class ClaudeCodeAgentAdapter implements AgentAdapter {
     }
 
     private Process startProcess(List<String> commandLine, Path requestDir) throws IOException {
-        return new ProcessBuilder(commandLine)
+        List<String> nativeCommandLine = commandLine.isEmpty()
+                ? commandLine
+                : CliCommandResolver.processCommand(commandLine.get(0), commandLine.subList(1, commandLine.size()));
+        return new ProcessBuilder(nativeCommandLine)
                 .directory(requestDir.toFile())
                 .redirectInput(ProcessBuilder.Redirect.PIPE)
                 .start();

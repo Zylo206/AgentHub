@@ -379,6 +379,8 @@ cd ..
 powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1 -UsePackagedBackend
 ```
 
+Authentication mode is controlled separately from persistence. The backend defaults to `demo` auth mode. If you want the JDBC-backed local account system, set `AGENTHUB_AUTH_MODE="real"` before running `start-local.ps1`, and pair it with `-PersistenceMode jdbc`. The starter does not auto-switch auth mode for you.
+
 To start the backend in JDBC/MySQL mode instead of the default `memory` mode:
 
 ```powershell

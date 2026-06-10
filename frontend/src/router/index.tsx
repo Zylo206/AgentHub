@@ -43,11 +43,12 @@ export function AppRouter() {
           <Route path="/workspace" element={<WorkspacePage />} />
           <Route path="/agents" element={<AgentBuilderPage />} />
           <Route path="/desktop" element={<DesktopConsolePage />} />
-          <Route path="/preview/:artifactId" element={<PreviewPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin/users" element={<AdminUsersPage />} />
           </Route>
         </Route>
+        {/* PreviewPage 独立于 AppLayout，作为全屏独立页面 */}
+        <Route path="/preview/:artifactId" element={<PreviewPage />} />
       </Route>
     </Routes>
   );

@@ -9,6 +9,7 @@ import { sanitizeProductionText } from "../../utils/productionLabels";
 import { createPortal } from "react-dom";
 import { InlineArtifactPreview } from "./InlineArtifactPreview";
 import { ArtifactPreviewModal } from "../artifacts/ArtifactPreviewModal";
+import { RichProtocolCard } from "./RichProtocolCard";
 
 interface MessageBubbleProps {
   message: Message;
@@ -92,32 +93,6 @@ function getProtocolLabel(messageType: string): ProtocolTone | null {
   return ["TASK", "RESULT", "REVIEW", "APPROVAL", "REJECTION", "ERROR"].includes(messageType)
     ? (messageType as ProtocolTone)
     : null;
-}
-
-function getProtocolDescription(messageType: string): string {
-  const descriptions: Record<ProtocolTone, string> = {
-    TASK: "Orchestrator 正在拆解任务、分配 Agent 和上下文。",
-    RESULT: "Specialist Agent 返回了本步骤产出或执行结果。",
-    REVIEW: "Reviewer 正在检查质量、风险和可交付性。",
-    APPROVAL: "协作链路通过当前评审，可继续进入产物操作。",
-    REJECTION: "评审发现阻塞问题，需要先修复后再继续。",
-    ERROR: "协作链路遇到错误，请查看失败原因和备用路径状态。"
-  };
-
-  return descriptions[messageType as ProtocolTone] || "Agent 协作状态更新。";
-}
-
-function getProtocolCta(messageType: string): string {
-  const ctas: Record<ProtocolTone, string> = {
-    TASK: "查看计划",
-    RESULT: "查看产物",
-    REVIEW: "查看评审",
-    APPROVAL: "继续交付",
-    REJECTION: "查看阻塞 / 生成 Revision",
-    ERROR: "查看错误"
-  };
-
-  return ctas[messageType as ProtocolTone] || "查看详情";
 }
 
 function getAgentLane(message: Message): "orchestrator" | "specialist" | "reviewer" | "system" {
@@ -494,6 +469,7 @@ export function MessageBubble({
   onApproveDeployIntent,
   onCancelDeployIntent,
   onDownloadArtifactBundle,
+  onCreateRevision,
   onToggleThread,
   onJumpToMessage
 }: MessageBubbleProps) {
@@ -610,40 +586,16 @@ export function MessageBubble({
           : null}
 
         {protocolLabel ? (
-          <div className={`message-protocol-card message-protocol-card--${protocolLabel.toLowerCase()}`}>
-            <div>
-              <span className="message-protocol-card__label">{protocolLabel}</span>
-              <strong>{agentLane === "orchestrator" ? "Orchestrator 协调消息" : "Specialist Agent 协作消息"}</strong>
-              <p>{getProtocolDescription(protocolLabel)}</p>
-            </div>
-            <span className="message-protocol-card__cta">{getProtocolCta(protocolLabel)}</span>
-          </div>
-        ) : null}
-        {protocolLabel === "REJECTION" ? (
-          <div className="message-rejection-cta" data-testid="message-rejection-cta">
-            <div>
-              <strong>修复闭环</strong>
-              <span>先定位阻塞项，再创建修复 Revision，最后重新评审。</span>
-            </div>
-            <div className="message-rejection-cta__actions">
-              <button
-                type="button"
-                className="message-action-button"
-                data-testid="message-rejection-view-blockers"
-                onClick={() => document.getElementById(blockerAnchorId)?.scrollIntoView({ behavior: "smooth", block: "center" })}
-              >
-                查看阻塞项
-              </button>
-              <button type="button" className="message-action-button" onClick={() => onQuoteMessage(message)}>
-                生成修复 Revision
-              </button>
-              {message.senderType === "AGENT" ? (
-                <button type="button" className="message-action-button" disabled={regenerating} onClick={() => onRegenerateAgentReply(message)}>
-                  重新评审
-                </button>
-              ) : null}
-            </div>
-          </div>
+          <RichProtocolCard
+            protocolLabel={protocolLabel}
+            agentLane={agentLane}
+            content={message.content}
+            artifacts={artifacts}
+            onSelectArtifact={onSelectArtifact}
+            onRegenerateAgentReply={message.senderType === "AGENT" ? () => onRegenerateAgentReply(message) : undefined}
+            regenerating={regenerating}
+            onQuoteMessage={() => onQuoteMessage(message)}
+          />
         ) : null}
 
         {message.senderType === "USER" && (message.targetAgentId || (message.mentionedAgentIds?.length ?? 0) > 0) ? (
@@ -1022,7 +974,12 @@ export function MessageBubble({
         ) : null}
 
         {modalArtifact ? (
-          <ArtifactPreviewModal artifact={modalArtifact} onClose={() => setModalArtifact(null)} />
+          <ArtifactPreviewModal
+            artifact={modalArtifact}
+            onClose={() => setModalArtifact(null)}
+            editable={Boolean(onCreateRevision)}
+            onCreateRevision={onCreateRevision}
+          />
         ) : null}
 
         {replyMessages.length > 0 ? (

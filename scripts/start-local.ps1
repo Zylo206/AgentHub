@@ -19,16 +19,30 @@ $backendJar = Join-Path $backendDir "target\agenthub-backend-0.1.0-SNAPSHOT-exec
 $backendApiBase = "http://127.0.0.1:$BackendPort"
 
 function Start-CmdWindow($title, $command) {
-  cmd.exe /c "start `"$title`" cmd.exe /k `"$command`""
+  $runDir = Join-Path ([System.IO.Path]::GetTempPath()) "agenthub-run"
+  New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+  $safeTitle = ($title -replace "[^A-Za-z0-9._-]", "-").Trim("-")
+  if ([string]::IsNullOrWhiteSpace($safeTitle)) {
+    $safeTitle = "agenthub"
+  }
+  $scriptPath = Join-Path $runDir "$safeTitle.cmd"
+  $content = @(
+    "@echo off",
+    "title $title",
+    $command,
+    "echo.",
+    "echo $title exited with code %ERRORLEVEL%.",
+    "pause"
+  )
+  Set-Content -Path $scriptPath -Value $content -Encoding ASCII
+  cmd.exe /c "start `"$title`" `"$scriptPath`""
 }
 
 function Get-CmdSetExpression($name, $value) {
   if ([string]::IsNullOrEmpty($value)) {
     return $null
   }
-  $rawValue = [string]$value
-  $escapedValue = $rawValue.Replace("^", "^^").Replace("&", "^&").Replace("|", "^|").Replace("<", "^<").Replace(">", "^>")
-  return "set `"$name=$escapedValue`""
+  return "set `"$name=$value`""
 }
 
 if ($UsePackagedBackend -and -not (Test-Path $backendJar)) {

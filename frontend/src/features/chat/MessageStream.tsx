@@ -42,6 +42,7 @@ interface MessageStreamProps {
   onApproveDeployIntent: (messageId: string) => void;
   onCancelDeployIntent: (messageId: string) => void;
   onDownloadArtifactBundle: (artifactIds?: string[]) => void;
+  onCreateRevision?: (artifactId: string, instruction: string) => Promise<void>;
   streamingPreviewsByStepId?: Record<string, StreamingPreviewState>;
 }
 
@@ -174,6 +175,7 @@ export function MessageStream({
   onApproveDeployIntent,
   onCancelDeployIntent,
   onDownloadArtifactBundle,
+  onCreateRevision,
   streamingPreviewsByStepId = {}
 }: MessageStreamProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(() => new Set());
@@ -307,6 +309,7 @@ export function MessageStream({
               onApproveDeployIntent={onApproveDeployIntent}
               onCancelDeployIntent={onCancelDeployIntent}
               onDownloadArtifactBundle={onDownloadArtifactBundle}
+              onCreateRevision={onCreateRevision}
               onToggleThread={() => toggleThread(messageId)}
               onJumpToMessage={jumpToMessage}
             />

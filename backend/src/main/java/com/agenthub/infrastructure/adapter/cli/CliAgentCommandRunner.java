@@ -5,12 +5,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
@@ -24,31 +21,10 @@ public class CliAgentCommandRunner {
             return CliAvailability.unavailable("CLI command is not configured.");
         }
 
-        Path directPath = Path.of(normalized);
-        if (directPath.isAbsolute() || normalized.contains("/") || normalized.contains("\\")) {
-            return Files.isRegularFile(directPath) && (isWindows() || Files.isExecutable(directPath))
-                    ? CliAvailability.availableResult(directPath.toString())
-                    : CliAvailability.unavailable("CLI command path is not executable: " + normalized);
-        }
-
-        String pathEnv = System.getenv("PATH");
-        if (pathEnv == null || pathEnv.isBlank()) {
-            return CliAvailability.unavailable("PATH environment variable is empty.");
-        }
-
-        for (String pathEntry : pathEnv.split(java.io.File.pathSeparator)) {
-            if (pathEntry == null || pathEntry.isBlank()) {
-                continue;
-            }
-            for (String candidateName : commandCandidates(normalized)) {
-                Path candidate = Path.of(pathEntry, candidateName);
-                if (Files.isRegularFile(candidate)) {
-                    return CliAvailability.availableResult(candidate.toString());
-                }
-            }
-        }
-
-        return CliAvailability.unavailable("CLI command is not available on PATH: " + normalized);
+        CliCommandResolver.ResolvedCommand resolved = CliCommandResolver.resolve(normalized);
+        return resolved.available()
+                ? CliAvailability.availableResult(resolved.executablePath())
+                : CliAvailability.unavailable(resolved.failureReason());
     }
 
     public CliProbeResult probe(String command, List<String> args, int timeoutSeconds) {
@@ -57,11 +33,7 @@ public class CliAgentCommandRunner {
             return CliProbeResult.failed("CLI command is not configured.");
         }
 
-        List<String> commandLine = new ArrayList<>();
-        commandLine.add(resolveCommandExecutable(normalizedCommand));
-        if (args != null) {
-            commandLine.addAll(args);
-        }
+        List<String> commandLine = CliCommandResolver.processCommand(resolveCommandExecutable(normalizedCommand), args);
 
         Process process = null;
         try {
@@ -114,9 +86,9 @@ public class CliAgentCommandRunner {
                     false);
         }
 
-        List<String> commandLine = new ArrayList<>();
-        commandLine.add(normalizedCommand);
-        commandLine.addAll(parseArgs(applyTemplate(normalizedTemplate, request)));
+        List<String> commandLine = CliCommandResolver.processCommand(
+                resolveCommandExecutable(normalizedCommand),
+                parseArgs(applyTemplate(normalizedTemplate, request)));
 
         Process process = null;
         try {
@@ -233,47 +205,8 @@ public class CliAgentCommandRunner {
         return builder.toString().trim();
     }
 
-    private List<String> commandCandidates(String command) {
-        List<String> candidates = new ArrayList<>();
-        candidates.add(command);
-        if (isWindows() && !command.contains(".")) {
-            String pathExt = System.getenv("PATHEXT");
-            String[] extensions = pathExt == null || pathExt.isBlank()
-                    ? new String[] {".EXE", ".CMD", ".BAT"}
-                    : pathExt.split(";");
-            for (String extension : extensions) {
-                if (extension != null && !extension.isBlank()) {
-                    candidates.add(command + extension.toLowerCase(Locale.ROOT));
-                    candidates.add(command + extension.toUpperCase(Locale.ROOT));
-                }
-            }
-        }
-        return candidates;
-    }
-
     private String resolveCommandExecutable(String command) {
-        Path directPath = Path.of(command);
-        if (directPath.isAbsolute() || command.contains("/") || command.contains("\\")) {
-            return command;
-        }
-
-        String pathEnv = System.getenv("PATH");
-        if (pathEnv == null || pathEnv.isBlank()) {
-            return command;
-        }
-
-        for (String pathEntry : pathEnv.split(java.io.File.pathSeparator)) {
-            if (pathEntry == null || pathEntry.isBlank()) {
-                continue;
-            }
-            for (String candidateName : commandCandidates(command)) {
-                Path candidate = Path.of(pathEntry, candidateName);
-                if (Files.isRegularFile(candidate)) {
-                    return candidate.toString();
-                }
-            }
-        }
-        return command;
+        return CliCommandResolver.resolveExecutable(command);
     }
 
     private String summarizeProbeOutput(String stdout, String stderr) {
@@ -283,10 +216,6 @@ public class CliAgentCommandRunner {
         }
         String sanitized = value.replace("\r", " ").replace("\n", " ").trim();
         return sanitized.length() <= 240 ? sanitized : sanitized.substring(0, 240) + "...";
-    }
-
-    private boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 
     private String normalize(String value) {

@@ -6,6 +6,7 @@ Move AgentHub from a single-user MVP collaboration demo to a production-aligned 
 
 ## Scope
 
+- Default auth mode is `demo`; `real` is opt-in for local verification and uses JDBC/MySQL-backed user/session storage.
 - Default login is enabled.
 - Built-in demo users are supported for local verification: `demo/demo`, `admin/admin`, and `reviewer/reviewer`.
 - Resources are scoped by `ownerUserId`, `orgTag`, `visibility`, and conversation member roles.

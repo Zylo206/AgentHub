@@ -964,6 +964,7 @@ export function WorkspacePage() {
               onApproveDeployIntent={handleApproveDeployIntent}
               onCancelDeployIntent={handleCancelDeployIntent}
               onDownloadArtifactBundle={handleDownloadArtifactBundle}
+              onCreateRevision={handleCreateArtifactRevision}
             />
           }
           composer={

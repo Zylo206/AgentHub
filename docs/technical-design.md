@@ -462,7 +462,13 @@ JDBC / MySQL Profile 是 opt-in 能力。
 
 当前边界是：系统不默认强制切换 MySQL，没有 Flyway / Liquibase 迁移体系；JDBC smoke 代表 profile 可验证，不代表数据库治理全部完成。
 
-### 12.3 Auth / Runtime Config 持久化
+### 12.3 Auth Mode / Runtime Config 持久化
+
+Auth 运行模式由 `AGENTHUB_AUTH_MODE` 控制，默认值是 `demo`。
+
+- `demo`：默认本地演示模式，走内置 `demo/admin/reviewer` 登录链路，适合 memory profile 和默认 smoke。
+- `real`：真实本地账号模式，依赖 `AGENTHUB_PERSISTENCE_MODE=jdbc` 与 JDBC/MySQL 用户仓库，启动时会创建 bootstrap 的 `admin` 和 `demo` 账号，并启用用户名 / 邮箱 + 密码、refresh token、`/me` 和 `/admin/users` 等能力。
+- `scripts/start-local.ps1` 只负责启动后端、前端和可选 doc-collab，不会自动切换 auth mode；切换后需要重启后端。
 
 真实账号模式下：
 

@@ -1,8 +1,6 @@
-import type { SyntheticEvent } from "react";
-import { useCallback } from "react";
 import { ArtifactCollaborationPanel } from "./ArtifactCollaborationPanel";
 import { DiffSummaryPanel } from "./DiffSummaryPanel";
-import { CodeMirrorEditor, type SelectionInfo } from "./CodeMirrorEditor";
+import { CodeMirrorEditor } from "./CodeMirrorEditor";
 import type { Artifact } from "./artifactTypes";
 import type { ArtifactCompareDiffResponse } from "../../api/agenthubApi";
 
@@ -39,7 +37,6 @@ interface ArtifactRevisionWorkspaceProps {
   onCancelContentEdit: () => void;
   onDraftContentChange: (value: string) => void;
   onDraftNoteChange: (value: string) => void;
-  onDraftSelectionChange: (event: SyntheticEvent<HTMLTextAreaElement>) => void;
   onCreateDraftRevision: () => void;
   onSendSelectionToChat: () => void;
   onRevisionInstructionChange: (value: string) => void;
@@ -87,7 +84,6 @@ export function ArtifactRevisionWorkspace({
   onCancelContentEdit,
   onDraftContentChange,
   onDraftNoteChange,
-  onDraftSelectionChange,
   onCreateDraftRevision,
   onSendSelectionToChat,
   onRevisionInstructionChange,

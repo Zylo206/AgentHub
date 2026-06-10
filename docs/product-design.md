@@ -131,6 +131,8 @@ AgentHub 是一个 IM-first 多 Agent 协作平台 MVP。用户像使用即时�
 
 支持：
 
+- 本地认证有两种运行模式：默认 `demo` 模式使用 `demo/demo`、`admin/admin`、`reviewer/reviewer`；切到 `real` 模式时启用 JDBC/MySQL 本地账号体系，bootstrap 账号默认是 `admin/Admin123!` 和 `demo/demo`。
+- 模式通过 `AGENTHUB_AUTH_MODE=demo|real` 控制，启动后端前设置，切换后需要重启后端。
 - 登录页；
 - 注册页；
 - 基于真实用户体系的登录态守卫；

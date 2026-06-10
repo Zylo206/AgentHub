@@ -125,49 +125,243 @@
   cursor: help;
 }
 
-/* --- Inline markdown rendering --- */
-.inline-md__h2 {
+/* =========================================================================
+   Markdown rendering (marked.js output styling)
+   Applied to .inline-preview__markdown, .artifact-preview__markdown,
+   .modal-preview__markdown, and .preview-page__markdown containers.
+   ========================================================================= */
+
+.inline-preview__markdown,
+.artifact-preview__markdown,
+.modal-preview__markdown,
+.preview-page__markdown {
+  color: var(--ah-text, #1f2329);
+  line-height: 1.65;
+}
+
+/* Headings */
+.inline-preview__markdown h1,
+.artifact-preview__markdown h1,
+.modal-preview__markdown h1,
+.preview-page__markdown h1 {
+  font-size: 20px;
+  font-weight: 900;
+  margin: 16px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(31, 35, 41, 0.08);
+}
+
+.inline-preview__markdown h2,
+.artifact-preview__markdown h2,
+.modal-preview__markdown h2,
+.preview-page__markdown h2 {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 14px 0 6px;
+}
+
+.inline-preview__markdown h3,
+.artifact-preview__markdown h3,
+.modal-preview__markdown h3,
+.preview-page__markdown h3 {
   font-size: 15px;
   font-weight: 800;
-  color: var(--ah-text, #1f2329);
-  margin: 8px 0 4px;
+  margin: 12px 0 4px;
 }
 
-.inline-md__h3 {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ah-text, #1f2329);
-  margin: 6px 0 3px;
-}
-
-.inline-md__h4 {
+.inline-preview__markdown h4,
+.inline-preview__markdown h5,
+.inline-preview__markdown h6,
+.artifact-preview__markdown h4,
+.artifact-preview__markdown h5,
+.artifact-preview__markdown h6,
+.modal-preview__markdown h4,
+.modal-preview__markdown h5,
+.modal-preview__markdown h6,
+.preview-page__markdown h4,
+.preview-page__markdown h5,
+.preview-page__markdown h6 {
   font-size: 13px;
   font-weight: 700;
-  color: var(--ah-text, #1f2329);
-  margin: 4px 0 2px;
+  margin: 10px 0 4px;
 }
 
-.inline-md__code {
-  background: #f8f9fb;
-  border: 1px solid rgba(31, 35, 41, 0.06);
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  font-size: 11px;
-  overflow-x: auto;
-  margin: 4px 0;
+/* Paragraphs */
+.inline-preview__markdown p,
+.artifact-preview__markdown p,
+.modal-preview__markdown p,
+.preview-page__markdown p {
+  margin: 6px 0;
 }
 
-.inline-md__inline-code {
+/* Links */
+.inline-preview__markdown a,
+.artifact-preview__markdown a,
+.modal-preview__markdown a,
+.preview-page__markdown a {
+  color: var(--ah-blue, #2f73ff);
+  text-decoration: none;
+}
+
+.inline-preview__markdown a:hover,
+.artifact-preview__markdown a:hover,
+.modal-preview__markdown a:hover,
+.preview-page__markdown a:hover {
+  text-decoration: underline;
+}
+
+/* Inline code */
+.inline-preview__markdown code:not([class*="language-"]),
+.artifact-preview__markdown code:not([class*="language-"]),
+.modal-preview__markdown code:not([class*="language-"]),
+.preview-page__markdown code:not([class*="language-"]) {
   background: rgba(31, 35, 41, 0.05);
   border-radius: 4px;
-  padding: 1px 4px;
+  padding: 1px 5px;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 0.9em;
 }
 
-.inline-md__li {
-  margin-left: 16px;
+/* Code blocks */
+.inline-preview__markdown pre,
+.artifact-preview__markdown pre,
+.modal-preview__markdown pre,
+.preview-page__markdown pre {
+  background: #f8f9fb;
+  border: 1px solid rgba(31, 35, 41, 0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.inline-preview__markdown pre code,
+.artifact-preview__markdown pre code,
+.modal-preview__markdown pre code,
+.preview-page__markdown pre code {
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* Blockquote */
+.inline-preview__markdown blockquote,
+.artifact-preview__markdown blockquote,
+.modal-preview__markdown blockquote,
+.preview-page__markdown blockquote {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid rgba(31, 35, 41, 0.15);
+  color: var(--ah-muted, #747b85);
+  background: rgba(31, 35, 41, 0.02);
+  border-radius: 0 6px 6px 0;
+}
+
+/* Lists */
+.inline-preview__markdown ul,
+.inline-preview__markdown ol,
+.artifact-preview__markdown ul,
+.artifact-preview__markdown ol,
+.modal-preview__markdown ul,
+.modal-preview__markdown ol,
+.preview-page__markdown ul,
+.preview-page__markdown ol {
+  margin: 6px 0;
+  padding-left: 24px;
+}
+
+.inline-preview__markdown li,
+.artifact-preview__markdown li,
+.modal-preview__markdown li,
+.preview-page__markdown li {
+  margin: 2px 0;
+}
+
+.inline-preview__markdown ul li,
+.artifact-preview__markdown ul li,
+.modal-preview__markdown ul li,
+.preview-page__markdown ul li {
   list-style: disc;
-  display: list-item;
+}
+
+.inline-preview__markdown ol li,
+.artifact-preview__markdown ol li,
+.modal-preview__markdown ol li,
+.preview-page__markdown ol li {
+  list-style: decimal;
+}
+
+/* Tables */
+.inline-preview__markdown table,
+.artifact-preview__markdown table,
+.modal-preview__markdown table,
+.preview-page__markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.inline-preview__markdown th,
+.inline-preview__markdown td,
+.artifact-preview__markdown th,
+.artifact-preview__markdown td,
+.modal-preview__markdown th,
+.modal-preview__markdown td,
+.preview-page__markdown th,
+.preview-page__markdown td {
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.inline-preview__markdown th,
+.artifact-preview__markdown th,
+.modal-preview__markdown th,
+.preview-page__markdown th {
+  background: #f8f9fb;
+  font-weight: 800;
+  color: var(--ah-text, #1f2329);
+}
+
+.inline-preview__markdown tr:nth-child(even),
+.artifact-preview__markdown tr:nth-child(even),
+.modal-preview__markdown tr:nth-child(even),
+.preview-page__markdown tr:nth-child(even) {
+  background: rgba(31, 35, 41, 0.02);
+}
+
+/* Horizontal rule */
+.inline-preview__markdown hr,
+.artifact-preview__markdown hr,
+.modal-preview__markdown hr,
+.preview-page__markdown hr {
+  border: none;
+  border-top: 1px solid rgba(31, 35, 41, 0.1);
+  margin: 12px 0;
+}
+
+/* Images */
+.inline-preview__markdown img,
+.artifact-preview__markdown img,
+.modal-preview__markdown img,
+.preview-page__markdown img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+/* Strong / em */
+.inline-preview__markdown strong,
+.artifact-preview__markdown strong,
+.modal-preview__markdown strong,
+.preview-page__markdown strong {
+  font-weight: 800;
+}
+
+.inline-preview__markdown em,
+.artifact-preview__markdown em,
+.modal-preview__markdown em,
+.preview-page__markdown em {
+  font-style: italic;
 }

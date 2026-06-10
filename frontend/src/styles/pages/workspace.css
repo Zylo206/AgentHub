@@ -1663,6 +1663,45 @@
   border: 0 !important;
 }
 
+/* Desktop console readability pass: keep the embedded Agent CLI panel on a light surface
+   so probe details remain legible in Workspace mode. */
+.workspace-page .desktop-console,
+.workspace-page .desktop-capability-panel {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.workspace-page .desktop-console__card,
+.workspace-page .desktop-console__metrics article,
+.workspace-page .desktop-console__boundary,
+.workspace-page .desktop-console__probe-list article,
+.workspace-page .desktop-console__processes article {
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.workspace-page .desktop-console__runtime-grid span,
+.workspace-page .desktop-console__notification-rules span,
+.workspace-page .desktop-console__notification-rules button {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+}
+
+.workspace-page .desktop-console__tab {
+  background: transparent !important;
+  color: #475569 !important;
+}
+
+.workspace-page .desktop-console__tab--active {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
 /* Sidebar and diagnostics usability pass. */
 .workspace-page .workspace-sidebar__body {
   padding-bottom: 24px !important;
@@ -1960,6 +1999,8 @@
 
 .workspace-page .workspace-diagnostics__section {
   overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  padding-right: 10px !important;
 }
 
 .workspace-page .workspace-diagnostics__section-body {
@@ -1971,5 +2012,19 @@
 .workspace-page .adapter-routing-panel,
 .workspace-page .adapter-quality-dashboard,
 .workspace-page .task-run-panel {
+  min-width: 0 !important;
   min-height: max-content !important;
+}
+
+.workspace-page .workspace-diagnostics__section--context,
+.workspace-page .workspace-diagnostics__section--adapter {
+  scrollbar-gutter: stable !important;
+}
+
+.workspace-page .workspace-diagnostics__section--context .context-card-list,
+.workspace-page .workspace-diagnostics__section--context .retrieved-context-list,
+.workspace-page .workspace-diagnostics__section--adapter .adapter-routing-table,
+.workspace-page .workspace-diagnostics__section--adapter .adapter-quality-table {
+  min-width: 0 !important;
+  scrollbar-gutter: stable !important;
 }
