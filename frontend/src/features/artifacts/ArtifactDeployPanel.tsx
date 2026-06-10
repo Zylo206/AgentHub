@@ -23,7 +23,7 @@ export function ArtifactDeployPanel({
     <div className="deploy-status-box" data-testid="deploy-status-box">
       <div className="artifact-revision-box__header">
         <strong>Deploy Status</strong>
-        <span>本地静态预览模拟</span>
+        <span>静态站点预览</span>
       </div>
       <button
         type="button"
@@ -42,7 +42,7 @@ export function ArtifactDeployPanel({
       </button>
       {deployments.length === 0 ? (
         <div className="deploy-status-empty">
-          暂无部署记录。部署该产物后会生成本地静态预览卡片。
+          暂无部署记录。部署该产物后会生成静态预览链接。
         </div>
       ) : (
         <div className="deploy-status-list release-panel-list">
@@ -100,7 +100,7 @@ export function ArtifactDeployPanel({
               </div>
               <p>{deployment.message}</p>
               <div className="release-panel__boundary">
-                本地静态预览，不是真实云部署；不会触发 Vercel / Netlify / Docker / Kubernetes。
+                后端静态预览服务，无需外部部署平台。
               </div>
             </div>
           ))}
