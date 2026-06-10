@@ -66,7 +66,7 @@ public class StaticDeployController {
         Artifact artifact = artifactOpt.get();
         String content = artifact.getContent() == null ? "" : artifact.getContent();
         String title = artifact.getTitle() == null ? "Untitled" : artifact.getTitle();
-        String type = artifact.getType() == null ? "" : artifact.getType();
+        String type = artifact.getType() == null ? "" : artifact.getType().name();
         String language = artifact.getLanguage() == null ? "" : artifact.getLanguage();
 
         response.setContentType("text/html;charset=UTF-8");

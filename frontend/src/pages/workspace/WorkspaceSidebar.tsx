@@ -23,6 +23,7 @@ interface WorkspaceSidebarProps {
   onConversationFilterChange: (filter: ConversationFilter) => void;
   onConversationQueryChange: (query: string) => void;
   onCreateConversation: (mode: WorkspaceConversationCreateMode) => void;
+  onDeleteAgent: (agent: Agent) => void;
   onRestoreConversation: (conversation: Conversation) => void;
   onSelectAgent: (agent: Agent) => void;
   onSelectConversation: (conversationId: string) => void;
@@ -46,6 +47,7 @@ export function WorkspaceSidebar({
   onConversationFilterChange,
   onConversationQueryChange,
   onCreateConversation,
+  onDeleteAgent,
   onRestoreConversation,
   onSelectAgent,
   onSelectConversation,
@@ -126,6 +128,7 @@ export function WorkspaceSidebar({
             adapterDescriptors={adapterDescriptors}
             loading={loadingAgents}
             selectedAgentId={selectedAgent ? getIdValue(selectedAgent.id) : null}
+            onDeleteAgent={onDeleteAgent}
             onSelectAgent={onSelectAgent}
           />
         </section>

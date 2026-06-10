@@ -151,6 +151,73 @@ Workspace 高级面板内提供 IM 端 OpenAI-compatible Provider 配置，支�
 - `CLAUDE_CODE` 与 `CODEX` 依赖本机 CLI、探测与鉴权状态；
 - `/api/adapters` 会返回当前适配器的可用状态与能力说明。
 
+## 环境变量参考
+
+默认启动不需要设置任何环境变量。以下变量按需启用对应能力。
+
+### 持久化与存储
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENTHUB_PERSISTENCE_MODE` | `memory` | `memory`=内存（重启丢失）/ `jdbc`=MySQL 持久化 |
+| `AGENTHUB_JDBC_URL` | — | MySQL JDBC 连接 URL |
+| `AGENTHUB_JDBC_USERNAME` | — | MySQL 用户名 |
+| `AGENTHUB_JDBC_PASSWORD` | — | MySQL 密码 |
+| `AGENTHUB_OBJECT_STORAGE_TYPE` | `filesystem` | `filesystem`=本地文件 / `s3`=MinIO 或 S3 |
+| `AGENTHUB_OBJECT_STORAGE_S3_ENDPOINT` | — | S3 endpoint（如 MinIO: `http://localhost:9000`） |
+| `AGENTHUB_OBJECT_STORAGE_S3_ACCESS_KEY` | — | S3 Access Key |
+| `AGENTHUB_OBJECT_STORAGE_S3_SECRET_KEY` | — | S3 Secret Key |
+
+### 认证
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENTHUB_AUTH_MODE` | `demo` | `demo`=演示模式 / `real`=真实账号体系 |
+| `AGENTHUB_AUTH_BOOTSTRAP_ADMIN_USERNAME` | `admin` | real 模式下的初始管理员用户名 |
+| `AGENTHUB_AUTH_BOOTSTRAP_ADMIN_PASSWORD` | `Admin123!` | real 模式下的初始管理员密码 |
+
+### LLM 与适配器
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `AGENTHUB_OPENAI_ENABLED` | `false` | 启用 OpenAI Compatible 适配器 |
+| `AGENTHUB_OPENAI_BASE_URL` | — | LLM API 地址 |
+| `AGENTHUB_OPENAI_API_KEY` | — | LLM API Key |
+| `AGENTHUB_OPENAI_MODEL` | — | 模型名称（如 `gpt-4o`） |
+| `AGENTHUB_CLAUDE_CODE_ENABLED` | `true` | 启用 Claude Code CLI 适配器（需本机安装 claude） |
+| `AGENTHUB_CODEX_ENABLED` | `true` | 启用 Codex CLI 适配器（需本机安装 codex） |
+
+### 协作与实时
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `REDIS_URL` | — | Redis 连接地址，启用 doc-collab 的 Redis fanout |
+| `VITE_DOC_COLLAB_V2_ENABLED` | — | 前端环境变量，设为 `false` 可禁用 V2 Yjs 协作 |
+| `AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_ENABLED` | `true` | 启用 Orchestrator 自动触发 |
+| `AGENTHUB_ORCHESTRATOR_AUTO_TRIGGER_REQUIRE_APPROVAL` | `true` | 自动触发需要用户确认 |
+
+### 快速切换示例
+
+```powershell
+# 完整生产配置（MySQL + Redis + 真实 LLM）
+$env:AGENTHUB_PERSISTENCE_MODE="jdbc"
+$env:AGENTHUB_JDBC_URL="jdbc:mysql://localhost:3306/agenthub"
+$env:AGENTHUB_JDBC_USERNAME="root"
+$env:AGENTHUB_JDBC_PASSWORD="your_password"
+$env:AGENTHUB_AUTH_MODE="real"
+$env:AGENTHUB_OPENAI_ENABLED="true"
+$env:AGENTHUB_OPENAI_BASE_URL="https://api.openai.com/v1"
+$env:AGENTHUB_OPENAI_API_KEY="sk-xxx"
+$env:AGENTHUB_OPENAI_MODEL="gpt-4o"
+$env:REDIS_URL="redis://localhost:6379"
+
+# 仅启用持久化（保持 MOCK 适配器）
+$env:AGENTHUB_PERSISTENCE_MODE="jdbc"
+$env:AGENTHUB_JDBC_URL="jdbc:mysql://localhost:3306/agenthub"
+$env:AGENTHUB_JDBC_USERNAME="root"
+$env:AGENTHUB_JDBC_PASSWORD="your_password"
+```
+
 ## 验证命令
 
 ### 构建
@@ -197,11 +264,14 @@ node scripts/e2e-browser.mjs
 
 ## 文档
 
+- [文档总入口](docs/README.md)
 - [产品设计文档](docs/product-design.md)
 - [技术设计文档](docs/technical-design.md)
 - [验收报告 v1.5（归档）](docs/archive/verification/acceptance-report-v1.5.md)
+- [归档总入口](docs/archive/README.md)
 - [下一阶段计划](docs/plans/next.md)
 - [脚本说明](scripts/README.md)
+- [Skill 索引](docs/skills/index.md)
 
 ## 开发原则
 

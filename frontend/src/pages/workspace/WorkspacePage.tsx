@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  deleteAgent,
   getAgents,
   getAdapters,
   getArtifact,
@@ -670,6 +671,25 @@ export function WorkspacePage() {
     setSelectedAgent(null);
   }
 
+  async function handleDeleteAgent(agent: Agent) {
+    const agentId = getIdValue(agent.id);
+    if (!agentId) {
+      return;
+    }
+
+    setErrorMessage(null);
+    try {
+      await deleteAgent(agentId);
+      setAgents((current) => current.filter((item) => getIdValue(item.id) !== agentId));
+      if (selectedAgent && getIdValue(selectedAgent.id) === agentId) {
+        setSelectedAgent(null);
+      }
+      setOperationMessage(`已删除 ${agent.name}。`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
   function replaceConversation(updatedConversation: Conversation) {
     setConversations((current) =>
       current.map((conversation) =>
@@ -879,6 +899,7 @@ export function WorkspacePage() {
         onConversationFilterChange={handleConversationFilterChange}
         onConversationQueryChange={handleConversationQueryChange}
         onCreateConversation={handleCreateDemoConversation}
+        onDeleteAgent={handleDeleteAgent}
         onRestoreConversation={handleRestoreConversation}
         onSelectAgent={handleSelectAgent}
         onSelectConversation={handleSelectConversation}

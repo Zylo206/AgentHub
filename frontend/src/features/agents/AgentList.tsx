@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import type { AdapterDescriptor, Agent } from "./agentTypes";
 import { formatId } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
@@ -10,6 +11,13 @@ interface AgentListProps {
   loading: boolean;
   selectedAgentId?: string | null;
   onSelectAgent?: (agent: Agent) => void;
+  onDeleteAgent?: (agent: Agent) => void;
+}
+
+interface ContextMenuState {
+  agent: Agent;
+  x: number;
+  y: number;
 }
 
 function getInitial(name: string): string {
@@ -99,9 +107,12 @@ export function AgentList({
   adapterDescriptors,
   loading,
   selectedAgentId,
-  onSelectAgent
+  onSelectAgent,
+  onDeleteAgent
 }: AgentListProps) {
   const [query, setQuery] = useState("");
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const visibleAgents = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
@@ -122,6 +133,68 @@ export function AgentList({
         .some((value) => String(value).toLowerCase().includes(normalizedQuery))
     );
   }, [agents, query]);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return undefined;
+    }
+
+    function closeContextMenu() {
+      setContextMenu(null);
+    }
+
+    function handlePointerDown(event: globalThis.MouseEvent) {
+      const target = event.target as Node | null;
+      if (target && contextMenuRef.current?.contains(target)) {
+        return;
+      }
+      closeContextMenu();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeContextMenu();
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("scroll", closeContextMenu, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("scroll", closeContextMenu, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenu]);
+
+  function openContextMenu(event: MouseEvent, agent: Agent) {
+    if (agent.role !== "CUSTOM" || !onDeleteAgent) {
+      return;
+    }
+
+    event.preventDefault();
+    const menuWidth = 220;
+    const menuHeight = 112;
+    const leftBoundary = 8;
+    const rightBoundary = window.innerWidth - menuWidth - 8;
+    const topBoundary = 8;
+    const bottomBoundary = window.innerHeight - menuHeight - 8;
+
+    setContextMenu({
+      agent,
+      x: Math.max(leftBoundary, Math.min(event.clientX, rightBoundary)),
+      y: Math.max(topBoundary, Math.min(event.clientY, bottomBoundary))
+    });
+  }
+
+  function handleDeleteAgent() {
+    if (!contextMenu) {
+      return;
+    }
+
+    onDeleteAgent?.(contextMenu.agent);
+    setContextMenu(null);
+  }
 
   if (loading) {
     return <div className="panel-empty">正在加载 Agent...</div>;
@@ -166,6 +239,7 @@ export function AgentList({
             key={agentId}
             className={`agent-item agent-item--im ${selectedAgentId === agentId ? "agent-item--selected" : ""}`}
             onClick={() => onSelectAgent?.(agent)}
+            onContextMenu={(event) => openContextMenu(event, agent)}
           >
             <div className="agent-item__row">
               <div className="agent-item__identity">
@@ -233,6 +307,30 @@ export function AgentList({
           </button>
         );
       })}
+
+      {contextMenu
+        ? createPortal(
+            <div
+              ref={contextMenuRef}
+              className="conversation-context-menu"
+              role="menu"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="conversation-context-menu__danger"
+                onClick={handleDeleteAgent}
+              >
+                删除 Agent
+              </button>
+              <small>仅自定义 Agent 可删除，删除后会从当前 Workspace 中移除。</small>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
