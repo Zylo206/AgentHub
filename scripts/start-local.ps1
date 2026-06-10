@@ -20,6 +20,29 @@ $frontendDir = Join-Path $repoRoot "frontend"
 $docCollabDir = Join-Path $repoRoot "doc-collab"
 $backendJar = Join-Path $backendDir "target\agenthub-backend-0.1.0-SNAPSHOT-exec.jar"
 $backendApiBase = "http://127.0.0.1:$BackendPort"
+$repoEnvFile = Join-Path $repoRoot ".env"
+
+function Import-DotEnv($path) {
+  if (-not (Test-Path $path)) {
+    return
+  }
+  foreach ($line in Get-Content $path) {
+    if ([string]::IsNullOrWhiteSpace($line)) {
+      continue
+    }
+    $trimmed = $line.Trim()
+    if ($trimmed.StartsWith("#")) {
+      continue
+    }
+    $separatorIndex = $trimmed.IndexOf("=")
+    if ($separatorIndex -lt 1) {
+      continue
+    }
+    $name = $trimmed.Substring(0, $separatorIndex).Trim()
+    $value = $trimmed.Substring($separatorIndex + 1)
+    [System.Environment]::SetEnvironmentVariable($name, $value, "Process")
+  }
+}
 
 function Start-CmdWindow($title, $command) {
   $runDir = Join-Path ([System.IO.Path]::GetTempPath()) "agenthub-run"
@@ -47,6 +70,8 @@ function Get-CmdSetExpression($name, $value) {
   }
   return "set `"$name=$value`""
 }
+
+Import-DotEnv $repoEnvFile
 
 if ($UsePackagedBackend -and -not (Test-Path $backendJar)) {
   throw "Packaged backend jar not found: $backendJar`nRun 'cd backend && mvn -q -DskipTests package' first, or omit -UsePackagedBackend."
