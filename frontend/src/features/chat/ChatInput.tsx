@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "
 import type { Agent } from "../agents/agentTypes";
 import type { ArtifactSelectionReference } from "../artifacts/artifactTypes";
 import type { LightweightAttachment, Message } from "./chatTypes";
-import { parseLeadingAgentMention } from "./agentMention";
+import { filterAgentsByMentionQuery, parseLeadingAgentMention } from "./agentMention";
 import { formatId, getIdValue } from "../../utils/id";
 
 interface ChatInputProps {
@@ -65,7 +65,7 @@ function getAttachmentContentType(attachment: LightweightAttachment): string {
 function getActiveMentionQuery(value: string, cursorPosition: number): MentionQuery | null {
   const safeCursor = Math.max(0, Math.min(cursorPosition, value.length));
   const beforeCursor = value.slice(0, safeCursor);
-  const mentionMatch = beforeCursor.match(/(?:^|\s)@([^\s@]*)$/);
+  const mentionMatch = beforeCursor.match(/(?:^|\s)@([^\n@]*)$/);
   if (!mentionMatch) {
     return null;
   }
@@ -79,25 +79,6 @@ function getActiveMentionQuery(value: string, cursorPosition: number): MentionQu
     end: safeCursor
   };
 }
-
-function sortAgentsByMatch(agents: Agent[], query: string): Agent[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return agents;
-  }
-
-  return [...agents].sort((left, right) => {
-    const leftName = left.name.toLowerCase();
-    const rightName = right.name.toLowerCase();
-    const leftStarts = leftName.startsWith(normalizedQuery) ? 0 : 1;
-    const rightStarts = rightName.startsWith(normalizedQuery) ? 0 : 1;
-    if (leftStarts !== rightStarts) {
-      return leftStarts - rightStarts;
-    }
-    return leftName.localeCompare(rightName);
-  });
-}
-
 export function ChatInput({
   value,
   disabled,
@@ -177,18 +158,7 @@ export function ChatInput({
       return [];
     }
 
-    const normalizedQuery = activeMentionQuery.query.trim().toLowerCase();
-    const filteredAgents = agents.filter((agent) => {
-      if (!normalizedQuery) {
-        return true;
-      }
-
-      return [agent.name, agent.role, agent.preferredAdapterType, ...agent.capabilityTags, ...agent.toolTags]
-        .filter(Boolean)
-        .some((candidate) => String(candidate).toLowerCase().includes(normalizedQuery));
-    });
-
-    return sortAgentsByMatch(filteredAgents, normalizedQuery).slice(0, 6);
+    return filterAgentsByMentionQuery(agents, activeMentionQuery.query).slice(0, 6);
   }, [activeMentionQuery, agents]);
 
   useEffect(() => {

@@ -257,18 +257,20 @@ export function DiffSummaryPanel({
       {visibleDiffEntries.length > 0 ? (
         <div className="diff-summary-section" id="artifact-line-diff-viewer" data-testid="artifact-line-diff-viewer">
           <span className="diff-summary-section__label">行级 Diff</span>
-          <div className="line-diff-viewer">
-            {visibleDiffEntries.map((entry, index) => (
-              <div
-                key={`${entry.operation}-${entry.oldLineNumber ?? "n"}-${entry.newLineNumber ?? "n"}-${index}`}
-                className={`line-diff-row line-diff-row--${entry.operation}`}
-              >
-                <span className="line-diff-row__number">{entry.oldLineNumber ?? ""}</span>
-                <span className="line-diff-row__number">{entry.newLineNumber ?? ""}</span>
-                <span className="line-diff-row__prefix">{getDiffPrefix(entry)}</span>
-                <code>{entry.content || " "}</code>
-              </div>
-            ))}
+          <div className="line-diff-viewer__scroll" data-testid="artifact-line-diff-scroll">
+            <div className="line-diff-viewer">
+              {visibleDiffEntries.map((entry, index) => (
+                <div
+                  key={`${entry.operation}-${entry.oldLineNumber ?? "n"}-${entry.newLineNumber ?? "n"}-${index}`}
+                  className={`line-diff-row line-diff-row--${entry.operation}`}
+                >
+                  <span className="line-diff-row__number">{entry.oldLineNumber ?? ""}</span>
+                  <span className="line-diff-row__number">{entry.newLineNumber ?? ""}</span>
+                  <span className="line-diff-row__prefix">{getDiffPrefix(entry)}</span>
+                  <code>{entry.content || " "}</code>
+                </div>
+              ))}
+            </div>
           </div>
           {hiddenLineCount > 0 ? <p>已截断显示，另有 {hiddenLineCount} 行未显示。</p> : null}
         </div>

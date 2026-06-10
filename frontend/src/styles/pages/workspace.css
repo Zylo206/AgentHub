@@ -27,6 +27,75 @@
   margin: 0 12px 12px;
 }
 
+.workspace-page .task-run-explain-details .orchestrator-explain-panel,
+.workspace-page .task-run-explain-details .adapter-routing-panel,
+.workspace-page .task-run-explain-details .task-graph-dag-panel,
+.workspace-page .task-run-explain-details .reviewer-gate-retry-panel,
+.workspace-page .task-run-explain-details .orchestrator-decision-rail__item,
+.workspace-page .task-run-explain-details .orchestrator-stage-card,
+.workspace-page .task-run-explain-details .task-graph-batch-card,
+.workspace-page .task-run-explain-details .reviewer-gate-retry-panel__decision,
+.workspace-page .task-run-explain-details .reviewer-gate-retry-panel__blockers article,
+.workspace-page .task-run-explain-details .adapter-routing-card {
+  background: #ffffff !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08) !important;
+}
+
+.workspace-page .task-run-explain-details .task-graph-dag-panel,
+.workspace-page .task-run-explain-details .reviewer-gate-retry-panel,
+.workspace-page .task-run-explain-details .adapter-routing-panel,
+.workspace-page .task-run-explain-details .orchestrator-explain-panel {
+  border-color: rgba(148, 163, 184, 0.22) !important;
+}
+
+.workspace-page .task-run-explain-details .task-graph-batch-card::after,
+.workspace-page .task-run-explain-details .orchestrator-decision-rail__item::before {
+  background: rgba(148, 163, 184, 0.28) !important;
+}
+
+.workspace-page .task-run-explain-details .orchestrator-explain-panel strong,
+.workspace-page .task-run-explain-details .task-graph-dag-panel strong,
+.workspace-page .task-run-explain-details .reviewer-gate-retry-panel strong,
+.workspace-page .task-run-explain-details .orchestrator-stage-card strong,
+.workspace-page .task-run-explain-details .orchestrator-decision-rail__item strong,
+.workspace-page .task-run-explain-details .adapter-routing-panel strong,
+.workspace-page .task-run-explain-details .adapter-routing-card strong {
+  color: #0f172a !important;
+}
+
+.workspace-page .task-run-explain-details .orchestrator-explain-panel p,
+.workspace-page .task-run-explain-details .task-graph-dag-panel p,
+.workspace-page .task-run-explain-details .reviewer-gate-retry-panel p,
+.workspace-page .task-run-explain-details .reviewer-gate-retry-panel small,
+.workspace-page .task-run-explain-details .orchestrator-stage-card p,
+.workspace-page .task-run-explain-details .orchestrator-stage-card span,
+.workspace-page .task-run-explain-details .orchestrator-stage-card small,
+.workspace-page .task-run-explain-details .orchestrator-decision-rail__item span,
+.workspace-page .task-run-explain-details .orchestrator-decision-rail__item small,
+.workspace-page .task-run-explain-details .task-graph-batch-card span,
+.workspace-page .task-run-explain-details .task-graph-batch-card em,
+.workspace-page .task-run-explain-details .task-graph-batch-card__deps,
+.workspace-page .task-run-explain-details .adapter-routing-panel p,
+.workspace-page .task-run-explain-details .adapter-routing-card span {
+  color: #475569 !important;
+}
+
+.workspace-page .task-run-explain-details .task-graph-step-chip,
+.workspace-page .task-run-explain-details .reviewer-gate-retry-panel__steps span {
+  background: #f8fafc !important;
+  color: #475569 !important;
+}
+
+.workspace-page .task-run-explain-details .task-graph-step-chip--blocked {
+  background: #fff1f2 !important;
+  color: #be123c !important;
+}
+
+.workspace-page .task-run-explain-details .task-graph-step-chip--missing {
+  background: #fffbeb !important;
+  color: #b45309 !important;
+}
+
 .workspace-presence-bar,
 .workspace-access-panel {
   margin: 10px 16px 0;
@@ -1327,6 +1396,47 @@
 .workspace-page .workspace-artifacts .artifact-card--selected small,
 .workspace-page .workspace-artifacts .artifact-card--selected .artifact-card__meta {
   color: #0f172a !important;
+}
+
+.workspace-page .workspace-artifacts .line-diff-viewer__scroll {
+  overflow: auto !important;
+  max-width: 100% !important;
+  max-height: 420px !important;
+  border: 1px solid rgba(148, 163, 184, 0.24) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  overscroll-behavior: contain !important;
+}
+
+.workspace-page .workspace-artifacts .line-diff-viewer {
+  min-width: max-content !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #ffffff !important;
+}
+
+.workspace-page .workspace-artifacts .line-diff-row {
+  width: max-content !important;
+  min-width: 100% !important;
+  grid-template-columns: 56px 56px 28px minmax(720px, max-content) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.2) !important;
+  color: #0f172a !important;
+}
+
+.workspace-page .workspace-artifacts .line-diff-row__number,
+.workspace-page .workspace-artifacts .line-diff-row__prefix {
+  color: #64748b !important;
+}
+
+.workspace-page .workspace-artifacts .line-diff-row code {
+  display: block !important;
+  min-width: max-content !important;
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  color: #0f172a !important;
+  background: transparent !important;
 }
 
 /* Phase 268: Adapter diagnostics must remain light, readable and scroll-safe. */

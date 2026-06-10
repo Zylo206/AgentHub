@@ -42,7 +42,6 @@ import type { MemoryItem } from "../../features/memory/memoryTypes";
 import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { displayAdapterName } from "../../utils/productionLabels";
-import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
 import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 import { WorkspaceArtifactInspectorShell } from "./WorkspaceArtifactInspectorShell";
 import { WorkspaceApiProviderPanel } from "./WorkspaceApiProviderPanel";
@@ -52,7 +51,6 @@ import { WorkspaceDiagnosticsDrawer } from "./WorkspaceDiagnosticsDrawer";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspacePresenceBar } from "./WorkspacePresenceBar";
 import { WorkspaceSidebar, type WorkspaceConversationCreateMode } from "./WorkspaceSidebar";
-import { WorkspaceSessionSummary } from "./WorkspaceSessionSummary";
 import { useArtifactInspectorLayout } from "./useArtifactInspectorLayout";
 import { useWorkspaceApprovalActions } from "./useWorkspaceApprovalActions";
 import { useWorkspaceArtifactOperations } from "./useWorkspaceArtifactOperations";
@@ -174,8 +172,7 @@ export function WorkspacePage() {
   const [loadingContext, setLoadingContext] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [runningDemoTask, setRunningDemoTask] = useState(false);
-  const [showDebugActions, setShowDebugActions] = useState(false);
+  const [, setRunningDemoTask] = useState(false);
   const [activeDiagnosticPanel, setActiveDiagnosticPanel] = useState<DiagnosticPanelKey | null>(() =>
     readActiveDiagnosticPanel()
   );
@@ -188,6 +185,20 @@ export function WorkspacePage() {
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [autoTriggerRunningMessageId, setAutoTriggerRunningMessageId] = useState<string | null>(null);
   const [agentCreationRunningMessageId, setAgentCreationRunningMessageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!quotedMessage && !artifactSelectionReference) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>('[data-testid="workspace-chat-composer"]')
+        ?.scrollIntoView({ block: "end", behavior: "smooth" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [artifactSelectionReference, quotedMessage]);
 
   const currentConversation =
     conversations.find((conversation) => getIdValue(conversation.id) === currentConversationId) ?? null;
@@ -244,20 +255,6 @@ export function WorkspacePage() {
     });
     return byMessageId;
   }, [approvalRequests, triggerSuggestionsByMessageId]);
-
-  const latestUserMessageId = latestUserMessage ? getIdValue(latestUserMessage.id) : null;
-  const latestTriggerSuggestion = latestUserMessageId ? triggerSuggestionsByMessageId[latestUserMessageId] ?? null : null;
-  const latestTriggerApproval = latestUserMessageId ? approvalByMessageId[latestUserMessageId] ?? null : null;
-  const latestTriggerReady = Boolean(latestTriggerSuggestion?.enabled && latestTriggerSuggestion.matched);
-  const latestTriggerApprovalStatus = latestTriggerApproval?.status?.toUpperCase() ?? null;
-  const latestTriggerPrimaryLabel =
-    latestTriggerApprovalStatus === "APPROVED"
-      ? "启动已确认协作"
-      : latestTriggerApprovalStatus === "PENDING"
-        ? "确认并启动协作"
-        : latestTriggerSuggestion?.requireApproval
-          ? "创建协作确认"
-          : "启动 Agent 协作";
 
   const highlightedArtifactIds = useMemo(
     () => (selectedTaskStep ? selectedTaskStep.producedArtifactIds.map((artifactId) => getIdValue(artifactId)) : []),
@@ -449,7 +446,6 @@ export function WorkspacePage() {
     handleCopyMessage,
     handleQuoteMessage,
     handleReplyMessage,
-    handleRunDemoTask,
     handleRerunFromMessage,
     handleRegenerateAgentReply
   } = useWorkspaceMessageActions({
@@ -862,20 +858,6 @@ export function WorkspacePage() {
     </div>
   ) : null;
 
-  const commandDeckAdvanced = (
-    <WorkspaceSessionSummary
-      currentConversation={currentConversation}
-      selectedAgent={selectedAgent}
-      selectedAgentAdapterDescriptor={selectedAgentAdapterDescriptor}
-      participants={currentParticipantAgents}
-      messages={messages}
-      latestTaskRun={selectedTaskRun}
-      pinnedContextCount={pinnedContexts.length}
-      memoryCount={memories.length}
-      artifactCount={artifacts.length}
-    />
-  );
-
   return (
     <section
       className={`workspace-page ${artifactInspectorCollapsed ? "workspace-page--artifact-inspector-collapsed" : ""}`}
@@ -931,22 +913,9 @@ export function WorkspacePage() {
             />
           }
           notices={commandDeckNotices}
-          toolbar={
-            <WorkspaceCollaborationToolbar
-              currentConversationId={currentConversationId}
-              latestUserMessage={latestUserMessage}
-              latestTriggerReady={latestTriggerReady}
-              latestTriggerPrimaryLabel={latestTriggerPrimaryLabel}
-              autoTriggerRunningMessageId={autoTriggerRunningMessageId}
-              showDebugActions={showDebugActions}
-              runningDemoTask={runningDemoTask}
-              onStartCollaboration={handleConfirmOrchestratorTrigger}
-              onToggleDebugActions={() => setShowDebugActions((current) => !current)}
-              onRunManualDebug={handleRunDemoTask}
-            />
-          }
+          toolbar={null}
           selectedAgentBanner={commandDeckSelectedAgentBanner}
-          advanced={commandDeckAdvanced}
+          advanced={null}
         />
 
         <WorkspaceChatLane

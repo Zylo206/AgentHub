@@ -137,10 +137,17 @@
   border-radius: 22px !important;
 }
 
+.workspace-page .workspace-chat-lane__composer .chat-input {
+  overflow: visible !important;
+  min-height: 96px !important;
+  gap: 6px !important;
+  padding: 8px 10px !important;
+}
+
 .workspace-page .chat-input__textarea,
 .workspace-page .chat-input textarea {
-  min-height: 52px !important;
-  max-height: 132px !important;
+  min-height: 42px !important;
+  max-height: 110px !important;
   padding: 0 !important;
 }
 
@@ -150,11 +157,52 @@
   overflow: visible !important;
 }
 
+.workspace-page .chat-quote-preview {
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 4px 8px !important;
+  min-height: 28px !important;
+  max-height: 30px !important;
+  overflow: hidden !important;
+}
+
+.workspace-page .chat-quote-preview strong {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+}
+
+.workspace-page .chat-quote-preview span {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.workspace-page .chat-quote-preview em {
+  display: none !important;
+}
+
+.workspace-page .chat-quote-preview .ghost-button {
+  flex: 0 0 auto !important;
+  min-height: 22px !important;
+  padding: 0 8px !important;
+}
+
 .workspace-page .chat-input__actions {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: 10px !important;
+}
+
+.workspace-page .workspace-chat-lane__composer .chat-input__actions {
+  position: static !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  min-height: 26px !important;
 }
 
 .workspace-page .chat-input__toolbar {
@@ -165,6 +213,10 @@
   gap: 6px !important;
   overflow: visible !important;
   flex-wrap: nowrap !important;
+}
+
+.workspace-page .workspace-chat-lane__composer .chat-input__toolbar {
+  width: 100% !important;
 }
 
 .workspace-page .chat-input__toolbar > .ghost-button,
