@@ -407,6 +407,10 @@ export function useArtifactOperationController({
     setDraftSelection(getTextareaSelectionRange(event.currentTarget));
   }
 
+  function handleDraftSelectionInfoChange(info: { startLine: number; endLine: number } | null) {
+    setDraftSelection(info);
+  }
+
   async function handleCreateDraftRevision() {
     if (!selectedArtifact || !selectedArtifactId) {
       return;
@@ -744,6 +748,7 @@ export function useArtifactOperationController({
     handleCreateRevision,
     handleDownloadArtifact,
     handleDraftSelectionChange,
+    handleDraftSelectionInfoChange,
     handleForceApplyDiffArtifact,
     handleRestoreSnapshot,
     handleSendSelectionToChat,

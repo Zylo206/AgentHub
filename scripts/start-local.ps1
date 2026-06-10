@@ -26,7 +26,9 @@ function Get-CmdSetExpression($name, $value) {
   if ([string]::IsNullOrEmpty($value)) {
     return $null
   }
-  return "set `"$name=$value`""
+  $rawValue = [string]$value
+  $escapedValue = $rawValue.Replace("^", "^^").Replace("&", "^&").Replace("|", "^|").Replace("<", "^<").Replace(">", "^>")
+  return "set `"$name=$escapedValue`""
 }
 
 if ($UsePackagedBackend -and -not (Test-Path $backendJar)) {

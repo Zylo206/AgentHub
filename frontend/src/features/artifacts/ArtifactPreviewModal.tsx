@@ -1,19 +1,40 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Artifact } from "./artifactTypes";
 import { renderArtifactContent, CopyButton } from "./renderArtifactContent";
+import { CodeMirrorEditor } from "./CodeMirrorEditor";
 
 interface ArtifactPreviewModalProps {
   artifact: Artifact;
   onClose: () => void;
+  /** If true, shows an "编辑" toggle and CodeMirror editor */
+  editable?: boolean;
+  /** Callback to create a revision from edited content */
+  onCreateRevision?: (artifactId: string, instruction: string) => Promise<void>;
 }
 
 /**
  * Fullscreen modal overlay for artifact preview.
- * Opens when user clicks "预览" on an artifact card in chat.
- * Renders via React Portal to document.body.
+ * Supports optional edit mode with CodeMirror.
  */
-export function ArtifactPreviewModal({ artifact, onClose }: ArtifactPreviewModalProps) {
+export function ArtifactPreviewModal({
+  artifact,
+  onClose,
+  editable = false,
+  onCreateRevision,
+}: ArtifactPreviewModalProps) {
+  const [editMode, setEditMode] = useState(false);
+  const [draftContent, setDraftContent] = useState(artifact.content ?? "");
+  const [revisionNote, setRevisionNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Reset state when artifact changes
+  useEffect(() => {
+    setDraftContent(artifact.content ?? "");
+    setRevisionNote("");
+    setEditMode(false);
+  }, [artifact.id, artifact.content]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -41,6 +62,34 @@ export function ArtifactPreviewModal({ artifact, onClose }: ArtifactPreviewModal
     [onClose]
   );
 
+  const handleSaveRevision = useCallback(async () => {
+    if (!onCreateRevision) return;
+    const hasContentChange = draftContent !== (artifact.content ?? "");
+    const hasNote = revisionNote.trim().length > 0;
+    if (!hasContentChange && !hasNote) return;
+
+    setSaving(true);
+    try {
+      const parts: string[] = [];
+      if (hasContentChange) {
+        parts.push(`已编辑内容（全文 ${draftContent.length} 字符）`);
+        parts.push(`编辑后内容:\n${draftContent}`);
+      }
+      if (hasNote) {
+        parts.push(`修改说明: ${revisionNote}`);
+      }
+      const instruction = parts.join("\n\n");
+      await onCreateRevision(artifact.id.toString(), instruction);
+      setEditMode(false);
+    } finally {
+      setSaving(false);
+    }
+  }, [onCreateRevision, artifact, draftContent, revisionNote]);
+
+  const hasChanges = editMode && (
+    draftContent !== (artifact.content ?? "") || revisionNote.trim().length > 0
+  );
+
   return createPortal(
     <div
       className="artifact-preview-modal__backdrop"
@@ -55,9 +104,24 @@ export function ArtifactPreviewModal({ artifact, onClose }: ArtifactPreviewModal
             {artifact.language ? (
               <span className="artifact-preview-modal__lang">{artifact.language}</span>
             ) : null}
+            {editMode ? (
+              <span className="artifact-preview-modal__lang" style={{ background: "#eff6ff", color: "#2563eb", borderColor: "rgba(37,99,235,0.22)" }}>
+                编辑中
+              </span>
+            ) : null}
           </div>
           <div className="artifact-preview-modal__actions">
-            <CopyButton content={artifact.content ?? ""} className="artifact-preview-modal__copy-btn" />
+            {editable ? (
+              <button
+                type="button"
+                className="artifact-preview-modal__copy-btn"
+                onClick={() => setEditMode(!editMode)}
+                style={editMode ? { background: "#fee2e2", color: "#b42335", borderColor: "rgba(220,38,38,0.2)" } : undefined}
+              >
+                {editMode ? "退出编辑" : "编辑"}
+              </button>
+            ) : null}
+            <CopyButton content={editMode ? draftContent : artifact.content ?? ""} className="artifact-preview-modal__copy-btn" />
             <a
               href={`/preview/${artifact.id}`}
               target="_blank"
@@ -76,12 +140,42 @@ export function ArtifactPreviewModal({ artifact, onClose }: ArtifactPreviewModal
             </button>
           </div>
         </div>
+
+        {editMode ? (
+          <div className="artifact-preview-modal__edit-bar">
+            <label htmlFor="modal-revision-note">修改说明：</label>
+            <textarea
+              id="modal-revision-note"
+              value={revisionNote}
+              onChange={(e) => setRevisionNote(e.target.value)}
+              placeholder="描述你希望如何修改当前产物（可选）"
+            />
+            <button
+              type="button"
+              className="artifact-preview-modal__save-btn"
+              disabled={saving || !hasChanges}
+              onClick={handleSaveRevision}
+            >
+              {saving ? "保存中..." : "保存修订"}
+            </button>
+          </div>
+        ) : null}
+
         <div className="artifact-preview-modal__body">
-          {renderArtifactContent(artifact, {
-            showLineNumbers: true,
-            classPrefix: "modal-preview",
-            markdownMode: "simple-html",
-          })}
+          {editMode ? (
+            <CodeMirrorEditor
+              content={draftContent}
+              language={artifact.language}
+              height="100%"
+              onChange={setDraftContent}
+            />
+          ) : (
+            renderArtifactContent(artifact, {
+              showLineNumbers: true,
+              classPrefix: "modal-preview",
+              markdownMode: "simple-html",
+            })
+          )}
         </div>
         <div className="artifact-preview-modal__footer">
           <span>Local Preview / Static Snapshot / Not Cloud Deploy</span>

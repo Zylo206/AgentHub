@@ -1,6 +1,8 @@
 import type { SyntheticEvent } from "react";
+import { useCallback } from "react";
 import { ArtifactCollaborationPanel } from "./ArtifactCollaborationPanel";
 import { DiffSummaryPanel } from "./DiffSummaryPanel";
+import { CodeMirrorEditor, type SelectionInfo } from "./CodeMirrorEditor";
 import type { Artifact } from "./artifactTypes";
 import type { ArtifactCompareDiffResponse } from "../../api/agenthubApi";
 
@@ -32,6 +34,7 @@ interface ArtifactRevisionWorkspaceProps {
   diffConflictArtifactId: string | null;
   diffConflictMessage: string | null;
   canSendSelectionToChat: boolean;
+  onDraftSelectionInfoChange?: (info: { startLine: number; endLine: number } | null) => void;
   onStartContentEdit: (artifact: Artifact) => void;
   onCancelContentEdit: () => void;
   onDraftContentChange: (value: string) => void;
@@ -79,6 +82,7 @@ export function ArtifactRevisionWorkspace({
   diffConflictArtifactId,
   diffConflictMessage,
   canSendSelectionToChat,
+  onDraftSelectionInfoChange,
   onStartContentEdit,
   onCancelContentEdit,
   onDraftContentChange,
@@ -155,17 +159,16 @@ export function ArtifactRevisionWorkspace({
                 <span className="artifact-content-editor__chip">首个变化行：{draftDiffPreview.firstChangedLine}</span>
               ) : null}
             </div>
-            <textarea
-              className="artifact-content-editor__textarea"
-              data-testid="artifact-content-editor-textarea"
-              value={draftContent}
-              disabled={revisingArtifact}
-              spellCheck={false}
-              onChange={(event) => onDraftContentChange(event.target.value)}
-              onSelect={onDraftSelectionChange}
-              onKeyUp={onDraftSelectionChange}
-              onMouseUp={onDraftSelectionChange}
-            />
+            <div className="artifact-content-editor__codemirror-wrap" data-testid="artifact-content-editor-textarea">
+              <CodeMirrorEditor
+                content={draftContent}
+                language={artifact.language}
+                readOnly={revisingArtifact}
+                height="280px"
+                onChange={onDraftContentChange}
+                onSelectionChange={onDraftSelectionInfoChange ? (info) => onDraftSelectionInfoChange(info) : undefined}
+              />
+            </div>
             <div className="artifact-content-editor__local-instruction">
               <label htmlFor="artifact-local-revision-note">局部修改说明</label>
               <textarea

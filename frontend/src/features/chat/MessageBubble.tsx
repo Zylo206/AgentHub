@@ -49,6 +49,7 @@ interface MessageBubbleProps {
   onApproveDeployIntent: (messageId: string) => void;
   onCancelDeployIntent: (messageId: string) => void;
   onDownloadArtifactBundle: (artifactIds?: string[]) => void;
+  onCreateRevision?: (artifactId: string, instruction: string) => Promise<void>;
   onToggleThread: () => void;
   onJumpToMessage: (messageId: string) => void;
 }
