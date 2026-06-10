@@ -28,3 +28,282 @@
 .message-action-bar {
   color: #213047;
 }
+
+/* =========================================================================
+   Inline Artifact Preview (inside chat message cards)
+   ========================================================================= */
+
+.inline-artifact-preview {
+  margin: 8px 0;
+  border: 1px solid rgba(31, 35, 41, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fafbfc;
+}
+
+.inline-artifact-preview__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(31, 35, 41, 0.03);
+  border-bottom: 1px solid rgba(31, 35, 41, 0.06);
+}
+
+.inline-artifact-preview__label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ah-muted, #747b85);
+}
+
+.inline-artifact-preview__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-artifact-preview__copy-btn,
+.inline-artifact-preview__toggle-btn {
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  border-radius: 6px;
+  background: #fff;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ah-muted, #747b85);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.inline-artifact-preview__copy-btn:hover,
+.inline-artifact-preview__toggle-btn:hover {
+  background: var(--ah-blue-soft, #edf3ff);
+  color: var(--ah-blue, #2f73ff);
+}
+
+.inline-artifact-preview__content {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.inline-artifact-preview__content .inline-preview__frame {
+  width: 100%;
+  height: 180px;
+  border: none;
+  transform: scale(1);
+  pointer-events: none;
+}
+
+.inline-artifact-preview__content .inline-preview__code {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  font-size: 11px;
+  max-height: 260px;
+}
+
+.inline-artifact-preview__content .inline-preview__markdown {
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ah-text, #1f2329);
+}
+
+.inline-artifact-preview__content .inline-preview__document {
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ah-text, #1f2329);
+}
+
+.inline-artifact-preview__content .inline-preview__file-shell {
+  padding: 12px;
+}
+
+/* =========================================================================
+   Artifact Preview Modal (fullscreen overlay)
+   ========================================================================= */
+
+.artifact-preview-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  animation: modal-fade-in 180ms ease;
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.artifact-preview-modal__dialog {
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  max-width: 1200px;
+  height: 88vh;
+  background: #fff;
+  border-radius: 18px;
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  animation: modal-slide-up 220ms ease;
+}
+
+@keyframes modal-slide-up {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.artifact-preview-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(31, 35, 41, 0.08);
+  background: #fafbfc;
+  flex-shrink: 0;
+}
+
+.artifact-preview-modal__title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.artifact-preview-modal__title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ah-text, #1f2329);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifact-preview-modal__type,
+.artifact-preview-modal__lang {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 35, 41, 0.12);
+  color: var(--ah-muted, #747b85);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.artifact-preview-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.artifact-preview-modal__copy-btn {
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  border-radius: 8px;
+  background: #fff;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ah-muted, #747b85);
+  cursor: pointer;
+}
+
+.artifact-preview-modal__copy-btn:hover {
+  background: var(--ah-blue-soft, #edf3ff);
+  color: var(--ah-blue, #2f73ff);
+}
+
+.artifact-preview-modal__newtab-btn {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ah-blue, #2f73ff);
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(47, 115, 255, 0.2);
+}
+
+.artifact-preview-modal__newtab-btn:hover {
+  background: var(--ah-blue-soft, #edf3ff);
+}
+
+.artifact-preview-modal__close-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  color: var(--ah-muted, #747b85);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.artifact-preview-modal__close-btn:hover {
+  background: #fee2e2;
+  color: var(--ah-red, #df3f3f);
+}
+
+.artifact-preview-modal__body {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.artifact-preview-modal__body .modal-preview__frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.artifact-preview-modal__body .modal-preview__code {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  min-height: 100%;
+  font-size: 13px;
+}
+
+.artifact-preview-modal__body .modal-preview__markdown {
+  padding: 20px 24px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.artifact-preview-modal__body .modal-preview__document {
+  padding: 20px 24px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.artifact-preview-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px;
+  border-top: 1px solid rgba(31, 35, 41, 0.06);
+  background: #fafbfc;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ah-faint, #a7adb5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}

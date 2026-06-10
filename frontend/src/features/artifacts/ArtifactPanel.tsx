@@ -504,7 +504,6 @@ export function ArtifactPanel({
                   <ArtifactHeroCard
                     artifact={selectedArtifact}
                     fallbackReason={selectedArtifactFallbackReason}
-                    gateAction={selectedArtifactGateAction}
                     selectedVersionEntry={selectedVersionEntry}
                     buildValidationLabel={formatBuildValidationValue(selectedArtifact)}
                     qualityScoreLabel={formatQualityScore(selectedArtifact.qualityScore)}

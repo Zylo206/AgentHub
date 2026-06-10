@@ -42,6 +42,7 @@ import { getIdValue } from "../../utils/id";
 import { displayAgentRole, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { displayAdapterName } from "../../utils/productionLabels";
 import { WorkspaceCollaborationToolbar } from "./WorkspaceCollaborationToolbar";
+import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 import { WorkspaceArtifactInspectorShell } from "./WorkspaceArtifactInspectorShell";
 import { WorkspaceApiProviderPanel } from "./WorkspaceApiProviderPanel";
 import { WorkspaceChatLane } from "./WorkspaceChatLane";
@@ -154,7 +155,7 @@ export function WorkspacePage() {
   const [selectedTaskRunId, setSelectedTaskRunId] = useState<string | null>(null);
   const [selectedTaskStepId, setSelectedTaskStepId] = useState<string | null>(null);
   const [showAllArtifacts, setShowAllArtifacts] = useState(true);
-  const [draftMessage, setDraftMessage] = useState(PRODUCT_DEMO_PROMPT);
+  const [draftMessage, setDraftMessage] = useState("");
   const [draftAttachments, setDraftAttachments] = useState<LightweightAttachment[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
@@ -179,6 +180,8 @@ export function WorkspacePage() {
   );
   const [savingAccessPolicy, setSavingAccessPolicy] = useState(false);
   const [artifactInspectorCollapsed, setArtifactInspectorCollapsed] = useState(false);
+  const [apiSettingsModalOpen, setApiSettingsModalOpen] = useState(false);
+  const [conversationSettingsModalOpen, setConversationSettingsModalOpen] = useState(false);
   const { workspaceStyle, onArtifactInspectorResizeStart } = useArtifactInspectorLayout(artifactInspectorCollapsed);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
@@ -538,6 +541,32 @@ export function WorkspacePage() {
   }, [handleCreateDemoConversation]);
 
   useEffect(() => {
+    function handleOpenConversationSettings() {
+      setConversationSettingsModalOpen(true);
+    }
+
+    function handleOpenApiSettings() {
+      setApiSettingsModalOpen(true);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setApiSettingsModalOpen(false);
+        setConversationSettingsModalOpen(false);
+      }
+    }
+
+    window.addEventListener("agenthub:open-conversation-settings", handleOpenConversationSettings);
+    window.addEventListener("agenthub:open-api-settings", handleOpenApiSettings);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("agenthub:open-conversation-settings", handleOpenConversationSettings);
+      window.removeEventListener("agenthub:open-api-settings", handleOpenApiSettings);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!currentConversationId) {
       setMessages([]);
       setTaskSpecs([]);
@@ -814,35 +843,17 @@ export function WorkspacePage() {
   ) : null;
 
   const commandDeckAdvanced = (
-    <>
-      <WorkspaceApiProviderPanel
-        agents={agents}
-        adapterDescriptors={adapterDescriptors}
-        selectedAgent={selectedAgent}
-        onSelectAgent={setSelectedAgent}
-        onAgentCreated={(agent) => {
-          setAgents((current) => {
-            const agentId = getIdValue(agent.id);
-            const exists = current.some((item) => getIdValue(item.id) === agentId);
-            return exists
-              ? current.map((item) => (getIdValue(item.id) === agentId ? agent : item))
-              : [...current, agent];
-          });
-        }}
-        onConfigured={handleApiProviderConfigured}
-      />
-      <WorkspaceSessionSummary
-        currentConversation={currentConversation}
-        selectedAgent={selectedAgent}
-        selectedAgentAdapterDescriptor={selectedAgentAdapterDescriptor}
-        participants={currentParticipantAgents}
-        messages={messages}
-        latestTaskRun={selectedTaskRun}
-        pinnedContextCount={pinnedContexts.length}
-        memoryCount={memories.length}
-        artifactCount={artifacts.length}
-      />
-    </>
+    <WorkspaceSessionSummary
+      currentConversation={currentConversation}
+      selectedAgent={selectedAgent}
+      selectedAgentAdapterDescriptor={selectedAgentAdapterDescriptor}
+      participants={currentParticipantAgents}
+      messages={messages}
+      latestTaskRun={selectedTaskRun}
+      pinnedContextCount={pinnedContexts.length}
+      memoryCount={memories.length}
+      artifactCount={artifacts.length}
+    />
   );
 
   return (
@@ -860,11 +871,8 @@ export function WorkspacePage() {
         conversationQuery={conversationQuery}
         creatingConversation={creatingConversation}
         currentConversationId={currentConversationId}
-        currentConversation={currentConversation}
-        currentUserId={currentUser?.userId ?? null}
         loadingAgents={loadingAgents}
         loadingConversations={loadingConversations}
-        savingAccessPolicy={savingAccessPolicy}
         selectedAgent={selectedAgent}
         onArchiveConversation={handleArchiveConversation}
         onConversationCreateModeChange={setConversationCreateMode}
@@ -875,9 +883,6 @@ export function WorkspacePage() {
         onSelectAgent={handleSelectAgent}
         onSelectConversation={handleSelectConversation}
         onToggleConversationPinned={handleToggleConversationPinned}
-        onUpdateVisibility={handleUpdateConversationVisibility}
-        onUpsertMember={handleUpsertConversationMember}
-        onRemoveMember={handleRemoveConversationMember}
       />
 
       <main className={`workspace-main ${workspaceMainEmpty ? "workspace-main--empty" : ""}`}>
@@ -1029,6 +1034,72 @@ export function WorkspacePage() {
           onCancelApprovalRequest={handleCancelApprovalRequest}
         />
       </WorkspaceArtifactInspectorShell>
+
+      {apiSettingsModalOpen ? (
+        <div
+          className="workspace-modal-backdrop"
+          data-testid="workspace-api-settings-modal"
+          onClick={() => setApiSettingsModalOpen(false)}
+        >
+          <div className="workspace-modal workspace-modal--api-settings" onClick={(event) => event.stopPropagation()}>
+            <div className="workspace-modal__header">
+              <div>
+                <span>IM API 接入</span>
+                <h3>远程问答供应商</h3>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => setApiSettingsModalOpen(false)}>
+                关闭
+              </button>
+            </div>
+            <WorkspaceApiProviderPanel
+              adapterDescriptors={adapterDescriptors}
+              onConfigured={handleApiProviderConfigured}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {conversationSettingsModalOpen ? (
+        <div
+          className="workspace-modal-backdrop"
+          data-testid="workspace-conversation-settings-modal"
+          onClick={() => setConversationSettingsModalOpen(false)}
+        >
+          <div
+            className="workspace-modal workspace-modal--conversation-settings"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="workspace-modal__header">
+              <div>
+                <span>会话设置</span>
+                <h3>{currentConversation ? currentConversation.title : "当前会话未选中"}</h3>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setConversationSettingsModalOpen(false)}
+              >
+                关闭
+              </button>
+            </div>
+            {currentConversation ? (
+              <WorkspaceAccessPanel
+                conversation={currentConversation}
+                currentUserId={currentUser?.userId ?? null}
+                saving={savingAccessPolicy}
+                mode="panel"
+                onUpdateVisibility={handleUpdateConversationVisibility}
+                onUpsertMember={handleUpsertConversationMember}
+                onRemoveMember={handleRemoveConversationMember}
+              />
+            ) : (
+              <div className="workspace-modal__empty">
+                <p>请先在左侧选择一个会话，再查看成员、权限和可见范围设置。</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

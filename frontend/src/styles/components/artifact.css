@@ -413,3 +413,57 @@
   display: grid !important;
   grid-template-columns: auto minmax(0, 1fr) !important;
 }
+
+/* --- Dock header actions (copy button) --- */
+.artifact-preview-dock__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.artifact-preview-dock__copy-btn {
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  border-radius: 6px;
+  background: #fff;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ah-muted, #747b85);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.artifact-preview-dock__copy-btn:hover {
+  background: var(--ah-blue-soft, #edf3ff);
+  color: var(--ah-blue, #2f73ff);
+}
+
+/* --- Dock body: markdown and code rendering --- */
+.artifact-preview-dock__body .artifact-preview__markdown {
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ah-text, #1f2329);
+}
+
+.artifact-preview-dock__body .artifact-preview__code {
+  font-size: 11px;
+}
+
+/* --- Generic copy button --- */
+.artifact-copy-btn {
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  border-radius: 6px;
+  background: #fff;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ah-muted, #747b85);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.artifact-copy-btn:hover {
+  background: var(--ah-blue-soft, #edf3ff);
+  color: var(--ah-blue, #2f73ff);
+}

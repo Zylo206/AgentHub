@@ -1,4 +1,5 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import type { Conversation } from "./conversationTypes";
 import { formatId, getIdValue } from "../../utils/id";
 import { displayConversationType } from "../../utils/displayLabels";
@@ -58,10 +59,23 @@ export function ConversationList({
   onRestore
 }: ConversationListProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (!contextMenu) {
+      return undefined;
+    }
+
     function closeContextMenu() {
       setContextMenu(null);
+    }
+
+    function handlePointerDown(event: MouseEvent | globalThis.MouseEvent) {
+      const target = event.target as Node | null;
+      if (target && contextMenuRef.current?.contains(target)) {
+        return;
+      }
+      closeContextMenu();
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -70,15 +84,15 @@ export function ConversationList({
       }
     }
 
-    document.addEventListener("click", closeContextMenu);
+    document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("scroll", closeContextMenu, true);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("click", closeContextMenu);
+      document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("scroll", closeContextMenu, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [contextMenu]);
 
   const activeConversations = conversations.filter((conversation) => !conversation.archived);
   const archivedConversations = conversations.filter((conversation) => conversation.archived);
@@ -106,13 +120,13 @@ export function ConversationList({
 
   function openContextMenu(event: MouseEvent, conversation: Conversation) {
     event.preventDefault();
-    const sidebarRect = event.currentTarget.closest(".workspace-sidebar")?.getBoundingClientRect();
-    const menuWidth = 220;
-    const menuHeight = 164;
-    const leftBoundary = (sidebarRect?.left ?? 0) + 8;
-    const rightBoundary = (sidebarRect?.right ?? window.innerWidth) - menuWidth - 8;
-    const topBoundary = (sidebarRect?.top ?? 0) + 8;
+    const menuWidth = 236;
+    const menuHeight = conversation.archived ? 172 : 148;
+    const leftBoundary = 8;
+    const rightBoundary = window.innerWidth - menuWidth - 8;
+    const topBoundary = 8;
     const bottomBoundary = window.innerHeight - menuHeight - 8;
+
     setContextMenu({
       conversation,
       x: Math.max(leftBoundary, Math.min(event.clientX, rightBoundary)),
@@ -144,6 +158,9 @@ export function ConversationList({
           <span className="im-search-box__control">
             <input
               data-testid="conversation-search-input"
+              name="conversation-search"
+              autoComplete="off"
+              spellCheck={false}
               value={query}
               placeholder="搜索会话 / Agent / 消息"
               onChange={(event) => onQueryChange(event.target.value)}
@@ -187,14 +204,14 @@ export function ConversationList({
       {loading && conversations.length === 0 ? <div className="panel-empty">正在加载会话...</div> : null}
 
       {visibleConversations.length === 0 && !loading ? (
-        <div className="conversation-empty-im" aria-label="Conversation empty examples">
+        <div className="conversation-empty-im" aria-label="Conversation empty state">
           <div className="conversation-empty-im__eyebrow">{query || filter !== "ALL" ? "没有匹配会话" : "暂无会话"}</div>
           <strong>{query || filter !== "ALL" ? "换个关键词，或切回全部会话。" : "点击“新建会话”开始一次协作。"}</strong>
           <p>这里展示真实会话列表，并保留未读、置顶和归档状态。</p>
           <div className="conversation-empty-im__hints">
             <span>搜索 Agent / 消息</span>
             <span>置顶关键协作</span>
-            <span>右键归档会话</span>
+            <span>右键管理会话</span>
           </div>
         </div>
       ) : null}
@@ -223,7 +240,12 @@ export function ConversationList({
             data-conversation-id={conversationId}
             onContextMenu={(event) => openContextMenu(event, conversation)}
           >
-            <button type="button" className="conversation-item__main" onClick={() => onSelect(conversationId)}>
+            <button
+              type="button"
+              className="conversation-item__main"
+              onClick={() => onSelect(conversationId)}
+              onContextMenu={(event) => openContextMenu(event, conversation)}
+            >
               <div className="conversation-item__row">
                 <div className="conversation-item__identity">
                   <span className="conversation-avatar">{conversation.type === "GROUP" ? "群" : "单"}</span>
@@ -248,67 +270,42 @@ export function ConversationList({
                 ) : null}
               </div>
             </button>
-
-            <div className="conversation-item__actions" aria-label="Conversation actions">
-              <button
-                type="button"
-                data-testid="conversation-pin-button"
-                className="conversation-action-button"
-                onClick={() => onTogglePinned(conversation)}
-              >
-                {pinned ? "取消置顶" : "置顶"}
-              </button>
-              {archived ? (
-                <button
-                  type="button"
-                  data-testid="conversation-restore-button"
-                  className="conversation-action-button"
-                  onClick={() => onRestore(conversation)}
-                >
-                  恢复
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  data-testid="conversation-archive-button"
-                  className="conversation-action-button conversation-action-button--muted"
-                  onClick={() => onArchive(conversation)}
-                >
-                  归档
-                </button>
-              )}
-            </div>
           </article>
         );
       })}
 
-      {contextMenu ? (
-        <div
-          className="conversation-context-menu"
-          role="menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <button type="button" role="menuitem" onClick={() => handleContextAction("pin")}>
-            {contextMenu.conversation.pinned ? "取消置顶" : "置顶会话"}
-          </button>
-          {contextMenu.conversation.archived ? (
-            <button type="button" role="menuitem" onClick={() => handleContextAction("restore")}>
-              恢复会话
-            </button>
-          ) : (
-            <button
-              type="button"
-              role="menuitem"
-              className="conversation-context-menu__danger"
-              onClick={() => handleContextAction("delete")}
+      {contextMenu
+        ? createPortal(
+            <div
+              ref={contextMenuRef}
+              className="conversation-context-menu"
+              role="menu"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
             >
-              归档会话
-            </button>
-          )}
-          <small>当前删除行为会先移动到归档，之后仍可恢复。</small>
-        </div>
-      ) : null}
+              <button type="button" role="menuitem" onClick={() => handleContextAction("pin")}>
+                {contextMenu.conversation.pinned ? "取消置顶" : "置顶会话"}
+              </button>
+              {contextMenu.conversation.archived ? (
+                <button type="button" role="menuitem" onClick={() => handleContextAction("restore")}>
+                  恢复会话
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="conversation-context-menu__danger"
+                  onClick={() => handleContextAction("delete")}
+                >
+                  归档会话
+                </button>
+              )}
+              <small>当前删除行为会先移动到归档，之后仍可恢复。</small>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

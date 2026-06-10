@@ -63,7 +63,8 @@
 .desktop-console-page .desktop-console {
   display: grid;
   gap: 14px;
-  padding: 16px;
+  min-height: 720px;
+  padding: 20px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.92);
@@ -158,11 +159,13 @@
 .desktop-console-page .desktop-console__grid {
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
   align-items: start;
+  min-height: 440px;
 }
 
 .desktop-console-page .desktop-console__card {
   display: grid;
   gap: 12px;
+  min-height: 0;
   padding: 16px;
 }
 
@@ -378,6 +381,11 @@
   background: #f8fafc;
   color: #64748b;
   padding: 14px;
+}
+
+.desktop-console-page .desktop-console__boundary p,
+.desktop-console-page .desktop-console__empty p {
+  margin: 0;
 }
 
 .desktop-console-page .desktop-console-page__header small {

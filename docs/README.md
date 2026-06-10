@@ -6,8 +6,9 @@
 
 - `product-design.md`：中文产品设计文档，说明产品定位、用户流程、核心体验、当前能力和边界。
 - `technical-design.md`：中文技术设计文档，说明前后端架构、Orchestrator、Adapter、Artifact、Context、Realtime、Persistence 和验证方式。
-- `spec/index.md`：稳定规格索引，指向多 Agent、消息、Artifact、Adapter、Context、Approval、MySQL 等专题 spec。
+- `spec/README.md`：稳定规格总入口，说明各 spec 的边界、优先级和阅读顺序。
 - `plans/next.md`：当前最高优先级任务入口。每个 Agent 接手任务前应先读取。
+- `collaboration/README.md`：AI 协作入口，说明 development-workflow、prompt-template、decision-log、dev-log 和 demo-checklist 各自用途。
 - `collaboration/dev-log.md`：追加式开发记录，不覆盖历史 Phase。
 - `collaboration/demo-checklist.md`：演示和验收清单。
 
@@ -15,7 +16,7 @@
 
 - `spec/`：稳定规格和验收标准。
 - `plans/`：当前计划、已完成计划、延期计划和专题计划。
-- `collaboration/`：协作流程、开发日志、demo checklist。
+- `collaboration/`：协作流程、开发日志、demo checklist 和总入口说明。
 - `skills/`：项目内 Agent skill 说明。
 - `rules/`：协作、路由、handoff 和执行规则。
 

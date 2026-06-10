@@ -6,6 +6,7 @@ import type { Artifact } from "../../features/artifacts/artifactTypes";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
 import { displayAdapterName, sanitizeProductionText } from "../../utils/productionLabels";
 import { formatId, getIdValue } from "../../utils/id";
+import { renderArtifactContent, CopyButton } from "../../features/artifacts/renderArtifactContent";
 import "../../styles/workspace.css";
 import "../../styles/pages/preview.css";
 
@@ -125,25 +126,6 @@ function formatPreviewSize(content: string | null | undefined): string {
     return `${(length / 1000).toFixed(1)}k 字符`;
   }
   return `${length} 字符`;
-}
-
-function renderPreviewContent(artifact: Artifact) {
-  const content = artifact.content || "";
-
-  if (artifact.type === "WEB_PREVIEW" && content.trim().startsWith("<")) {
-    return <iframe className="preview-page__iframe" title={artifact.title} sandbox="" srcDoc={content} />;
-  }
-
-  const className =
-    artifact.type === "CODE" || artifact.type === "API_CONTRACT" || artifact.type === "DATA_MODEL"
-      ? "preview-page__code"
-      : "preview-page__text";
-
-  return (
-    <pre className={className}>
-      <code>{content}</code>
-    </pre>
-  );
 }
 
 export function PreviewPage() {
@@ -381,9 +363,17 @@ export function PreviewPage() {
                     <strong>{presentationMode?.label || "内容预览"}</strong>
                     <span>{artifact.title}</span>
                   </div>
-                  <span>{presentationMode?.description || previewMode}</span>
+                  <div className="preview-page__content-toolbar-actions">
+                    <span>{presentationMode?.description || previewMode}</span>
+                    <CopyButton content={artifact.content ?? ""} className="preview-page__copy-btn" />
+                  </div>
                 </div>
-                {renderPreviewContent(artifact)}
+                {renderArtifactContent(artifact, {
+                  showLineNumbers: true,
+                  classPrefix: "preview-page",
+                  iframeSandbox: "",
+                  markdownMode: "simple-html",
+                })}
               </section>
             </section>
           </div>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ApprovalRequest } from "../approval/approvalTypes";
 import type { Artifact } from "../artifacts/artifactTypes";
 import type { AgentCreationDraft } from "../agents/conversationalAgentDraft";
@@ -6,6 +7,8 @@ import { getAttachmentDownloadUrl } from "../../api/agenthubApi";
 import { formatId, getIdValue } from "../../utils/id";
 import { sanitizeProductionText } from "../../utils/productionLabels";
 import { createPortal } from "react-dom";
+import { InlineArtifactPreview } from "./InlineArtifactPreview";
+import { ArtifactPreviewModal } from "../artifacts/ArtifactPreviewModal";
 
 interface MessageBubbleProps {
   message: Message;
@@ -509,6 +512,7 @@ export function MessageBubble({
   const plannedArtifacts = getPlannedArtifacts(message);
   const contextSources = getContextSources(message);
   const blockerAnchorId = `message-blockers-${messageId}`;
+  const [modalArtifact, setModalArtifact] = useState<Artifact | null>(null);
 
   return (
     <div
@@ -996,21 +1000,28 @@ export function MessageBubble({
                     <span>质量：{artifact ? getQualityLabel(artifact) : "UNKNOWN"}</span>
                     {artifact?.language ? <span>语言：{artifact.language}</span> : null}
                   </div>
-                  <p className="message-artifact-card__evidence-note">
-                    该卡片来自后端 Artifact 记录；预览为本地静态 URL，不代表真实云部署。
-                  </p>
+                  {artifact ? <InlineArtifactPreview artifact={artifact} maxLines={12} /> : null}
                   <div className="message-artifact-card__actions">
                     <button type="button" className="artifact-link" onClick={() => onSelectArtifact(artifactId)}>
                       选择产物
                     </button>
+                    {artifact ? (
+                      <button type="button" className="artifact-link artifact-link--preview" onClick={() => setModalArtifact(artifact)}>
+                        全屏预览
+                      </button>
+                    ) : null}
                     <a className="artifact-link artifact-link--preview" href={`/preview/${artifactId}`} target="_blank" rel="noreferrer">
-                      打开本地 Preview
+                      新标签页
                     </a>
                   </div>
                 </article>
               );
             })}
           </div>
+        ) : null}
+
+        {modalArtifact ? (
+          <ArtifactPreviewModal artifact={modalArtifact} onClose={() => setModalArtifact(null)} />
         ) : null}
 
         {replyMessages.length > 0 ? (

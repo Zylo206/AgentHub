@@ -7,7 +7,6 @@ import { sanitizeProductionText } from "../../utils/productionLabels";
 interface ArtifactHeroCardProps {
   artifact: Artifact;
   fallbackReason: string | null;
-  gateAction: { title: string; reason: string; nextStep: string } | null;
   selectedVersionEntry: VersionHistoryEntry | null;
   buildValidationLabel: string;
   qualityScoreLabel: string;
@@ -16,7 +15,6 @@ interface ArtifactHeroCardProps {
 export function ArtifactHeroCard({
   artifact,
   fallbackReason,
-  gateAction,
   selectedVersionEntry,
   buildValidationLabel,
   qualityScoreLabel
@@ -57,14 +55,6 @@ export function ArtifactHeroCard({
         <p className="artifact-hero-card__boundary">
           当前产物属于本地预览或备用路径：{sanitizeProductionText(fallbackReason)}
         </p>
-      ) : null}
-
-      {gateAction ? (
-        <div className="artifact-hero-card__gate">
-          <strong>{gateAction.title}</strong>
-          <span>{gateAction.reason}</span>
-          <small>{gateAction.nextStep}</small>
-        </div>
       ) : null}
 
       {selectedVersionEntry?.parentArtifact ? (

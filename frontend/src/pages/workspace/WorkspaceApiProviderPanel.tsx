@@ -1,19 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  createAgent,
   getOpenAICompatibleRuntimeConfig,
   updateOpenAICompatibleRuntimeConfig,
   type OpenAICompatibleRuntimeConfig
 } from "../../api/agenthubApi";
-import type { AdapterDescriptor, Agent } from "../../features/agents/agentTypes";
-import { displayStatus, normalizeStatusClass } from "../../utils/displayLabels";
+import type { AdapterDescriptor } from "../../features/agents/agentTypes";
 
 interface WorkspaceApiProviderPanelProps {
-  agents: Agent[];
   adapterDescriptors: AdapterDescriptor[];
-  selectedAgent: Agent | null;
-  onSelectAgent: (agent: Agent) => void;
-  onAgentCreated: (agent: Agent) => void;
   onConfigured: () => Promise<void>;
 }
 
@@ -45,14 +39,7 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "未知错误";
 }
 
-export function WorkspaceApiProviderPanel({
-  agents,
-  adapterDescriptors,
-  selectedAgent,
-  onSelectAgent,
-  onAgentCreated,
-  onConfigured
-}: WorkspaceApiProviderPanelProps) {
+export function WorkspaceApiProviderPanel({ onConfigured }: WorkspaceApiProviderPanelProps) {
   const [config, setConfig] = useState<OpenAICompatibleRuntimeConfig | null>(null);
   const [providerName, setProviderName] = useState("DeepSeek");
   const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
@@ -62,18 +49,8 @@ export function WorkspaceApiProviderPanel({
   const [selectedScopeType, setSelectedScopeType] = useState("USER");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [creatingAgent, setCreatingAgent] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const openAIAdapter = adapterDescriptors.find((adapter) => adapter.adapterType === "OPENAI_COMPATIBLE") ?? null;
-  const apiAgents = useMemo(
-    () => agents.filter((agent) => agent.preferredAdapterType === "OPENAI_COMPATIBLE"),
-    [agents]
-  );
-  const selectedIsApiAgent = Boolean(
-    selectedAgent && selectedAgent.preferredAdapterType === "OPENAI_COMPATIBLE"
-  );
 
   function applyConfig(runtimeConfig: OpenAICompatibleRuntimeConfig) {
     setConfig(runtimeConfig);
@@ -87,17 +64,25 @@ export function WorkspaceApiProviderPanel({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
+
     void getOpenAICompatibleRuntimeConfig(selectedScopeType)
       .then((runtimeConfig) => {
-        if (cancelled) return;
-        applyConfig(runtimeConfig);
+        if (!cancelled) {
+          applyConfig(runtimeConfig);
+        }
       })
       .catch((caughtError) => {
-        if (!cancelled) setError(getErrorMessage(caughtError));
+        if (!cancelled) {
+          setError(getErrorMessage(caughtError));
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
+
     return () => {
       cancelled = true;
     };
@@ -105,7 +90,9 @@ export function WorkspaceApiProviderPanel({
 
   function applyPreset(key: string) {
     const preset = PROVIDER_PRESETS.find((item) => item.key === key);
-    if (!preset) return;
+    if (!preset) {
+      return;
+    }
     setProviderName(preset.providerName);
     setBaseUrl(preset.baseUrl);
     setModel(preset.model);
@@ -127,7 +114,7 @@ export function WorkspaceApiProviderPanel({
       applyConfig(updated);
       setApiKey("");
       await onConfigured();
-      setMessage("API 问答通道已更新。发送 IM 时选择 API Agent 即会走远程 OpenAI-compatible HTTP。");
+      setMessage("IM 远程问答配置已更新，当前工作台会优先使用这条 OpenAI-compatible HTTP 通道。");
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
     } finally {
@@ -135,56 +122,21 @@ export function WorkspaceApiProviderPanel({
     }
   }
 
-  async function handlePrepareApiAgent() {
-    const existing = apiAgents[0];
-    if (existing) {
-      onSelectAgent(existing);
-      setMessage(`已选择 ${existing.name}，后续 IM 问答将优先使用 API 通道。`);
-      return;
-    }
-
-    setCreatingAgent(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const agent = await createAgent({
-        name: "API 问答 Agent",
-        avatarUrl: "",
-        systemPrompt: "你是 AgentHub IM 问答 Agent。优先通过 OpenAI-compatible API 回答用户问题，并按任务需要生成 Artifact JSON。",
-        capabilityTags: ["IM 问答", "API", providerName],
-        toolTags: ["api", "schema", "task_planner"],
-        preferredAdapterType: "OPENAI_COMPATIBLE"
-      });
-      onAgentCreated(agent);
-      onSelectAgent(agent);
-      setMessage("已创建并选择 API 问答 Agent。");
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError));
-    } finally {
-      setCreatingAgent(false);
-    }
-  }
-
   return (
     <section className="workspace-api-provider-panel" data-testid="workspace-api-provider-panel">
-      <div className="workspace-api-provider-panel__header">
-        <div>
-          <span>IM API 接入</span>
-          <h3>远程问答供应商</h3>
-        </div>
-        <span className={`adapter-health-pill adapter-health-pill--${normalizeStatusClass(openAIAdapter?.status || "UNKNOWN")}`}>
-          {displayStatus(openAIAdapter?.status || "UNKNOWN")}
-        </span>
-      </div>
-
       <p className="workspace-api-provider-panel__copy">
-        这里配置的是 IM 端问答的 OpenAI-compatible HTTP 通道，不是 Claude Code / Codex 本地 CLI。
-        API Key 只提交给后端运行时，不保存在浏览器。
+        这里配置的是 IM 端问答使用的 OpenAI-compatible HTTP 通道，不是 Claude Code 或 Codex 的本地 CLI。
+        API Key 只提交给后端运行时，不会保存在浏览器里。
       </p>
 
       <div className="workspace-api-provider-panel__presets" aria-label="API provider presets">
         {PROVIDER_PRESETS.map((preset) => (
-          <button key={preset.key} type="button" className="secondary-button secondary-button--quiet" onClick={() => applyPreset(preset.key)}>
+          <button
+            key={preset.key}
+            type="button"
+            className="secondary-button secondary-button--quiet"
+            onClick={() => applyPreset(preset.key)}
+          >
             {preset.label}
           </button>
         ))}
@@ -206,11 +158,19 @@ export function WorkspaceApiProviderPanel({
       <div className="workspace-api-provider-panel__grid">
         <label>
           <span>供应商</span>
-          <input value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder="DeepSeek / OpenAI / 自定义" />
+          <input
+            value={providerName}
+            onChange={(event) => setProviderName(event.target.value)}
+            placeholder="DeepSeek / OpenAI / 自定义"
+          />
         </label>
         <label>
           <span>Base URL / API</span>
-          <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.deepseek.com" />
+          <input
+            value={baseUrl}
+            onChange={(event) => setBaseUrl(event.target.value)}
+            placeholder="https://api.deepseek.com"
+          />
         </label>
         <label>
           <span>模型名称</span>
@@ -222,7 +182,7 @@ export function WorkspaceApiProviderPanel({
             type="password"
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
-            placeholder={config?.selectedScope.hasApiKey ? `configured ${config.selectedScope.maskedApiKey}` : "sk-..."}
+            placeholder={config?.selectedScope.hasApiKey ? `已配置 ${config.selectedScope.maskedApiKey}` : "sk-..."}
           />
         </label>
       </div>
@@ -248,9 +208,6 @@ export function WorkspaceApiProviderPanel({
         >
           {saving ? "保存中..." : "保存 API 配置"}
         </button>
-        <button type="button" className="secondary-button" disabled={creatingAgent} onClick={handlePrepareApiAgent}>
-          {creatingAgent ? "准备中..." : selectedIsApiAgent ? "当前已选 API Agent" : "用于当前 IM 问答"}
-        </button>
       </div>
 
       {config ? (
@@ -264,7 +221,7 @@ export function WorkspaceApiProviderPanel({
       ) : null}
       {config && !config.selectedScope.canManage ? (
         <p className="workspace-api-provider-panel__error">
-          Current user cannot edit scope {config.selectedScope.scopeType}/{config.selectedScope.scopeId}.
+          当前用户没有权限修改 {config.selectedScope.scopeType}/{config.selectedScope.scopeId}。
         </p>
       ) : null}
       {message ? <p className="workspace-api-provider-panel__message">{message}</p> : null}

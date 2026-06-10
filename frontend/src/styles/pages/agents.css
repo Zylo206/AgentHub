@@ -452,6 +452,59 @@
   box-shadow: none !important;
 }
 
+/* Keep the shared left rail icons consistent on Agent Builder pages. */
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="workspace"],
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="desktop"] {
+  position: relative !important;
+}
+
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="workspace"]::before {
+  content: "" !important;
+  width: 18px !important;
+  height: 14px !important;
+  border: 2px solid currentColor !important;
+  border-radius: 7px !important;
+  box-sizing: border-box !important;
+  background: transparent !important;
+}
+
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="workspace"]::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 24px !important;
+  top: 24px !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-left: 2px solid currentColor !important;
+  border-bottom: 2px solid currentColor !important;
+  border-bottom-left-radius: 2px !important;
+  transform: rotate(-18deg) !important;
+}
+
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="desktop"]::before {
+  content: "" !important;
+  width: 19px !important;
+  height: 15px !important;
+  border: 2px solid currentColor !important;
+  border-radius: 4px !important;
+  box-sizing: border-box !important;
+  background: transparent !important;
+}
+
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="desktop"]::after {
+  content: ">_" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  padding-top: 1px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  color: currentColor !important;
+}
+
 /* Phase 268: split Create Agent and Local CLI into two clear product views. */
 .agent-builder-page .agent-builder-view-switch {
   display: inline-flex;

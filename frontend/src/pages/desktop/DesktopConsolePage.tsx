@@ -73,13 +73,7 @@ export function DesktopConsolePage() {
       <header className="desktop-console-page__header">
         <div>
           <span className="desktop-console-page__eyebrow">Desktop Console</span>
-          <h1>本机能力控制台</h1>
-          <p>集中处理 Tauri 本地文件预览、系统通知、本机 Agent CLI 探测和 backend managed process。</p>
-          <small>
-            {conversationId
-              ? `已连接当前会话：${conversationId.slice(0, 8)}，本地文件可加入 Context / Memory。`
-              : "未关联会话：文件仍可预览，但不能写入 Workspace Context / Memory。"}
-          </small>
+          <h1>本地能力控制台</h1>
         </div>
         <Link className="secondary-button" to="/workspace">
           返回 Workspace

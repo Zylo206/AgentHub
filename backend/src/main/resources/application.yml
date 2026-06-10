@@ -117,7 +117,7 @@ agenthub:
       fixture-enabled: ${AGENTHUB_OPENAI_FIXTURE_ENABLED:false}
       fixture-review-decision: ${AGENTHUB_OPENAI_FIXTURE_REVIEW_DECISION:APPROVE}
     codex:
-      enabled: ${AGENTHUB_CODEX_ENABLED:false}
+      enabled: ${AGENTHUB_CODEX_ENABLED:true}
       command: ${AGENTHUB_CODEX_COMMAND:codex}
       model: ${AGENTHUB_CODEX_MODEL:}
       timeout-seconds: ${AGENTHUB_CODEX_TIMEOUT_SECONDS:120}
@@ -127,7 +127,7 @@ agenthub:
       fixture-enabled: ${AGENTHUB_CODEX_FIXTURE_ENABLED:false}
       fixture-stream-chunk-delay-millis: ${AGENTHUB_CODEX_FIXTURE_STREAM_CHUNK_DELAY_MILLIS:0}
     claude-code:
-      enabled: ${AGENTHUB_CLAUDE_CODE_ENABLED:false}
+      enabled: ${AGENTHUB_CLAUDE_CODE_ENABLED:true}
       command: ${AGENTHUB_CLAUDE_CODE_COMMAND:claude}
       args-template: ${AGENTHUB_CLAUDE_CODE_ARGS_TEMPLATE:}
       model: ${AGENTHUB_CLAUDE_CODE_MODEL:sonnet}

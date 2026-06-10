@@ -500,7 +500,7 @@
 - 重写 `README.md`，同步当前 MVP 演示闭环、技术栈、启动方式、Demo 主线和课题要求对齐情况
 - 更新 `docs/product-design.md`，同步 IM Workspace、selectedAgent / `@Agent`、Artifact-centered iteration 和当前已实现 / 未实现边界
 - 更新 `docs/technical-design.md`，同步 OrchestratorService、Message.targetAgentId 推断链路、Adapter Layer、Artifact Revision 和迁移设计
-- 更新 `docs/demo-scenario.md`，整理为可直接用于 3 分钟视频的脚本草案
+- 更新 `docs/archive/submission/demo-scenario.md`，整理为可直接用于 3 分钟视频的脚本草案
 - 更新 `docs/roadmap.md`，切换到收敛式开发阶段视角
 
 ### 验证方式
@@ -1001,7 +1001,7 @@
 
 ### 主要变更
 
-- 新增 `docs/mvp-requirements-alignment.md`
+- 新增 `docs/archive/submission/mvp-requirements-alignment.md`
 - 按 IM 聊天、Orchestrator、多 Agent 接入、Artifact、部署、多端、交付物和评分维度进行对齐
 - 明确当前项目处于 MVP 功能扩展期，不急于最终 Demo 收敛
 - 梳理下一阶段优先级：群聊多 Agent 最小闭环、Context pin、真实 Adapter 输出进入 Artifact、消息操作、真实 line diff
@@ -1543,7 +1543,7 @@
 
 ### 主要变更
 
-- `docs/mvp-requirements-alignment.md` 更新为当前 MVP 功能扩展期评估：
+- `docs/archive/submission/mvp-requirements-alignment.md` 更新为当前 MVP 功能扩展期评估：
   - IM Workspace
   - 多 @Agent
   - 群聊式 Agent 消息
@@ -1570,7 +1570,7 @@
 
 - 文档路径检查：
   - `README.md`
-  - `docs/mvp-requirements-alignment.md`
+  - `docs/archive/submission/mvp-requirements-alignment.md`
   - `docs/roadmap.md`
   - `docs/technical-design.md`
   - `docs/collaboration/demo-checklist.md`
@@ -1678,7 +1678,7 @@
   - `AGENTHUB_PLANNER_TYPE`
   - `AGENTHUB_PLANNER_FALLBACK_TO_RULE_BASED`
 - `scripts/smoke-test.mjs` 增加 planner mode 可见性断言
-- `README.md`、`docs/technical-design.md`、`docs/roadmap.md`、`docs/mvp-requirements-alignment.md` 同步 P0-2 状态
+- `README.md`、`docs/technical-design.md`、`docs/roadmap.md`、`docs/archive/submission/mvp-requirements-alignment.md` 同步 P0-2 状态
 
 ### 验证方式
 
@@ -2682,8 +2682,8 @@
 
 ### 遗留问题
 
-- `docs/mvp-requirements-alignment.md` 可后续单独同步为最新评分表
-- `docs/product-design.md` 和 `docs/demo-scenario.md` 后续仍需按 V1.0 演示口径再收敛
+- `docs/archive/submission/mvp-requirements-alignment.md` 可后续单独同步为最新评分表
+- `docs/product-design.md` 和 `docs/archive/submission/demo-scenario.md` 后续仍需按 V1.0 演示口径再收敛
 - README 和部分历史文档曾出现编码显示问题，后续提交前需再次人工打开确认
 - smoke test 尚未固化“自定义 Agent capability route”断言
 
@@ -3135,7 +3135,7 @@
 - `ContextPanel` 展示 Context Retrieval v3 分项得分和 matched tokens。
 - `scripts/smoke-test.mjs` 使用真实附件上传 / 下载链路验证消息附件。
 - `scripts/e2e-browser.mjs` 在 seed 阶段上传真实轻量附件，而不是只写 metadata。
-- 新增 `docs/persistence-plan.md`，规划内存仓储、本地附件、JDBC/MySQL 仓储和附件 metadata / binary 分层。
+- 新增 `docs/archive/plan-history/persistence-plan.md`，规划内存仓储、本地附件、JDBC/MySQL 仓储和附件 metadata / binary 分层。
 - `scripts/README.md` 同步真实附件、Context Retrieval v3 和浏览器 E2E 覆盖范围。
 
 ### 验证方式
@@ -5516,7 +5516,7 @@
 
 ### 主要变更
 
-- 新增 `docs/ui-audit.md`，记录 AgentHub 当前 UI 方向、保留项、各区域完成度、边界和下一步 UI 建议。
+- 新增 `docs/archive/audit/ui-audit.md`，记录 AgentHub 当前 UI 方向、保留项、各区域完成度、边界和下一步 UI 建议。
 - 新增 `ArtifactDeliveryWorkbench`，承接 Artifact Cockpit、Source / Quality / Build badge、Diagnostic Panel、Diff / Snapshot / Deploy 风险摘要。
 - 新增 `ArtifactDeployPanel`，承接 Deploy Status / Release Panel 展示和 Preview URL 操作。
 - 新增 `ArtifactSnapshotTimeline`，承接 Safety Checkpoint timeline 和 Restore 入口展示。
@@ -5538,7 +5538,7 @@
 
 - `WorkspacePage` 仍然偏大，后续可继续拆分 selected agent banner、right panel layout、SSE wiring 和 action handlers。
 - `ArtifactPanel` 仍可继续拆分 revision box、approval gate、diff apply 和 content preview。
-- `docs/ui-audit.md` 是当前审计基线，后续大规模 UI 改动应同步更新。
+- `docs/archive/audit/ui-audit.md` 是当前审计基线，后续大规模 UI 改动应同步更新。
 
 ### 下一步建议
 
@@ -9515,9 +9515,9 @@
 
 ### 改动
 
-- 新增 `docs/acceptance-report-v1.5.md`，沉淀本轮全量项目验收结论、验收范围、自动化证据、功能完成度和已知问题。
-- 新增 `docs/technical-design-v1.5.md`，以 v1.5 状态重写技术文档，明确前后端、桌面壳、Orchestrator、Adapter、Context、Artifact、Approval、Deploy Preview 和验证体系。
-- 新增 `docs/product-design-v1.5.md`，以 v1.5 状态重写中文产品文档，明确产品定位、目标用户、主路径、功能清单、版本完成度和边界。
+- 新增 `docs/archive/verification/acceptance-report-v1.5.md`，沉淀本轮全量项目验收结论、验收范围、自动化证据、功能完成度和已知问题。
+- 新增 `docs/archive/versioned/technical-design-v1.5.md`，以 v1.5 状态重写技术文档，明确前后端、桌面壳、Orchestrator、Adapter、Context、Artifact、Approval、Deploy Preview 和验证体系。
+- 新增 `docs/archive/versioned/product-design-v1.5.md`，以 v1.5 状态重写中文产品文档，明确产品定位、目标用户、主路径、功能清单、版本完成度和边界。
 - 将“默认 Web 基线通过”和“条件能力未实测/脚本前置问题”在文档中分开表述，避免把 JDBC、真实适配器或本地静态预览误写成默认完成项。
 
 ### 验证
@@ -10191,3 +10191,283 @@
 ### 边界
 
 - 本轮只收口右侧 Inspector 的空态与布局冲突，不改 Artifact 业务语义、Diff 流程或审批逻辑。
+
+## 2026-06-09 - 会话权限弹窗与概览卡片去重
+
+### 变更
+
+- 将 Workspace 左侧的会话权限区从常驻展开卡片改成按钮触发的小窗口。
+- 新的权限窗口支持点击空白关闭、Escape 关闭，并保留成员目录搜索、可见范围设置与成员角色管理。
+- 删除 Artifact 概览头中重复的 gate 提示框，保留来源边界和版本链信息，避免在窄侧栏里重复堆叠提醒。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：通过。
+
+### 边界
+
+- 本轮只调整权限入口形态与概览信息密度，不改后端权限接口和审批语义。
+
+## 2026-06-09 - 会话右键菜单与诊断抽屉可用性修正
+
+### 变更
+
+- `ConversationList` 改为通过 `createPortal` 渲染右键菜单，避免侧栏 `overflow` 截断。
+- 会话卡片底部常驻的“置顶 / 归档”按钮移除，统一收口到右键菜单。
+- 会话搜索输入增加 `autoComplete="off"` 和独立 `name`，降低浏览器把管理员账号自动填进搜索框的概率。
+- 提升中间消息流中协议 CTA 和 Artifact 操作按钮的对比度与可点击感。
+- 放大 diagnostics 抽屉展开高度，并增强 `Context / Adapter / TaskRun` 面板的滚动承载，减少内容被截断的情况。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：通过。
+
+### 边界
+
+- 本轮只修正 Workspace 可用性和可视性问题，不改会话归档语义、Context 数据结构和 Adapter 路由逻辑。
+
+## 2026-06-09 - 本地能力控制台 Web 模式提示与首屏收口
+
+### 变更
+
+- 删除 Desktop Console 顶部重复的小字说明，首屏只保留标题和返回入口。
+- 放大本地能力控制台主容器和内容区最小高度，减少首屏像“缩成一条”的拥挤感。
+- 在 Web 模式下补充明确提示：
+  - 当前灰色禁用并不代表 Claude / Codex 安装失败；
+  - 只有通过 Tauri 桌面壳启动后，CLI 探测、桌面通知和托管进程才会启用；
+  - 直接给出 `cd desktop && npm run dev` 和桌面可执行文件路径提示。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只调整 Desktop Console 的首屏信息密度和 Web 模式提示，不改 Tauri bridge 协议和 CLI probe 后端实现。
+
+## 2026-06-09 - 会话右键、顶部用户菜单与 API 接入入口修复
+
+### 变更
+
+- 会话右键菜单改为“外部按下关闭”，不再用全局 `document.click` 抢事件，修复菜单弹出后无法稳定点击的问题。
+- 顶部用户区改成头像触发的下拉菜单，退出登录收口到用户菜单内，去掉窄按钮被挤压的异常样式。
+- Workspace 顶部把 IM 远程问答的 OpenAI-compatible 配置拆成独立 `API 接入` 入口，不再埋在单一“高级工具”折叠项里。
+- 顺手重写了 `WorkspaceApiProviderPanel` 与 `AppLayout` 的异常中文文案，避免继续出现乱码提示。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只修正前端交互与入口可发现性，不改后端鉴权、OpenAI-compatible 配置接口语义和 Conversation 归档逻辑。
+
+## 2026-06-09 - 左侧账号入口与中央 API 设置弹窗收口
+
+### 变更
+
+- 账号入口不再停留在顶部漂浮区域，改为 Workspace 左侧竖栏底部的固定头像按钮。
+- 点击头像后弹出小窗，统一展示当前用户名、`API 设置` 和 `退出登录`。
+- `API 设置` 从顶部工具区移除，改为通过自定义事件在 Workspace 中央打开配置弹窗。
+- IM API 配置面板去掉“用于当前 IM 问答”按钮，只保留运行时配置本身。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只调整账号入口层级、API 配置展示位置和弹窗交互，不改 OpenAI-compatible 后端接口或 Agent 选择逻辑。
+
+## 2026-06-09 - Workspace 账号轨道菜单定位加固
+
+### 变更
+
+- `AppLayout` 为 Workspace 显式增加 `workspace-rail` 账号菜单变体，不再只依赖路由样式覆盖，避免退出菜单继续按顶部用户区逻辑定位。
+- 左侧竖栏账号菜单改为固定锚定在轨道右侧底部，弹层稳定展示用户名、`API 设置` 和 `退出登录`。
+- `WorkspaceApiProviderPanel` 整体重写为干净的中文配置面板，去掉旧的 “选 API Agent / 用于当前 IM 问答” 路径文案，只保留 IM 远程问答配置。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：通过。
+
+### 边界
+
+- 本轮只加固 Workspace 账号入口和 IM API 配置面板文案，不改登录鉴权、用户资料模型和 OpenAI-compatible 后端持久化策略。
+
+## 2026-06-09 - 发送框默认示例文案清理
+
+### 变更
+
+- `WorkspacePage` 不再把产品演示示例任务写入 `draftMessage` 初始值。
+- Workspace 首次进入时发送框恢复为空，仅显示 placeholder，不再把示例任务误显示成待发送内容。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只移除发送框默认草稿，不改真实发送、会话切换和消息草稿持久化策略。
+
+## 2026-06-10 - 会话右键菜单 portal 命中修复
+
+### 变更
+
+- `ConversationList` 继续通过 `createPortal(document.body)` 渲染右键菜单，但 `.conversation-context-menu` 不再只依赖 `.workspace-page` 祖先作用域。
+- 为菜单容器、按钮、危险态和说明文字补全全局样式选择器，确保 portal 脱离侧栏 DOM 后仍能正确显示。
+- 会话主按钮也显式绑定 `onContextMenu`，降低不同浏览器在按钮元素上右键时事件未稳定冒泡到外层卡片的概率。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只修复会话右键菜单的 portal 样式命中和事件入口，不改置顶、归档、恢复的业务语义。
+
+## 2026-06-10 - Agents 页面底部账号入口轨道化
+
+### 变更
+
+- `AppLayout` 的左侧轨道账号入口不再只对 `/workspace` 生效，`/agents` 也切到同一套底部图标按钮样式。
+- Agent Builder 页面底部不再展示横向用户名条，改为与 Workspace 一致的底部头像入口和弹出菜单交互。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只统一 `/agents` 的左侧轨道账号入口形态，不改 Agent Builder 页面主体布局、表单结构和用户菜单内容。
+
+## 2026-06-10 - 会话设置收入口袋菜单与 API 弹窗去重
+
+### 变更
+
+- Workspace 左侧侧栏不再常驻展示“会话设置 / 成员与权限”区块，相关入口统一收进左下角账号菜单。
+- 账号菜单新增“会话设置”，点击后在 Workspace 中央打开会话权限弹窗，复用现有成员目录搜索、可见范围和成员角色管理逻辑。
+- `WorkspaceAccessPanel` 增加面板模式，用于居中弹窗内嵌渲染，避免再显示侧栏触发按钮和重复标题。
+- `WorkspaceApiProviderPanel` 去掉内层重复的 `IM API 接入 / 远程问答供应商` 标题与状态 badge，只保留配置正文。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只调整会话权限入口层级、中央弹窗容器和 IM API 配置面板去重，不改权限后端接口、成员搜索 API 和 OpenAI-compatible 配置语义。
+
+## 2026-06-10 - 左侧轨道补齐 Desktop 与管理入口图标
+
+### 变更
+
+- `AppLayout` 为左侧轨道导航补充 `data-rail-icon`、`title` 和 `aria-label`，避免仅靠被压缩的文字链接承载入口语义。
+- Workspace 轨道为 `Workspace / Agent / Desktop / 用户管理` 分别补齐明确图标，不再让 `Desktop` 和管理员入口显示为空白按钮。
+- Agent Builder 页面沿用同一套轨道图标映射，保证 `/workspace` 与 `/agents` 视觉一致。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只补轨道图标和可访问性标记，不改左轨按钮顺序、路由结构和权限判断。
+
+## 2026-06-10 - Web 模式复用后端 CLI 探测
+
+### 变更
+
+- `DesktopCapabilityPanel` 保留桌面端的 Tauri CLI 探测不变，同时在浏览器模式下改为调用后端 `/api/adapters` 读取 `CLAUDE_CODE`、`CODEX`、`OPEN_CODE` 的服务端探测结果。
+- Web 模式下的 `Agent CLI` 按钮不再因缺少 Tauri bridge 而整体禁用，前端会把后端返回的 `cliPath`、`version`、`helpProbeStatus`、`supportsStreamJson`、`supportsOutputSchema` 等能力字段映射为统一探测卡片。
+- 桌面能力边界文案同步收敛为“文件/通知/托管进程仍需桌面壳，CLI 探测可复用后端同机能力”，避免把 Web 模式误展示成“CLI 一律不可探测”。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只补 Web 模式 CLI 探测回退，不改后端 adapter probe 逻辑、不新增独立 probe API，也不改变 Tauri 本地文件、通知和托管进程能力的桌面端前提。
+
+## 2026-06-10 - CLI 适配器默认改为可测状态
+
+### 变更
+
+- 后端 `application.yml` 将 `codex.enabled` 和 `claude-code.enabled` 的默认值从 `false` 调整为 `true`。
+- 现在未显式传入环境变量时，AgentHub 启动后会默认尝试探测 `codex` 与 `claude` 命令，不再先返回 `DISABLED`。
+- 适配器的真实判定逻辑保持不变：命令不存在、`--help` / `--version` 失败、未登录或 artifact-only 约束不满足时，仍会返回 `MISCONFIGURED` 或不可用状态，不会被伪装成 `AVAILABLE`。
+
+### 验证
+
+- 待后端重启后访问 `/api/adapters` 或在 Web 模式 `本地能力控制台 -> Agent CLI` 点击探测，确认默认返回的是实际探测结果而非 `disabled`。
+
+### 边界
+
+- 本轮只改默认启用策略，不改 `OPEN_CODE` 默认状态、不自动写入本机命令路径，也不替代 CLI 自身登录态与 PATH 配置。
+
+## 2026-06-10 - 左侧轨道 Workspace 与 Desktop 图标语义化
+
+### 变更
+
+- 将左侧轨道的 `Workspace` 图标从黑点改为 CSS 绘制的聊天气泡，表达 IM 工作台入口。
+- 将 `Desktop Console` 图标从重复的命令符号改为终端窗口样式，表达本地能力 / CLI / 后端托管入口。
+- Workspace 页面和 Agent Builder 页面同步使用同一套图标覆盖，避免切换页面后出现不一致。
+
+### 验证
+
+- `cd frontend && npm.cmd run build`：待本轮执行。
+
+### 边界
+
+- 本轮只调整左侧轨道两个入口的视觉图标，不改路由、按钮顺序、权限判断和菜单行为。
+
+## 2026-06-10 - 产物预览体验优化
+
+### 目标
+
+- 提升 artifact 预览在聊天流、右侧面板和独立预览页中的体验质量
+- 让评委在不跳转的情况下即可感知产物内容
+
+### 主要变更
+
+- 新增 `renderArtifactContent.tsx` 共享渲染工具，统一 ArtifactPreviewDock、PreviewPage、InlineArtifactPreview 的渲染逻辑
+- 新增 `InlineArtifactPreview.tsx`：聊天流内联预览组件，支持代码（带行号 + PrismJS 语法高亮）、WEB_PREVIEW（iframe 缩略图）、Markdown（简单 HTML 渲染）、截断展开/收起
+- 新增 `ArtifactPreviewModal.tsx`：全屏 modal 预览，React Portal 渲染，ESC/点击背景关闭，90vw×88vh
+- 更新 `MessageBubble.tsx`：artifact 卡片内嵌 InlineArtifactPreview，新增"全屏预览"按钮打开 modal
+- 更新 `ArtifactPreviewDock.tsx`：使用共享渲染函数，代码带语法高亮 + 行号，新增复制按钮
+- 更新 `PreviewPage.tsx`：使用共享渲染函数，代码带语法高亮 + 行号，内容工具栏新增复制按钮
+- 新增 `syntax-highlight.css`：PrismJS token 颜色适配 light theme，行号样式，Markdown 渲染样式
+- 更新 `message.css`：内联预览卡片样式、modal overlay 样式
+- 更新 `artifact.css`：dock header actions、copy button 样式
+- 更新 `preview.css`：content toolbar actions、copy button、markdown 渲染样式
+- 新增依赖：`prismjs`（语法高亮）、`marked`（已安装但当前使用简单正则方案）
+
+### 验证
+
+- `cd frontend && npm run build`：通过
+- `cd frontend && npm run lint`：通过
+
+### 边界
+
+- PPT 在线浏览不做，需要重型库
+- 代码编辑器不升级为 Monaco/CodeMirror，textarea + 高亮预览已满足 demo 需求
+- marked 已安装但当前使用简单正则渲染 Markdown，避免 XSS 风险
+- iframe sandbox 策略保持不变：PreviewPage 用 sandbox=""，Dock 不加 sandbox
+
+## 2026-06-10 - persistence mode 启动参数归一化
+
+### 变更
+
+- 新增 `PersistenceModeEnvironmentInitializer`，在 Spring 条件装配前归一化 `agenthub.persistence.mode`。
+- `AGENTHUB_PERSISTENCE_MODE` 或命令行参数即使带首尾空格，也会被 trim 并转成小写后参与 Repository 条件匹配。
+- 修复 Windows `cmd set` 拼接时可能产生 `jdbc ` / `memory `，导致 memory/JDBC Repository 条件全部失配，最终表现为 `ActionAuditRepository` Bean 缺失的问题。
+
+### 验证
+
+- `cd backend && mvn -q -DskipTests package`：通过。
+- 临时端口启动 `--agenthub.persistence.mode="memory "`：通过，应用成功启动到 18084，说明尾随空格不会再造成 Repository Bean 条件失配。
+
+### 边界
+
+- 本轮只处理 persistence mode 条件匹配鲁棒性，不改变 JDBC 凭据要求；如果 MySQL 用户名或密码错误，JDBC 模式仍会按真实连接错误失败。

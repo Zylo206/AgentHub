@@ -480,3 +480,63 @@
     min-height: 520px !important;
   }
 }
+
+/* --- Content toolbar actions (copy button) --- */
+.preview-page__content-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 420px;
+  margin-top: 0;
+  text-align: right;
+}
+
+.preview-page__content-toolbar-actions span {
+  margin: 0 !important;
+}
+
+.preview-page__copy-btn {
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  border-radius: 8px;
+  background: #fff;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ah-muted, #747b85);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.preview-page__copy-btn:hover {
+  background: var(--ah-blue-soft, #edf3ff);
+  color: var(--ah-blue, #2f73ff);
+}
+
+/* --- Preview page markdown rendering --- */
+.preview-page__panel--content .preview-page__markdown {
+  padding: 16px 20px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ah-text, #1f2329);
+}
+
+.preview-page__panel--content .preview-page__document {
+  padding: 16px 20px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+/* --- Preview page code with line numbers --- */
+.preview-page__panel--content .preview-page__code {
+  min-height: 320px;
+}
+
+@media (max-width: 768px) {
+  .preview-page__content-toolbar-actions {
+    max-width: none;
+    text-align: left;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+  }
+}

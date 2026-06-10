@@ -16751,6 +16751,26 @@ body:has(.agent-builder-page),
   line-height: 1 !important;
 }
 
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="workspace"]::before {
+  content: "●" !important;
+  font-size: 14px !important;
+}
+
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="agents"]::before {
+  content: "✚" !important;
+  font-size: 18px !important;
+}
+
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="desktop"]::before {
+  content: "⌘" !important;
+  font-size: 18px !important;
+}
+
+.app-shell:has(.agent-builder-page) .app-nav-link[data-rail-icon="admin"]::before {
+  content: "⚙" !important;
+  font-size: 17px !important;
+}
+
 .app-shell:has(.agent-builder-page) .app-nav-link[href="/workspace"]::before {
   content: "●" !important;
 }

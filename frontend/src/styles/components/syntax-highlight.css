@@ -1,0 +1,173 @@
+/* =========================================================================
+   Syntax Highlighting (PrismJS theme integration for AgentHub)
+   Uses --ah-* tokens from coze-light.css for consistent light theme.
+   ========================================================================= */
+
+/* --- Code block base --- */
+.artifact-preview__code,
+.preview-page__code,
+.inline-preview__code,
+.modal-preview__code {
+  margin: 0;
+  padding: 12px 14px;
+  background: #f8f9fb;
+  border: 1px solid rgba(31, 35, 41, 0.06);
+  border-radius: 10px;
+  overflow-x: auto;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ah-text, #1f2329);
+  tab-size: 2;
+}
+
+.artifact-preview__code code,
+.preview-page__code code,
+.inline-preview__code code,
+.modal-preview__code code {
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  padding: 0;
+  white-space: pre;
+}
+
+/* --- Line numbers --- */
+.code-lineno {
+  display: inline-block;
+  min-width: 2.5em;
+  padding-right: 10px;
+  text-align: right;
+  color: var(--ah-faint, #a7adb5);
+  user-select: none;
+  border-right: 1px solid rgba(31, 35, 41, 0.06);
+  margin-right: 10px;
+}
+
+/* --- Code container with line numbers --- */
+.artifact-preview__code-container,
+.inline-preview__code-container,
+.modal-preview__code-container {
+  position: relative;
+}
+
+/* --- Prism token colors (light theme) --- */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #6a737d;
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: #24292e;
+}
+
+.token.namespace {
+  opacity: 0.7;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #005cc5;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #22863a;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #d73a49;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #d73a49;
+}
+
+.token.function,
+.token.class-name {
+  color: #6f42c1;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #e36209;
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.entity {
+  cursor: help;
+}
+
+/* --- Inline markdown rendering --- */
+.inline-md__h2 {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ah-text, #1f2329);
+  margin: 8px 0 4px;
+}
+
+.inline-md__h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ah-text, #1f2329);
+  margin: 6px 0 3px;
+}
+
+.inline-md__h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ah-text, #1f2329);
+  margin: 4px 0 2px;
+}
+
+.inline-md__code {
+  background: #f8f9fb;
+  border: 1px solid rgba(31, 35, 41, 0.06);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 11px;
+  overflow-x: auto;
+  margin: 4px 0;
+}
+
+.inline-md__inline-code {
+  background: rgba(31, 35, 41, 0.05);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.inline-md__li {
+  margin-left: 16px;
+  list-style: disc;
+  display: list-item;
+}

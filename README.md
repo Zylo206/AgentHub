@@ -72,6 +72,11 @@ npm run dev
 
 默认本地模式偏向演示和 smoke 稳定性，可直接使用 demo 登录链路。
 
+默认账号：
+
+- 演示账号：`demo / demo`
+- 管理员账号：`admin / Admin123!`
+
 ### 真实账号 + JDBC 模式
 
 如需切到真实用户体系和 MySQL 持久化，核心变量包括：
@@ -174,7 +179,7 @@ node scripts/e2e-browser.mjs
 
 - [产品设计文档](docs/product-design.md)
 - [技术设计文档](docs/technical-design.md)
-- [验收报告 v1.5](docs/acceptance-report-v1.5.md)
+- [验收报告 v1.5（归档）](docs/archive/verification/acceptance-report-v1.5.md)
 - [下一阶段计划](docs/plans/next.md)
 - [脚本说明](scripts/README.md)
 

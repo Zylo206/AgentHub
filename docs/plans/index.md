@@ -5,7 +5,7 @@
 ## 来源范围
 
 - 主要来源：`docs/collaboration/dev-log.md` Phase 40 - Phase 84。
-- 辅助来源：`docs/roadmap.md`、`docs/technical-design.md`、`docs/persistence-plan.md` 中已经同步过的能力边界。
+- 辅助来源：`docs/roadmap.md`、`docs/technical-design.md` 中已经同步过的能力边界；历史 `persistence-plan` 见 `docs/archive/plan-history/persistence-plan.md`。
 - 本目录记录的是产品 / 架构 / 工程计划，不替代 `dev-log.md` 的逐轮开发记录。
 
 ## 当前阶段判断
@@ -22,7 +22,6 @@ AgentHub 当前处于 MVP 增强后期，已经具备 IM Workspace、多 Agent �
 | `completed-roadmap.md` | Phase 40-84 中已经落地的能力归档 |
 | `deferred-roadmap.md` | 明确后置的能力和暂缓原因 |
 | `real-adapter-plan.md` | OpenAI-compatible、REAL_FIRST、REAL_ADAPTER 质量闭环计划 |
-| `persistence-plan.md` | memory / JDBC / MySQL 验证路线 |
 | `realtime-plan.md` | SSE、Realtime State、WebSocket control、token streaming 路线 |
 | `orchestrator-plan.md` | Planner / Router / Executor / Aggregator、TaskGraph、多 Agent 调度路线 |
 | `productionization-plan.md` | 附件、安全边界、质量指标、仓库卫生、验证脚本等生产化计划 |

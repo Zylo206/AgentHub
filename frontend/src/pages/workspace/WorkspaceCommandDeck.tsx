@@ -6,7 +6,8 @@ interface WorkspaceCommandDeckProps {
   notices?: ReactNode;
   toolbar: ReactNode;
   selectedAgentBanner?: ReactNode;
-  advanced: ReactNode;
+  apiProvider?: ReactNode;
+  advanced?: ReactNode;
 }
 
 export function WorkspaceCommandDeck({
@@ -15,6 +16,7 @@ export function WorkspaceCommandDeck({
   notices,
   toolbar,
   selectedAgentBanner,
+  apiProvider,
   advanced
 }: WorkspaceCommandDeckProps) {
   return (
@@ -23,10 +25,23 @@ export function WorkspaceCommandDeck({
         {header}
         <div className="workspace-command-deck__presence-row">
           {presence}
-          <details className="workspace-command-deck__advanced" data-testid="workspace-command-deck-advanced">
-            <summary>高级工具</summary>
-            <div className="workspace-command-deck__advanced-body">{advanced}</div>
-          </details>
+          <div className="workspace-command-deck__tool-row">
+            {apiProvider ? (
+              <details
+                className="workspace-command-deck__advanced workspace-command-deck__advanced--api"
+                data-testid="workspace-command-deck-api"
+              >
+                <summary>API 接入</summary>
+                <div className="workspace-command-deck__advanced-body">{apiProvider}</div>
+              </details>
+            ) : null}
+            {advanced ? (
+              <details className="workspace-command-deck__advanced" data-testid="workspace-command-deck-advanced">
+                <summary>会话摘要</summary>
+                <div className="workspace-command-deck__advanced-body">{advanced}</div>
+              </details>
+            ) : null}
+          </div>
         </div>
         {notices}
         {toolbar}

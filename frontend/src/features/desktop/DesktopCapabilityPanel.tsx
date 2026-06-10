@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { getAdapters } from "../../api/agenthubApi";
 import {
   checkDesktopPort,
   getDesktopEnvironment,
@@ -22,12 +23,15 @@ import {
   type DesktopManagedProcess,
   type DesktopPortStatus
 } from "./desktopBridge";
+import type { AdapterDescriptor } from "../agents/agentTypes";
 import type { LightweightAttachment } from "../chat/chatTypes";
 
 const DEFAULT_BACKEND_JAR = "backend/target/agenthub-backend-0.1.0-SNAPSHOT.jar";
 const DEFAULT_BACKEND_PORT = 8080;
+const WEB_CLI_ADAPTER_TYPES = ["CLAUDE_CODE", "CODEX", "OPEN_CODE"] as const;
 
 type DesktopTab = "files" | "notifications" | "agents" | "backend";
+type CliAdapterType = (typeof WEB_CLI_ADAPTER_TYPES)[number];
 
 interface LocalContextCandidate {
   path: string;
@@ -173,6 +177,78 @@ function statusLabel(status: NotificationLogItem["status"]): string {
   return status === "SENT" ? "已发送" : "发送失败";
 }
 
+function readCapabilityDetail(details: Record<string, unknown> | undefined, ...keys: string[]): unknown {
+  if (!details) {
+    return undefined;
+  }
+  for (const key of keys) {
+    const value = details[key];
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function stringifyCapabilityDetail(value: unknown, fallback: string): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof value === "boolean") {
+    return value ? "supported" : "not supported";
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  return fallback;
+}
+
+function buildWebCliProbe(adapter: AdapterDescriptor | undefined, command: string): DesktopCliProbeResult {
+  const details = adapter?.capabilityDetails;
+  const available = adapter?.status === "AVAILABLE";
+  const helpProbeStatus = stringifyCapabilityDetail(
+    readCapabilityDetail(details, "helpProbeStatus", "helpProbeFailure"),
+    available ? "server-side probe completed" : "not available"
+  );
+  const authProbeStatus = stringifyCapabilityDetail(
+    readCapabilityDetail(details, "authProbeStatus"),
+    available ? "unknown" : "not available"
+  );
+  const streamSupport = stringifyCapabilityDetail(
+    readCapabilityDetail(details, "supportsStreamJson", "supportsJsonEvents"),
+    "unknown"
+  );
+  const schemaSupport = stringifyCapabilityDetail(
+    readCapabilityDetail(details, "supportsOutputSchema", "schemaMode"),
+    "unknown"
+  );
+  const sandboxPolicy = stringifyCapabilityDetail(
+    readCapabilityDetail(details, "supportsSandbox", "workspaceWriteAllowed", "sandboxPolicy"),
+    "unknown"
+  );
+  const toolPolicy = stringifyCapabilityDetail(
+    readCapabilityDetail(details, "supportsToolPolicy", "externalCliSessionMode", "toolPolicy"),
+    "unknown"
+  );
+  const failureDetail = readCapabilityDetail(details, "probeFailure", "helpProbeFailure", "versionProbeFailure");
+  const failureReason = adapter?.failureReason || stringifyCapabilityDetail(failureDetail, "") || null;
+
+  return {
+    command,
+    available,
+    executablePath: stringifyCapabilityDetail(readCapabilityDetail(details, "cliPath"), "") || null,
+    version: stringifyCapabilityDetail(readCapabilityDetail(details, "version"), "") || null,
+    helpProbe: helpProbeStatus,
+    authProbeStatus,
+    streamSupport,
+    schemaSupport,
+    sandboxPolicy,
+    toolPolicy,
+    failureReason
+  };
+}
+
 export function DesktopCapabilityPanel({
   conversationId,
   onUseLocalFileAsAttachment,
@@ -203,6 +279,7 @@ export function DesktopCapabilityPanel({
   const [portStatus, setPortStatus] = useState<DesktopPortStatus | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const cliProbeSupported = true;
 
   const cliSummary = useMemo(() => {
     if (cliProbes.length === 0) {
@@ -421,9 +498,11 @@ export function DesktopCapabilityPanel({
     });
   }
 
-  async function handleProbeCli(command: string) {
-    await runAction(`probe-${command}`, async () => {
-      const probe = await probeDesktopAgentCli(command);
+  async function handleProbeCli(adapterType: CliAdapterType, command: string) {
+    await runAction(`probe-${adapterType}`, async () => {
+      const probe = desktopAvailable
+        ? await probeDesktopAgentCli(command)
+        : buildWebCliProbe((await getAdapters()).find((item) => item.adapterType === adapterType), command);
       setCliProbes((previous) => [
         probe,
         ...previous.filter((item) => item.command !== probe.command)
@@ -480,7 +559,15 @@ export function DesktopCapabilityPanel({
     return (
       <div className="desktop-console__boundary">
         <strong>当前是 Web 模式</strong>
-        <p>本地文件、系统通知和进程管理需要通过 Tauri 原生壳启动；Web 主路径仍可完成 IM 协作验收。</p>
+        <p>本地文件、系统通知和托管进程仍需要 Tauri 桌面壳；但 Agent CLI 探测现在会复用后端 `/api/adapters`，由服务端在同机环境执行版本与帮助探测。</p>
+        <p>如果需要完整桌面能力，请运行 `cd desktop && npm run dev`，或直接启动 `desktop/src-tauri/target/debug/agenthub-desktop.exe`。</p>
+      </div>
+    );
+    return (
+      <div className="desktop-console__boundary">
+        <strong>当前是 Web 模式</strong>
+        <p>现在没有连接 AgentHub 的 Tauri 桌面壳，所以本地文件、桌面通知、CLI 探测和托管进程都会禁用。</p>
+        <p>要启用这几项能力，请运行 `cd desktop && npm run dev`，或直接启动 `desktop/src-tauri/target/debug/agenthub-desktop.exe`。</p>
       </div>
     );
   }
@@ -491,7 +578,6 @@ export function DesktopCapabilityPanel({
         <div>
           <span className="desktop-console__eyebrow">Desktop Console</span>
           <strong>本地能力控制台</strong>
-          <p>集中处理本地文件、系统通知、本机 Agent CLI 和 backend 托管进程。</p>
         </div>
         <span className={desktopAvailable ? "desktop-console__status desktop-console__status--active" : "desktop-console__status"}>
           {desktopAvailable ? "Tauri 已连接" : "Web 模式"}
@@ -732,9 +818,30 @@ export function DesktopCapabilityPanel({
                 <p>探测本机 Claude Code、Codex 和 OpenCode 命令，仅验证 headless Artifact-only 能力。</p>
               </div>
               <div className="desktop-console__actions">
-                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli(claudeCommand)}>Claude Code</button>
-                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli(codexCommand)}>Codex</button>
-                <button type="button" className="secondary-button" disabled={!desktopAvailable} onClick={() => void handleProbeCli(opencodeCommand)}>OpenCode</button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!cliProbeSupported || loadingAction === "probe-CLAUDE_CODE"}
+                  onClick={() => void handleProbeCli("CLAUDE_CODE", claudeCommand)}
+                >
+                  Claude Code
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!cliProbeSupported || loadingAction === "probe-CODEX"}
+                  onClick={() => void handleProbeCli("CODEX", codexCommand)}
+                >
+                  Codex
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!cliProbeSupported || loadingAction === "probe-OPEN_CODE"}
+                  onClick={() => void handleProbeCli("OPEN_CODE", opencodeCommand)}
+                >
+                  OpenCode
+                </button>
               </div>
             </div>
             <div className="desktop-console__row">
@@ -742,6 +849,16 @@ export function DesktopCapabilityPanel({
               <input value={codexCommand} onChange={(event) => setCodexCommand(event.target.value)} placeholder="Codex command" disabled={!desktopAvailable} />
               <input value={opencodeCommand} onChange={(event) => setOpencodeCommand(event.target.value)} placeholder="OpenCode command" disabled={!desktopAvailable} />
             </div>
+            {!desktopAvailable ? (
+              <div className="desktop-console__empty">
+                当前页面运行在浏览器中，CLI 探测会改为读取后端 `/api/adapters` 返回的服务端探测结果；命令输入框仍只在桌面端用于本地自定义命令。
+              </div>
+            ) : null}
+            {false ? (
+              <div className="desktop-console__empty">
+                当前页面跑在浏览器里，不是在 Tauri 桌面壳里，所以探测按钮会保持灰色禁用。这不等于 Claude 或 Codex 没装好。
+              </div>
+            ) : null}
             {cliProbes.length > 0 ? (
               <div className="desktop-console__probe-list">
                 {cliProbes.map((probe) => (

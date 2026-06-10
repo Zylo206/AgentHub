@@ -1,18 +1,38 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { AgentCreateDialog, type AgentCreateMode } from "../features/agents/AgentCreateDialog";
 import type { Agent } from "../features/agents/agentTypes";
 
+function getUserDisplayName(user?: {
+  displayName?: string | null;
+  username?: string | null;
+} | null): string {
+  return user?.displayName || user?.username || "当前用户";
+}
+
+function getUserInitial(user?: {
+  displayName?: string | null;
+  username?: string | null;
+} | null): string {
+  return getUserDisplayName(user).charAt(0).toUpperCase() || "U";
+}
+
 export function AppLayout() {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
   const [agentDialogMode, setAgentDialogMode] = useState<AgentCreateMode>("custom");
   const [createdAgentName, setCreatedAgentName] = useState<string | null>(null);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
   const createButtonRef = useRef<HTMLButtonElement | null>(null);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const userButtonRef = useRef<HTMLButtonElement | null>(null);
+  const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const isRailLayoutRoute =
+    location.pathname.startsWith("/workspace") || location.pathname.startsWith("/agents");
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -20,11 +40,15 @@ export function AppLayout() {
       if (createMenuOpen && !createMenuRef.current?.contains(target) && !createButtonRef.current?.contains(target)) {
         setCreateMenuOpen(false);
       }
+      if (userMenuOpen && !userMenuRef.current?.contains(target) && !userButtonRef.current?.contains(target)) {
+        setUserMenuOpen(false);
+      }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setCreateMenuOpen(false);
+        setUserMenuOpen(false);
         setAgentDialogOpen(false);
       }
     }
@@ -35,7 +59,7 @@ export function AppLayout() {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [createMenuOpen]);
+  }, [createMenuOpen, userMenuOpen]);
 
   function openAgentDialog(mode: AgentCreateMode) {
     setAgentDialogMode(mode);
@@ -63,8 +87,33 @@ export function AppLayout() {
   }
 
   async function handleLogout() {
+    setUserMenuOpen(false);
     await logout();
     navigate("/login", { replace: true });
+  }
+
+  function handleOpenApiSettings() {
+    setUserMenuOpen(false);
+    if (location.pathname !== "/workspace") {
+      navigate("/workspace");
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("agenthub:open-api-settings"));
+      }, 80);
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("agenthub:open-api-settings"));
+  }
+
+  function handleOpenConversationSettings() {
+    setUserMenuOpen(false);
+    if (location.pathname !== "/workspace") {
+      navigate("/workspace");
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("agenthub:open-conversation-settings"));
+      }, 80);
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("agenthub:open-conversation-settings"));
   }
 
   return (
@@ -87,7 +136,10 @@ export function AppLayout() {
             data-testid="app-create-button"
             aria-expanded={createMenuOpen}
             aria-haspopup="menu"
-            onClick={() => setCreateMenuOpen((current) => !current)}
+            onClick={() => {
+              setUserMenuOpen(false);
+              setCreateMenuOpen((current) => !current);
+            }}
           >
             <span aria-hidden="true">+</span>
             <span className="app-rail-create-button__label">新建</span>
@@ -152,18 +204,39 @@ export function AppLayout() {
         </div>
 
         <nav className="app-header__nav" aria-label="主导航">
-          <NavLink to="/workspace" className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}>
+          <NavLink
+            to="/workspace"
+            title="Workspace"
+            aria-label="Workspace"
+            data-rail-icon="workspace"
+            className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}
+          >
             工作台
           </NavLink>
-          <NavLink to="/agents" className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}>
+          <NavLink
+            to="/agents"
+            title="Agent 管理"
+            aria-label="Agent 管理"
+            data-rail-icon="agents"
+            className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}
+          >
             Agent 管理
           </NavLink>
-          <NavLink to="/desktop" className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}>
+          <NavLink
+            to="/desktop"
+            title="Desktop Console"
+            aria-label="Desktop Console"
+            data-rail-icon="desktop"
+            className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}
+          >
             Desktop
           </NavLink>
           {user?.role === "ADMIN" ? (
             <NavLink
               to="/admin/users"
+              title="用户管理"
+              aria-label="用户管理"
+              data-rail-icon="admin"
               className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link--active" : ""}`}
             >
               用户管理
@@ -171,19 +244,70 @@ export function AppLayout() {
           ) : null}
         </nav>
 
-        <div className="app-header__user">
-          <div className="app-header__user-meta">
-            <strong>{user?.displayName || user?.username || "当前用户"}</strong>
-            <span>{user?.role || "USER"}</span>
-          </div>
+        <div
+          className={`app-header__user${isRailLayoutRoute ? " app-header__user--workspace-rail" : ""}`}
+          ref={userMenuRef}
+        >
           <button
+            ref={userButtonRef}
             type="button"
-            className="secondary-button app-header__logout-button"
-            data-testid="app-logout-button"
-            onClick={() => void handleLogout()}
+            className={`app-header__user-trigger${isRailLayoutRoute ? " app-header__user-trigger--workspace-rail" : ""}`}
+            data-testid="app-user-menu-button"
+            aria-expanded={userMenuOpen}
+            aria-haspopup="menu"
+            onClick={() => {
+              setCreateMenuOpen(false);
+              setUserMenuOpen((current) => !current);
+            }}
           >
-            退出登录
+            <span className="app-header__user-avatar" aria-hidden="true">
+              {getUserInitial(user)}
+            </span>
+            <span className="app-header__user-meta">
+              <strong>{getUserDisplayName(user)}</strong>
+              <span>{user?.role || "USER"}</span>
+            </span>
           </button>
+
+          {userMenuOpen ? (
+            <div
+              className={`app-header__user-menu${isRailLayoutRoute ? " app-header__user-menu--workspace-rail" : ""}`}
+              role="menu"
+              data-testid="app-user-menu"
+            >
+              <div className="app-header__user-menu-header">
+                <strong>{getUserDisplayName(user)}</strong>
+                <span>{user?.role || "USER"}</span>
+              </div>
+              {location.pathname.startsWith("/workspace") ? (
+                <button
+                  type="button"
+                  className="app-header__user-menu-item"
+                  role="menuitem"
+                  onClick={handleOpenConversationSettings}
+                >
+                  会话设置
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="app-header__user-menu-item"
+                role="menuitem"
+                onClick={handleOpenApiSettings}
+              >
+                API 设置
+              </button>
+              <button
+                type="button"
+                className="app-header__user-menu-item"
+                data-testid="app-logout-button"
+                role="menuitem"
+                onClick={() => void handleLogout()}
+              >
+                退出登录
+              </button>
+            </div>
+          ) : null}
         </div>
       </header>
 
