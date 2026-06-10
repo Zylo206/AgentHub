@@ -12,6 +12,8 @@
 - `windows-powershell-exact-installs/`：Windows PowerShell 精确安装和落盘验证
 - `chinese-first-repo-docs/`：中文优先 README/docs 和发布文案
 - `agents-md-standard/`：项目级 AGENTS.md 标准
+- `verification-gate/`：验证门禁、回归检查、改动后验收
+- `swarm-coordinator/`：多 Agent 协作、规划、分工、聚合
 
 ## 使用原则
 

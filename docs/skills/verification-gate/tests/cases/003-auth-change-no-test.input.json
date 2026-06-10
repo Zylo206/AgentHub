@@ -1,0 +1,10 @@
+{
+  "task_goal": "Verify an auth-related login flow change.",
+  "git_diff": "diff --git a/src/auth/login.py b/src/auth/login.py\nindex 3333333..4444444 100644\n--- a/src/auth/login.py\n+++ b/src/auth/login.py\n@@ -1,6 +1,10 @@\n def login(user, password):\n+    if not user:\n+        raise ValueError(\"invalid user\")\n     token = issue_token(user)\n     return token\n\n def check_permission(user, action):\n+    if action == \"admin\":\n+        return user.is_admin\n     return True\n",
+  "changed_files": [
+    "src/auth/login.py"
+  ],
+  "user_constraints": [
+    "Do not modify any source files during verification."
+  ]
+}

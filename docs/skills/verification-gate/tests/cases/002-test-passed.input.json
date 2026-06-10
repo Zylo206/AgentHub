@@ -1,0 +1,8 @@
+{
+  "task_goal": "Verify a small refactor in a formatting helper.",
+  "git_diff": "diff --git a/src/formatting.py b/src/formatting.py\nindex 1111111..2222222 100644\n--- a/src/formatting.py\n+++ b/src/formatting.py\n@@ -1,4 +1,6 @@\n def format_user(user):\n-    return user.name.strip()\n+    if user is None:\n+        return \"\"\n+    return user.name.strip()\n",
+  "test_log": "pytest -q\n3 passed in 0.42s\n",
+  "changed_files": [
+    "src/formatting.py"
+  ]
+}

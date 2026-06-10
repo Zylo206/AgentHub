@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_goal",
+    "git_diff"
+  ],
+  "properties": {
+    "task_goal": {
+      "type": "string"
+    },
+    "git_diff": {
+      "type": "string"
+    },
+    "test_log": {
+      "type": "string"
+    },
+    "lint_log": {
+      "type": "string"
+    },
+    "build_log": {
+      "type": "string"
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "user_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

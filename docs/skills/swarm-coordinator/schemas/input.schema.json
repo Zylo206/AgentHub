@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "goal"
+  ],
+  "properties": {
+    "goal": {
+      "type": "string"
+    },
+    "context": {
+      "type": "string"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "available_workers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "type",
+          "summary"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "preferred_state": {
+      "type": "string",
+      "enum": [
+        "PLANNED",
+        "RESEARCHING",
+        "IMPLEMENTING",
+        "VERIFYING",
+        "DONE",
+        "BLOCKED",
+        "FAILED"
+      ]
+    },
+    "require_verification": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "name": "swarm-coordinator",
+  "version": "0.2.0",
+  "description": "Generate a structured multi-agent task plan with bounded workers, handoff rules, and verification criteria.",
+  "category": "coordination",
+  "trigger": {
+    "when": [
+      "complex_task_detected",
+      "multi_step_task",
+      "requires_research_and_implementation",
+      "before_parallel_agent_work"
+    ],
+    "avoid": [
+      "simple_single_step_task",
+      "pure_chat_response",
+      "no_clear_goal"
+    ]
+  },
+  "runtime": {
+    "type": "script",
+    "language": "python",
+    "entry": "scripts/run.py"
+  },
+  "inputs": {
+    "required": [
+      "goal"
+    ],
+    "optional": [
+      "context",
+      "constraints",
+      "available_workers",
+      "changed_files",
+      "artifacts",
+      "preferred_state",
+      "require_verification"
+    ]
+  },
+  "outputs": {
+    "format": "json",
+    "schema": "schemas/output.schema.json"
+  },
+  "permissions": {
+    "read": [
+      "task_goal",
+      "task_context",
+      "changed_files",
+      "artifacts"
+    ],
+    "execute": [],
+    "write": [
+      "task_plan"
+    ],
+    "forbidden": [
+      "modify_source_code",
+      "delete_files",
+      "commit_code",
+      "push_code",
+      "execute_shell_commands"
+    ]
+  },
+  "verification": {
+    "required_checks": [
+      "goal_preserved",
+      "workers_defined",
+      "handoff_rules_defined",
+      "acceptance_criteria_defined",
+      "verification_step_included",
+      "output_schema_valid"
+    ]
+  },
+  "benchmark": {
+    "dataset": "tests/cases",
+    "metrics": [
+      "output_schema_validity",
+      "worker_plan_completeness",
+      "handoff_rule_coverage",
+      "verification_inclusion_rate"
+    ]
+  }
+}

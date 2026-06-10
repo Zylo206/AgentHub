@@ -76,8 +76,8 @@ public class DeploymentApplicationService {
                 timeProvider.now()));
 
         String deploymentId = idGenerator.nextId("deploy");
-        String previewUrl = "http://localhost:5173/preview/" + artifact.getId().value();
-        String message = "Static demo deployment completed. No real external deployment was executed.";
+        String previewUrl = "http://localhost:8080/deploy/" + deploymentId;
+        String message = "Static preview deployed. Accessible at the preview URL.";
         DeploymentRecord deploymentRecord = new DeploymentRecord(
                 deploymentId,
                 artifact.getId(),
@@ -132,7 +132,7 @@ public class DeploymentApplicationService {
     }
 
     private void appendDeployStatusMessage(DeploymentRecord deploymentRecord) {
-        String content = "Static demo deployment completed for "
+        String content = "Static preview deployed for "
                 + deploymentRecord.getArtifactTitle()
                 + ". Preview URL: "
                 + deploymentRecord.getPreviewUrl()

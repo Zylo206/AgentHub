@@ -1,0 +1,77 @@
+{
+  "name": "verification-gate",
+  "version": "0.2.0",
+  "description": "Post-implementation verification gate for AI coding tasks.",
+  "category": "verification",
+  "trigger": {
+    "when": [
+      "after_code_change",
+      "before_final_response",
+      "before_commit"
+    ],
+    "avoid": [
+      "pure_explanation_task",
+      "no_code_changed"
+    ]
+  },
+  "runtime": {
+    "type": "script",
+    "language": "python",
+    "entry": "scripts/run.py"
+  },
+  "inputs": {
+    "required": [
+      "task_goal",
+      "git_diff"
+    ],
+    "optional": [
+      "test_log",
+      "lint_log",
+      "build_log",
+      "changed_files",
+      "user_constraints"
+    ]
+  },
+  "outputs": {
+    "format": "json",
+    "schema": "schemas/output.schema.json"
+  },
+  "permissions": {
+    "read": [
+      "repo_files",
+      "git_diff",
+      "test_logs",
+      "build_logs",
+      "lint_logs"
+    ],
+    "execute": [
+      "tests",
+      "lint"
+    ],
+    "write": [
+      "reports"
+    ],
+    "forbidden": [
+      "modify_source_code",
+      "delete_files",
+      "commit_code",
+      "push_code"
+    ]
+  },
+  "verification": {
+    "required_checks": [
+      "diff_reviewed",
+      "tests_status_checked",
+      "risk_level_assigned",
+      "final_status_assigned"
+    ]
+  },
+  "benchmark": {
+    "dataset": "tests/cases",
+    "metrics": [
+      "risk_detection_rate",
+      "false_verified_rate",
+      "output_schema_validity"
+    ]
+  }
+}

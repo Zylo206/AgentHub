@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "goal",
+    "task_state",
+    "workers",
+    "handoff_rules",
+    "shared_context",
+    "acceptance_criteria",
+    "verification_required",
+    "verification_plan",
+    "risks",
+    "next_step"
+  ],
+  "properties": {
+    "goal": {
+      "type": "string"
+    },
+    "task_state": {
+      "type": "string",
+      "enum": [
+        "PLANNED",
+        "RESEARCHING",
+        "IMPLEMENTING",
+        "VERIFYING",
+        "DONE",
+        "BLOCKED",
+        "FAILED"
+      ]
+    },
+    "workers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "task",
+          "input",
+          "expected_output",
+          "handoff_to"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          },
+          "input": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expected_output": {
+            "type": "string"
+          },
+          "handoff_to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "handoff_rules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "shared_context": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verification_required": {
+      "type": "boolean"
+    },
+    "verification_plan": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_step": {
+      "type": "string"
+    }
+  }
+}

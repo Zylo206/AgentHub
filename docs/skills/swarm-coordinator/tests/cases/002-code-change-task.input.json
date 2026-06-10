@@ -1,0 +1,19 @@
+{
+  "goal": "Implement a verification gate runtime and update related tests.",
+  "constraints": [
+    "Do not modify unrelated skills.",
+    "Keep SKILL.md backward compatible."
+  ],
+  "changed_files": [
+    "skills/verification-gate/scripts/run.py",
+    "tools/run_skill_tests.py"
+  ],
+  "artifacts": [
+    {
+      "path": "skills/verification-gate/tests/cases",
+      "type": "test-data",
+      "summary": "Verification cases for the bundle runtime."
+    }
+  ],
+  "require_verification": true
+}

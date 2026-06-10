@@ -1,0 +1,7 @@
+{
+  "goal_non_empty": true,
+  "workers_non_empty": true,
+  "handoff_rules_non_empty": true,
+  "acceptance_criteria_non_empty": true,
+  "next_step_non_empty": true
+}
