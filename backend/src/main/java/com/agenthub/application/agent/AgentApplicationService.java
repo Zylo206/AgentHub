@@ -7,6 +7,7 @@ import com.agenthub.domain.agent.AgentId;
 import com.agenthub.domain.agent.AgentRepository;
 import com.agenthub.domain.agent.AgentRole;
 import com.agenthub.domain.agent.AgentStatus;
+import com.agenthub.domain.agent.BuiltInAgentIds;
 import com.agenthub.infrastructure.adapter.AgentAdapterType;
 import java.time.Instant;
 import java.util.List;
@@ -71,6 +72,26 @@ public class AgentApplicationService {
         return agentRepository.save(agent);
     }
 
+    public boolean deleteAgent(String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            throw new IllegalArgumentException("Agent id cannot be blank.");
+        }
+
+        if (isBuiltInAgent(agentId)) {
+            throw new IllegalArgumentException("Built-in agents cannot be deleted.");
+        }
+
+        AgentId normalizedId = new AgentId(agentId);
+        Agent agent = agentRepository.findById(normalizedId)
+                .orElseThrow(() -> new NoSuchElementException("Agent not found: " + agentId));
+        if (agent.getRole() != AgentRole.CUSTOM) {
+            throw new IllegalArgumentException("Only custom agents can be deleted.");
+        }
+
+        agentRepository.deleteById(normalizedId);
+        return true;
+    }
+
     private String normalizePreferredAdapterType(String preferredAdapterType) {
         if (preferredAdapterType == null || preferredAdapterType.isBlank()) {
             return AgentAdapterType.MOCK.name();
@@ -90,5 +111,12 @@ public class AgentApplicationService {
 
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private boolean isBuiltInAgent(String agentId) {
+        return BuiltInAgentIds.ORCHESTRATOR.equals(agentId)
+                || BuiltInAgentIds.FRONTEND_BUILDER.equals(agentId)
+                || BuiltInAgentIds.BACKEND_WORKER.equals(agentId)
+                || BuiltInAgentIds.REVIEWER.equals(agentId);
     }
 }

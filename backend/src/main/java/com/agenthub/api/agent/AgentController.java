@@ -6,6 +6,7 @@ import com.agenthub.common.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -55,6 +56,11 @@ public class AgentController {
         return ApiResponse.success(
                 naturalLanguageAgentDraftService.draftFromNaturalLanguage(request.description()),
                 "Agent draft created");
+    }
+
+    @DeleteMapping("/{agentId}")
+    public ApiResponse<?> deleteAgent(@PathVariable("agentId") String agentId) {
+        return ApiResponse.success(agentApplicationService.deleteAgent(agentId), "Agent deleted");
     }
 }
 

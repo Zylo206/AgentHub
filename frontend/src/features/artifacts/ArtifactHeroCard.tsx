@@ -10,6 +10,8 @@ interface ArtifactHeroCardProps {
   selectedVersionEntry: VersionHistoryEntry | null;
   buildValidationLabel: string;
   qualityScoreLabel: string;
+  /** 是否使用紧凑模式 */
+  compact?: boolean;
 }
 
 export function ArtifactHeroCard({
@@ -17,14 +19,17 @@ export function ArtifactHeroCard({
   fallbackReason,
   selectedVersionEntry,
   buildValidationLabel,
-  qualityScoreLabel
+  qualityScoreLabel,
+  compact = false
 }: ArtifactHeroCardProps) {
   const sourceLabel = displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE");
   const isRealOutput = artifact.sourceKind === "REAL_ADAPTER";
 
   return (
     <section
-      className={`artifact-hero-card ${isRealOutput ? "artifact-hero-card--real" : "artifact-hero-card--fallback"}`}
+      className={`artifact-hero-card ${compact ? "artifact-hero-card--compact" : ""} ${
+        isRealOutput ? "artifact-hero-card--real" : "artifact-hero-card--fallback"
+      }`}
       data-testid="artifact-hero-card"
     >
       <div className="artifact-hero-card__main">
@@ -41,14 +46,22 @@ export function ArtifactHeroCard({
       <div className="artifact-hero-card__badges" aria-label="Artifact source and delivery boundary">
         <span>{sourceLabel}</span>
         <span>{sanitizeProductionText(artifact.realAdapterOutcome || "本地预览结果")}</span>
-        <span>构建 {buildValidationLabel}</span>
-        <span>评分 {qualityScoreLabel}</span>
+        {!compact && (
+          <>
+            <span>构建 {buildValidationLabel}</span>
+            <span>评分 {qualityScoreLabel}</span>
+          </>
+        )}
       </div>
 
       <div className="artifact-hero-card__meta">
         <span>ID {formatId(artifact.id)}</span>
-        <span>{artifact.language || "plain"}</span>
-        <span>{sanitizeProductionText(artifact.generationMode || "本地静态")}</span>
+        {!compact && (
+          <>
+            <span>{artifact.language || "plain"}</span>
+            <span>{sanitizeProductionText(artifact.generationMode || "本地静态")}</span>
+          </>
+        )}
       </div>
 
       {fallbackReason ? (
@@ -57,11 +70,11 @@ export function ArtifactHeroCard({
         </p>
       ) : null}
 
-      {selectedVersionEntry?.parentArtifact ? (
+      {!compact && selectedVersionEntry?.parentArtifact ? (
         <p className="artifact-hero-card__lineage">
           基于 {selectedVersionEntry.parentArtifact.title} v{selectedVersionEntry.parentArtifact.version}
         </p>
-      ) : artifact.revisionInstruction ? (
+      ) : !compact && artifact.revisionInstruction ? (
         <p className="artifact-hero-card__lineage">该 Revision 产物基于当前会话中的历史版本生成。</p>
       ) : null}
     </section>

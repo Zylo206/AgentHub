@@ -12,4 +12,6 @@ public interface AgentRepository {
     List<Agent> findAll();
 
     List<Agent> findByRole(AgentRole role);
+
+    void deleteById(AgentId agentId);
 }

@@ -102,4 +102,9 @@ public class InMemoryAgentRepository implements AgentRepository {
                 .sorted(Comparator.comparing(Agent::getCreatedAt).thenComparing(agent -> agent.getId().value()))
                 .toList();
     }
+
+    @Override
+    public void deleteById(AgentId agentId) {
+        storage.remove(agentId.value());
+    }
 }

@@ -6,6 +6,7 @@ param(
   [string]$JdbcUrl,
   [string]$JdbcUsername,
   [string]$JdbcPassword,
+  [string]$OpenAiRuntimeConfigEncryptionKey,
   [int]$BackendPort = 8080,
   [int]$FrontendPort = 5173,
   [int]$DocCollabPort = 8091
@@ -52,6 +53,11 @@ if ($UsePackagedBackend -and -not (Test-Path $backendJar)) {
 $resolvedJdbcUrl = if ($JdbcUrl) { $JdbcUrl } else { $env:AGENTHUB_JDBC_URL }
 $resolvedJdbcUsername = if ($JdbcUsername) { $JdbcUsername } else { $env:AGENTHUB_JDBC_USERNAME }
 $resolvedJdbcPassword = if ($PSBoundParameters.ContainsKey("JdbcPassword")) { $JdbcPassword } else { $env:AGENTHUB_JDBC_PASSWORD }
+$resolvedOpenAiRuntimeConfigEncryptionKey = if ($OpenAiRuntimeConfigEncryptionKey) {
+  $OpenAiRuntimeConfigEncryptionKey
+} else {
+  $env:AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY
+}
 
 if ($PersistenceMode -eq "jdbc") {
   if ([string]::IsNullOrWhiteSpace($resolvedJdbcUrl)) {
@@ -71,7 +77,8 @@ if ($PersistenceMode -eq "jdbc") {
   $backendEnvironment += @(
     (Get-CmdSetExpression "AGENTHUB_JDBC_URL" $resolvedJdbcUrl),
     (Get-CmdSetExpression "AGENTHUB_JDBC_USERNAME" $resolvedJdbcUsername),
-    (Get-CmdSetExpression "AGENTHUB_JDBC_PASSWORD" $resolvedJdbcPassword)
+    (Get-CmdSetExpression "AGENTHUB_JDBC_PASSWORD" $resolvedJdbcPassword),
+    (Get-CmdSetExpression "AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY" $resolvedOpenAiRuntimeConfigEncryptionKey)
   )
 }
 
@@ -90,6 +97,11 @@ Write-Output "Persistence mode: $PersistenceMode"
 if ($PersistenceMode -eq "jdbc") {
   Write-Output "JDBC URL: $resolvedJdbcUrl"
   Write-Output "JDBC user: $resolvedJdbcUsername"
+  if ([string]::IsNullOrWhiteSpace($resolvedOpenAiRuntimeConfigEncryptionKey)) {
+    Write-Output "OpenAI runtime-config encryption key: not configured"
+  } else {
+    Write-Output "OpenAI runtime-config encryption key: configured"
+  }
 }
 Start-CmdWindow "AgentHub Backend" $backendCommand
 

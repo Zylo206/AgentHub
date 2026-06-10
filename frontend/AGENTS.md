@@ -31,6 +31,9 @@
 - ArtifactPanel Apply / Deploy / Restore must use Approval Gate.
 - Preview URLs are local static previews, not public deployments.
 - Adapter quality, routing, and context explain panels are trust surfaces; do not remove them as UI simplification.
+- ArtifactCard tags are simplified (quality status + build status only); do not re-add quality score to card.
+- ArtifactTrustGrid supports collapsible mode; default is collapsed to reduce visual density.
+- ArtifactHeroCard supports compact mode; use `compact={true}` in ArtifactPanel overview.
 
 ## Code Conventions
 

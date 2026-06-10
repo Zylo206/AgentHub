@@ -462,6 +462,12 @@ export function createAgent(requestBody: CreateAgentRequest): Promise<Agent> {
   });
 }
 
+export function deleteAgent(agentId: string): Promise<boolean> {
+  return request<boolean>(`/api/agents/${encodeURIComponent(agentId)}`, {
+    method: "DELETE"
+  });
+}
+
 export function getAdapters(): Promise<AdapterDescriptor[]> {
   return request<AdapterDescriptor[]>("/api/adapters");
 }

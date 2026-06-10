@@ -507,8 +507,9 @@ export function ArtifactPanel({
                     selectedVersionEntry={selectedVersionEntry}
                     buildValidationLabel={formatBuildValidationValue(selectedArtifact)}
                     qualityScoreLabel={formatQualityScore(selectedArtifact.qualityScore)}
+                    compact={true}
                   />
-                  <ArtifactTrustGrid metrics={selectedArtifactMetrics} />
+                  <ArtifactTrustGrid metrics={selectedArtifactMetrics} title="产物指标" />
                   <ArtifactPreviewDock artifact={selectedArtifact} />
                   <ArtifactOperationBar
                     artifact={selectedArtifact}

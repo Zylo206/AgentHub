@@ -3,14 +3,6 @@ import { formatId, getIdValue } from "../../utils/id";
 import { displayArtifactSourceKind, displayArtifactType, displayStatus } from "../../utils/displayLabels";
 import { sanitizeProductionText } from "../../utils/productionLabels";
 
-function formatQualityScore(score: number | null | undefined): string {
-  if (typeof score !== "number" || !Number.isFinite(score)) {
-    return "未评分";
-  }
-
-  return score.toFixed(2);
-}
-
 function formatBuildValidation(status: string | null | undefined): string {
   if (!status || status === "NOT_EVALUATED") {
     return "未构建";
@@ -45,7 +37,6 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
   const artifactId = getIdValue(artifact.id);
   const isRevision = Boolean(artifact.parentArtifactId || artifact.revisionInstruction);
   const isRealAdapterArtifact = artifact.sourceKind === "REAL_ADAPTER";
-  const qualityScore = formatQualityScore(artifact.qualityScore);
   const sourceLabel = displayArtifactSourceKind(artifact.sourceKind || "STATIC_TEMPLATE");
   const buildLabel = formatBuildValidation(artifact.buildValidationStatus);
   const qualityLabel = formatQualityStatus(artifact.qualityStatus);
@@ -78,7 +69,6 @@ export function ArtifactCard({ artifact, selected, highlighted, onSelect }: Arti
       <div className="artifact-card__tags">
         <span className="artifact-card__tag artifact-card__tag--quality">{qualityLabel}</span>
         <span className="artifact-card__tag artifact-card__tag--build">{buildLabel}</span>
-        <span className="artifact-card__tag">质量分 {qualityScore}</span>
       </div>
 
       {isRevision ? (

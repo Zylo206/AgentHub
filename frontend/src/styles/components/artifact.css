@@ -547,3 +547,81 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* --- Collapsible Trust Grid --- */
+.artifact-trust-grid {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.artifact-trust-grid__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.artifact-trust-grid__toggle:hover {
+  background: #f1f5f9;
+}
+
+.artifact-trust-grid__title {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.artifact-trust-grid__icon {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.artifact-trust-grid__content {
+  padding: 12px;
+}
+
+/* --- Hero Card Compact Mode --- */
+.workspace-page .artifact-hero-card--compact {
+  padding: 12px !important;
+  gap: 8px !important;
+}
+
+.workspace-page .artifact-hero-card--compact .artifact-hero-card__main {
+  gap: 10px !important;
+}
+
+.workspace-page .artifact-hero-card--compact .artifact-hero-card__avatar {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+.workspace-page .artifact-hero-card--compact strong {
+  font-size: 14px !important;
+}
+
+.workspace-page .artifact-hero-card--compact .artifact-hero-card__badges span {
+  padding: 3px 6px !important;
+  font-size: 10px !important;
+}
+
+.workspace-page .artifact-hero-card--compact .artifact-hero-card__meta {
+  gap: 4px !important;
+}
+
+.workspace-page .artifact-hero-card--compact .artifact-hero-card__meta span {
+  padding: 3px 6px !important;
+  font-size: 10px !important;
+}
+
+/* --- Artifact Card Simplified Tags --- */
+.artifact-card__tags {
+  margin-top: 2px;
+}

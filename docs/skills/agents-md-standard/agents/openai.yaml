@@ -1,0 +1,8 @@
+interface:
+  display_name: "AGENTS.md Standard"
+  short_description: "Create Codex-native project instruction files."
+  default_prompt: "Use $agents-md-standard to create or rewrite this repo's AGENTS.md with verified commands and concrete architecture notes."
+
+policy:
+  allow_implicit_invocation: true
+

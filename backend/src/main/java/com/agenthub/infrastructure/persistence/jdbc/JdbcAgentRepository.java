@@ -75,6 +75,17 @@ public class JdbcAgentRepository implements AgentRepository {
         return queryMany("SELECT * FROM agenthub_agents WHERE role = ? ORDER BY created_at, id", role.name());
     }
 
+    @Override
+    public void deleteById(AgentId agentId) {
+        try (Connection connection = connectionFactory.open();
+                var statement = connection.prepareStatement("DELETE FROM agenthub_agents WHERE id = ?")) {
+            statement.setString(1, agentId.value());
+            statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to delete agent", exception);
+        }
+    }
+
     private List<Agent> queryMany(String sql, String... values) {
         try (Connection connection = connectionFactory.open();
                 var statement = connection.prepareStatement(sql)) {

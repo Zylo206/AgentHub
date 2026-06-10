@@ -1,0 +1,8 @@
+interface:
+  display_name: "Chinese-first Repo Docs"
+  short_description: "Rewrite repo docs in verified Chinese-first form."
+  default_prompt: "Use $chinese-first-repo-docs to refresh this repo README in Chinese-first style from the current implementation."
+
+policy:
+  allow_implicit_invocation: true
+

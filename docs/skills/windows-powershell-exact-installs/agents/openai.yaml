@@ -1,0 +1,8 @@
+interface:
+  display_name: "Windows PowerShell Installs"
+  short_description: "Run exact Windows install commands and verify the result."
+  default_prompt: "Use $windows-powershell-exact-installs to install this exact command on Windows and verify the real installed state."
+
+policy:
+  allow_implicit_invocation: true
+

@@ -10575,3 +10575,25 @@
 
 - PreviewPage 编辑直接调用后端 API，不经过 workspace 的 orchestrator 流程
 - marked 使用同步模式，GFM tables/lists/breaks 全部启用
+
+## 2026-06-10 - 启动脚本补充 JDBC API Key 加密参数
+
+### 目标
+
+- 让 `scripts/start-local.ps1` 在 JDBC 模式下可显式注入 `AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY`
+- 避免本地为了保存 IM API Key 还要先手动在外层 shell 里设置环境变量
+
+### 主要变更
+
+- 更新 `scripts/start-local.ps1`：新增 `-OpenAiRuntimeConfigEncryptionKey` 参数
+- 启动 backend 时，当 `-PersistenceMode jdbc` 启用，会把该参数透传为 `AGENTHUB_OPENAI_RUNTIME_CONFIG_ENCRYPTION_KEY`
+- 启动日志增加加密 key 是否已配置的提示，但不打印明文
+
+### 验证
+
+- 使用 PowerShell Parser 校验 `scripts/start-local.ps1` 语法：通过
+
+### 边界
+
+- 脚本不会自动生成加密 key；仍由调用者显式提供或使用已有环境变量
+- 未配置该 key 时，JDBC 模式仍可启动，但 `/api/adapters/openai-compatible/runtime-config` 保存 API Key 仍会失败
