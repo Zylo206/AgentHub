@@ -78,6 +78,68 @@ npm run dev
 - 前端：<http://127.0.0.1:5173>
 - 后端：<http://127.0.0.1:8080/api/health>
 
+## Desktop 桌面壳补充说明
+
+Desktop 是可选的 Tauri 桌面 shell，不是 AgentHub 的主客户端。它加载的是 `frontend/dist` 目录中的 React 前端，不是 Electron 应用。
+
+### Desktop 打包产物位置
+
+```text
+desktop/src-tauri/target/release/agenthub-desktop.exe
+```
+
+直接下载入口：
+
+- [agenthub-desktop.exe](desktop/src-tauri/target/release/agenthub-desktop.exe)
+- [README.txt](desktop/src-tauri/target/release/README.txt)
+
+文件信息：
+
+- 文件名：`agenthub-desktop.exe`
+- 大小：9.2 MB
+- 构建时间：2026-06-10
+
+### 构建说明
+
+参考 [desktop/README.md](desktop/README.md)：
+
+```powershell
+cd desktop
+npm install
+npm run build
+```
+
+构建产物：
+
+- Release 版本：`desktop/src-tauri/target/release/agenthub-desktop.exe`
+- Debug 版本：`desktop/src-tauri/target/debug/agenthub-desktop.exe`（如果执行了 debug build）
+
+安装包说明：
+
+- 当前 `desktop/src-tauri/tauri.conf.json` 配置的 `bundle.targets` 是 `['nsis']`
+- Release 构建时会生成 NSIS installer 相关产物，位于 `desktop/src-tauri/target/release/bundle/nsis/`
+- 这不是 MSI 打包链路，所以这里不把它写成 WiX / MSI 依赖
+
+### 验证命令
+
+直接运行：
+
+```powershell
+.\desktop\src-tauri\target\release\agenthub-desktop.exe
+```
+
+或通过 npm 启动开发模式：
+
+```powershell
+cd desktop
+npm run dev
+```
+
+边界说明：
+
+- 这是可选的桌面 shell，不是主客户端
+- 加载的是 `frontend/dist` 目录的 React
+- 不是 Electron 应用，是 Tauri（Rust + WebView2）
 ## 登录与运行模式
 
 ### 默认 demo 模式
