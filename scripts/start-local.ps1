@@ -1,6 +1,8 @@
 param(
   [switch]$IncludeDocCollab,
   [switch]$UsePackagedBackend,
+  [ValidateSet("demo", "real")]
+  [string]$AuthMode = "demo",
   [ValidateSet("memory", "jdbc")]
   [string]$PersistenceMode = "memory",
   [string]$JdbcUrl,
@@ -70,6 +72,7 @@ if ($PersistenceMode -eq "jdbc") {
 
 $backendEnvironment = @(
   (Get-CmdSetExpression "SERVER_PORT" $BackendPort),
+  (Get-CmdSetExpression "AGENTHUB_AUTH_MODE" $AuthMode),
   (Get-CmdSetExpression "AGENTHUB_PERSISTENCE_MODE" $PersistenceMode)
 )
 
@@ -93,6 +96,7 @@ $backendCommand = if ($UsePackagedBackend) {
 $frontendCommand = "cd /d `"$frontendDir`" && npm.cmd run dev -- --host 127.0.0.1 --port $FrontendPort"
 
 Write-Output "Starting AgentHub backend on $backendApiBase"
+Write-Output "Auth mode: $AuthMode"
 Write-Output "Persistence mode: $PersistenceMode"
 if ($PersistenceMode -eq "jdbc") {
   Write-Output "JDBC URL: $resolvedJdbcUrl"
